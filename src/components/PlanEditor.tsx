@@ -110,7 +110,7 @@ export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; 
             {(plan.furniture ?? []).map((f) => {
               const p = toPx(f.position);
               return (
-                <Group key={f.id} x={p.x} y={p.y} draggable onDragEnd={(e) => moveFurniture(f.id, toM(e.target.x(), e.target.y()))}>
+                <Group key={f.id} x={p.x} y={p.y} draggable onDragMove={(e) => moveFurniture(f.id, toM(e.target.x(), e.target.y()))} onDragEnd={(e) => moveFurniture(f.id, toM(e.target.x(), e.target.y()))}>
                   <Circle radius={f.radiusM * SCALE} fill="#e5e5e5" stroke="#737373" />
                   <Text text={f.name} fontSize={10} fill="#525252" x={-40} y={-5} width={80} align="center" />
                 </Group>
@@ -126,13 +126,13 @@ export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; 
                 <Group key={c.id}>
                   <Arrow points={[p.x, p.y, t.x, t.y]} stroke={sel ? "#2563eb" : "#a3a3a3"} fill={sel ? "#2563eb" : "#a3a3a3"} strokeWidth={1} pointerLength={6} pointerWidth={6} listening={false} />
                   <Group x={p.x} y={p.y} draggable onMouseDown={() => setSelectedCam(c.id)} onTouchStart={() => setSelectedCam(c.id)}
-                    onDragEnd={(e) => moveCam(c.id, { position: toM(e.target.x(), e.target.y()) })}>
+                    onDragMove={(e) => moveCam(c.id, { position: toM(e.target.x(), e.target.y()) })} onDragEnd={(e) => moveCam(c.id, { position: toM(e.target.x(), e.target.y()) })}>
                     <Rect x={-9} y={-7} width={18} height={14} cornerRadius={3} fill={sel ? "#1d4ed8" : "#404040"} />
                     <Text text={c.name} fontSize={11} fontStyle="bold" fill={sel ? "#1d4ed8" : "#404040"} x={-50} y={10} width={100} align="center" />
                   </Group>
                   {sel && (
                     <Circle x={t.x} y={t.y} radius={7} fill="#fff" stroke="#2563eb" strokeWidth={2} draggable
-                      onDragEnd={(e) => moveCam(c.id, { lookAt: toM(e.target.x(), e.target.y()) })} />
+                      onDragMove={(e) => moveCam(c.id, { lookAt: toM(e.target.x(), e.target.y()) })} onDragEnd={(e) => moveCam(c.id, { lookAt: toM(e.target.x(), e.target.y()) })} />
                   )}
                 </Group>
               );
@@ -142,7 +142,7 @@ export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; 
             {plan.actors.map((a) => {
               const p = toPx(a.position);
               return (
-                <Group key={a.characterId} x={p.x} y={p.y} draggable onDragEnd={(e) => moveActor(a.characterId, toM(e.target.x(), e.target.y()))}>
+                <Group key={a.characterId} x={p.x} y={p.y} draggable onDragMove={(e) => moveActor(a.characterId, toM(e.target.x(), e.target.y()))} onDragEnd={(e) => moveActor(a.characterId, toM(e.target.x(), e.target.y()))}>
                   <Circle radius={11} fill={colour(a.characterId)} stroke="#fff" strokeWidth={2} />
                   <Text text={name(a.characterId).charAt(0)} fontSize={12} fontStyle="bold" fill="#fff" x={-5} y={-6} />
                   <Text text={name(a.characterId)} fontSize={11} fill="#171717" x={13} y={-6} />
@@ -176,7 +176,10 @@ export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; 
                   {Object.keys(PRESET_FOV).map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
               </label>
-              <CameraView plan={plan} cameraId={cam.id} cast={cast} />
+              <div>
+                <p className="mb-1 font-medium">Viewfinder: updates as you drag</p>
+                <CameraView plan={plan} cameraId={cam.id} cast={cast} />
+              </div>
               <div>
                 <p className="font-medium">What this camera sees (written into prompts)</p>
                 <p className="mt-1 rounded-md bg-neutral-100 px-3 py-2">{describeFrame(reading, cast) || "Nobody in view."}</p>

@@ -132,7 +132,7 @@ export function CameraView({
         <rect width={W} height={H} fill="none" stroke="#0004" />
       </svg>
       <figcaption className="px-3 py-1.5 text-xs text-neutral-600">
-        {cam.name}: schematic preview from the floor plan, not a render. Soft dark shape = over-the-shoulder person seen from behind.
+        {cam.name}: sketch from the floor plan, not a render. Soft dark shape = over-the-shoulder person seen from behind.
       </figcaption>
     </figure>
   );

@@ -211,7 +211,7 @@ export function ShotDirector(props: {
       <section className="space-y-4">
         {plan && spec.cameraId && (
           <div className="rounded-xl border border-neutral-200 bg-white p-5">
-            <h2 className="mb-2 text-lg font-semibold">Camera view</h2>
+            <h2 className="mb-2 text-lg font-semibold">Viewfinder</h2>
             <CameraView plan={plan} cameraId={spec.cameraId} cast={cast} onlyIds={spec.visibleIds} subjectId={mainSubjectId(spec)} />
           </div>
         )}
