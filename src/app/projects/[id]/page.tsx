@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const db = getDb();
+  const db = await getDb();
   const project = repo.getProject(db, id);
   if (!project) notFound();
   const cast = repo.getCast(db, id);

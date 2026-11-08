@@ -43,6 +43,7 @@ export function ShotDirector(props: {
 }) {
   const { cast, plan } = props;
   const [spec, setSpec] = useState<ShotSpec>(props.initial);
+  const [saved, setSaved] = useState<ShotSpec>(props.initial);
   const [status, setStatus] = useState<string>("");
   const [pending, start] = useTransition();
   const set = <K extends keyof ShotSpec>(k: K, v: ShotSpec[K]) => setSpec((s) => ({ ...s, [k]: v }));
@@ -54,7 +55,7 @@ export function ShotDirector(props: {
   );
   const suggested = deriveDuration(spec.dialogue);
   const speaker = cast.find((c) => c.id === spec.speakerId);
-  const dirty = JSON.stringify(spec) !== JSON.stringify(props.initial);
+  const dirty = JSON.stringify(spec) !== JSON.stringify(saved);
   const hasErrors = findings.some((f) => f.severity === "error");
 
   return (
@@ -175,7 +176,7 @@ export function ShotDirector(props: {
           <button
             type="button"
             disabled={pending || !dirty}
-            onClick={() => start(async () => { await saveShotAction(props.shotId, spec); setStatus("Shot saved."); })}
+            onClick={() => start(async () => { await saveShotAction(props.shotId, spec); setSaved(spec); setStatus("Shot saved."); })}
             className="rounded-md bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-50"
           >
             Save shot

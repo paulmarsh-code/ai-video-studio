@@ -4,8 +4,8 @@ import { listProjects } from "@/lib/repo";
 
 export const dynamic = "force-dynamic";
 
-export default function Home() {
-  const projects = listProjects(getDb());
+export default async function Home() {
+  const projects = listProjects(await getDb());
   return (
     <div className="max-w-4xl">
       <h1 className="text-2xl font-semibold">Projects</h1>

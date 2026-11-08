@@ -9,9 +9,9 @@ Plan, check and log AI video shots *before* spending generation credits. The fir
 | Area | State |
 |---|---|
 | Project scaffold (Next.js 15, React 19, TypeScript, Tailwind 4) | ✅ |
-| Data layer: Drizzle + SQLite (`src/db`), auto-migrate, demo seed, repository (`src/lib/repo.ts`) | ✅ (D12) |
+| Data layer: Drizzle + SQLite via sql.js, no native build needed (`src/db`), auto-migrate, demo seed, repository (`src/lib/repo.ts`) | ✅ (D12, D13) |
 | Rules engine: geometry, duration, validator, Kling prompt composer (`src/lib/domain`) | ✅ |
-| Tests: acceptance 1–7, 16, 18–20, blocking, persistence and regressions (`tests/`) | ✅ 28 passing |
+| Tests: acceptance 1–7, 16, 18–20, blocking, persistence and regressions (`tests/`) | ✅ 29 passing |
 | Projects, scene and shot list with live check status | ✅ |
 | Shot Director: presence per character, locked dialogue, live checks, Kling prompt, Copy, prompt versions | ✅ |
 | Floor plan editor (React Konva): drag people, furniture and cameras, aim handles, viewing cones, 180° line, versioned saves | ✅ |
@@ -23,6 +23,8 @@ Plan, check and log AI video shots *before* spending generation credits. The fir
 Decisions since the spec: see `docs/DECISIONS.md`.
 
 ## Run it
+
+Needs Node.js 22 or newer. No C++ build tools needed.
 
 ```bash
 npm install                                 # database is created in ./data on first run

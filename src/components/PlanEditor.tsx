@@ -20,6 +20,8 @@ const COLOURS = ["#e11d48", "#2563eb", "#16a34a", "#9333ea", "#ea580c", "#0891b2
 export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; version: number; cast: CastMember[] }) {
   const { cast } = props;
   const [plan, setPlan] = useState<GeometryPlanData>(props.initial);
+  const [saved, setSaved] = useState<GeometryPlanData>(props.initial);
+  const [savedVersion, setSavedVersion] = useState(props.version);
   const [selectedCam, setSelectedCam] = useState(props.initial.cameras[0]?.id ?? "");
   const [status, setStatus] = useState("");
   const [pending, start] = useTransition();
@@ -38,7 +40,7 @@ export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; 
   const lineFindings = useMemo(() => checkLineOfAction(plan, cast), [plan, cast]);
   const cam = plan.cameras.find((c) => c.id === selectedCam);
   const reading = cam ? readCamera(plan, cam) : undefined;
-  const dirty = JSON.stringify(plan) !== JSON.stringify(props.initial);
+  const dirty = JSON.stringify(plan) !== JSON.stringify(saved);
 
   const moveActor = (id: string, p: Point) =>
     setPlan((pl) => ({ ...pl, actors: pl.actors.map((a) => (a.characterId === id ? { ...a, position: p } : a)) }));
@@ -201,7 +203,7 @@ export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; 
 
         <div className="flex flex-wrap items-center gap-3">
           <button type="button" disabled={!dirty || pending}
-            onClick={() => start(async () => { const r = await savePlanAction(props.sceneId, plan); setStatus(`Saved as plan version ${r.version}. Earlier versions are kept.`); })}
+            onClick={() => start(async () => { const r = await savePlanAction(props.sceneId, plan); setSaved(plan); setSavedVersion(r.version); setStatus(`Saved as plan version ${r.version}. Earlier versions are kept.`); })}
             className="rounded-md bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-50">
             Save plan (new version)
           </button>
@@ -211,7 +213,7 @@ export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; 
             className="rounded-md border border-neutral-300 px-4 py-2 text-sm disabled:opacity-50">
             Save to library
           </button>
-          <span className="text-sm text-neutral-600">Current: v{props.version}{dirty ? " (unsaved changes)" : ""}</span>
+          <span className="text-sm text-neutral-600">Current: v{savedVersion}{dirty ? " (unsaved changes)" : ""}</span>
           {status && <span className="text-sm text-green-700">{status}</span>}
         </div>
       </div>

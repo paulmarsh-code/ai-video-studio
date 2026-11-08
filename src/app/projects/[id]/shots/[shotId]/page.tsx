@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ShotPage({ params }: { params: Promise<{ id: string; shotId: string }> }) {
   const { id, shotId } = await params;
-  const db = getDb();
+  const db = await getDb();
   const shot = repo.getShot(db, shotId);
   if (!shot) notFound();
   const cast = repo.getCast(db, id);

@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ScenePage({ params }: { params: Promise<{ id: string; sceneId: string }> }) {
   const { id, sceneId } = await params;
-  const db = getDb();
+  const db = await getDb();
   const s = repo.getScene(db, sceneId);
   if (!s) notFound();
   const cast = repo.getCast(db, id);

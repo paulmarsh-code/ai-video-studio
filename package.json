@@ -10,22 +10,22 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "better-sqlite3": "^13.0.3",
-    "drizzle-orm": "^0.44.5",
-    "konva": "^9.3.22",
+    "drizzle-orm": "0.44.5",
+    "konva": "9.3.22",
     "next": "15.5.4",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "react-konva": "^19.0.10",
+    "react-konva": "19.0.10",
+    "sql.js": "1.13.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
-    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/sql.js": "^1.4.9",
     "drizzle-kit": "^0.31.4",
     "eslint": "^9",
     "eslint-config-next": "15.5.4",

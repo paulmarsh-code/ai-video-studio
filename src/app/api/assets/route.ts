@@ -35,7 +35,7 @@ export async function POST(req: Request) {
   if (!ext) return NextResponse.json({ error: `Unsupported file type ${file.type || "(unknown)"}` }, { status: 415 });
   if (file.size > MAX_BYTES) return NextResponse.json({ error: "File is larger than 25 MB" }, { status: 413 });
 
-  const db = getDb();
+  const db = await getDb();
   const project = repo.getProject(db, projectId);
   if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 

@@ -8,7 +8,7 @@ import { validatePrompt, validateShot } from "@/lib/domain/validator";
 import * as repo from "@/lib/repo";
 
 export async function saveShotAction(shotId: string, spec: ShotSpec) {
-  const db = getDb();
+  const db = await getDb();
   const shot = repo.getShot(db, shotId);
   if (!shot) throw new Error("Shot not found");
   // Dialogue is locked: the Shot Director cannot change the approved line.
@@ -19,7 +19,7 @@ export async function saveShotAction(shotId: string, spec: ShotSpec) {
 }
 
 export async function savePromptAction(shotId: string, projectId: string) {
-  const db = getDb();
+  const db = await getDb();
   const shot = repo.getShot(db, shotId);
   if (!shot) throw new Error("Shot not found");
   const cast = repo.getCast(db, projectId);
@@ -32,20 +32,20 @@ export async function savePromptAction(shotId: string, projectId: string) {
 }
 
 export async function savePlanAction(sceneId: string, data: GeometryPlanData) {
-  const db = getDb();
+  const db = await getDb();
   const version = repo.savePlan(db, sceneId, data);
   revalidatePath("/", "layout");
   return { version };
 }
 
 export async function saveAnimaticAction(sceneId: string, timeline: repo.AnimaticTimeline) {
-  const version = repo.saveAnimatic(getDb(), sceneId, timeline);
+  const version = repo.saveAnimatic(await getDb(), sceneId, timeline);
   revalidatePath("/", "layout");
   return { version };
 }
 
 export async function addPlanToLibraryAction(sceneId: string, name: string) {
-  const db = getDb();
+  const db = await getDb();
   const s = repo.getScene(db, sceneId);
   if (!s?.plan) throw new Error("No plan");
   repo.addLibraryItem(db, { kind: "venue", name, data: { venueName: s.venue?.name, plan: s.plan.data } });
@@ -53,7 +53,7 @@ export async function addPlanToLibraryAction(sceneId: string, name: string) {
 }
 
 export async function addShotToLibraryAction(shotId: string, name: string) {
-  const db = getDb();
+  const db = await getDb();
   const shot = repo.getShot(db, shotId);
   if (!shot) throw new Error("Shot not found");
   // A shot set-up template keeps camera, framing and performance — not the specific line.
@@ -64,7 +64,7 @@ export async function addShotToLibraryAction(shotId: string, name: string) {
 }
 
 export async function addCharacterToLibraryAction(projectId: string, characterId: string) {
-  const db = getDb();
+  const db = await getDb();
   const c = repo.getCast(db, projectId).find((x) => x.id === characterId);
   if (!c) throw new Error("Character not found");
   repo.addLibraryItem(db, { kind: "character", name: c.name, data: c });
@@ -78,7 +78,7 @@ export async function copyLibraryItemAction(id: string, name: string, dataJson: 
   } catch {
     return { ok: false, error: "The item data is not valid JSON." };
   }
-  repo.copyLibraryItem(getDb(), id, { name, data });
+  repo.copyLibraryItem(await getDb(), id, { name, data });
   revalidatePath("/library");
   return { ok: true };
 }

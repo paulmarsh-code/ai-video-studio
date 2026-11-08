@@ -2,7 +2,7 @@
 
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
-import type { DB } from "@/db/client";
+import { persist, type DB } from "@/db/client";
 import * as t from "@/db/schema";
 import type { CastMember, Finding, GeometryPlanData, PlanView, Pronoun, ShotSpec } from "./domain/types";
 
@@ -70,6 +70,7 @@ export function savePlan(db: DB, sceneId: string, data: GeometryPlanData, name?:
   const latest = getLatestPlan(db, sceneId);
   const version = (latest?.version ?? 0) + 1;
   db.insert(t.plans).values({ id: randomUUID(), sceneId, name: name ?? latest?.name ?? "Blocking plan", version, data }).run();
+  persist(db);
   return version;
 }
 
@@ -80,6 +81,7 @@ export function getShot(db: DB, shotId: string) {
 
 export function saveShotSpec(db: DB, shotId: string, spec: ShotSpec) {
   db.update(t.shots).set({ spec, code: spec.code }).where(eq(t.shots.id, shotId)).run();
+  persist(db);
 }
 
 export function listPromptVersions(db: DB, shotId: string) {
@@ -91,6 +93,7 @@ export function savePromptVersion(db: DB, shotId: string, text: string, settings
   if (latest && latest.text === text) return latest.version; // unchanged — no new version
   const version = (latest?.version ?? 0) + 1;
   db.insert(t.promptVersions).values({ id: randomUUID(), shotId, version, text, settings, findings }).run();
+  persist(db);
   return version;
 }
 
@@ -99,6 +102,7 @@ export function savePromptVersion(db: DB, shotId: string, text: string, settings
 export function insertAsset(db: DB, a: { projectId: string; assetCode: string; kind: string; path: string; mime: string; sourceNote?: string }) {
   const id = randomUUID();
   db.insert(t.assets).values({ id, ...a, sourceNote: a.sourceNote ?? "" }).run();
+  persist(db);
   return id;
 }
 
@@ -130,6 +134,7 @@ export function saveAnimatic(db: DB, sceneId: string, timeline: AnimaticTimeline
   const version = (latest?.version ?? 0) + 1;
   if (latest) db.update(t.animatics).set({ status: "superseded" }).where(eq(t.animatics.id, latest.id)).run();
   db.insert(t.animatics).values({ id: randomUUID(), sceneId, version, timeline }).run();
+  persist(db);
   return version;
 }
 
@@ -148,6 +153,7 @@ export function getLibraryItem(db: DB, id: string) {
 export function addLibraryItem(db: DB, item: { kind: LibraryKind; name: string; data: unknown; ownerId?: string }) {
   const id = randomUUID();
   db.insert(t.libraryItems).values({ id, ownerId: item.ownerId ?? "local", kind: item.kind, name: item.name, data: item.data }).run();
+  persist(db);
   return id;
 }
 
@@ -160,6 +166,7 @@ export function copyLibraryItem(db: DB, sourceId: string, changes: { name?: stri
     id, ownerId, kind: src.kind, name: changes.name ?? `${src.name} (copy)`, version: src.version + 1,
     sourceId: src.id, sourceName: src.name, visibility: "private", data: changes.data ?? src.data,
   }).run();
+  persist(db);
   return id;
 }
 
@@ -180,4 +187,5 @@ export function libraryStats(db: DB, itemId: string) {
 
 export function insertTake(db: DB, take: { shotId: string; number: number; promptVersion: number; verdict: string; libraryItemIds?: string[]; credits?: number }) {
   db.insert(t.takes).values({ id: randomUUID(), ...take, libraryItemIds: take.libraryItemIds ?? [] }).run();
+  persist(db);
 }

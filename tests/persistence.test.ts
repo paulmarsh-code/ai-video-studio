@@ -8,15 +8,15 @@ import { composeKlingPrompt } from "../src/lib/domain/composer";
 import { validateShot } from "../src/lib/domain/validator";
 import * as repo from "../src/lib/repo";
 
-function fresh() {
-  const db = openDb(":memory:");
+async function fresh() {
+  const db = await openDb(":memory:");
   const projectId = seedDemo(db);
   return { db, projectId };
 }
 
 describe("Demo project seed", () => {
-  it("creates Paid On Time with four characters and Scene 1", () => {
-    const { db, projectId } = fresh();
+  it("creates Paid On Time with four characters and Scene 1", async () => {
+    const { db, projectId } = await fresh();
     expect(repo.getProject(db, projectId)?.code).toBe("POT");
     expect(repo.getCast(db, projectId).map((c) => c.name)).toEqual(["Jade", "Chase", "Marcus", "Nina"]);
     const [scene] = repo.listScenes(db, projectId);
@@ -26,8 +26,8 @@ describe("Demo project seed", () => {
     expect(s.plan?.data.cameras.map((c) => c.id)).toEqual(["main", "reverse", "jade-cu"]);
   });
 
-  it("every seeded shot composes, and none has a blocking error", () => {
-    const { db, projectId } = fresh();
+  it("every seeded shot composes, and none has a blocking error", async () => {
+    const { db, projectId } = await fresh();
     const cast = repo.getCast(db, projectId);
     const s = repo.getScene(db, repo.listScenes(db, projectId)[0].id)!;
     for (const shot of s.shots) {
@@ -39,8 +39,8 @@ describe("Demo project seed", () => {
 });
 
 describe("Versioning", () => {
-  it("saving a plan keeps the previous version", () => {
-    const { db, projectId } = fresh();
+  it("saving a plan keeps the previous version", async () => {
+    const { db, projectId } = await fresh();
     const sceneId = repo.listScenes(db, projectId)[0].id;
     const before = repo.getLatestPlan(db, sceneId)!;
     const moved = structuredClone(before.data);
@@ -49,8 +49,8 @@ describe("Versioning", () => {
     expect(repo.getLatestPlan(db, sceneId)!.data.actors[0].position.x).toBeCloseTo(before.data.actors[0].position.x - 0.2);
   });
 
-  it("identical prompt text does not create a new prompt version", () => {
-    const { db, projectId } = fresh();
+  it("identical prompt text does not create a new prompt version", async () => {
+    const { db, projectId } = await fresh();
     const shot = repo.getScene(db, repo.listScenes(db, projectId)[0].id)!.shots[0];
     expect(repo.savePromptVersion(db, shot.id, "A", {}, [])).toBe(1);
     expect(repo.savePromptVersion(db, shot.id, "A", {}, [])).toBe(1);
@@ -59,8 +59,8 @@ describe("Versioning", () => {
 });
 
 describe("Library (Stage 10)", () => {
-  it("AT-18: copy and change leaves the original untouched and credits the source", () => {
-    const { db, projectId } = fresh();
+  it("AT-18: copy and change leaves the original untouched and credits the source", async () => {
+    const { db, projectId } = await fresh();
     const plan = repo.getLatestPlan(db, repo.listScenes(db, projectId)[0].id)!.data;
     const origId = repo.addLibraryItem(db, { kind: "venue", name: "Launch-party venue", data: { plan } });
     const changed = structuredClone(plan);
@@ -75,8 +75,8 @@ describe("Library (Stage 10)", () => {
     expect(repo.listLibrary(db).map((i) => i.id)).toEqual(expect.arrayContaining([origId, copyId]));
   });
 
-  it("AT-19: stats come from the take log", () => {
-    const { db, projectId } = fresh();
+  it("AT-19: stats come from the take log", async () => {
+    const { db, projectId } = await fresh();
     const itemId = repo.addLibraryItem(db, { kind: "shot-setup", name: "Two at a table", data: {} });
     const shots = repo.getScene(db, repo.listScenes(db, projectId)[0].id)!.shots;
     repo.insertTake(db, { shotId: shots[0].id, number: 1, promptVersion: 1, verdict: "approved", libraryItemIds: [itemId] });
@@ -88,10 +88,25 @@ describe("Library (Stage 10)", () => {
     expect(s.takesPerApprovedClip).toBeCloseTo(1.5);
   });
 
-  it("AT-20: new items are private to their owner", () => {
-    const { db } = fresh();
+  it("AT-20: new items are private to their owner", async () => {
+    const { db } = await fresh();
     const id = repo.addLibraryItem(db, { kind: "character", name: "New character", data: {}, ownerId: "paul" });
     expect(repo.getLibraryItem(db, id)!.visibility).toBe("private");
     expect(repo.listLibrary(db, "someone-else").map((i) => i.id)).not.toContain(id);
+  });
+});
+
+describe("File persistence (sql.js)", () => {
+  it("changes survive closing and reopening the database file", async () => {
+    const os = await import("node:os");
+    const path = await import("node:path");
+    const fs = await import("node:fs");
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "studio-")), "studio.db");
+    const db1 = await openDb(file);
+    seedDemo(db1);
+    const id = repo.addLibraryItem(db1, { kind: "venue", name: "Saved venue", data: {} });
+    const db2 = await openDb(file);
+    expect(repo.getLibraryItem(db2, id)?.name).toBe("Saved venue");
+    expect(repo.listProjects(db2)).toHaveLength(1);
   });
 });

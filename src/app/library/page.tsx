@@ -12,8 +12,8 @@ const KIND_LABEL: Record<string, string> = {
   "scene-kit": "Scene kit",
 };
 
-export default function LibraryPage() {
-  const db = getDb();
+export default async function LibraryPage() {
+  const db = await getDb();
   const items = repo.listLibrary(db).map((i) => ({ ...i, stats: repo.libraryStats(db, i.id) }));
   return (
     <div className="max-w-5xl">

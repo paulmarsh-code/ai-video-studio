@@ -55,9 +55,10 @@ const PANELS: PanelSeed[] = [
   },
 ];
 
-export function seedIfEmpty(db: DB): void {
-  if (db.select().from(t.projects).limit(1).all().length) return;
+export function seedIfEmpty(db: DB): boolean {
+  if (db.select().from(t.projects).limit(1).all().length) return false;
   seedDemo(db);
+  return true;
 }
 
 export function seedDemo(db: DB): string {

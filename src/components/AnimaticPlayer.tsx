@@ -25,6 +25,8 @@ export function AnimaticPlayer(props: {
 }) {
   const { panels, cast } = props;
   const [timeline, setTimeline] = useState<AnimaticTimeline>(props.initial);
+  const [saved, setSaved] = useState<AnimaticTimeline>(props.initial);
+  const [savedVersion, setSavedVersion] = useState(props.version);
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [subtitles, setSubtitles] = useState(true);
@@ -80,7 +82,7 @@ export function AnimaticPlayer(props: {
   const name = (id: string) => cast.find((c) => c.id === id)?.name ?? id;
   const line = current?.panel.dialogue[0];
   const lineVisible = !!line && current && time - current.start >= PRE_GAP;
-  const sceneDirty = JSON.stringify(timeline) !== JSON.stringify(props.initial);
+  const sceneDirty = JSON.stringify(timeline) !== JSON.stringify(saved);
 
   async function upload(panel: PanelRow, file: File) {
     setStatus(`Uploading ${file.name}…`);
@@ -209,11 +211,11 @@ export function AnimaticPlayer(props: {
         })}
         <div className="flex flex-wrap items-center gap-3">
           <button type="button" disabled={!sceneDirty || pending}
-            onClick={() => start(async () => { const r = await saveAnimaticAction(props.sceneId, timeline); setStatus(`Animatic saved as version ${r.version}.`); })}
+            onClick={() => start(async () => { const r = await saveAnimaticAction(props.sceneId, timeline); setSaved(timeline); setSavedVersion(r.version); setStatus(`Animatic saved as version ${r.version}.`); })}
             className="rounded-md bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-50">
             Save animatic (new version)
           </button>
-          <span className="text-sm text-neutral-600">{props.version ? `Current: v${props.version}` : "Not saved yet"}</span>
+          <span className="text-sm text-neutral-600">{savedVersion ? `Current: v${savedVersion}` : "Not saved yet"}</span>
         </div>
         {status && <p className="text-sm text-green-700">{status}</p>}
       </div>

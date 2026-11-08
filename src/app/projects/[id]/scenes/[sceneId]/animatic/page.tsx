@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function AnimaticPage({ params }: { params: Promise<{ id: string; sceneId: string }> }) {
   const { id, sceneId } = await params;
-  const db = getDb();
+  const db = await getDb();
   const project = repo.getProject(db, id);
   const s = repo.getScene(db, sceneId);
   if (!project || !s) notFound();
