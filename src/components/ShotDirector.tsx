@@ -100,8 +100,13 @@ export function ShotDirector(props: {
         <label className={label}>
           Main subject (who the shot is about)
           <select className={input} value={spec.subjectId ?? ""} onChange={(e) => set("subjectId", e.target.value || undefined)}>
-            <option value="">{speaker ? `Speaker (${speaker.name})` : "First visible character"}</option>
-            {cast.filter((c) => spec.visibleIds.includes(c.id)).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            <option value="">
+              {(() => {
+                const auto = cast.find((c) => c.id === (spec.speakerId ?? spec.visibleIds[0]));
+                return auto ? `${auto.name} (automatic: ${speaker ? "the speaker" : "first visible"})` : "Nobody visible";
+              })()}
+            </option>
+            {cast.filter((c) => spec.visibleIds.includes(c.id)).map((c) => <option key={c.id} value={c.id}>{c.name} (chosen)</option>)}
           </select>
         </label>
 
