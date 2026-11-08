@@ -35,16 +35,18 @@ export const CAST: CastMember[] = [
 ];
 
 export const SCENE1_PLAN: GeometryPlanData = {
+  bounds: { minX: -4.5, maxX: 4.5, minY: 0, maxY: 10 },
+  furniture: [{ id: "table", name: "cocktail table", position: { x: 0.6, y: 5.1 }, radiusM: 0.4 }],
   actors: [
     { characterId: "chase", position: { x: -0.6, y: 4.4 } },
-    { characterId: "marcus", position: { x: -0.1, y: 4.3 } },
-    { characterId: "nina", position: { x: 0.3, y: 4.5 } },
-    { characterId: "jade", position: { x: 0.7, y: 5.6 } },
+    { characterId: "marcus", position: { x: -0.2, y: 4.55 } },
+    { characterId: "nina", position: { x: 0.2, y: 4.7 } },
+    { characterId: "jade", position: { x: 1.5, y: 5.4 } },
   ],
   cameras: [
-    { id: "main", name: "Main OTS", preset: "main-ots", position: { x: -1.4, y: 3.0 }, lookAt: { x: 0, y: 5 } },
-    { id: "reverse", name: "Reverse OTS", preset: "reverse-ots", position: { x: 2.3, y: 5.9 }, lookAt: { x: -0.4, y: 4.5 } },
-    { id: "jade-cu", name: "Jade close-up", preset: "single-cu", position: { x: -0.2, y: 3.9 }, lookAt: { x: 0.7, y: 5.6 } },
+    { id: "main", name: "Main OTS", preset: "main-ots", position: { x: -1.4, y: 3.0 }, lookAt: { x: 0.3, y: 5.0 } },
+    { id: "reverse", name: "Reverse OTS", preset: "reverse-ots", position: { x: 2.9, y: 5.3 }, lookAt: { x: -0.3, y: 4.5 } },
+    { id: "jade-cu", name: "Jade close-up", preset: "single-cu", position: { x: 0.4, y: 3.6 }, lookAt: { x: 1.5, y: 5.4 } },
   ],
   views: [
     { name: "screen wall", directionDeg: 90 },

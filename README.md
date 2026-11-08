@@ -11,9 +11,13 @@ Plan, check and log AI video shots *before* spending generation credits. The fir
 | Project scaffold (Next.js 15, React 19, TypeScript, Tailwind 4) | ✅ |
 | Data layer: Drizzle + SQLite (`src/db`), auto-migrate, demo seed, repository (`src/lib/repo.ts`) | ✅ (D12) |
 | Rules engine: geometry, duration, validator, Kling prompt composer (`src/lib/domain`) | ✅ |
-| Tests: acceptance 1–7, 16, 18–20, persistence and regressions (`tests/`) | ✅ 26 passing |
-| Checkpoint page showing three Paid On Time shots composed and checked | ✅ |
-| Shot Director form, geometry editor (React Konva), persistence, library L1, animatic R1 | ⏳ next |
+| Tests: acceptance 1–7, 16, 18–20, blocking, persistence and regressions (`tests/`) | ✅ 28 passing |
+| Projects, scene and shot list with live check status | ✅ |
+| Shot Director: presence per character, locked dialogue, live checks, Kling prompt, Copy, prompt versions | ✅ |
+| Floor plan editor (React Konva): drag people, furniture and cameras, aim handles, viewing cones, 180° line, versioned saves | ✅ |
+| Animatic Release 1: timed storyboard player, subtitles with emotion tags, uploaded line audio, fit-to-line timing, versions | ✅ |
+| Library L1: save characters, plans and shot set-ups; copy and change; stats from the take log | ✅ |
+| Character and venue studios (editing), storyboard editing, take review (Phase 2) | ⏳ next |
 | Phase 2 adds: take review, metrics, animatic R2, **animatic-to-rough-cut (D11)** | planned |
 
 Decisions since the spec: see `docs/DECISIONS.md`.

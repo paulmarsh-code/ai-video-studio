@@ -48,7 +48,17 @@ export interface PlanView {
   directionDeg: number; // look direction that sees this view (0 = +x, 90 = +y)
 }
 
+export interface PlanFurniture {
+  id: string;
+  name: string; // e.g. "cocktail table"
+  position: Point;
+  radiusM: number;
+}
+
 export interface GeometryPlanData {
+  /** Room extent in metres (scene-local). */
+  bounds?: { minX: number; maxX: number; minY: number; maxY: number };
+  furniture?: PlanFurniture[];
   actors: PlanActor[];
   cameras: PlanCamera[];
   views: PlanView[];

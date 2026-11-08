@@ -32,6 +32,8 @@ export const PRESET_TEXT: Record<CameraPreset, string> = {
 export const CENTRE_BAND_DEG = 2;
 /** Visible people closer than this are treated as soft foreground (over-the-shoulder). */
 export const FOREGROUND_DEPTH_M = 2.0;
+/** The shoulder person must be at least this much nearer than the next person in view. */
+export const FOREGROUND_GAP_M = 0.3;
 
 const deg = (rad: number) => (rad * 180) / Math.PI;
 
@@ -90,9 +92,17 @@ export function readCamera(plan: GeometryPlanData, cam: PlanCamera): CameraReadi
       depthM: depth,
       inView,
       frame,
-      foreground: inView && depth < FOREGROUND_DEPTH_M,
+      foreground: false,
     };
   });
+
+  // Soft foreground = the over-the-shoulder person: nearest in view, and clearly nearer than the rest.
+  const inView = actors.filter((a) => a.inView).sort((a, b) => a.depthM - b.depthM);
+  const nearest = inView[0];
+  for (const a of actors) a.foreground = false;
+  if (nearest && nearest.depthM < FOREGROUND_DEPTH_M && (inView.length === 1 || inView[1].depthM - nearest.depthM >= FOREGROUND_GAP_M)) {
+    nearest.foreground = true;
+  }
 
   let backgroundView: string | undefined;
   let best = Infinity;
