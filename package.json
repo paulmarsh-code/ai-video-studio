@@ -10,7 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "better-sqlite3": "^12.4.1",
+    "better-sqlite3": "^13.0.3",
     "drizzle-orm": "^0.44.5",
     "konva": "^9.3.22",
     "next": "15.5.4",
@@ -32,5 +32,8 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
