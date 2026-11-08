@@ -128,11 +128,17 @@ export function CameraView({
               </g>
             );
           })}
+          {/* Unblurred labels for over-the-shoulder figures */}
+          {people.filter((p) => p.foreground).map((p) => (
+            <text key={`fg-${p.characterId}`} x={Math.min(W - 40, Math.max(40, p.pr.x))} y={H - 12} textAnchor="middle" fontSize={12} fill="#fff" stroke="#0009" strokeWidth={3} paintOrder="stroke">
+              {name(p.characterId)} (back)
+            </text>
+          ))}
         </g>
         <rect width={W} height={H} fill="none" stroke="#0004" />
       </svg>
       <figcaption className="px-3 py-1.5 text-xs text-neutral-600">
-        {cam.name}: sketch from the floor plan, not a render. Soft dark shape = over-the-shoulder person seen from behind.
+        {cam.name}: sketch from the floor plan, not a render. Black blurred shape = the over-the-shoulder person, seen from behind.
       </figcaption>
     </figure>
   );
