@@ -10,6 +10,7 @@ import { Arrow, Circle, Group, Layer, Line, Rect, Stage, Text, Wedge } from "rea
 import { savePlanAction, addPlanToLibraryAction } from "@/app/actions";
 import { checkLineOfAction, describeFrame, PRESET_FOV, readCamera } from "@/lib/domain/geometry";
 import type { CameraPreset, CastMember, GeometryPlanData, Point } from "@/lib/domain/types";
+import { CameraView } from "./CameraView";
 import { FindingList } from "./FindingList";
 
 const SCALE = 66; // pixels per metre
@@ -175,6 +176,7 @@ export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; 
                   {Object.keys(PRESET_FOV).map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
               </label>
+              <CameraView plan={plan} cameraId={cam.id} cast={cast} />
               <div>
                 <p className="font-medium">What this camera sees (written into prompts)</p>
                 <p className="mt-1 rounded-md bg-neutral-100 px-3 py-2">{describeFrame(reading, cast) || "Nobody in view."}</p>

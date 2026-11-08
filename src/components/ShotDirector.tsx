@@ -5,11 +5,12 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { addShotToLibraryAction, savePromptAction, saveShotAction } from "@/app/actions";
-import { composeKlingPrompt } from "@/lib/domain/composer";
+import { composeKlingPrompt, mainSubjectId } from "@/lib/domain/composer";
 import { deriveDuration } from "@/lib/domain/duration";
 import type { AudioMode, CastMember, DistancePreset, Finding, GeometryPlanData, Intensity, ShotSpec } from "@/lib/domain/types";
 import { validatePrompt, validateShot } from "@/lib/domain/validator";
 import { CopyButton } from "./CopyButton";
+import { CameraView } from "./CameraView";
 import { FindingList } from "./FindingList";
 
 type Presence = "visible" | "offscreen" | "excluded" | "absent";
@@ -208,6 +209,12 @@ export function ShotDirector(props: {
 
       {/* ---------- Prompt and checks ---------- */}
       <section className="space-y-4">
+        {plan && spec.cameraId && (
+          <div className="rounded-xl border border-neutral-200 bg-white p-5">
+            <h2 className="mb-2 text-lg font-semibold">Camera view</h2>
+            <CameraView plan={plan} cameraId={spec.cameraId} cast={cast} onlyIds={spec.visibleIds} subjectId={mainSubjectId(spec)} />
+          </div>
+        )}
         <div className="rounded-xl border border-neutral-200 bg-white p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-semibold">Kling prompt</h2>
