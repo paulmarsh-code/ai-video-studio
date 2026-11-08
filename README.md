@@ -9,9 +9,9 @@ Plan, check and log AI video shots *before* spending generation credits. The fir
 | Area | State |
 |---|---|
 | Project scaffold (Next.js 15, React 19, TypeScript, Tailwind 4) | ✅ |
-| Data schema (`prisma/schema.prisma`, SQLite) | ✅ written; **validate on first run** (see below) |
+| Data layer: Drizzle + SQLite (`src/db`), auto-migrate, demo seed, repository (`src/lib/repo.ts`) | ✅ (D12) |
 | Rules engine: geometry, duration, validator, Kling prompt composer (`src/lib/domain`) | ✅ |
-| Acceptance tests 1–7 and 16, plus regressions (`tests/`) | ✅ 19 passing |
+| Tests: acceptance 1–7, 16, 18–20, persistence and regressions (`tests/`) | ✅ 26 passing |
 | Checkpoint page showing three Paid On Time shots composed and checked | ✅ |
 | Shot Director form, geometry editor (React Konva), persistence, library L1, animatic R1 | ⏳ next |
 | Phase 2 adds: take review, metrics, animatic R2, **animatic-to-rough-cut (D11)** | planned |
@@ -21,13 +21,12 @@ Decisions since the spec: see `docs/DECISIONS.md`.
 ## Run it
 
 ```bash
-npm install
-npx prisma validate && npx prisma db push   # creates dev.db (needs internet for Prisma engines)
+npm install                                 # database is created in ./data on first run
 npm test                                    # rules-engine acceptance tests
 npm run dev                                 # http://localhost:3000
 ```
 
-`.env` holds `DATABASE_URL="file:./dev.db"`.
+The database file is `data/studio.db`; set `STUDIO_DB` to change it. Delete it to re-seed the demo project.
 
 ## Design rules carried into code
 
@@ -47,7 +46,8 @@ npm run dev                                 # http://localhost:3000
 src/lib/domain/    pure TypeScript rules engine (no framework imports)
 src/lib/demo/      Paid On Time illustrative data (not approved assets)
 src/app/           Next.js app
-prisma/            data schema
+src/db/            Drizzle schema, client, demo seed
+drizzle/           SQL migrations
 tests/             acceptance tests (Vitest)
 ```
 

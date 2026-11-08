@@ -7,6 +7,7 @@ Decisions made since Build Spec v1.4 was approved. Each one is folded into the n
 | 8 Nov 2026 | D1 | Build Spec v1.4 approved as the build baseline | Paul |
 | 8 Nov 2026 | D2 | Builder: Claude Code, in a private Mind First GitHub repository | Paul |
 | 8 Nov 2026 | D11 | **Animatic-to-rough-cut moves from "Later" into Phase 2** | Paul |
+| 8 Nov 2026 | D12 | Database layer: **Drizzle ORM + better-sqlite3** instead of Prisma (still SQLite, still portable to PostgreSQL) | Claude (build), for Paul's review |
 
 ## D11: Animatic-to-rough-cut in Phase 2
 
@@ -28,3 +29,9 @@ Acceptance tests (to be added to spec §6):
 - **AT-23:** Toggle between "Storyboard" and "Current cut". Both play correctly, and the storyboard-only version is unchanged.
 
 Phase 2 exit evidence: each Paid On Time episode from 2 to 4 is shown progressing from a storyboard reel to the finished cut in the same timeline. This is also captured as marketing material.
+
+## D12: Drizzle instead of Prisma
+
+Prisma has to download engine binaries from binaries.prisma.sh. The cloud build environment blocks that site, so no Prisma code could be run or tested there. Drizzle is pure TypeScript and uses better-sqlite3, which installs from npm, so every database path now runs under the automated tests.
+
+The intent of spec §2 is unchanged: structured SQLite persistence that can migrate to PostgreSQL (`drizzle-orm/pg-core`). Migrations are in `drizzle/` and are applied automatically on start. The domain layer has no dependency on the database library.
