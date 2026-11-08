@@ -1,103 +1,112 @@
-import Image from "next/image";
+// Phase 1 checkpoint page: shows the rules engine working on the Paid On Time demo shots.
+// The full Shot Director form, geometry editor and persistence come next.
+
+import { composeKlingPrompt } from "@/lib/domain/composer";
+import type { ShotSpec } from "@/lib/domain/types";
+import { validatePrompt, validateShot } from "@/lib/domain/validator";
+import { ALL_IDS, CAST, SCENE1_PLAN } from "@/lib/demo/paidOnTime";
+import { CopyButton } from "./CopyButton";
+
+const venueName = "GLOWVANE launch-party venue";
+
+const SHOTS: ShotSpec[] = [
+  {
+    code: "EP01_S01_C4b",
+    venueName,
+    sceneContext: "At the launch party, Chase answers Jade's question at the cocktail table.",
+    presentIds: ALL_IDS,
+    visibleIds: ["chase", "jade"],
+    excludedIds: ["marcus", "nina"],
+    speakerId: "chase",
+    dialogue: "You're lucky we booked you at all.",
+    actions: "Chase smirks and leans back slightly.",
+    emotion: "smug, dismissive",
+    intensity: "natural",
+    cameraId: "reverse",
+    distance: "conversational",
+    durationSec: 4,
+    audioMode: "native-on",
+  },
+  {
+    code: "EP01_S01_C4a",
+    venueName,
+    sceneContext: "Jade reacts to Chase's put-down.",
+    presentIds: ALL_IDS,
+    visibleIds: ["jade"],
+    excludedIds: ["chase", "marcus", "nina"],
+    speakerId: "jade",
+    dialogue: "Unbelievable.",
+    actions: "Jade stares at Chase in disbelief.",
+    emotion: "angry",
+    intensity: "big",
+    cameraId: "jade-cu",
+    durationSec: 3,
+    audioMode: "native-on",
+  },
+  {
+    code: "EP01_S01_C4c-2",
+    venueName,
+    sceneContext: "Marcus and Nina react to what just happened.",
+    presentIds: ALL_IDS,
+    visibleIds: ["marcus", "nina"],
+    excludedIds: ["chase", "jade"],
+    actions: 'Marcus and Nina look utterly shocked, as if thinking "did that just happen".',
+    intensity: "big",
+    cameraId: "main",
+    durationSec: 3,
+    audioMode: "native-on",
+  },
+];
+
+const tone = {
+  error: "border-red-300 bg-red-50 text-red-900",
+  warning: "border-amber-300 bg-amber-50 text-amber-900",
+  info: "border-sky-300 bg-sky-50 text-sky-900",
+} as const;
 
 export default function Home() {
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <main className="mx-auto max-w-4xl px-4 py-8">
+      <p className="text-sm uppercase tracking-wide text-neutral-500">Mind First · Phase 1 checkpoint</p>
+      <h1 className="mt-1 text-3xl font-semibold">AI Video Production Studio</h1>
+      <p className="mt-2 text-neutral-700">
+        Paid On Time demo data (illustrative). Each shot is checked by the deterministic rules engine
+        before a single credit is spent, then composed into the proven Kling prompt.
+      </p>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+      {SHOTS.map((shot) => {
+        const composed = composeKlingPrompt(shot, CAST, SCENE1_PLAN);
+        const findings = [
+          ...validateShot(shot, CAST, SCENE1_PLAN),
+          ...validatePrompt(composed.text, shot, CAST),
+        ];
+        return (
+          <section key={shot.code} className="mt-8 rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-xl font-semibold">{shot.code}</h2>
+              <CopyButton text={composed.text} />
+            </div>
+            <p className="mt-1 text-sm text-neutral-600">
+              {composed.settings.model} · {composed.settings.resolution} · {composed.settings.durationSec}s ·
+              native audio {composed.settings.nativeAudio} (recommended {composed.settings.recommendedAudio}) ·
+              multi-shot off · no audio references
+            </p>
+            <pre className="mt-3 whitespace-pre-wrap rounded-lg bg-neutral-900 p-4 text-sm text-neutral-100">
+              {composed.text}
+            </pre>
+            <h3 className="mt-4 font-medium">Checks ({findings.length})</h3>
+            {findings.length === 0 && <p className="text-sm text-green-700">All checks passed.</p>}
+            <ul className="mt-2 space-y-2">
+              {findings.map((f, i) => (
+                <li key={i} className={`rounded-md border px-3 py-2 text-sm ${tone[f.severity]}`}>
+                  <strong className="uppercase">{f.severity}</strong> · {f.message}
+                  {f.fix && <div className="mt-1 opacity-80">Fix: {f.fix}</div>}
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+      })}
+    </main>
   );
 }

@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI Video Production Studio
 
-## Getting Started
+Mind First Group Ltd add-on product. Built to **Build Spec v1.4** (approved 8 Nov 2026).
 
-First, run the development server:
+Plan, check and log AI video shots *before* spending generation credits. The first provider is Kling 3.0 Omni, used through the Kling web app.
+
+## Status: Phase 1 checkpoint 1 (8 Nov 2026)
+
+| Area | State |
+|---|---|
+| Project scaffold (Next.js 15, React 19, TypeScript, Tailwind 4) | ✅ |
+| Data schema (`prisma/schema.prisma`, SQLite) | ✅ written; **validate on first run** (see below) |
+| Rules engine: geometry, duration, validator, Kling prompt composer (`src/lib/domain`) | ✅ |
+| Acceptance tests 1–7 and 16, plus regressions (`tests/`) | ✅ 19 passing |
+| Checkpoint page showing three Paid On Time shots composed and checked | ✅ |
+| Shot Director form, geometry editor (React Konva), persistence, library L1, animatic R1 | ⏳ next |
+
+## Run it
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npx prisma validate && npx prisma db push   # creates dev.db (needs internet for Prisma engines)
+npm test                                    # rules-engine acceptance tests
+npm run dev                                 # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`.env` holds `DATABASE_URL="file:./dev.db"`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Design rules carried into code
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **One speaker per clip.** A second speaker is flagged.
+- **Dialogue is locked.** The prompt carries it word for word, and any edit is caught.
+- **Voice lock.** Each character's approved voice text is injected word for word.
+- **Kling native audio only.** Audio or voice reference files are flagged (v1.3).
+- **Quote marks appear only around the spoken line.** Quotes anywhere else are removed when the prompt is composed.
+- **Duration comes from the dialogue:** 2.75 words per second plus 1 s, clamped to 3–15 s.
+- **Silent shots** get audio off and a no-speech guard.
+- **Excluded characters are never named** in the prompt.
+- **Geometry from the top-down plan:** frame-left, centre and frame-right; the over-the-shoulder foreground; the background view; and the 180° line, with override reasons.
 
-## Learn More
+## Layout
 
-To learn more about Next.js, take a look at the following resources:
+```
+src/lib/domain/    pure TypeScript rules engine (no framework imports)
+src/lib/demo/      Paid On Time illustrative data (not approved assets)
+src/app/           Next.js app
+prisma/            data schema
+tests/             acceptance tests (Vitest)
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Demo data is illustrative and editable. It contains no Watford FC data, assets or likenesses.

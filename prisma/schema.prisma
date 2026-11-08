@@ -1,0 +1,217 @@
+// AI Video Production Studio — data schema (Build Spec v1.4, approved 8 Nov 2026)
+// SQLite for Phase 1; designed to migrate to PostgreSQL.
+// Enumerated values are stored as strings and validated in src/lib/domain/types.ts.
+// JSON blobs are stored as strings (String) for SQLite portability.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Project {
+  id            String   @id @default(cuid())
+  code          String   @unique // e.g. "POT" — used in asset IDs
+  name          String
+  type          String   // series | ad | short | other
+  brief         String   @default("{}") // JSON: concept, audience, platforms, aspect, style, budget…
+  briefApproved Boolean  @default(false)
+  generator     String   @default("kling-3.0-omni")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  characters Character[]
+  venues     Venue[]
+  scenes     Scene[]
+  assets     Asset[]
+}
+
+// A character identity. Approved looks/voices live in immutable CharacterVersion rows.
+model Character {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  pronoun   String   @default("they") // she | he | they — used in "She says exactly once:"
+  role      String   @default("")
+  invented  Boolean  @default(true) // false = real person → consent record required
+  consentRef String?
+  createdAt DateTime @default(now())
+
+  versions CharacterVersion[]
+}
+
+model CharacterVersion {
+  id          String   @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  version     Int
+  status      String   @default("draft") // draft | approved | superseded
+  profile     String   @default("{}") // JSON: appearance, wardrobe, mannerisms, continuity traits
+  voiceLock   String   // the approved description injected word for word into prompts
+  createdAt   DateTime @default(now())
+  approvedAt  DateTime?
+
+  @@unique([characterId, version])
+}
+
+model Venue {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  description String @default("")
+  status    String  @default("draft") // draft | approved
+  views     VenueView[]
+  props     Prop[]
+}
+
+// Named view used as a background per camera, e.g. "screen wall" seen when looking in direction 90°.
+model VenueView {
+  id           String @id @default(cuid())
+  venueId      String
+  venue        Venue  @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  name         String
+  directionDeg Float  // look direction in scene-local degrees (0 = +x, 90 = +y)
+  assetId      String?
+}
+
+model Prop {
+  id      String @id @default(cuid())
+  venueId String
+  venue   Venue  @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  name    String
+  owner   String? // character id
+  states  String @default("[]") // JSON array of allowed states, e.g. ["in hand","on table"]
+}
+
+model Scene {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  episode   Int
+  number    Int
+  title     String
+  venueId   String?
+  panels    StoryboardPanel[]
+  plans     GeometryPlan[]
+  shots     Shot[]
+  animatics Animatic[]
+
+  @@unique([projectId, episode, number])
+}
+
+model StoryboardPanel {
+  id          String @id @default(cuid())
+  sceneId     String
+  scene       Scene  @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  code        String // e.g. "C2a"
+  order       Int
+  description String
+  framing     String @default("")
+  emotion     String @default("")
+  dialogue    String @default("[]") // JSON: [{characterId, text}]
+  durationSec Float  @default(4)
+  imageAssetId String?
+  status      String @default("draft") // draft | approved | needs-recheck
+  version     Int    @default(1)
+}
+
+// Top-down plan: positions, facing, cameras, line of action. JSON = GeometryPlanData (types.ts).
+model GeometryPlan {
+  id      String @id @default(cuid())
+  sceneId String
+  scene   Scene  @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  name    String
+  version Int    @default(1)
+  data    String // JSON GeometryPlanData
+}
+
+model Shot {
+  id          String @id @default(cuid())
+  sceneId     String
+  scene       Scene  @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  code        String // e.g. "EP01_S01_C4a"
+  panelId     String?
+  planId      String?
+  data        String // JSON ShotSpec (types.ts)
+  status      String @default("draft") // draft | ready | generated | approved
+  prompts     PromptVersion[]
+  takes       Take[]
+}
+
+model PromptVersion {
+  id        String   @id @default(cuid())
+  shotId    String
+  shot      Shot     @relation(fields: [shotId], references: [id], onDelete: Cascade)
+  version   Int
+  text      String
+  settings  String   // JSON: model, resolution, duration, nativeAudio, multiShot
+  findings  String   @default("[]") // JSON validator findings at compose time
+  createdAt DateTime @default(now())
+
+  @@unique([shotId, version])
+}
+
+model Take {
+  id              String   @id @default(cuid())
+  shotId          String
+  shot            Shot     @relation(fields: [shotId], references: [id], onDelete: Cascade)
+  number          Int
+  promptVersion   Int
+  settingsUsed    String   @default("{}")
+  credits         Float?
+  durationSec     Float?
+  verdict         String   @default("pending") // pending | approved | retake | rejected
+  failureCategories String @default("[]") // JSON array of FailureCategory
+  comments        String   @default("")
+  videoAssetId    String?
+  libraryItemIds  String   @default("[]") // JSON: library items used (for stats)
+  createdAt       DateTime @default(now())
+
+  @@unique([shotId, number])
+}
+
+// Every file: references, start frames, panel images, takes, audio. Never confuse with provider IDs.
+model Asset {
+  id          String  @id @default(cuid())
+  projectId   String
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assetCode   String  @unique // e.g. POT_EP01_S01_A14_START_v01.png
+  kind        String  // character-ref | venue-ref | start-frame | panel | take | audio | animatic | other
+  path        String  // local storage path
+  providerIds String  @default("{}") // JSON: {"kling-element": "326027452310559"}
+  sourceNote  String  @default("")
+  immutable   Boolean @default(false)
+  createdAt   DateTime @default(now())
+}
+
+model Animatic {
+  id        String   @id @default(cuid())
+  sceneId   String
+  scene     Scene    @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  code      String   // e.g. POT_EP01_S01_ANIM
+  version   Int
+  timeline  String   // JSON AnimaticTimeline
+  mp4AssetId String?
+  status    String   @default("current") // current | needs-recheck | superseded
+  createdAt DateTime @default(now())
+
+  @@unique([sceneId, version])
+}
+
+// Stage 10: library items. L1 = private to owner.
+model LibraryItem {
+  id         String   @id @default(cuid())
+  ownerId    String   // user id (single-user in Phase 1: "local")
+  kind       String   // venue | shot-setup | character | prompt-template | scene-kit
+  name       String
+  version    Int      @default(1)
+  sourceId   String?  // copied from (credit kept)
+  visibility String   @default("private") // private | shared (L3, after go)
+  data       String   // JSON payload
+  createdAt  DateTime @default(now())
+}
