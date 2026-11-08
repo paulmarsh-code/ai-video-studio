@@ -14,6 +14,9 @@ Plan, check and log AI video shots *before* spending generation credits. The fir
 | Acceptance tests 1–7 and 16, plus regressions (`tests/`) | ✅ 19 passing |
 | Checkpoint page showing three Paid On Time shots composed and checked | ✅ |
 | Shot Director form, geometry editor (React Konva), persistence, library L1, animatic R1 | ⏳ next |
+| Phase 2 adds: take review, metrics, animatic R2, **animatic-to-rough-cut (D11)** | planned |
+
+Decisions since the spec: see `docs/DECISIONS.md`.
 
 ## Run it
 
