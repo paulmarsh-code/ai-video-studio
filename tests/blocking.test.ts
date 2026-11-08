@@ -15,3 +15,13 @@ describe("Blocking Plan v4", () => {
     expect(r.actors.filter((a) => a.inView).map((a) => a.characterId)).toEqual(["jade"]);
   });
 });
+
+describe("Regression: close-up viewfinder (Paul, 8 Nov 2026)", () => {
+  it("a person alone in frame is never the soft over-the-shoulder foreground", () => {
+    const plan = { ...SCENE1_PLAN, cameras: [{ id: "cu", name: "CU", preset: "single-cu" as const, position: { x: 0.4, y: 4.4 }, lookAt: { x: 1.5, y: 5.4 } }] };
+    const r = readCamera(plan, plan.cameras[0]);
+    const inView = r.actors.filter((a) => a.inView);
+    expect(inView.map((a) => a.characterId)).toEqual(["jade"]);
+    expect(inView[0].foreground).toBe(false);
+  });
+});

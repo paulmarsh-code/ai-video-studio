@@ -100,7 +100,8 @@ export function readCamera(plan: GeometryPlanData, cam: PlanCamera): CameraReadi
   const inView = actors.filter((a) => a.inView).sort((a, b) => a.depthM - b.depthM);
   const nearest = inView[0];
   for (const a of actors) a.foreground = false;
-  if (nearest && nearest.depthM < FOREGROUND_DEPTH_M && (inView.length === 1 || inView[1].depthM - nearest.depthM >= FOREGROUND_GAP_M)) {
+  // Only when someone else is in view further back: a lone person is the subject, facing camera.
+  if (nearest && inView.length >= 2 && nearest.depthM < FOREGROUND_DEPTH_M && inView[1].depthM - nearest.depthM >= FOREGROUND_GAP_M) {
     nearest.foreground = true;
   }
 
