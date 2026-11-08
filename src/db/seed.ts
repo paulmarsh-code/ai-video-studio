@@ -26,7 +26,7 @@ const PANELS: PanelSeed[] = [
   {
     code: "C1", description: "Jade walks in from the screen-wall end towards the group at the cocktail table.",
     emotion: "confident, upbeat", durationSec: 5,
-    shot: { sceneContext: "Jade arrives at the GLOWVANE launch party and walks towards the group at the cocktail table.", visibleIds: ["jade", "chase", "marcus", "nina"], excludedIds: [], actions: "Jade walks towards the table holding a champagne glass, smiling.", cameraId: "main", audioMode: "off", intensity: "natural" },
+    shot: { subjectId: "jade", sceneContext: "Jade arrives at the GLOWVANE launch party and walks towards the group at the cocktail table.", visibleIds: ["jade", "chase", "marcus", "nina"], excludedIds: [], actions: "Jade walks towards the table holding a champagne glass, smiling.", cameraId: "main", audioMode: "off", intensity: "natural" },
   },
   {
     code: "C2a", description: "Jade joins the group and asks about the campaign.", emotion: "warm, professional",
@@ -51,7 +51,7 @@ const PANELS: PanelSeed[] = [
   {
     code: "C4c", description: "Jade sets her glass down, makes a rude gesture at Chase and walks off. Marcus and Nina are shocked.",
     emotion: "furious, then defiant", durationSec: 5,
-    shot: { sceneContext: "Jade leaves the conversation.", visibleIds: ["jade", "marcus", "nina"], excludedIds: ["chase"], actions: "Jade sets her glass down, makes a rude one-finger gesture towards Chase, and walks away towards the screen wall. Marcus and Nina look utterly shocked.", cameraId: "main", audioMode: "off", intensity: "big" },
+    shot: { subjectId: "jade", sceneContext: "Jade leaves the conversation.", visibleIds: ["jade", "marcus", "nina"], excludedIds: ["chase"], actions: "Jade sets her glass down, makes a rude one-finger gesture towards Chase, and walks away towards the screen wall. Marcus and Nina look utterly shocked.", cameraId: "main", audioMode: "off", intensity: "big" },
   },
 ];
 

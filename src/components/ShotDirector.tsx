@@ -98,6 +98,14 @@ export function ShotDirector(props: {
         </fieldset>
 
         <label className={label}>
+          Main subject (who the shot is about)
+          <select className={input} value={spec.subjectId ?? ""} onChange={(e) => set("subjectId", e.target.value || undefined)}>
+            <option value="">{speaker ? `Speaker (${speaker.name})` : "First visible character"}</option>
+            {cast.filter((c) => spec.visibleIds.includes(c.id)).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </label>
+
+        <label className={label}>
           Story moment (no quoted dialogue)
           <textarea className={input} rows={2} value={spec.sceneContext} onChange={(e) => set("sceneContext", e.target.value)} />
         </label>

@@ -201,3 +201,26 @@ describe("16. Native audio rule", () => {
     expect(p.settings.audioReferences).toBe("none");
   });
 });
+
+describe("Regression: C1 review by Paul, 8 Nov 2026", () => {
+  const c1 = base({
+    subjectId: "jade",
+    visibleIds: ["jade", "chase", "marcus", "nina"],
+    actions: "Jade walks towards the table holding a champagne glass, smiling.",
+    cameraId: "main",
+    audioMode: "off",
+    durationSec: 5,
+  });
+  it("a silent shot has no 'listen silently' line", () => {
+    expect(composeKlingPrompt(c1, CAST, SCENE1_PLAN).text).not.toContain("listen");
+  });
+  it("the background is described behind the main subject, not the last person listed", () => {
+    const t = composeKlingPrompt(c1, CAST, SCENE1_PLAN).text;
+    expect(t).toContain("Background behind Jade: the screen wall.");
+    expect(t).not.toContain("behind Nina");
+  });
+  it("a main subject who is not visible is an error", () => {
+    const f = validateShot({ ...c1, subjectId: "marcus", visibleIds: ["jade"] }, CAST);
+    expect(codes(f)).toContain("SUBJECT_NOT_VISIBLE");
+  });
+});

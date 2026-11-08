@@ -37,6 +37,11 @@ const INTENSITY_TEXT = {
   big: "Big, clearly readable facial expression.",
 } as const;
 
+/** Main subject: explicit, else the speaker, else the first visible character. */
+export function mainSubjectId(shot: ShotSpec): string | undefined {
+  return shot.subjectId ?? shot.speakerId ?? shot.visibleIds[0];
+}
+
 export function composeKlingPrompt(
   shot: ShotSpec,
   cast: CastMember[],
@@ -47,6 +52,8 @@ export function composeKlingPrompt(
   const visible = shot.visibleIds.map(byId).filter((c): c is CastMember => !!c);
   const speaker = shot.speakerId ? byId(shot.speakerId) : undefined;
   const s: Record<string, string> = {};
+  const subjectId = mainSubjectId(shot);
+  const subject = subjectId ? byId(subjectId) : undefined;
 
   // 1. References — only visible characters, never excluded ones.
   const refs = visible.map((c) => `${c.name}'s approved character image`);
@@ -61,9 +68,8 @@ export function composeKlingPrompt(
   const cam = plan?.cameras.find((c) => c.id === shot.cameraId);
   if (plan && cam) {
     const reading = readCamera(plan, cam);
-    const frame = describeFrame(reading, cast, shot.visibleIds, shot.speakerId);
+    const frame = describeFrame(reading, cast, shot.visibleIds, subjectId);
     // Over-the-shoulder foreground: only a non-subject person, and only when 2+ people are visible.
-    const subjectId = shot.speakerId ?? shot.visibleIds[shot.visibleIds.length - 1];
     const fg = reading.actors
       .filter(
         (a) =>
@@ -79,7 +85,7 @@ export function composeKlingPrompt(
       (fg.length ? ` ${joinNames(fg)} in the soft foreground, seen from behind over the shoulder.` : "") +
       (shot.distance && visible.length > 1 ? ` ${DISTANCE_TEXT[shot.distance]}` : "");
     if (reading.backgroundView) {
-      const subj = speaker?.name ?? visible[visible.length - 1]?.name ?? "the subject";
+      const subj = subject?.name ?? "the subject";
       s.background = `Background behind ${subj}: the ${reading.backgroundView}.`;
     }
     s.camera = PRESET_TEXT[cam.preset];
@@ -90,7 +96,7 @@ export function composeKlingPrompt(
     s.character = `${speaker.name} is ${speaker.voiceLock}`;
   }
   const listeners = visible.filter((c) => c.id !== speaker?.id).map((c) => c.name);
-  if (listeners.length) s.listeners = `${joinNames(listeners)} listen${listeners.length === 1 ? "s" : ""} silently.`;
+  if (speaker && listeners.length) s.listeners = `${joinNames(listeners)} listen${listeners.length === 1 ? "s" : ""} silently.`;
 
   // 5. Dialogue — the only quoted text in the prompt.
   const performance = [

@@ -47,6 +47,14 @@ export function validateShot(
     }
   }
 
+  if (shot.subjectId && !shot.visibleIds.includes(shot.subjectId)) {
+    out.push({
+      code: "SUBJECT_NOT_VISIBLE", severity: "error", field: "subjectId",
+      message: `${name(shot.subjectId)} is the main subject but is not visible.`,
+      fix: `Make ${name(shot.subjectId)} visible, or choose another main subject.`,
+    });
+  }
+
   // Speaker and dialogue attribution.
   const hasDialogue = !!shot.dialogue && shot.dialogue.trim().length > 0;
   if (hasDialogue && !shot.speakerId) {

@@ -80,6 +80,8 @@ export interface ShotSpec {
   presentIds: string[];
   visibleIds: string[];
   excludedIds: string[];
+  /** Main subject of the shot (who the camera is about). Defaults to the speaker. */
+  subjectId?: string;
   speakerId?: string;
   /** Exact approved dialogue for the speaker (locked field). */
   dialogue?: string;
