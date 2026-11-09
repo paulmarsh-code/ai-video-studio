@@ -31,6 +31,7 @@ export default async function ShotPage({ params }: { params: Promise<{ id: strin
         cast={cast}
         plan={s.plan?.data}
         promptVersions={versions}
+        genre={repo.getProjectGenre(db, id)}
       />
     </div>
   );

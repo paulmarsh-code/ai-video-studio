@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "@/db/client";
 import * as repo from "@/lib/repo";
+import { GENRE_PROFILES } from "@/lib/domain/genre";
 import { AnimaticPlayer } from "@/components/AnimaticPlayer";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +31,7 @@ export default async function AnimaticPage({ params }: { params: Promise<{ id: s
         cast={repo.getCast(db, id)}
         initial={anim?.timeline ?? { lineAudio: {}, durations: {} }}
         version={anim?.version ?? 0}
+        postGapSec={GENRE_PROFILES[repo.getProjectGenre(db, id)].postGapSec}
       />
     </div>
   );

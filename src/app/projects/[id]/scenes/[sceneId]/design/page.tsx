@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "@/db/client";
 import { designScene } from "@/lib/domain/director";
+import { GENRE_PROFILES } from "@/lib/domain/genre";
 import * as repo from "@/lib/repo";
 import { DesignBoard } from "@/components/DesignBoard";
 
@@ -20,7 +21,8 @@ export default async function DesignPage({ params }: { params: Promise<{ id: str
     spec: sh.spec,
     description: s.panels.find((p) => p.id === sh.panelId)?.description,
   }));
-  const design = designScene(s.plan.data, inputs, name);
+  const genre = repo.getProjectGenre(db, id);
+  const design = designScene(s.plan.data, inputs, name, genre);
   return (
     <div className="max-w-6xl">
       <p className="text-sm text-neutral-500">
@@ -34,7 +36,7 @@ export default async function DesignPage({ params }: { params: Promise<{ id: str
         Pick a different option for any shot, then apply. You can still fine-tune on the floor plan, which will warn you if a change makes a shot worse.
       </p>
       <p className="mt-1 text-sm text-neutral-500">
-        Rules and sources: docs/CINEMA_RULES.md. Uses the people and furniture from floor plan v{s.plan.version}.
+        Genre: <strong>{GENRE_PROFILES[genre].label}</strong> ({GENRE_PROFILES[genre].summary}) Change it on the project page. Rules and sources: docs/CINEMA_RULES.md. Uses the people and furniture from floor plan v{s.plan.version}.
       </p>
       <DesignBoard projectId={id} sceneId={sceneId} plan={s.plan.data} cast={cast} design={design} shots={inputs} />
     </div>

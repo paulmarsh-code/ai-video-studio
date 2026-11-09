@@ -24,7 +24,7 @@ export async function savePromptAction(shotId: string, projectId: string) {
   if (!shot) throw new Error("Shot not found");
   const cast = repo.getCast(db, projectId);
   const plan = repo.getLatestPlan(db, shot.sceneId)?.data;
-  const composed = composeKlingPrompt(shot.spec, cast, plan);
+  const composed = composeKlingPrompt(shot.spec, cast, plan, undefined, repo.getProjectGenre(db, projectId));
   const findings = [...validateShot(shot.spec, cast, plan), ...validatePrompt(composed.text, shot.spec, cast)];
   const version = repo.savePromptVersion(db, shotId, composed.text, composed.settings, findings);
   revalidatePath("/", "layout");
@@ -100,4 +100,10 @@ export async function applyShotDesignAction(
   }
   revalidatePath("/", "layout");
   return { version };
+}
+
+export async function setGenreAction(projectId: string, genre: string) {
+  const { asGenre } = await import("@/lib/domain/genre");
+  repo.setProjectGenre(await getDb(), projectId, asGenre(genre));
+  revalidatePath("/", "layout");
 }

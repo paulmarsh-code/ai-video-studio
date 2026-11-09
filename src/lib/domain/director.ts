@@ -4,6 +4,7 @@
 
 import { deriveDuration } from "./duration";
 import { cameraPlacementProblem, occlusions, PRESET_FOV, readCamera, type CameraReading } from "./geometry";
+import { GENRE_PROFILES, genreBonus, type Genre } from "./genre";
 import type { CameraPreset, GeometryPlanData, PlanCamera, Point, ShotSpec } from "./types";
 
 export type MomentKind = "establishing" | "dialogue" | "peak" | "reaction" | "exit";
@@ -174,6 +175,7 @@ function score(
   line: [Point, Point] | undefined,
   mem: Memory,
   name: (id: string) => string,
+  genre: Genre = "neutral",
 ): { ok: boolean; score: number; reasons: string[]; reading?: CameraReading } {
   const cam = cand.camera;
   if (cameraPlacementProblem(plan, cam)) return { ok: false, score: 0, reasons: [] };
@@ -202,6 +204,11 @@ function score(
     exit: { wide: 3, group: 2.5 },
   };
   s += pref[moment][cand.role] ?? 0;
+  let gb = genreBonus(genre, cand.role, moment);
+  const words = (shot.dialogue ?? "").trim().split(/\s+/).filter(Boolean).length;
+  if (moment === "dialogue" && cand.role === "group" && words > 0 && words <= 8) gb += GENRE_PROFILES[genre].shortLineTwoShotBonus ?? 0;
+  s += gb;
+  if (gb > 0.4 && GENRE_PROFILES[genre].reason) reasons.push(GENRE_PROFILES[genre].reason);
 
   // R-SHOULDER.
   if (cand.role === "ots") {
@@ -221,7 +228,7 @@ function score(
   }
 
   // Subject size suited to the shot (closer for emotion).
-  const ideal = cand.role === "cu" ? 1.6 : cand.role === "ots" ? 2.2 : cand.role === "group" ? 2.6 : 4.5;
+  const ideal = (cand.role === "cu" ? 1.6 : cand.role === "ots" ? 2.2 : cand.role === "group" ? 2.6 : 4.5) * GENRE_PROFILES[genre].distanceFactor;
   s += 1 - Math.min(1, Math.abs(subj.depthM - ideal) / ideal);
 
   // R-SCREEN: characters keep their side of the screen.
@@ -299,7 +306,7 @@ function chooseLine(plan: GeometryPlanData, shots: ShotInput[]): [string, string
   return undefined;
 }
 
-function designForSide(plan: GeometryPlanData, shots: ShotInput[], side: number, line: [string, string] | undefined, name: (id: string) => string, seed?: Map<string, number>) {
+function designForSide(plan: GeometryPlanData, shots: ShotInput[], side: number, line: [string, string] | undefined, name: (id: string) => string, seed?: Map<string, number>, genre: Genre = "neutral") {
   const pos = (id: string) => plan.actors.find((a) => a.characterId === id)?.position;
   const linePts = line && pos(line[0]) && pos(line[1]) ? ([pos(line[0])!, pos(line[1])!] as [Point, Point]) : undefined;
   const mem: Memory = { screenSide: new Map(seed ?? []), background: new Map(), lastBySubject: new Map() };
@@ -309,7 +316,7 @@ function designForSide(plan: GeometryPlanData, shots: ShotInput[], side: number,
     const moment = classifyMoment(sh, i);
     const partner = partnerFor(plan, sh.spec, line);
     const scored = candidates(plan, sh.spec, moment, partner, name)
-      .map((c) => ({ c, r: score(plan, c, sh.spec, moment, side, linePts, mem, name) }))
+      .map((c) => ({ c, r: score(plan, c, sh.spec, moment, side, linePts, mem, name, genre) }))
       .filter((x) => x.r.ok)
       .sort((a, b) => b.r.score - a.r.score);
     // Keep the best few distinct options (different type, or clearly different position).
@@ -366,16 +373,16 @@ export function groupMultiShot(shots: ShotInput[], maxSec = 15, maxCuts = 6): Mu
   return groups;
 }
 
-export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (id: string) => string): SceneDesign {
+export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (id: string) => string, genre: Genre = "neutral"): SceneDesign {
   const line = chooseLine(plan, shots);
   // Anchor screen sides from the dialogue (R-SCREEN): run the dialogue shots first, take the
   // side each character lands on, then design the whole scene against that anchor.
   const seedFor = (side: number) => {
     const dialogue = shots.filter((sh, i) => ["dialogue", "peak"].includes(classifyMoment(sh, i)));
-    return designForSide(plan, dialogue, side, line, name).mem.screenSide;
+    return designForSide(plan, dialogue, side, line, name, undefined, genre).mem.screenSide;
   };
-  const a = designForSide(plan, shots, 1, line, name, seedFor(1));
-  const b = designForSide(plan, shots, -1, line, name, seedFor(-1));
+  const a = designForSide(plan, shots, 1, line, name, seedFor(1), genre);
+  const b = designForSide(plan, shots, -1, line, name, seedFor(-1), genre);
   const best = line ? (a.total >= b.total ? { side: 1, ...a } : { side: -1, ...b }) : { side: 1, ...a };
   return { side: best.side, lineOfAction: line, shots: best.designs, multiShot: groupMultiShot(shots) };
 }

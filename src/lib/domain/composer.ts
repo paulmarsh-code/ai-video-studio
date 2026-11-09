@@ -2,6 +2,7 @@
 // It never rewrites approved dialogue and never names characters excluded from the shot.
 
 import { describeFrame, PRESET_TEXT, readCamera } from "./geometry";
+import { GENRE_PROFILES, type Genre } from "./genre";
 import { capitalise, joinNames, stripQuotes } from "./text";
 import {
   KLING_OMNI_PRESET,
@@ -47,6 +48,7 @@ export function composeKlingPrompt(
   cast: CastMember[],
   plan?: GeometryPlanData,
   preset: ProviderPreset = KLING_OMNI_PRESET,
+  genre: Genre = "neutral",
 ): ComposedPrompt {
   const byId = (id: string) => cast.find((c) => c.id === id);
   const visible = shot.visibleIds.map(byId).filter((c): c is CastMember => !!c);
@@ -88,7 +90,7 @@ export function composeKlingPrompt(
       const subj = subject?.name ?? "the subject";
       s.background = `Background behind ${subj}: the ${reading.backgroundView}.`;
     }
-    s.camera = PRESET_TEXT[cam.preset];
+    s.camera = PRESET_TEXT[cam.preset].replace("static camera", GENRE_PROFILES[genre].movement);
   }
 
   // 4. Character and voice lock — word for word.
@@ -112,6 +114,9 @@ export function composeKlingPrompt(
   }
   if (shot.additionalInstructions) s.additional = stripQuotes(shot.additionalInstructions);
 
+  // Genre look (lighting, lens, tone) — never contradicts the camera line.
+  if (genre !== "neutral") s.style = `Look: ${GENRE_PROFILES[genre].look}.`;
+
   // 8. Guard lines.
   const guards: string[] = [];
   if (speaker) {
@@ -129,7 +134,7 @@ export function composeKlingPrompt(
 
   const order = [
     "references", "scene", "positions", "character", "listeners", "performance",
-    "dialogue", "camera", "background", "additional", "guards",
+    "dialogue", "camera", "background", "style", "additional", "guards",
   ];
   const text = order.filter((k) => s[k]).map((k) => s[k]).join("\n");
 

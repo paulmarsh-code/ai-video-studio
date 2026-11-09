@@ -12,7 +12,6 @@ import type { CastMember } from "@/lib/domain/types";
 import type { AnimaticTimeline, PanelRow } from "@/lib/repo";
 
 const PRE_GAP = 0.3;
-const POST_GAP = 0.5;
 
 export function AnimaticPlayer(props: {
   projectId: string;
@@ -22,8 +21,11 @@ export function AnimaticPlayer(props: {
   cast: CastMember[];
   initial: AnimaticTimeline;
   version: number;
+  /** Pause after each line, from the genre profile. */
+  postGapSec: number;
 }) {
   const { panels, cast } = props;
+  const POST_GAP = props.postGapSec;
   const [timeline, setTimeline] = useState<AnimaticTimeline>(props.initial);
   const [saved, setSaved] = useState<AnimaticTimeline>(props.initial);
   const [savedVersion, setSavedVersion] = useState(props.version);

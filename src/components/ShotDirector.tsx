@@ -7,6 +7,7 @@ import { useMemo, useState, useTransition } from "react";
 import { addShotToLibraryAction, savePromptAction, saveShotAction } from "@/app/actions";
 import { composeKlingPrompt, mainSubjectId } from "@/lib/domain/composer";
 import { deriveDuration } from "@/lib/domain/duration";
+import type { Genre } from "@/lib/domain/genre";
 import type { AudioMode, CastMember, DistancePreset, Finding, GeometryPlanData, Intensity, ShotSpec } from "@/lib/domain/types";
 import { validatePrompt, validateShot } from "@/lib/domain/validator";
 import { CopyButton } from "./CopyButton";
@@ -41,6 +42,7 @@ export function ShotDirector(props: {
   cast: CastMember[];
   plan?: GeometryPlanData;
   promptVersions: { version: number; createdAt: string }[];
+  genre: Genre;
 }) {
   const { cast, plan } = props;
   const [spec, setSpec] = useState<ShotSpec>(props.initial);
@@ -49,7 +51,7 @@ export function ShotDirector(props: {
   const [pending, start] = useTransition();
   const set = <K extends keyof ShotSpec>(k: K, v: ShotSpec[K]) => setSpec((s) => ({ ...s, [k]: v }));
 
-  const composed = useMemo(() => composeKlingPrompt(spec, cast, plan), [spec, cast, plan]);
+  const composed = useMemo(() => composeKlingPrompt(spec, cast, plan, undefined, props.genre), [spec, cast, plan, props.genre]);
   const findings: Finding[] = useMemo(
     () => [...validateShot(spec, cast, plan), ...validatePrompt(composed.text, spec, cast)],
     [spec, cast, plan, composed.text],

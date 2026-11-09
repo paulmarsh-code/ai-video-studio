@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getDb } from "@/db/client";
 import * as repo from "@/lib/repo";
 import { LibraryButton } from "@/components/LibraryButton";
+import { GenrePicker } from "@/components/GenrePicker";
 import { addCharacterToLibraryAction } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +21,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       <p className="text-sm text-neutral-500"><Link href="/">Projects</Link> /</p>
       <h1 className="text-2xl font-semibold">{project.name}</h1>
       {project.demo && <p className="mt-1 text-sm text-amber-700">Demo project. All data is illustrative and editable, not approved production assets.</p>}
+
+      <GenrePicker projectId={id} genre={repo.getProjectGenre(db, id)} />
 
       <h2 className="mt-8 text-lg font-semibold">Scenes</h2>
       <ul className="mt-3 space-y-2">

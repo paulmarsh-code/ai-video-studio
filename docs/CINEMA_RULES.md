@@ -53,3 +53,19 @@ The rules are geometric approximations of craft guidance. They are not a substit
 4. **Choose the side of the line** that scores best across the whole scene, then **offer the best 2–3 options per panel**, each with a plain-English reason.
 5. **Group panels into multi-shot clips** where R-MULTISHOT allows.
 6. **When the user changes the plan**, re-score every affected shot and report what got worse (Impact).
+
+## Genre
+
+Genre changes **taste**: which shots are preferred, camera movement, light and lens, and pacing. It never changes the continuity rules (R-180, R-SCREEN, R-OCCLUSION, R-BACKGROUND). Profiles are in `src/lib/domain/genre.ts` and are chosen per project.
+
+| Genre | Preferred shots | Camera movement in prompts | Look in prompts | Animatic pause after a line |
+|---|---|---|---|---|
+| General | Coverage rules only | Static | Natural, even lighting | 0.5 s |
+| Comedy | Two-shots and wides; **short lines and put-downs play in a two-shot**; hold reactions | Static | Bright, even lighting, natural lens | 0.8 s |
+| Drama | Over-the-shoulders building to close-ups; close-up at the peak | Slow, subtle push-in | Soft motivated light, shallow depth of field | 0.7 s |
+| Horror | Tight frames hiding the surroundings; wide only to establish | Slow creeping move | Low-key light, deep shadows | 1.0 s |
+| Sci-fi | Wides for scale | Smooth glide | Cool coloured light, wide lens | 0.6 s |
+| Action | Wides for geography plus tight impact shots | Dynamic handheld | High contrast | 0.3 s |
+| Documentary | Observational; no staged over-the-shoulders | Steady observational | Natural light | 0.5 s |
+
+Sources: Mascelli (camera angles, close-ups), Katz (staging and coverage), Brown (lens, light and movement), and common genre practice. The comedy two-shot convention is "play the joke in one frame so the timing isn't cut up".

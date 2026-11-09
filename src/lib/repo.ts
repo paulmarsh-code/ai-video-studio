@@ -4,6 +4,7 @@ import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { persist, type DB } from "@/db/client";
 import * as t from "@/db/schema";
+import { asGenre, type Genre } from "./domain/genre";
 import type { CastMember, Finding, GeometryPlanData, PlanView, Pronoun, ShotSpec } from "./domain/types";
 
 export interface PanelRow {
@@ -195,4 +196,18 @@ export function shotsWithApprovedTakes(db: DB, sceneId: string): Set<string> {
   const ids = db.select().from(t.shots).where(eq(t.shots.sceneId, sceneId)).all().map((x) => x.id);
   if (!ids.length) return new Set();
   return new Set(db.select().from(t.takes).where(and(inArray(t.takes.shotId, ids), eq(t.takes.verdict, "approved"))).all().map((x) => x.shotId));
+}
+
+// ---- Genre (Stage 1 brief) ----
+
+export function getProjectGenre(db: DB, projectId: string): Genre {
+  const p = getProject(db, projectId);
+  return asGenre((p?.brief as { genre?: string } | undefined)?.genre);
+}
+
+export function setProjectGenre(db: DB, projectId: string, genre: Genre) {
+  const p = getProject(db, projectId);
+  if (!p) throw new Error("Project not found");
+  db.update(t.projects).set({ brief: { ...(p.brief as object), genre } }).where(eq(t.projects.id, projectId)).run();
+  persist(db);
 }

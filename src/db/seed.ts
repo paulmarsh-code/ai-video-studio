@@ -65,7 +65,7 @@ export function seedDemo(db: DB): string {
   const projectId = uid();
   db.insert(t.projects).values({
     id: projectId, code: "POT", name: "Paid On Time", type: "series", demo: true,
-    brief: { concept: "A creator chases late payment from a dismissive brand team.", episodes: 4, episodeSec: 30, aspect: "9:16", style: "photorealistic", note: "Illustrative demo data" },
+    brief: { concept: "A creator chases late payment from a dismissive brand team.", episodes: 4, episodeSec: 30, aspect: "9:16", style: "photorealistic", genre: "comedy", note: "Illustrative demo data" },
   }).run();
 
   for (const c of CAST) {
