@@ -84,6 +84,11 @@ describe("Parsing ChatGPT's reply", () => {
 });
 
 describe("Venue describe", () => {
+  it("atmosphere from the user drives setting and light; left out when empty", () => {
+    expect(venueDescribePrompt("image", "", "outdoors, late evening, warm festoon lights")).toContain("Setting, atmosphere, light and time of day: outdoors, late evening, warm festoon lights.");
+    expect(venueDescribePrompt("image")).not.toContain("Setting, atmosphere");
+  });
+
   it("picture prompt removes people and brand signs", () => {
     const p = venueDescribePrompt("image");
     expect(p).toContain("Leave out any people");
@@ -124,6 +129,8 @@ describe("Asking for a change", () => {
     expect(p).toContain("IDENTITY ANCHORS: bob; cat-eye liner");
     expect(p).toContain("AGE RANGE:");
     expect(p).toContain("three equal vertical panels");
+    expect(p).toContain("not a single picture of the person");
+    expect(p).toContain("same three-panel layout as the attached board");
     expect(p).not.toMatch(/["“”]/);
   });
 

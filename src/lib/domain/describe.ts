@@ -58,7 +58,8 @@ const SHEET_COMMON = "Thin plain white dividers between panels, all panels exact
 /** Step 2 of the character prompt: one image, three equal panels side by side. */
 export function characterSheetRequest(style = "photorealistic"): string {
   return [
-    `Step 2: using the description above, create ONE ${style} image: a character reference sheet in landscape 3:2 format, divided into three equal vertical panels side by side.`,
+    `Step 2: using the description above, create ONE ${style} image: a character reference board in landscape 3:2 format (wider than it is tall), divided into three equal vertical panels side by side.`,
+    "It must be a three-panel board, not a single picture of the person.",
     "Left panel: front view, the whole body from the top of the head to the shoes, standing naturally, facing the camera.",
     "Middle panel: back view, the whole body from the top of the head to the shoes, facing directly away from the camera, face not visible.",
     "Right panel: face close-up, head and shoulders, looking straight into the camera, neutral relaxed expression.",
@@ -74,7 +75,8 @@ export function venueSheetRequest(viewNames?: string[], style = "photorealistic"
     ? `Top-left: looking towards the ${viewNames[0]}. Top-right: the ${viewNames[1]}. Bottom-left: the ${viewNames[2]}. Bottom-right: the ${viewNames[3]}.`
     : "Use the four VIEWS in the order you listed them: top-left is the first view, top-right the second, bottom-left the third, bottom-right the fourth.";
   return [
-    `Step 2: using the description above, create ONE ${style} image in landscape 3:2 format, divided into a 2 by 2 grid of four equal panels, each showing the same place from the main viewpoint looking in a different direction.`,
+    `Step 2: using the description above, create ONE ${style} image in landscape 3:2 format (wider than it is tall), divided into a 2 by 2 grid of four equal panels, each showing the same place from the main viewpoint looking in a different direction.`,
+    "It must be a four-panel board, not a single picture of the place.",
     order,
     "Eye-level wide shots, no people, the same layout, materials and light in every panel.",
     SHEET_COMMON,
@@ -99,7 +101,8 @@ export interface CurrentCharacter {
  */
 export function characterChangePrompt(current: CurrentCharacter, change: string): string {
   return [
-    "I am refining an original character for a short AI video. The current description is below, and the attached image shows how the character looks now.",
+    "I am refining an original character for a short AI video. The current description is below. The attached image board shows how the character looks now: front, back and face side by side.",
+    "Your reply will be the updated description and ONE new image board in exactly the same three-panel layout as the attached board.",
     `Change only this: ${stripQuotes(change).trim() || "(describe the change here)"}`,
     "Keep everything else exactly the same: the same person, face, proportions and any details the change does not mention.",
     "",
@@ -122,7 +125,8 @@ export function characterChangePrompt(current: CurrentCharacter, change: string)
 
 export function venueChangePrompt(current: { setting?: string; description: string; views: string[] }, change: string): string {
   return [
-    "I am refining a location for a short AI video. The current description is below, and the attached image shows how it looks now.",
+    "I am refining a location for a short AI video. The current description is below. The attached image board shows how it looks now: four views in a 2 by 2 grid.",
+    "Your reply will be the updated description and ONE new image board in exactly the same 2 by 2 layout as the attached board.",
     `Change only this: ${stripQuotes(change).trim() || "(describe the change here)"}`,
     "Keep everything else exactly the same, including the four views and their names unless the change says otherwise.",
     "",
@@ -169,7 +173,9 @@ export function characterDescribePrompt(source: DescribeSource, idea = "", perso
   ].join("\n");
 }
 
-export function venueDescribePrompt(source: DescribeSource, idea = ""): string {
+export function venueDescribePrompt(source: DescribeSource, idea = "", atmosphere = ""): string {
+  // The user's own words on setting, light and mood (a picture may not show the time of day wanted).
+  const mood = stripQuotes(atmosphere).trim();
   const intro = source === "image"
     ? [
         "I am designing a location for a short AI video. Use the attached picture as the reference for the place.",
@@ -181,6 +187,7 @@ export function venueDescribePrompt(source: DescribeSource, idea = ""): string {
       ];
   return [
     ...intro,
+    ...(mood ? [`Setting, atmosphere, light and time of day: ${mood}. Use this for SETTING and LIGHT AND TIME OF DAY.`] : []),
     "Imagine standing at the main viewpoint, where a scene would usually start, and describe what is ahead, to the left, to the right and behind.",
     ...REPLY_RULES,
     "",

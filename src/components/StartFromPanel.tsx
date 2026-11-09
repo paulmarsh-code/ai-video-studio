@@ -11,6 +11,7 @@ import { CopyButton } from "./CopyButton";
 import { SheetCutter, type Cutter } from "./SheetCutter";
 import { ActionButton } from "./ActionButton";
 import type { DescribeSource } from "@/lib/domain/describe";
+import { downloadBoard } from "@/lib/board";
 
 export type CreateResult = { ok: boolean; text: string };
 
@@ -196,7 +197,7 @@ export function StartFromPanel(p: StartFromPanelProps) {
             )}
             <div className="space-y-1">
               <div className="flex flex-wrap items-center gap-2">
-                <span>{n()} Copy the prompt, then in a new ChatGPT chat paste it{mode === "image" ? " with your picture" : mode === "change" ? " with the current image" : ""}:</span>
+                <span>{n()} Copy the prompt, then in a new ChatGPT chat paste it{mode === "image" ? " with your picture" : mode === "change" ? " with the current image board" : ""}:</span>
                 <CopyButton text={prompt} label={mode === "change" ? "Copy change prompt" : "Copy prompt"} />
                 {p.canDescribe && (
                   <ActionButton variant="secondary" label="Or: describe with GPT" busyLabel="Describing…" doneLabel="Described"
@@ -205,14 +206,21 @@ export function StartFromPanel(p: StartFromPanelProps) {
                 )}
               </div>
               {mode === "change" && !!p.change?.currentImages.length && (
-                <p className="flex flex-wrap items-center gap-2 text-xs text-neutral-600">Current image to attach:
-                  {p.change.currentImages.map((a) => (
-                    <a key={a.assetId} className="flex items-center gap-1 text-blue-700 underline" href={`/api/assets/${a.assetId}`} download>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={`/api/assets/${a.assetId}`} alt="" className="h-10 w-7 rounded object-cover" />Download {a.label}
-                    </a>
-                  ))}
-                </p>
+                p.change.currentImages.length === views ? (
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-600">Attach the current image board in ChatGPT:
+                    <ActionButton variant="secondary" size="sm" label="Download current image board" busyLabel="Building…" doneLabel="Board downloaded" testId="download-board"
+                      onAction={() => downloadBoard(p.change!.currentImages.map((a) => a.assetId), p.sheet.cols, p.sheet.rows, `${p.baseCode.replace(/_SOURCE$/, "")}_current_board.png`)} />
+                  </div>
+                ) : (
+                  <p className="flex flex-wrap items-center gap-2 text-xs text-neutral-600">Current image to attach:
+                    {p.change.currentImages.map((a) => (
+                      <a key={a.assetId} className="flex items-center gap-1 text-blue-700 underline" href={`/api/assets/${a.assetId}`} download>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={`/api/assets/${a.assetId}`} alt="" className="h-10 w-7 rounded object-cover" />Download {a.label}
+                      </a>
+                    ))}
+                  </p>
+                )
               )}
               <p className="text-xs text-neutral-500">ChatGPT replies with a description and one image board showing the {views} views.</p>
             </div>

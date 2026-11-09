@@ -6,7 +6,6 @@ import { LibraryButton } from "@/components/LibraryButton";
 import { GenrePicker } from "@/components/GenrePicker";
 import { addCharacterToLibraryAction } from "@/app/actions";
 import * as studio from "@/lib/studioRepo";
-import { AddVenueForm } from "@/components/AddForms";
 
 export const dynamic = "force-dynamic";
 
@@ -38,12 +37,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           <p className={charsReady ? "text-green-700" : "text-amber-700"}>{charsReady ? "Ready" : "Needs approval"}</p>
         </li>
         <li className="rounded-lg border border-neutral-200 bg-white p-3">
-          <p className="font-semibold">2. Venue</p>
-          {venues.map((v) => (
-            <p key={v.id}><Link className="text-blue-700 underline" href={`/projects/${id}/venues/${v.id}`}>{v.name}</Link> <span className={v.status === "approved" ? "text-green-700" : "text-amber-700"}>({v.status})</span></p>
-          ))}
-          {!venuesReady && venues.length === 0 && <p className="text-amber-700">No venue yet</p>}
-          <div className="mt-2"><AddVenueForm projectId={id} /></div>
+          <p className="font-semibold">2. <Link className="text-blue-700 underline" href={`/projects/${id}/venues`}>Venues</Link></p>
+          <p className="text-neutral-600">{venues.length} venue{venues.length === 1 ? "" : "s"} · {venues.filter((v) => v.status === "approved").length} approved</p>
+          <p className={venuesReady ? "text-green-700" : "text-amber-700"}>{venuesReady ? "Ready" : venues.length ? "Needs approval" : "No venue yet"}</p>
         </li>
         <li className="rounded-lg border border-neutral-200 bg-white p-3">
           <p className="font-semibold">3. Storyboard, then shots</p>

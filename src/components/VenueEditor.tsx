@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { approveVenueAction, saveVenueAction, setVenueViewImageAction } from "@/app/studioActions";
 import { uploadBlob } from "@/lib/clientUpload";
 import type { VenueView } from "@/lib/studioRepo";
@@ -21,7 +21,7 @@ const DIRECTIONS = [
   { deg: 315, label: "Behind and right" },
 ];
 
-export function VenueEditor({ venue, projectId, baseCode, canDescribe }: { projectId: string; baseCode: string; canDescribe: boolean; venue: { id: string; name: string; description: string; setting: string; status: string; views: VenueView[] } }) {
+export function VenueEditor({ venue, projectId, baseCode, canDescribe, images }: { projectId: string; baseCode: string; canDescribe: boolean; images?: ReactNode; venue: { id: string; name: string; description: string; setting: string; status: string; views: VenueView[] } }) {
   const router = useRouter();
   // Images are set beside each view, so they are not part of this form's state.
   const initial = { name: venue.name, description: venue.description, setting: (venue.setting === "exterior" ? "exterior" : "interior") as "interior" | "exterior", views: venue.views.map((v) => ({ name: v.name, directionDeg: v.directionDeg })) };
@@ -59,9 +59,6 @@ export function VenueEditor({ venue, projectId, baseCode, canDescribe }: { proje
       ].filter(Boolean).join(" "),
     };
   };
-  // A brand-new venue shows only the start panel until Create fills in the details.
-  const [byHand, setByHand] = useState(false);
-  const showDetails = byHand || venue.views.some((v) => v.imageAssetId) || !!f.description.trim();
 
   const save = async () => {
     const r = await saveVenueAction(venue.id, f);
@@ -77,25 +74,12 @@ export function VenueEditor({ venue, projectId, baseCode, canDescribe }: { proje
   };
 
   return (
+    <div className="grid gap-6 lg:grid-cols-[1fr_1.4fr]" data-testid="venue-details">
     <div className="space-y-3 rounded-xl border border-neutral-200 bg-white p-4">
       <div className="flex items-center gap-2 text-xs">
         <span className={`rounded px-2 py-0.5 ${venue.status === "approved" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>{venue.status}</span>
       </div>
       <label className="block text-sm">Venue name<input className={field} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
-      <StartFromPanel what="place" projectId={projectId} baseCode={`${baseCode}_SOURCE`} canDescribe={canDescribe} promptFor={(src: DescribeSource, text: string) => src === "change"
-          ? venueChangePrompt({ setting: f.setting, description: f.description, views: f.views.map((v) => v.name) }, text)
-          : venueDescribePrompt(src, text)}
-        change={f.description.trim() ? {
-          currentImages: venue.views.filter((v) => v.imageAssetId).map((v) => ({ label: `${v.name} view`, assetId: v.imageAssetId! })),
-        } : undefined} onCreate={create} defaultOpen={!showDetails}
-        sheet={{
-          cols: VENUE_SHEET.cols, rows: VENUE_SHEET.rows,
-          labels: showDetails && f.views.length === 4 ? f.views.map((v) => v.name) : ["view 1", "view 2", "view 3", "view 4"],
-          prompt: venueSheetRequest(showDetails && f.views.length === 4 ? f.views.map((v) => v.name) : undefined),
-        }} />
-      {!showDetails ? (
-        <button type="button" className="text-xs text-neutral-500 underline" onClick={() => setByHand(true)}>Or fill in the details by hand</button>
-      ) : (<>
       <label className="block text-sm">Setting
         <select className={field} value={f.setting} onChange={(e) => setF({ ...f, setting: e.target.value as "interior" | "exterior" })} data-testid="venue-setting">
           <option value="interior">Indoors (a room, hall, office, shop…)</option>
@@ -132,7 +116,21 @@ export function VenueEditor({ venue, projectId, baseCode, canDescribe }: { proje
         {dirty && <span className="text-xs text-amber-700">Unsaved changes</span>}
       </div>
       {msg && <p className={`text-sm ${msg.ok ? "text-green-700" : "text-red-700"}`} role="status">{msg.text}</p>}
-      </>)}
+    </div>
+    <div className="space-y-3 self-start">
+      {images}
+      <StartFromPanel what="place" projectId={projectId} baseCode={`${baseCode}_SOURCE`} canDescribe={canDescribe} changeOnly
+        promptFor={(src: DescribeSource, text: string) => src === "change"
+          ? venueChangePrompt({ setting: f.setting, description: f.description, views: f.views.map((v) => v.name) }, text)
+          : venueDescribePrompt(src, text)}
+        change={{ currentImages: venue.views.filter((v) => v.imageAssetId).map((v) => ({ label: `${v.name} view`, assetId: v.imageAssetId! })) }}
+        onCreate={create}
+        sheet={{
+          cols: VENUE_SHEET.cols, rows: VENUE_SHEET.rows,
+          labels: f.views.length === 4 ? f.views.map((v) => v.name) : ["view 1", "view 2", "view 3", "view 4"],
+          prompt: venueSheetRequest(f.views.length === 4 ? f.views.map((v) => v.name) : undefined),
+        }} />
+    </div>
     </div>
   );
 }

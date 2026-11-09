@@ -176,8 +176,10 @@ export function CharacterEditor({ c, projectId, baseCode, canDescribe, images }:
           ? characterChangePrompt({ appearance: f.appearance, wardrobe: f.wardrobe, mannerisms: f.mannerisms, anchors: anchorsList }, text)
           : characterDescribePrompt(src, text, personality)}
         change={f.appearance.trim() || w?.profile.refs?.front ? {
+          // In board order (front, back, face), so the app can rebuild the current board.
           currentImages: [
             w?.profile.refs?.front && { label: `${c.name}'s front image`, assetId: w.profile.refs.front },
+            w?.profile.refs?.back && { label: `${c.name}'s back image`, assetId: w.profile.refs.back },
             w?.profile.refs?.face && { label: `${c.name}'s face image`, assetId: w.profile.refs.face },
           ].filter((x): x is { label: string; assetId: string } => !!x),
         } : undefined}
