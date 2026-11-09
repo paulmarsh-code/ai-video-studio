@@ -27,7 +27,7 @@ export interface ComposedPrompt {
 }
 
 const DISTANCE_TEXT = {
-  conversational: "They stand about an arm's length apart at the cocktail table.",
+  conversational: "They stand about an arm's length apart.",
   "social-group": "They stand together as a small social group.",
   "across-room": "They are across the room from each other.",
 } as const;
@@ -37,6 +37,19 @@ const INTENSITY_TEXT = {
   natural: "Natural, believable expression.",
   big: "Big, clearly readable facial expression.",
 } as const;
+
+/** Distance line, naming the nearest piece of furniture from the plan (e.g. "at the cocktail table") when there is one. */
+function distanceText(distance: keyof typeof DISTANCE_TEXT, plan: GeometryPlanData, ids: string[]): string {
+  const base = DISTANCE_TEXT[distance];
+  const pts = plan.actors.filter((a) => ids.includes(a.characterId)).map((a) => a.position);
+  if (distance !== "conversational" || !pts.length || !plan.furniture?.length) return base;
+  const mid = { x: pts.reduce((n, p) => n + p.x, 0) / pts.length, y: pts.reduce((n, p) => n + p.y, 0) / pts.length };
+  const near = plan.furniture
+    .map((f) => ({ f, d: Math.hypot(f.position.x - mid.x, f.position.y - mid.y) - f.radiusM }))
+    .filter((x) => x.d <= 1.2)
+    .sort((a, b) => a.d - b.d)[0];
+  return near ? `${base.slice(0, -1)} at the ${stripQuotes(near.f.name)}.` : base;
+}
 
 /** Main subject: explicit, else the speaker, else the first visible character. */
 export function mainSubjectId(shot: ShotSpec): string | undefined {
@@ -85,7 +98,7 @@ export function composeKlingPrompt(
     s.positions =
       `Positions: ${frame}.` +
       (fg.length ? ` ${joinNames(fg)} in the soft foreground, seen from behind over the shoulder.` : "") +
-      (shot.distance && visible.length > 1 ? ` ${DISTANCE_TEXT[shot.distance]}` : "");
+      (shot.distance && visible.length > 1 ? ` ${distanceText(shot.distance, plan, shot.visibleIds)}` : "");
     if (reading.backgroundView) {
       const subj = subject?.name ?? "the subject";
       s.background = `Background behind ${subj}: the ${reading.backgroundView}.`;

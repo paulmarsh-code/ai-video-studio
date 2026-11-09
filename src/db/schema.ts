@@ -47,6 +47,8 @@ export const venues = sqliteTable("venues", {
   projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   description: text("description").notNull().default(""),
+  /** interior | exterior — sets the wording of venue image prompts. */
+  setting: text("setting").notNull().default("interior"),
   status: text("status").notNull().default("draft"),
   views: text("views", { mode: "json" }).notNull().default([]), // PlanView[]
 });

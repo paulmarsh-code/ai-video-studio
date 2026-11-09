@@ -46,7 +46,7 @@ export async function setCharacterRefAction(characterId: string, view: RefView, 
 export async function addVenueAction(projectId: string, name: string) {
   return run((db) => studio.addVenue(db, projectId, name));
 }
-export async function saveVenueAction(venueId: string, input: { name: string; description: string; views: studio.VenueView[] }) {
+export async function saveVenueAction(venueId: string, input: { name: string; description: string; setting: "interior" | "exterior"; views: studio.VenueView[] }) {
   return run((db) => studio.saveVenue(db, venueId, input));
 }
 export async function setVenueViewImageAction(venueId: string, viewName: string, assetId: string) {

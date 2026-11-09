@@ -61,14 +61,24 @@ export function characterRefPrompt(name: string, profile: CharacterProfile, view
   ].filter(Boolean).join("\n\n");
 }
 
-export function venueViewPrompt(venueName: string, description: string, viewName: string, genre: Genre = "neutral", style = "photorealistic"): string {
+export type VenueSetting = "interior" | "exterior";
+
+/** One view of a location: works for any setting (a room, a street, a beach), not just party venues. */
+export function venueViewPrompt(
+  venue: { name: string; description: string; setting?: VenueSetting },
+  viewName: string,
+  genre: Genre = "neutral",
+  style = "photorealistic",
+): string {
+  const kind = venue.setting === "exterior" ? "outdoor location" : "indoor location";
+  const styleWord = style.charAt(0).toUpperCase() + style.slice(1);
   return [
-    `${style.charAt(0).toUpperCase() + style.slice(1)} interior reference image of ${venueName}.`,
-    description ? `${stripQuotes(description)}.` : "",
-    `View looking towards the ${viewName}, eye level, wide lens.`,
+    `VIEW TOWARDS THE ${viewName.toUpperCase()}: ${styleWord} location reference image of ${stripQuotes(venue.name)} (${kind}).`,
+    venue.description.trim() ? `The place: ${sentence(venue.description)}` : "",
+    `Camera at eye level near the middle of the space, looking towards the ${stripQuotes(viewName)}, wide lens, so the ${stripQuotes(viewName)} fills the background clearly. This is one of several views of the same place, so keep the layout, materials and light consistent with the description.`,
     `Lighting and mood: ${GENRE_PROFILES[genre].look}.`,
     "No people. Landscape 16:9. No text, no logos, no watermark.",
-  ].filter(Boolean).join(" ");
+  ].filter(Boolean).join("\n\n");
 }
 
 export interface PanelPromptInput {

@@ -42,9 +42,17 @@ describe("GPT image prompts", () => {
   });
 
   it("venue view prompts have no people and carry the genre look", () => {
-    const p = venueViewPrompt("Launch venue", "Screen wall at the far end", "screen wall", "horror");
+    const p = venueViewPrompt({ name: "Launch venue", description: "Screen wall at the far end" }, "screen wall", "horror");
     expect(p).toContain("No people");
     expect(p).toContain("low-key lighting");
+    expect(p).toContain("indoor location");
+  });
+
+  it("venue prompts suit outdoor settings too", () => {
+    const p = venueViewPrompt({ name: "Brighton seafront", description: "Shingle beach with the pier to the east.", setting: "exterior" }, "pier");
+    expect(p).toContain("outdoor location");
+    expect(p).not.toMatch(/interior|wall/i);
+    expect(p).not.toContain("..");
   });
 
   it("panel prompts use the shot's camera, positions and visible cast, and list references to attach", () => {

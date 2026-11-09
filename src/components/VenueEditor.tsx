@@ -5,21 +5,22 @@ import { useState, useTransition } from "react";
 import { approveVenueAction, saveVenueAction } from "@/app/studioActions";
 import type { VenueView } from "@/lib/studioRepo";
 
+// Directions are as seen from the main viewpoint (where scenes here usually start).
 const DIRECTIONS = [
-  { deg: 90, label: "Far end (straight ahead from the entrance)" },
-  { deg: 0, label: "Right-hand side" },
-  { deg: 180, label: "Left-hand side" },
-  { deg: 270, label: "Near end (behind you at the entrance)" },
-  { deg: 45, label: "Far right corner" },
-  { deg: 135, label: "Far left corner" },
-  { deg: 225, label: "Near left corner" },
-  { deg: 315, label: "Near right corner" },
+  { deg: 90, label: "Ahead (far side)" },
+  { deg: 0, label: "To the right" },
+  { deg: 180, label: "To the left" },
+  { deg: 270, label: "Behind (near side)" },
+  { deg: 45, label: "Ahead and right" },
+  { deg: 135, label: "Ahead and left" },
+  { deg: 225, label: "Behind and left" },
+  { deg: 315, label: "Behind and right" },
 ];
 
-export function VenueEditor({ venue }: { venue: { id: string; name: string; description: string; status: string; views: VenueView[] } }) {
+export function VenueEditor({ venue }: { venue: { id: string; name: string; description: string; setting: string; status: string; views: VenueView[] } }) {
   const router = useRouter();
   // Images are set beside each view, so they are not part of this form's state.
-  const initial = { name: venue.name, description: venue.description, views: venue.views.map((v) => ({ name: v.name, directionDeg: v.directionDeg })) };
+  const initial = { name: venue.name, description: venue.description, setting: (venue.setting === "exterior" ? "exterior" : "interior") as "interior" | "exterior", views: venue.views.map((v) => ({ name: v.name, directionDeg: v.directionDeg })) };
   const [f, setF] = useState(initial);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, start] = useTransition();
@@ -43,12 +44,18 @@ export function VenueEditor({ venue }: { venue: { id: string; name: string; desc
         <span className={`rounded px-2 py-0.5 ${venue.status === "approved" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>{venue.status}</span>
       </div>
       <label className="block text-sm">Venue name<input className={field} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
-      <label className="block text-sm">Description <span className="text-neutral-500">(layout, décor and light; used in every venue and panel prompt)</span>
+      <label className="block text-sm">Setting
+        <select className={field} value={f.setting} onChange={(e) => setF({ ...f, setting: e.target.value as "interior" | "exterior" })} data-testid="venue-setting">
+          <option value="interior">Indoors (a room, hall, office, shop…)</option>
+          <option value="exterior">Outdoors (a street, park, beach, pitch…)</option>
+        </select>
+      </label>
+      <label className="block text-sm">Description <span className="text-neutral-500">(what the place is, its layout, materials, time of day and light; used in every venue and panel prompt)</span>
         <textarea className={field} rows={3} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} data-testid="venue-description" />
       </label>
       <div>
         <p className="text-sm font-medium">Named views</p>
-        <p className="text-xs text-neutral-500">What you see looking each way. The floor plan uses these to name each shot&apos;s background, so cuts can be checked for a jumping room.</p>
+        <p className="text-xs text-neutral-500">What you see looking each way from the main viewpoint, e.g. a back wall, a shop window, the pier. The floor plan uses these to name each shot&apos;s background, so cuts can be checked for a jumping room.</p>
         <ul className="mt-2 space-y-2">
           {f.views.map((v, i) => (
             <li key={i} className="flex flex-wrap items-center gap-2">

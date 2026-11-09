@@ -14,12 +14,23 @@ const HEAD_R_M = 0.11;
 const SHOULDER_M = 0.46;
 const TABLE_TOP_M = 1.05;
 const COLOURS = ["#e11d48", "#2563eb", "#16a34a", "#9333ea", "#ea580c", "#0891b2"];
-const VIEW_COLOURS: Record<string, string> = {
-  "screen wall": "#1e293b",
-  bar: "#78350f",
-  "windows and entrance": "#bae6fd",
-  "lounge seating": "#e7e5e4",
-};
+// Background colour per named view: picked from a fixed palette by the view's name, so any
+// venue's views get distinct, stable colours. Text colour follows the background's lightness.
+const VIEW_PALETTE = [
+  { bg: "#1e293b", fg: "#e2e8f0" },
+  { bg: "#78350f", fg: "#fef3c7" },
+  { bg: "#bae6fd", fg: "#334155" },
+  { bg: "#e7e5e4", fg: "#334155" },
+  { bg: "#14532d", fg: "#dcfce7" },
+  { bg: "#fde68a", fg: "#334155" },
+  { bg: "#581c87", fg: "#f3e8ff" },
+  { bg: "#fecaca", fg: "#334155" },
+];
+function viewColour(name: string) {
+  let h = 0;
+  for (const ch of name.toLowerCase()) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return VIEW_PALETTE[h % VIEW_PALETTE.length];
+}
 
 function project(cam: PlanCamera, fovDeg: number, p: Point) {
   const fx = cam.lookAt.x - cam.position.x;
@@ -85,10 +96,10 @@ export function CameraView({
         </defs>
         <g clipPath="url(#frame)">
           {/* Background wall and floor */}
-          <rect width={W} height={horizon + 25} fill={VIEW_COLOURS[wall] ?? "#cbd5e1"} />
+          <rect width={W} height={horizon + 25} fill={wall ? viewColour(wall).bg : "#cbd5e1"} />
           <rect y={horizon + 25} width={W} height={H} fill="#d6d3d1" />
           {wall && (
-            <text x={10} y={22} textAnchor="start" fontSize={12} fill={wall === "windows and entrance" || wall === "lounge seating" ? "#334155" : "#e2e8f0"} letterSpacing={2}>
+            <text x={10} y={22} textAnchor="start" fontSize={12} fill={viewColour(wall).fg} letterSpacing={2}>
               {wall.toUpperCase()}
             </text>
           )}

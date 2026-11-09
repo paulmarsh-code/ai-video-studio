@@ -155,10 +155,10 @@ export function addVenue(db: DB, projectId: string, name: string) {
   db.insert(t.venues).values({
     id, projectId, name: name.trim(), status: "draft",
     views: [
-      { name: "far wall", directionDeg: 90 },
-      { name: "left wall", directionDeg: 180 },
-      { name: "near wall", directionDeg: 270 },
-      { name: "right wall", directionDeg: 0 },
+      { name: "far side", directionDeg: 90 },
+      { name: "left side", directionDeg: 180 },
+      { name: "near side", directionDeg: 270 },
+      { name: "right side", directionDeg: 0 },
     ],
   }).run();
   persist(db);
@@ -166,7 +166,7 @@ export function addVenue(db: DB, projectId: string, name: string) {
 }
 
 /** Saving any change returns the venue to draft, so it is re-approved before use. */
-export function saveVenue(db: DB, venueId: string, input: { name: string; description: string; views: VenueView[] }) {
+export function saveVenue(db: DB, venueId: string, input: { name: string; description: string; setting?: "interior" | "exterior"; views: VenueView[] }) {
   const v = getVenue(db, venueId);
   if (!v) throw new Error("Venue not found");
   const names = input.views.map((x) => x.name.trim()).filter(Boolean);
@@ -175,7 +175,7 @@ export function saveVenue(db: DB, venueId: string, input: { name: string; descri
     name: x.name.trim(), directionDeg: ((Math.round(x.directionDeg) % 360) + 360) % 360,
     imageAssetId: x.imageAssetId ?? v.views.find((o) => o.name === x.name.trim())?.imageAssetId,
   }));
-  db.update(t.venues).set({ name: input.name.trim() || v.name, description: input.description.trim(), views, status: "draft" }).where(eq(t.venues.id, venueId)).run();
+  db.update(t.venues).set({ name: input.name.trim() || v.name, description: input.description.trim(), setting: input.setting ?? (v.setting === "exterior" ? "exterior" : "interior"), views, status: "draft" }).where(eq(t.venues.id, venueId)).run();
   persist(db);
 }
 

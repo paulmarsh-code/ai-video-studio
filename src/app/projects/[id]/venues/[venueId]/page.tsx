@@ -30,7 +30,7 @@ export default async function VenuePage({ params }: { params: Promise<{ id: stri
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_1.4fr]">
         <VenueEditor key={venue.id} venue={venue} />
         <div>
-          <p className="mb-2 text-xs text-neutral-600">View images (landscape, no people). Prompts use the saved description.</p>
+          <p className="mb-2 text-xs text-neutral-600">View images (landscape, no people). Prompts use the saved description and setting.</p>
           <div className="grid gap-3 sm:grid-cols-2">
             {venue.views.map((v) => (
               <ImageSlot
@@ -40,7 +40,7 @@ export default async function VenuePage({ params }: { params: Promise<{ id: stri
                 baseCode={`${project.code}_VEN_${slug}_${v.name.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}`}
                 kind="venue-ref"
                 assetId={v.imageAssetId}
-                prompt={venueViewPrompt(venue.name, venue.description, v.name, genre, style)}
+                prompt={venueViewPrompt({ name: venue.name, description: venue.description, setting: venue.setting === "exterior" ? "exterior" : "interior" }, v.name, genre, style)}
                 shape="landscape"
                 canGenerate={canGenerate}
                 onAttach={setVenueViewImageAction.bind(null, venueId, v.name)}

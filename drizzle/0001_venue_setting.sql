@@ -1,0 +1,1 @@
+ALTER TABLE `venues` ADD `setting` text DEFAULT 'interior' NOT NULL;
