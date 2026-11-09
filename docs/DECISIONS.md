@@ -276,3 +276,24 @@ Also:
 - The continuity picture keeps the spot, furniture, light and clothes, but if it shows fewer guests than the setting, GPT adds them.
 
 Checked by replaying Paul's own scene data with the fixes. Every request now carries the table and the crowd. Panels 5 and 8 include Marcus and Nina at the edge. Panel 10 shows the whole group, with Jade where she should be.
+
+## D18e — Strict positions, posture and precise gestures in every request (2026-11-09)
+
+From Paul's third run. Marcus and Nina swapped places (panels 3 and 7) or vanished (4, 5, 8 and 10), Chase leaned on the table, the table changed height, and a "dismissive wave" was drawn as a stop sign. These are general fixes, not fixes for this one scene.
+
+- **Order and count.** Every multi-person picture now states "Exactly N people in this picture, from left to right: A, B, C and D. Keep this left-to-right order; do not swap anyone." The order comes from the camera's view of the floor plan.
+- **Supporting people are never optional.** People at the spot whom the camera sees are "clearly in the picture… less prominent than [subject] but never left out". They used to be "partly visible, softly out of focus", which GPT treated as optional.
+- **Place and posture.** The spot stays the same height and size, and everyone keeps their own place and posture: standing upright, unless the spot says they sit. No one leans on furniture unless the moment says so. The same rule goes into Kling prompts. The continuity picture keeps the furniture at the same height and size.
+- **Gestures.** Common gestures are spelled out precisely in picture and Kling prompts: shoo-away, stop, shrug, eye-roll, pointing, facepalm and toast. The story request asks GPT to describe gestures precisely, and the setting request asks for the size, height and colour of what people gather around, and whether they stand or sit.
+
+## D18f — Layout sketch: the geometry goes to GPT as a picture (2026-11-09)
+
+Words like "frame-left" are read loosely, so positions drift even when the floor plan is right. For each panel with a camera, the app now draws a layout sketch from the floor plan through that camera:
+- labelled figures where each person stands, nearer people drawn bigger;
+- the furniture at its height;
+- the eye line;
+- the venue view behind.
+
+The sketch is rendered as SVG, then turned into a PNG with sharp. It is attached last to every GPT picture request and change, with "use it for positions, sizes, angle and the table; copy nothing of its style". It can also be downloaded on the by-hand route from `/api/layout/[shotId]`.
+
+The sketches also showed that the camera chooser places cameras badly for a group around a table: people stand in front of the subject in two-shots, and the wide shot is too far back. That, together with approving and locking positions and cameras and adding key props, is the next work (D19).

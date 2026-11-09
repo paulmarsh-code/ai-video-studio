@@ -6,6 +6,7 @@
 import { mainSubjectId } from "./composer";
 import { describeFrame, PRESET_TEXT, readCamera } from "./geometry";
 import { GENRE_PROFILES, type Genre } from "./genre";
+import { gestureDetail } from "./gestures";
 import { joinNames, stripQuotes } from "./text";
 import type { CastMember, GeometryPlanData, ShotSpec } from "./types";
 
@@ -97,6 +98,8 @@ export interface PanelPromptInput {
   aspect?: string; // e.g. "9:16"
   genre?: Genre;
   style?: string;
+  /** The layout sketch for this shot (D18f): the floor plan seen through its camera. */
+  layoutHref?: string;
   /**
    * An approved picture of this scene (D18c), attached so later panels keep the same spot,
    * furniture, background guests, light and clothes. Not used for the panel's own picture.
@@ -106,8 +109,8 @@ export interface PanelPromptInput {
 
 export interface PanelPrompt {
   text: string;
-  /** Reference images to attach in ChatGPT, in order. */
-  attach: { label: string; assetId: string }[];
+  /** Reference images to attach in ChatGPT, in order. A generated one has an href instead of an asset. */
+  attach: { label: string; assetId: string; href?: string }[];
 }
 
 export function panelPrompt(i: PanelPromptInput): PanelPrompt {
@@ -147,17 +150,19 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   const bgView = reading?.backgroundView;
   const bgImage = bgView ? i.venueViews?.find((v) => v.name === bgView)?.imageAssetId : undefined;
   if (bgImage) attach.push({ label: `${bgView} view`, assetId: bgImage });
+  const layout = !!(i.layoutHref && reading);
+  if (layout) attach.push({ label: "layout sketch", assetId: "", href: i.layoutHref });
 
   const lines: string[] = [];
   lines.push(`${(i.style ?? "photorealistic").replace(/^./, (m) => m.toUpperCase())} storyboard frame for a ${i.aspect ?? "9:16"} video, set in the ${i.venueName}.`);
-  const people = attach.filter((a) => !a.label.endsWith(" view") && a.assetId !== i.continuity?.assetId);
+  const people = attach.filter((a) => !a.label.endsWith(" view") && !a.href && a.assetId !== i.continuity?.assetId);
   if (people.length) lines.push(`Use the attached reference images for ${joinNames(people.map((a) => a.label.replace(/ (reference|back)$/, "")))}; keep their faces, hair and clothes identical.`);
   if (bgImage) lines.push(`Use the attached ${bgView} image as the background: same place, layout and light.${shot?.crowd?.trim() ? " It shows the room empty; fill it with the background guests described below." : ""}`);
   const spot = shot?.spot?.trim();
   const crowd = shot?.crowd?.trim();
   // An older approved picture may show an empty room: keep its spot and look, but add the crowd.
-  if (i.continuity) lines.push(`Use the attached ${i.continuity.label} for continuity: the same spot, furniture, light and clothes${crowd ? ". If it shows fewer background guests than described below, add them" : ", and the same background guests"}. Change only the camera angle and the moment.`);
-  if (spot) lines.push(`Where: ${sentence(spot)} Keep it in the picture wherever the camera would see it.`);
+  if (i.continuity) lines.push(`Use the attached ${i.continuity.label} for continuity: the same spot, the same furniture at the same height and size, the same light and clothes${crowd ? ". If it shows fewer background guests than described below, add them" : ", and the same background guests"}. Change only the camera angle and the moment.`);
+  if (spot) lines.push(`Where: ${sentence(spot)} Keep it in the picture wherever the camera would see it, always the same height and size. Everyone keeps their own place and posture around it${/\b(sit|sits|sitting|seated|sofa|couch|bench)\b/i.test(spot) ? "" : ", standing upright"}; no one leans on it or on the bar unless the moment says so.`);
   if (crowd) lines.push(`Background: ${sentence(crowd)} Background guests are out of focus, smaller than the main characters and never look at the camera; none of them look like the main characters.`);
   for (const c of visible) {
     const p = i.profiles[c.id];
@@ -172,13 +177,22 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   lines.push(`Moment: ${sentence(i.description)}`);
   if (i.emotion) lines.push(`Emotion: ${sentence(i.emotion)}`);
   if (shot?.actions) lines.push(sentence(shot.actions));
+  lines.push(...gestureDetail(i.description, shot?.actions));
 
   if (cam && reading && shot) {
     lines.push(PRESET_TEXT[cam.preset].replace(", static camera", "").replace(" static camera,", ""));
-    const frame = describeFrame(reading, i.cast, [...shownIds, ...edgeIds], subjectId);
-    if (frame) lines.push(`Positions: ${frame}.`);
-    if (fgId) lines.push(`${name(fgId)} in the soft foreground, seen from behind over the shoulder.`);
-    if (edge.length) lines.push(`${joinNames(edge.map((c) => c.name))} ${edge.length === 1 ? "is" : "are"} also there with them: partly visible at the edge of the frame, softly out of focus, listening.`);
+    // A strict left-to-right order and head count (D18e): looser wording let GPT swap people or drop them.
+    const order = reading.actors.filter((a) => a.inView && [...shownIds, ...edgeIds].includes(a.characterId)).sort((a, b) => a.angleDeg - b.angleDeg);
+    if (order.length > 1) {
+      lines.push(`Exactly ${order.length} people in this picture, from left to right: ${joinNames(order.map((a) => `${name(a.characterId)}${a.characterId === fgId ? " (in the foreground, seen from behind over the shoulder)" : ""}`))}. Keep this left-to-right order; do not swap anyone.`);
+      if (reading.backgroundView && subjectId) lines.push(`Behind ${name(subjectId)}: the ${reading.backgroundView}.`);
+    } else {
+      const frame = describeFrame(reading, i.cast, [...shownIds, ...edgeIds], subjectId);
+      if (frame) lines.push(`Positions: ${frame}.`);
+      if (fgId) lines.push(`${name(fgId)} in the soft foreground, seen from behind over the shoulder.`);
+    }
+    if (layout) lines.push("Use the attached layout sketch, drawn from the floor plan through this camera, for where each person stands in the frame, how big they appear, the camera angle and the table's height and place. It is only a guide made of labelled shapes: draw real people in the real room and copy nothing of its style, shapes, colours or text.");
+    if (edge.length) lines.push(`${joinNames(edge.map((c) => c.name))} ${edge.length === 1 ? "is" : "are"} clearly in the picture, standing in ${edge.length === 1 ? "their place" : "their places"} with the others and listening, less prominent than ${subjectId ? name(subjectId) : "the main characters"} but never left out.`);
     if (closeUp && (shot.visibleIds.length > 1)) lines.push(`Close on ${name(subjectId!)}; the others are out of frame.`);
   }
   lines.push(`Look: ${GENRE_PROFILES[genre].look}.`);

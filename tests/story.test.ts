@@ -272,7 +272,7 @@ describe("Scene setting (D18c): the same spot and crowd in every picture and cli
     const cast = CAST.map((c) => ({ id: c.id, name: c.name, pronoun: "she" as const, voiceLock: "" }));
     const shot = shotSpecFor(parseStoryReply(REPLY, CAST).panels[0], { code: "P1", venueName: "Launch", castIds: CAST.map((c) => c.id), staging: { spot: "around a tall cocktail table", crowd: "about 30 guests mingling" } });
     const p = panelPrompt({ description: "Jade arrives", shot, cast, profiles: {}, venueName: "Launch", continuity: { assetId: "a-p2", label: "approved scene picture (panel 2)" } });
-    expect(p.text).toContain("Where: around a tall cocktail table. Keep it in the picture wherever the camera would see it.");
+    expect(p.text).toContain("Where: around a tall cocktail table. Keep it in the picture wherever the camera would see it, always the same height and size. Everyone keeps their own place and posture around it, standing upright; no one leans on it");
     expect(p.text).toContain("Background: about 30 guests mingling. Background guests are out of focus");
     expect(p.text).toContain("Only Jade in the foreground; other guests only in the background.");
     expect(p.text).toContain("Use the attached approved scene picture (panel 2) for continuity");
@@ -352,12 +352,13 @@ describe("Group scenes (D18d): blocking, close-ups and people at the edge of fra
     ];
     const chase = shotSpecFor(panels[2], { code: "P3", venueName: "v", castIds: ids, staging });
     const two = panelPrompt({ description: "Chase shrugs", shot: { ...chase, cameraId: "two" }, cast, profiles: {}, plan, venueName: "v" });
-    expect(two.text).toMatch(/Marcus and Nina are also there with them: partly visible at the edge of the frame/);
+    expect(two.text).toMatch(/Exactly 4 people in this picture, from left to right: /);
+    expect(two.text).toMatch(/Marcus and Nina are clearly in the picture, standing in their places with the others and listening, less prominent than Chase but never left out/);
     expect(two.text).toContain("Exactly one of each person: Chase, Jade, Marcus and Nina.");
     const cu = panelPrompt({ description: "Chase waves her off", shot: { ...chase, cameraId: "cu" }, cast, profiles: {}, plan, venueName: "v" });
     expect(cu.text).toContain("Close on Chase; the others are out of frame.");
     expect(cu.text).not.toMatch(/in the soft foreground, seen from behind/);
-    expect(cu.text).not.toContain("also there with them");
+    expect(cu.text).not.toContain("clearly in the picture");
   });
   it("saving the setting rebuilds a floor plan the app made, clears its cameras and frees the group", async () => {
     const { openDb } = await import("../src/db/client");
@@ -379,5 +380,33 @@ describe("Group scenes (D18d): blocking, close-ups and people at the edge of fra
     // A plan the user edited is kept.
     repo.savePlan(db, sid, s.plan!.data, "Blocking plan v3");
     expect(studio.saveSceneStaging(db, sid, { spot: "on the sofas", crowd: "" }).replanned).toBe(false);
+  });
+});
+
+describe("Precise gestures (D18e)", () => {
+  it("spells out common gestures for pictures and Kling, and asks GPT to be precise", async () => {
+    const { gestureDetail } = await import("../src/lib/domain/gestures");
+    expect(gestureDetail("Chase makes a dismissive wave, looking bored")[0]).toMatch(/flick outwards and away from the body.*not a raised-palm stop sign/);
+    expect(gestureDetail("Chase waves her away")).toHaveLength(1);
+    expect(gestureDetail("Jade smiles")).toEqual([]);
+    expect(storyPrompt({ story: "x", characters: CAST, venue: "v", targetSec: 30 })).toContain("Describe gestures precisely");
+    const { composeKlingPrompt } = await import("../src/lib/domain/composer");
+    const cast = CAST.map((c) => ({ id: c.id, name: c.name, pronoun: "he" as const, voiceLock: "a calm voice" }));
+    const shot = shotSpecFor({ action: "Chase makes a dismissive wave", inFrame: ["chase"], line: "", emotion: "bored", seconds: 3 }, { code: "P10", venueName: "v", castIds: ["chase"] });
+    expect(composeKlingPrompt(shot, cast).text).toContain("Dismissive shoo-away gesture");
+  });
+});
+
+describe("Layout sketch (D18f)", () => {
+  it("draws the floor plan through the camera: nearer people bigger, left and right as the camera sees them", async () => {
+    const { layoutSketchSvg } = await import("../src/lib/domain/layoutSketch");
+    const plan = defaultPlan(CAST.map((c) => c.id), parseStoryReply(REPLY, CAST).panels, [], { spot: "around a tall table", crowd: "" });
+    const svg = layoutSketchSvg({ plan, camera: { id: "c", name: "c", preset: "two-shot", position: { x: 0.25, y: 1.5 }, lookAt: { x: 0.25, y: 5 } }, size: "portrait",
+      people: CAST.map((c) => ({ id: c.id, name: c.name })), subjectId: "chase", backgroundView: "bar" });
+    expect(svg.startsWith("<svg")).toBe(true);
+    const x = (n: string) => Number(svg.match(new RegExp(`<text x="([\\d.]+)"[^>]*>${n}</text>`))![1]);
+    expect(x("Chase")).toBeLessThan(x("Jade")); // camera on the near side: Chase (west) on the left, Jade (east) on the right
+    expect(svg).toContain("behind: bar");
+    expect(svg).toContain("tall table");
   });
 });

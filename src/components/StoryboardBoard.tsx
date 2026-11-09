@@ -26,9 +26,11 @@ export interface BoardPanel {
   status: string;
   imageAssetId?: string;
   hasCamera: boolean;
+  /** Its shot, for the layout sketch (D18f). */
+  shotId?: string;
   /** The GPT picture request, built from the camera, characters and venue. */
   prompt: string;
-  attach: { label: string; assetId: string }[];
+  attach: { label: string; assetId: string; href?: string }[];
 }
 
 export interface StoryboardBoardProps {
@@ -52,10 +54,12 @@ export function plainReason(error: string): string {
   return `GPT said: ${error.slice(0, 200)}`;
 }
 
-async function drawPicture(p: { projectId: string; baseCode: string; prompt: string; refs: string[]; size: "portrait" | "landscape" }) {
+const assetIds = (attach: BoardPanel["attach"]) => attach.filter((a) => !a.href && a.assetId).map((a) => a.assetId);
+
+async function drawPicture(p: { projectId: string; baseCode: string; prompt: string; refs: string[]; size: "portrait" | "landscape"; layoutShotId?: string }) {
   const res = await fetch("/api/images/generate", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ projectId: p.projectId, baseCode: p.baseCode, kind: "panel", prompt: p.prompt, refAssetIds: p.refs, size: p.size }),
+    body: JSON.stringify({ projectId: p.projectId, baseCode: p.baseCode, kind: "panel", prompt: p.prompt, refAssetIds: p.refs, size: p.size, layoutShotId: p.layoutShotId }),
   });
   const body = (await res.json()) as { id?: string; error?: string };
   if (!res.ok || !body.id) throw new Error(body.error ?? "GPT didn't return a picture.");
@@ -69,7 +73,7 @@ function changeRequestFor(p: BoardPanel, ch: SubmittedChange) {
     : "";
   return {
     prompt: imageChangePrompt(ch.text, p.prompt) + refNote,
-    refs: [p.imageAssetId!, ...p.attach.map((a) => a.assetId), ...ch.refs.map((r) => r.assetId)],
+    refs: [p.imageAssetId!, ...assetIds(p.attach), ...ch.refs.map((r) => r.assetId)],
   };
 }
 
@@ -79,14 +83,14 @@ function CopyButton({ text, label, testId }: { text: string; label: string; test
 }
 
 /** Make or change a picture in ChatGPT: copy the request, attach the listed pictures, upload the result. */
-function ByHand({ p, prompt, attach, projectId, baseCode, onUploaded }: { p: BoardPanel; prompt: string; attach: { label: string; assetId: string }[]; projectId: string; baseCode: string; onUploaded: () => void }) {
+function ByHand({ p, prompt, attach, projectId, baseCode, onUploaded }: { p: BoardPanel; prompt: string; attach: BoardPanel["attach"]; projectId: string; baseCode: string; onUploaded: () => void }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   return (
     <div className="space-y-2 text-sm">
       <CopyButton text={prompt} label="Copy the picture request" testId={`hand-${p.code}-copy`} />
       {attach.length > 0 && (
-        <p className="text-neutral-700">In ChatGPT, attach: {attach.map((a, i) => <span key={a.assetId}>{i > 0 && ", "}<a className="text-blue-700 underline" href={`/api/assets/${a.assetId}`} download>{a.label}</a></span>)}.</p>
+        <p className="text-neutral-700">In ChatGPT, attach: {attach.map((a, i) => <span key={a.href ?? a.assetId}>{i > 0 && ", "}<a className="text-blue-700 underline" href={a.href ?? `/api/assets/${a.assetId}`} download>{a.label}</a></span>)}.</p>
       )}
       <label className="inline-block cursor-pointer rounded-md border border-blue-700 px-3 py-1.5 text-blue-700 hover:bg-blue-50">
         {busy ? "Uploading…" : "Upload the picture"}
@@ -141,7 +145,7 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
       setProgress(`${verb} ${done + bad + 1} of ${list.length}…`);
       setDrawing((x) => ({ ...x, [p.id]: `${verb}…` }));
       try {
-        const id = await drawPicture({ projectId: b.projectId, baseCode: codeOf(p), prompt: p.prompt, refs: p.attach.map((a) => a.assetId), size: b.size });
+        const id = await drawPicture({ projectId: b.projectId, baseCode: codeOf(p), prompt: p.prompt, refs: assetIds(p.attach), size: b.size, layoutShotId: p.hasCamera ? p.shotId : undefined });
         const r = await setPanelImageAction(p.id, id);
         if (!r.ok) throw new Error(r.error);
         done++;
@@ -166,7 +170,7 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
     setDrawing((x) => ({ ...x, [p.id]: "Redrawing…" }));
     try {
       const req = changeRequestFor(p, ch);
-      const id = await drawPicture({ projectId: b.projectId, baseCode: codeOf(p), prompt: req.prompt, refs: req.refs, size: b.size });
+      const id = await drawPicture({ projectId: b.projectId, baseCode: codeOf(p), prompt: req.prompt, refs: req.refs, size: b.size, layoutShotId: p.hasCamera ? p.shotId : undefined });
       const r = await setPanelImageAction(p.id, id);
       if (!r.ok) throw new Error(r.error);
     } catch (e) {

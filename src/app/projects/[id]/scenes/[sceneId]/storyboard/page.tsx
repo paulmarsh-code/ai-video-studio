@@ -89,12 +89,13 @@ export default async function StoryboardPage({ params, searchParams }: { params:
             const prompt = panelPrompt({
               description: p.description, emotion: p.emotion, shot: shot?.spec, cast, profiles, plan: s.plan?.data,
               venueName: s.venue?.name ?? "venue", venueViews: s.venue?.views as { name: string; imageAssetId?: string }[] | undefined, aspect: brief.aspect, genre, style: brief.style,
+              layoutHref: shot?.spec.cameraId ? `/api/layout/${shot.id}` : undefined,
               continuity: anchor && anchor.panel.id !== p.id ? { assetId: anchor.panel.imageAssetId!, label: `approved scene picture (panel ${anchor.n})` } : undefined,
             });
             return {
               id: p.id, code: p.code, description: p.description, seconds: p.durationSec, status: p.status, imageAssetId: p.imageAssetId ?? undefined,
               speaker: d ? cast.find((c) => c.id === d.characterId)?.name : undefined, line: d?.text,
-              hasCamera: !!shot?.spec.cameraId, prompt: prompt.text, attach: prompt.attach,
+              hasCamera: !!shot?.spec.cameraId, shotId: shot?.id, prompt: prompt.text, attach: prompt.attach,
             };
           })} />
       </div>

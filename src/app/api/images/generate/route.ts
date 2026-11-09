@@ -6,16 +6,22 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/db/client";
 import { cleanBaseCode, storeAsset } from "@/lib/assetStore";
 import { getImageProvider } from "@/lib/providers/images";
+import { renderLayoutForShot } from "@/lib/layoutImage";
 import * as repo from "@/lib/repo";
 
 export async function POST(req: Request) {
   const provider = getImageProvider();
   if (!provider) return NextResponse.json({ error: "No image provider is connected. Copy the prompt into ChatGPT and upload the image." }, { status: 501 });
-  const body = (await req.json()) as { projectId?: string; baseCode?: string; kind?: string; prompt?: string; refAssetIds?: string[]; size?: "portrait" | "landscape" | "square" };
+  const body = (await req.json()) as { projectId?: string; baseCode?: string; kind?: string; prompt?: string; refAssetIds?: string[]; size?: "portrait" | "landscape" | "square"; layoutShotId?: string };
   if (!body.projectId || !body.baseCode || !body.prompt) return NextResponse.json({ error: "projectId, baseCode and prompt are required" }, { status: 400 });
   const db = await getDb();
-  const refs = (body.refAssetIds ?? []).map((id) => repo.getAsset(db, id)).filter((a) => a && fs.existsSync(a.path))
+  const refs: { data: Buffer; mime: string; name: string }[] = (body.refAssetIds ?? []).map((id) => repo.getAsset(db, id)).filter((a) => a && fs.existsSync(a.path))
     .map((a) => ({ data: fs.readFileSync(a!.path), mime: a!.mime, name: a!.assetCode }));
+  // The layout sketch from the floor plan goes last (D18f).
+  if (body.layoutShotId) {
+    const png = await renderLayoutForShot(db, body.layoutShotId);
+    if (png) refs.push({ data: Buffer.from(png), mime: "image/png", name: "layout_sketch.png" });
+  }
   try {
     const img = await provider.generate(body.prompt, refs, body.size ?? "portrait");
     const saved = storeAsset(db, {

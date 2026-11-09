@@ -2,6 +2,7 @@
 // It never rewrites approved dialogue and never names characters excluded from the shot.
 
 import { describeFrame, PRESET_TEXT, readCamera } from "./geometry";
+import { gestureDetail } from "./gestures";
 import { GENRE_PROFILES, type Genre } from "./genre";
 import { capitalise, joinNames, stripQuotes } from "./text";
 import {
@@ -131,7 +132,9 @@ export function composeKlingPrompt(
   ]
     .filter(Boolean)
     .join(" ");
-  if (performance) s.performance = performance;
+  const gestures = gestureDetail(shot.sceneContext, shot.actions);
+  if (performance || gestures.length) s.performance = [performance, ...gestures].filter(Boolean).join(" ");
+  if (shot.spot?.trim()) s.scene += " Everyone keeps their own place and posture; no one leans on the furniture unless the moment says so.";
   if (speaker && shot.dialogue) {
     s.dialogue = `${capitalise(speaker.pronoun)} says exactly once: "${shot.dialogue}"`;
   }
