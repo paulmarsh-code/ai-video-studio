@@ -157,3 +157,10 @@ Paul's direction: break the change flow down the same way as creation.
 New characters, new venues and changes now share one final-step component (`CreateStep`). The old combined panel (`StartFromPanel`) has been removed.
 
 The one-click "Describe with GPT" button lived in that panel, so it is no longer on screen. The `/api/describe` connection point is unchanged and will be wired into the shared step when the GPT link is switched on.
+
+### D16h: Changes that don't affect the look skip the image step (9 Nov 2026)
+
+Paul's direction: if nothing changes what the person looks like, it should update differently.
+- **Only "Personality or mannerisms?" answered:** **Submit changes** saves the new mannerisms straight away as a draft version. There's no ChatGPT step and no new board, the images stay, and the page doesn't clear. The message tells the user to check the voice lock still fits, then approve.
+- **Anything about looks or clothes answered** (how they look, what they're wearing, anything else): the full change flow (D16g). Any personality change in the same request goes into that prompt too.
+- **Venue questions are all about the look,** so venue changes always use the full flow.

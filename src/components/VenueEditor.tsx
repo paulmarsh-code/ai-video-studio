@@ -149,7 +149,7 @@ export function VenueEditor({ venue, projectId, baseCode, images }: { projectId:
     </div>
     <div className="space-y-3 self-start">
       {images}
-      <ChangeRequest what="place" onSubmit={setChanging} />
+      <ChangeRequest what="place" onSubmit={(ch) => setChanging(ch.text)} />
     </div>
     </div>
   );

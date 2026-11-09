@@ -9,7 +9,7 @@ import { uploadBlob } from "@/lib/clientUpload";
 import { MIN_REF_ASPECT } from "@/lib/domain/imagePrompts";
 import type { Pronoun } from "@/lib/domain/types";
 import { CHARACTER_SHEET, characterChangePrompt, characterFillFromReply, characterSheetRequest } from "@/lib/domain/describe";
-import { ChangeRequest } from "./ChangeRequest";
+import { ChangeRequest, type SubmittedChange } from "./ChangeRequest";
 import { CreateStep } from "./CreateStep";
 import { downloadBoard } from "@/lib/board";
 import { ActionButton, DoneBadge } from "./ActionButton";
@@ -97,6 +97,20 @@ export function CharacterEditor({ c, projectId, baseCode, images }: { c: Charact
     setMsg(r.ok ? { kind: "ok", text: "Draft discarded." } : { kind: "error", text: r.error });
     router.refresh();
   });
+
+  // A change that doesn't affect the look (only personality or mannerisms) is saved straight
+  // away as a new draft; the images stay. Anything visual goes through the image flow below.
+  const submitChange = async (ch: SubmittedChange) => {
+    if (ch.visual) { setChanging(ch.text); return; }
+    const raw = ch.parts.personality ?? "";
+    const mannerisms = raw ? raw.charAt(0).toUpperCase() + raw.slice(1).replace(/[.]?$/, ".") : f.mannerisms;
+    const saved = await saveCharacterAction(c.id, { name: f.name, pronoun: f.pronoun as Pronoun, role: f.role, invented: f.invented, consentRef: f.consentRef },
+      { appearance: f.appearance, wardrobe: f.wardrobe, mannerisms, anchors: anchorsList, voiceLock: f.voiceLock });
+    if (!saved.ok) return { ok: false, text: saved.error };
+    setF((x) => ({ ...x, mannerisms }));
+    router.refresh();
+    return { ok: true, text: `Mannerisms updated and saved as draft v${saved.value}; images unchanged. Check the voice lock still fits, then approve.` };
+  };
 
   // After "Submit changes" the page clears and runs the same final step as a new character.
   if (changing) {
@@ -195,7 +209,7 @@ export function CharacterEditor({ c, projectId, baseCode, images }: { c: Charact
     </div>
     <div className="space-y-3 self-start">
       {images}
-      <ChangeRequest what="character" onSubmit={setChanging} />
+      <ChangeRequest what="character" onSubmit={submitChange} />
     </div>
     </div>
   );
