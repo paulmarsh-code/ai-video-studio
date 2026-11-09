@@ -68,7 +68,7 @@ export default async function CharactersPage({ params, searchParams }: { params:
             <div className="mt-3">
               <CharacterEditor key={c.id} canAuto={canAuto} c={c} projectId={id} baseCode={code}
                 images={hasImages ? (
-                <div className="grid grid-cols-3 gap-2 self-start">
+                <div key="images" className="grid grid-cols-3 gap-2 self-start">
                   {REF_VIEWS.map((v) => (
                     <ImageSlot
                       key={v}

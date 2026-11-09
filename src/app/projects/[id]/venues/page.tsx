@@ -65,7 +65,7 @@ export default async function VenuesPage({ params, searchParams }: { params: Pro
             <h2 className="mb-3 text-lg font-semibold">{venue.name}</h2>
             <VenueEditor key={venue.id} canAuto={canAuto} venue={venue} projectId={id} baseCode={baseCode}
               images={hasImages ? (
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div key="images" className="grid gap-3 sm:grid-cols-2">
                   {venue.views.map((v) => (
                     <ImageSlot
                       key={v.name}
