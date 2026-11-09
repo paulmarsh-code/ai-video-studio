@@ -91,6 +91,7 @@ export function VenueEditor({ venue, projectId, baseCode, images }: { projectId:
         <p className="mb-4 rounded bg-neutral-50 p-2 text-sm text-neutral-700"><span className="font-medium">Your changes:</span> {changing}</p>
         <CreateStep
           id="chg"
+          action="Recreate"
           copyLabel={`Copy ${venue.name}'s updated description`}
           prompt={venueChangePrompt({ setting: f.setting, description: f.description, views: names }, changing)}
           instruction={<>Go over to ChatGPT, paste the copied description and upload the current image board{haveBoard && <> (<button type="button" className="text-blue-700 underline" data-testid="download-board"

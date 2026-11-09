@@ -126,6 +126,7 @@ export function CharacterEditor({ c, projectId, baseCode, images }: { c: Charact
         <p className="mb-4 rounded bg-neutral-50 p-2 text-sm text-neutral-700"><span className="font-medium">Your changes:</span> {changing}</p>
         <CreateStep
           id="chg"
+          action="Recreate"
           copyLabel={`Copy ${c.name}'s updated description`}
           prompt={characterChangePrompt({ appearance: f.appearance, wardrobe: f.wardrobe, mannerisms: f.mannerisms, anchors: anchorsList }, changing)}
           instruction={<>Go over to ChatGPT, paste the copied description and upload the current image board{haveBoard && <> (<button type="button" className="text-blue-700 underline" data-testid="download-board"

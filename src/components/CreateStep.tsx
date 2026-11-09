@@ -20,6 +20,8 @@ export interface CreateStepProps {
   /** Save everything; return an error message, or nothing on success. */
   onCreate: (reply: string, pieces: Blob[], board: File) => Promise<string | void>;
   footer?: ReactNode;
+  /** Button wording: "Create" for new, "Recreate" when changing. */
+  action?: "Create" | "Recreate";
 }
 
 const field = "mt-1 w-full rounded border border-neutral-300 px-2 py-1.5 font-mono text-xs";
@@ -66,7 +68,7 @@ export function CreateStep(p: CreateStepProps) {
       </div>
       <div className="flex items-center gap-3">
         {p.footer}
-        <ActionButton label="Create" busyLabel="Creating…" doneLabel="Created" testId={`${p.id}-create`} disabled={!reply.trim() || !board}
+        <ActionButton label={p.action ?? "Create"} busyLabel={p.action === "Recreate" ? "Recreating…" : "Creating…"} doneLabel={p.action === "Recreate" ? "Recreated" : "Created"} testId={`${p.id}-create`} disabled={!reply.trim() || !board}
           title={!reply.trim() ? "Paste ChatGPT's reply first" : !board ? "Upload the image board first" : ""}
           onAction={create} resetKey={[reply, board?.name, board?.lastModified]} />
       </div>
