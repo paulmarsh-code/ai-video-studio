@@ -55,3 +55,20 @@ Paul's direction (9 Nov 2026):
 4. The rules library and the viewfinder comparisons are also sales and marketing material ("directed by a century of film grammar").
 
 Implemented in `src/lib/domain/director.ts`, `impact.ts` and `geometry.ts` (occlusion), the Design shots page, and the floor plan's Impact panel.
+
+## D15: Images come from GPT. Manual upload now, a direct link later
+
+Paul's direction (9 Nov 2026): build the real Character, Venue and Storyboard steps now. For now he makes the images in ChatGPT and uploads them by hand. Later, an API or MCP link to GPT will automate it.
+
+1. **The app writes every image prompt.** Prompts are built from approved data only, so the same inputs always give the same text (`src/lib/domain/imagePrompts.ts`):
+   - character references: front, back and face;
+   - venue views: one per named view, with no people;
+   - storyboard panels: built from the approved characters, the venue, and the shot's camera framing on the floor plan, plus the genre's look.
+   Each prompt lists the reference images to attach in ChatGPT.
+2. **Manual route (now).** Copy GPT prompt, make the image in ChatGPT, upload. Character images narrower than 1:2 are rejected before upload, a lesson from testing.
+3. **Automated route (later).** `src/lib/providers/images.ts` defines the `ImageProvider` interface. Setting `OPENAI_API_KEY`, and optionally `OPENAI_IMAGE_MODEL` (default `gpt-image-1`), turns on a "Generate with GPT" button beside every upload. An MCP connector can implement the same interface. With no provider configured, the app never claims an image was generated.
+   - The OpenAI route has not been run against a live key yet. Test it with a real key before relying on it.
+4. **Approval rules.**
+   - Approved character versions are never edited. Any change, including a new reference image, creates a draft, and prompts keep using the approved version until the draft is approved.
+   - Any venue change returns the venue to draft.
+   - A storyboard dialogue change updates the shot's locked line, speaker and duration, and flags that panel in the animatic for a re-check.

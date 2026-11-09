@@ -24,6 +24,7 @@ export default async function ScenePage({ params }: { params: Promise<{ id: stri
       </h1>
       <p className="text-sm text-neutral-600">{s.venue?.name}</p>
       <div className="mt-3 flex gap-4 text-sm">
+        <Link className="text-blue-700 underline" href={`/projects/${id}/scenes/${sceneId}/storyboard`}>Storyboard</Link>
         <Link className="font-semibold text-blue-700 underline" href={`/projects/${id}/scenes/${sceneId}/design`}>Design shots</Link>
         <Link className="text-blue-700 underline" href={`/projects/${id}/scenes/${sceneId}/plan`}>Floor plan</Link>
         <Link className="text-blue-700 underline" href={`/projects/${id}/scenes/${sceneId}/animatic`}>Animatic</Link>

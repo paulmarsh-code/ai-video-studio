@@ -17,6 +17,7 @@ export interface PanelRow {
   durationSec: number;
   imageAssetId: string | null;
   status: string;
+  version: number;
 }
 
 export function listProjects(db: DB) {
@@ -123,6 +124,8 @@ export interface AnimaticTimeline {
   lineAudio: Record<string, { assetId: string; durationSec?: number }>;
   /** Per-panel duration overrides (seconds). */
   durations: Record<string, number>;
+  /** Panels whose storyboard changed after the animatic was made: panel id -> reason. */
+  recheck?: Record<string, string>;
 }
 
 export function getAnimatic(db: DB, sceneId: string) {

@@ -101,7 +101,11 @@ export function AnimaticPlayer(props: {
       a.addEventListener("loadedmetadata", () => resolve(Number.isFinite(a.duration) ? a.duration : undefined));
       a.addEventListener("error", () => resolve(undefined));
     });
-    setTimeline((tl) => ({ ...tl, lineAudio: { ...tl.lineAudio, [panel.id]: { assetId: body.id, durationSec } } }));
+    setTimeline((tl) => {
+      const rc = { ...(tl.recheck ?? {}) };
+      delete rc[panel.id];
+      return { ...tl, recheck: rc, lineAudio: { ...tl.lineAudio, [panel.id]: { assetId: body.id, durationSec } } };
+    });
     setStatus(`Saved as ${body.assetCode}. Remember to save the animatic.`);
   }
 
@@ -172,6 +176,12 @@ export function AnimaticPlayer(props: {
                 <span className="text-neutral-500">{seg.start.toFixed(1)}–{seg.end.toFixed(1)}s</span>
               </div>
               <p className="mt-1 text-neutral-700">{p.description}</p>
+              {timeline.recheck?.[p.id] && (
+                <p className="mt-1 rounded bg-red-50 px-2 py-1 text-xs text-red-800">
+                  {timeline.recheck[p.id]}{" "}
+                  <button type="button" className="underline" onClick={() => setTimeline((tl) => { const rc = { ...(tl.recheck ?? {}) }; delete rc[p.id]; return { ...tl, recheck: rc }; })}>Mark as checked</button>
+                </p>
+              )}
               {d && (
                 <p className="mt-1">
                   <span className="text-neutral-500">{name(d.characterId)}:</span> {d.text}{" "}

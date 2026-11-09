@@ -5,6 +5,8 @@ import * as repo from "@/lib/repo";
 import { LibraryButton } from "@/components/LibraryButton";
 import { GenrePicker } from "@/components/GenrePicker";
 import { addCharacterToLibraryAction } from "@/app/actions";
+import * as studio from "@/lib/studioRepo";
+import { AddVenueForm } from "@/components/AddForms";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +17,10 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   if (!project) notFound();
   const cast = repo.getCast(db, id);
   const scenes = repo.listScenes(db, id);
+  const chars = studio.listCharacters(db, id);
+  const venues = studio.listVenues(db, id);
+  const charsReady = chars.length > 0 && chars.every((c) => c.approved && !c.draft);
+  const venuesReady = venues.length > 0 && venues.every((v) => v.status === "approved");
 
   return (
     <div className="max-w-5xl">
@@ -24,12 +30,34 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
 
       <GenrePicker projectId={id} genre={repo.getProjectGenre(db, id)} />
 
+      <h2 className="mt-8 text-lg font-semibold">Production steps</h2>
+      <ol className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
+        <li className="rounded-lg border border-neutral-200 bg-white p-3">
+          <p className="font-semibold">1. <Link className="text-blue-700 underline" href={`/projects/${id}/characters`}>Characters</Link></p>
+          <p className="text-neutral-600">{chars.length} characters · {chars.filter((c) => c.approved).length} approved{chars.some((c) => c.draft) ? " · drafts waiting" : ""}</p>
+          <p className={charsReady ? "text-green-700" : "text-amber-700"}>{charsReady ? "Ready" : "Needs approval"}</p>
+        </li>
+        <li className="rounded-lg border border-neutral-200 bg-white p-3">
+          <p className="font-semibold">2. Venue</p>
+          {venues.map((v) => (
+            <p key={v.id}><Link className="text-blue-700 underline" href={`/projects/${id}/venues/${v.id}`}>{v.name}</Link> <span className={v.status === "approved" ? "text-green-700" : "text-amber-700"}>({v.status})</span></p>
+          ))}
+          {!venuesReady && venues.length === 0 && <p className="text-amber-700">No venue yet</p>}
+          <div className="mt-2"><AddVenueForm projectId={id} /></div>
+        </li>
+        <li className="rounded-lg border border-neutral-200 bg-white p-3">
+          <p className="font-semibold">3. Storyboard, then shots</p>
+          <p className="text-neutral-600">Per scene below: Storyboard → Design shots → Floor plan → Animatic.</p>
+        </li>
+      </ol>
+
       <h2 className="mt-8 text-lg font-semibold">Scenes</h2>
       <ul className="mt-3 space-y-2">
         {scenes.map((s) => (
           <li key={s.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-neutral-200 bg-white px-4 py-3">
             <span className="font-mono text-sm">EP{String(s.episode).padStart(2, "0")} S{String(s.number).padStart(2, "0")}</span>
             <span className="flex-1">{s.title}</span>
+            <Link className="text-sm font-semibold text-blue-700 underline" href={`/projects/${id}/scenes/${s.id}/storyboard`}>Storyboard</Link>
             <Link className="text-sm text-blue-700 underline" href={`/projects/${id}/scenes/${s.id}`}>Shots</Link>
             <Link className="text-sm font-semibold text-blue-700 underline" href={`/projects/${id}/scenes/${s.id}/design`}>Design shots</Link>
             <Link className="text-sm text-blue-700 underline" href={`/projects/${id}/scenes/${s.id}/plan`}>Floor plan</Link>
