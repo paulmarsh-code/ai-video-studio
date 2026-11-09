@@ -41,6 +41,7 @@ export function CameraView({
   cast,
   onlyIds,
   subjectId,
+  compact,
 }: {
   plan: GeometryPlanData;
   cameraId: string;
@@ -48,6 +49,8 @@ export function CameraView({
   /** Limit drawing to these characters (the shot's visible set). */
   onlyIds?: string[];
   subjectId?: string;
+  /** Hide the explanatory caption (for compact grids). */
+  compact?: boolean;
 }) {
   const cam = plan.cameras.find((c) => c.id === cameraId);
   if (!cam) return null;
@@ -85,7 +88,7 @@ export function CameraView({
           <rect width={W} height={horizon + 25} fill={VIEW_COLOURS[wall] ?? "#cbd5e1"} />
           <rect y={horizon + 25} width={W} height={H} fill="#d6d3d1" />
           {wall && (
-            <text x={W / 2} y={28} textAnchor="middle" fontSize={14} fill={wall === "windows and entrance" || wall === "lounge seating" ? "#334155" : "#e2e8f0"} letterSpacing={2}>
+            <text x={10} y={22} textAnchor="start" fontSize={12} fill={wall === "windows and entrance" || wall === "lounge seating" ? "#334155" : "#e2e8f0"} letterSpacing={2}>
               {wall.toUpperCase()}
             </text>
           )}
@@ -137,9 +140,9 @@ export function CameraView({
         </g>
         <rect width={W} height={H} fill="none" stroke="#0004" />
       </svg>
-      <figcaption className="px-3 py-1.5 text-xs text-neutral-600">
+      {!compact && <figcaption className="px-3 py-1.5 text-xs text-neutral-600">
         {cam.name}: sketch from the floor plan, not a render. Black blurred shape = the over-the-shoulder person, seen from behind.
-      </figcaption>
+      </figcaption>}
     </figure>
   );
 }

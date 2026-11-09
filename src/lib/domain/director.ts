@@ -135,7 +135,7 @@ function candidates(plan: GeometryPlanData, shot: ShotSpec, moment: MomentKind, 
 
   // Group / reaction shot (R-REACTION).
   const visiblePts = shot.visibleIds.map(pos).filter((p): p is Point => !!p);
-  if (visiblePts.length >= 2 && (moment === "reaction" || moment === "dialogue" || moment === "exit")) {
+  if (visiblePts.length >= 2 && (moment === "reaction" || moment === "dialogue" || moment === "exit" || moment === "peak")) {
     const c = centroid(visiblePts);
     for (const radius of [2.0, 2.6, 3.2]) for (let a = 0; a < 360; a += 15) {
       const camPos = add(c, mul({ x: Math.cos((a * Math.PI) / 180), y: Math.sin((a * Math.PI) / 180) }, radius));
@@ -313,15 +313,16 @@ function designForSide(plan: GeometryPlanData, shots: ShotInput[], side: number,
       .filter((x) => x.r.ok)
       .sort((a, b) => b.r.score - a.r.score);
     // Keep the best few distinct options (different type, or clearly different position).
-    const options: CameraOption[] = [];
+    // Offer different kinds of shot first (best of each type), then fill with variations.
     const picked: typeof scored = [];
+    for (const x of scored) if (!picked.some((p) => p.c.role === x.c.role)) picked.push(x);
     for (const x of scored) {
-      const distinct = picked.every((p) => p.c.role !== x.c.role || Math.hypot(p.c.camera.position.x - x.c.camera.position.x, p.c.camera.position.y - x.c.camera.position.y) > 0.6);
-      if (!distinct) continue;
-      picked.push(x);
-      options.push({ camera: x.c.camera, kind: x.c.kind, score: Math.round(x.r.score * 10) / 10, reasons: x.r.reasons });
-      if (options.length === 3) break;
+      if (picked.length >= 3) break;
+      if (!picked.includes(x) && picked.every((p) => Math.hypot(p.c.camera.position.x - x.c.camera.position.x, p.c.camera.position.y - x.c.camera.position.y) > 0.6)) picked.push(x);
     }
+    picked.splice(3);
+    picked.sort((a, b) => b.r.score - a.r.score);
+    const options: CameraOption[] = picked.map((x) => ({ camera: x.c.camera, kind: x.c.kind, score: Math.round(x.r.score * 10) / 10, reasons: x.r.reasons }));
     if (picked[0]?.r.reading) {
       remember(mem, sh.spec, picked[0].r.reading, picked[0].c.camera.preset);
       total += picked[0].r.score;

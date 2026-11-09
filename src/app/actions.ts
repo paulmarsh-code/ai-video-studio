@@ -82,3 +82,22 @@ export async function copyLibraryItemAction(id: string, name: string, dataJson: 
   revalidatePath("/library");
   return { ok: true };
 }
+
+export async function applyShotDesignAction(
+  sceneId: string,
+  choices: { shotId: string; shotCode: string; option: import("@/lib/domain/director").CameraOption }[],
+  lineOfAction?: [string, string],
+) {
+  const { applyDesign } = await import("@/lib/domain/director");
+  const db = await getDb();
+  const current = repo.getLatestPlan(db, sceneId);
+  if (!current) throw new Error("No floor plan for this scene");
+  const { plan, assign } = applyDesign(current.data, choices, lineOfAction);
+  const version = repo.savePlan(db, sceneId, plan, "Designed by the app (rules library)");
+  for (const ch of choices) {
+    const shot = repo.getShot(db, ch.shotId);
+    if (shot) repo.saveShotSpec(db, ch.shotId, { ...shot.spec, cameraId: assign[ch.shotId] });
+  }
+  revalidatePath("/", "layout");
+  return { version };
+}

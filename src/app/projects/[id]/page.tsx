@@ -28,6 +28,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             <span className="font-mono text-sm">EP{String(s.episode).padStart(2, "0")} S{String(s.number).padStart(2, "0")}</span>
             <span className="flex-1">{s.title}</span>
             <Link className="text-sm text-blue-700 underline" href={`/projects/${id}/scenes/${s.id}`}>Shots</Link>
+            <Link className="text-sm font-semibold text-blue-700 underline" href={`/projects/${id}/scenes/${s.id}/design`}>Design shots</Link>
             <Link className="text-sm text-blue-700 underline" href={`/projects/${id}/scenes/${s.id}/plan`}>Floor plan</Link>
             <Link className="text-sm text-blue-700 underline" href={`/projects/${id}/scenes/${s.id}/animatic`}>Animatic</Link>
           </li>
