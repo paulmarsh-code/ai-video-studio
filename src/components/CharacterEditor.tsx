@@ -4,9 +4,11 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { CharacterRecord } from "@/lib/studioRepo";
 import { approvalProblems } from "@/lib/domain/approval";
-import { approveCharacterAction, discardCharacterDraftAction, saveCharacterAction } from "@/app/studioActions";
+import { approveCharacterAction, discardCharacterDraftAction, saveCharacterAction, setCharacterRefAction } from "@/app/studioActions";
+import { uploadBlob } from "@/lib/clientUpload";
+import { MIN_REF_ASPECT } from "@/lib/domain/imagePrompts";
 import type { Pronoun } from "@/lib/domain/types";
-import { characterDescribePrompt, characterFillFromReply } from "@/lib/domain/describe";
+import { CHARACTER_SHEET, characterDescribePrompt, characterFillFromReply, characterSheetRequest } from "@/lib/domain/describe";
 import { StartFromPanel } from "./StartFromPanel";
 
 export function CharacterEditor({ c, projectId, baseCode, canDescribe }: { c: CharacterRecord; projectId: string; baseCode: string; canDescribe: boolean }) {
@@ -68,6 +70,17 @@ export function CharacterEditor({ c, projectId, baseCode, canDescribe }: { c: Ch
     setMsg(r.ok ? { kind: "ok", text: `Version ${r.value} approved. Earlier versions are kept as superseded.` } : { kind: "error", text: r.error });
     router.refresh();
   });
+  const attachSheet = async (sheet: File, pieces: Blob[]) => {
+    await uploadBlob(projectId, `${baseCode}_SHEET`, "reference-sheet", sheet, sheet.name);
+    for (const [i, view] of CHARACTER_SHEET.views.entries()) {
+      const id = await uploadBlob(projectId, `${baseCode}_${view.toUpperCase()}`, "character-ref", pieces[i], `${view}.png`);
+      const r = await setCharacterRefAction(c.id, view, id);
+      if (!r.ok) throw new Error(r.error);
+    }
+    router.refresh();
+    return { ok: true, text: "Front, back and face attached to the draft (on the right). Check them, save any field changes, then approve." };
+  };
+
   const discard = () => start(async () => {
     const r = await discardCharacterDraftAction(c.id);
     setMsg(r.ok ? { kind: "ok", text: "Draft discarded." } : { kind: "error", text: r.error });
@@ -102,6 +115,7 @@ export function CharacterEditor({ c, projectId, baseCode, canDescribe }: { c: Ch
         canDescribe={canDescribe}
         promptFor={characterDescribePrompt}
         onReply={fillFromReply}
+        sheet={{ cols: CHARACTER_SHEET.cols, rows: CHARACTER_SHEET.rows, labels: ["Front", "Back", "Face"], minAspect: MIN_REF_ASPECT, prompt: characterSheetRequest(), onPieces: attachSheet }}
         gateOk={who === "invented" || (who === "real" && !!f.consentRef.trim())}
         gate={
           <div className="space-y-1 rounded border border-amber-200 bg-amber-50 p-2 text-xs">

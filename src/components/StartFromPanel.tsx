@@ -6,6 +6,7 @@
 
 import { useState, type ReactNode } from "react";
 import { CopyButton } from "./CopyButton";
+import { SheetCutter } from "./SheetCutter";
 import type { DescribeSource } from "@/lib/domain/describe";
 
 export interface StartFromPanelProps {
@@ -19,6 +20,18 @@ export interface StartFromPanelProps {
   /** Shown above the steps in picture mode (e.g. the consent choice); steps stay locked until gateOk. */
   gate?: ReactNode;
   gateOk?: boolean;
+  /** Step 4: upload the one-image reference sheet and cut it into views. */
+  sheet?: {
+    cols: number;
+    rows: number;
+    labels: string[];
+    minAspect?: number;
+    /** Short follow-up to send in the same chat if ChatGPT only wrote the description. */
+    prompt: string;
+    /** Why the sheet can't be used yet (e.g. save the views first). */
+    blockedReason?: string;
+    onPieces: (sheet: File, pieces: Blob[]) => Promise<{ ok: boolean; text: string }>;
+  };
 }
 
 export function StartFromPanel(p: StartFromPanelProps) {
@@ -28,6 +41,22 @@ export function StartFromPanel(p: StartFromPanelProps) {
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState(false);
   const [report, setReport] = useState<{ ok: boolean; text: string } | null>(null);
+  const [sheetFile, setSheetFile] = useState<File>();
+  const [cutting, setCutting] = useState(false);
+
+  async function cutDone(pieces: Blob[]) {
+    if (!p.sheet || !sheetFile) return;
+    setCutting(true);
+    try {
+      const r = await p.sheet.onPieces(sheetFile, pieces);
+      setReport(r);
+      if (r.ok) setSheetFile(undefined);
+    } catch (e) {
+      setReport({ ok: false, text: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setCutting(false);
+    }
+  }
   const locked = mode === "image" && p.gateOk === false;
   const prompt = p.promptFor(mode, idea);
   const slug = p.what === "character" ? "character" : "place";
@@ -112,6 +141,25 @@ export function StartFromPanel(p: StartFromPanelProps) {
             <textarea className="mt-1 w-full rounded border border-neutral-300 px-2 py-1 font-mono text-xs" rows={5} value={reply} onChange={(e) => setReply(e.target.value)} data-testid="start-reply" />
           </label>
           <button type="button" onClick={() => apply(reply)} className="mt-1 rounded-md bg-blue-700 px-3 py-1 text-sm text-white" data-testid="start-fill">Fill in the fields</button>
+          {p.sheet && (
+            <div className="mt-3 space-y-2 border-t border-neutral-200 pt-3">
+              <p>{mode === "image" ? "4." : "3."} Upload the reference sheet ChatGPT made ({p.sheet.cols * p.sheet.rows} views in one image). The app cuts it into {p.sheet.labels.join(", ")}.</p>
+              <p className="flex flex-wrap items-center gap-2 text-xs text-neutral-600">No sheet? If ChatGPT only wrote the description, send this in the same chat:
+                <CopyButton text={p.sheet.prompt} label="Copy sheet request" /></p>
+              {p.sheet.blockedReason ? (
+                <p className="text-xs text-amber-700">{p.sheet.blockedReason}</p>
+              ) : (
+                <label className="inline-block cursor-pointer rounded-md bg-blue-700 px-3 py-1 text-sm text-white">
+                  {sheetFile ? "Choose a different sheet" : "Upload sheet"}
+                  <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" data-testid="sheet-upload"
+                    onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) { setReport(null); setSheetFile(f); } }} />
+                </label>
+              )}
+              {sheetFile && !p.sheet.blockedReason && (
+                <SheetCutter file={sheetFile} cols={p.sheet.cols} rows={p.sheet.rows} labels={p.sheet.labels} minAspect={p.sheet.minAspect} busy={cutting} onCut={(b) => void cutDone(b)} />
+              )}
+            </div>
+          )}
         </fieldset>
         {report && <p className={`text-sm ${report.ok ? "text-green-700" : "text-red-700"}`} role="status">{report.text}</p>}
       </div>

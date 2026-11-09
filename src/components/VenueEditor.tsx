@@ -2,9 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { approveVenueAction, saveVenueAction } from "@/app/studioActions";
+import { approveVenueAction, saveVenueAction, setVenueViewImageAction } from "@/app/studioActions";
+import { uploadBlob } from "@/lib/clientUpload";
 import type { VenueView } from "@/lib/studioRepo";
-import { venueDescribePrompt, venueFillFromReply } from "@/lib/domain/describe";
+import { VENUE_SHEET, venueDescribePrompt, venueFillFromReply, venueSheetRequest } from "@/lib/domain/describe";
 import { StartFromPanel } from "./StartFromPanel";
 
 // Directions are as seen from the main viewpoint (where scenes here usually start).
@@ -28,6 +29,18 @@ export function VenueEditor({ venue, projectId, baseCode, canDescribe }: { proje
   const [pending, start] = useTransition();
   const dirty = JSON.stringify(f) !== JSON.stringify(initial);
   const field = "mt-1 w-full rounded border border-neutral-300 px-2 py-1 text-sm";
+
+  const attachSheet = async (sheet: File, pieces: Blob[]) => {
+    await uploadBlob(projectId, `${baseCode}_SHEET`, "reference-sheet", sheet, sheet.name);
+    for (const [i, v] of venue.views.entries()) {
+      const code = `${baseCode}_${v.name.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}`;
+      const id = await uploadBlob(projectId, code, "venue-ref", pieces[i], `${v.name}.png`);
+      const r = await setVenueViewImageAction(venue.id, v.name, id);
+      if (!r.ok) throw new Error(r.error);
+    }
+    router.refresh();
+    return { ok: true, text: "Four view images attached (on the right). Check them, then approve the venue." };
+  };
 
   const fillFromReply = (reply: string) => {
     const r = venueFillFromReply(reply);
@@ -64,7 +77,14 @@ export function VenueEditor({ venue, projectId, baseCode, canDescribe }: { proje
         <span className={`rounded px-2 py-0.5 ${venue.status === "approved" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>{venue.status}</span>
       </div>
       <label className="block text-sm">Venue name<input className={field} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
-      <StartFromPanel what="place" projectId={projectId} baseCode={`${baseCode}_SOURCE`} canDescribe={canDescribe} promptFor={venueDescribePrompt} onReply={fillFromReply} />
+      <StartFromPanel what="place" projectId={projectId} baseCode={`${baseCode}_SOURCE`} canDescribe={canDescribe} promptFor={venueDescribePrompt} onReply={fillFromReply}
+        sheet={{
+          cols: VENUE_SHEET.cols, rows: VENUE_SHEET.rows,
+          labels: venue.views.length === 4 ? venue.views.map((v) => v.name) : ["view 1", "view 2", "view 3", "view 4"],
+          prompt: venueSheetRequest(venue.views.length === 4 ? venue.views.map((v) => v.name) : undefined),
+          blockedReason: dirty ? "Save the venue first, so the four views have their names." : venue.views.length !== 4 ? `The sheet has four panels, but this venue has ${venue.views.length} views. Make it four and save, or upload view images one by one.` : undefined,
+          onPieces: attachSheet,
+        }} />
       <label className="block text-sm">Setting
         <select className={field} value={f.setting} onChange={(e) => setF({ ...f, setting: e.target.value as "interior" | "exterior" })} data-testid="venue-setting">
           <option value="interior">Indoors (a room, hall, office, shop…)</option>

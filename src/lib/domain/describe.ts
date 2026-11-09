@@ -45,9 +45,43 @@ function format(fields: Field[]): string {
 }
 
 const REPLY_RULES = [
-  "Reply with exactly these labelled lines, in this order, and nothing else. No markdown, no bullet points, no headings.",
+  "Step 1: write the description as exactly these labelled lines, in this order. No markdown, no bullet points, no headings, no other commentary.",
   "Use plain description. Do not use quote marks.",
 ];
+
+/** Layout of the one-image reference sheet that the app cuts into separate views. */
+export const CHARACTER_SHEET = { cols: 3, rows: 1, views: ["front", "back", "face"] as const };
+export const VENUE_SHEET = { cols: 2, rows: 2 };
+
+const SHEET_COMMON = "Thin plain white dividers between panels, all panels exactly the same size, nothing crossing from one panel into another. No text, labels, numbers, logos or watermark anywhere in the image.";
+
+/** Step 2 of the character prompt: one image, three equal panels side by side. */
+export function characterSheetRequest(style = "photorealistic"): string {
+  return [
+    `Step 2: using the description above, create ONE ${style} image: a character reference sheet in landscape 3:2 format, divided into three equal vertical panels side by side.`,
+    "Left panel: front view, the whole body from the top of the head to the shoes, standing naturally, facing the camera.",
+    "Middle panel: back view, the whole body from the top of the head to the shoes, facing directly away from the camera, face not visible.",
+    "Right panel: face close-up, head and shoulders, looking straight into the camera, neutral relaxed expression.",
+    "In the two full-body panels the head must not be cropped: leave a clear gap above the head and below the shoes, and make the figures smaller if needed to fit.",
+    "Exactly the same person, hair, outfit and accessories in all three panels. Plain light-grey studio background, soft even lighting.",
+    SHEET_COMMON,
+  ].join("\n");
+}
+
+/** Step 2 of the venue prompt: one image, a 2x2 grid of the four named views. */
+export function venueSheetRequest(viewNames?: string[], style = "photorealistic"): string {
+  const order = viewNames?.length === 4
+    ? `Top-left: looking towards the ${viewNames[0]}. Top-right: the ${viewNames[1]}. Bottom-left: the ${viewNames[2]}. Bottom-right: the ${viewNames[3]}.`
+    : "Use the four VIEWS in the order you listed them: top-left is the first view, top-right the second, bottom-left the third, bottom-right the fourth.";
+  return [
+    `Step 2: using the description above, create ONE ${style} image in landscape 3:2 format, divided into a 2 by 2 grid of four equal panels, each showing the same place from the main viewpoint looking in a different direction.`,
+    order,
+    "Eye-level wide shots, no people, the same layout, materials and light in every panel.",
+    SHEET_COMMON,
+  ].join("\n");
+}
+
+const STEP2_FALLBACK = "If you can only do one thing in this reply, write the description and stop; I will then ask for the image.";
 
 export type DescribeSource = "image" | "idea";
 
@@ -70,6 +104,9 @@ export function characterDescribePrompt(source: DescribeSource, idea = ""): stri
     ...REPLY_RULES,
     "",
     format(CHARACTER_FIELDS),
+    "",
+    characterSheetRequest(),
+    STEP2_FALLBACK,
   ].join("\n");
 }
 
@@ -89,8 +126,13 @@ export function venueDescribePrompt(source: DescribeSource, idea = ""): string {
     ...REPLY_RULES,
     "",
     format(VENUE_FIELDS),
+    "",
+    venueSheetRequest(),
+    STEP2_FALLBACK,
   ].join("\n");
 }
+
+const CHAT_LINE = /^(here(?:'s| is| are)|i(?:'ve| have| will|'ll)|below|now|sure|great|okay|ok[,.!]|let me|this (?:is|sheet|image))\b/i;
 
 /** Parse a labelled reply. Tolerates markdown bold, bullets, numbering, case and line wraps. */
 export function parseLabelled(text: string, fields: Field[]): { values: Record<string, string>; missing: string[]; known: boolean } {
@@ -104,6 +146,8 @@ export function parseLabelled(text: string, fields: Field[]): { values: Record<s
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.replace(/\*\*|__/g, "").replace(/^\s*(?:[-*•]|\d+[.)])\s*/, "").trim();
     if (!line) continue;
+    if (/^step\s*2\b/i.test(line)) break; // anything after the description is about the image
+    if (/^step\s*1\b/i.test(line)) continue;
     const m = line.match(/^([A-Za-z][A-Za-z &/-]{1,40}):\s*(.*)$/);
     if (m) {
       const n = norm(m[1]);
@@ -111,6 +155,8 @@ export function parseLabelled(text: string, fields: Field[]): { values: Record<s
       const key = byLabel.get(n) ?? alias[n];
       if (key) { current = key; values[key] = m[2].trim(); continue; }
     }
+    // A wrapped line continues the current field; ChatGPT's own chat ("Here is the sheet…") ends it.
+    if (CHAT_LINE.test(line)) { current = undefined; continue; }
     if (current) values[current] = `${values[current]} ${line}`.trim();
   }
   for (const k of Object.keys(values)) values[k] = stripQuotes(values[k].replace(/^<|>$/g, "")).trim();

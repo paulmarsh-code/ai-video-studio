@@ -49,6 +49,20 @@ describe("Parsing ChatGPT's reply", () => {
     expect(f.known).toBe(false);
   });
 
+  it("ignores ChatGPT's chat around the image", () => {
+    const f = characterFillFromReply(`Step 1\n${REPLY}\nHere is the reference sheet you asked for.\n[image]`);
+    expect(f.voice).toBe("Warm, quick London voice, quietly amused.");
+    const g = characterFillFromReply(`${REPLY}\nStep 2: generating the sheet now\nOUTFIT: something else`);
+    expect(g.wardrobe).not.toContain("something else");
+  });
+
+  it("asks for one reference sheet image with the views in a fixed layout", () => {
+    const p = characterDescribePrompt("image");
+    expect(p).toContain("three equal vertical panels");
+    expect(p).toMatch(/Left panel: front view[\s\S]*Middle panel: back view[\s\S]*Right panel: face close-up/);
+    expect(venueDescribePrompt("idea", "rooftop bar")).toContain("2 by 2 grid");
+  });
+
   it("reports missing fields and a known-person flag", () => {
     const f = characterFillFromReply("KNOWN: yes\nHAIR: short grey crop");
     expect(f.known).toBe(true);
