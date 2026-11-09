@@ -110,8 +110,9 @@ export function SheetCutter({ file, cols, rows, labels, minAspect, cutterRef }: 
       return blobs;
     }
   }
+  // Ready only once the board has loaded and the cut lines are placed.
   useEffect(() => {
-    cutterRef.current = cut;
+    cutterRef.current = img ? cut : null;
     return () => { cutterRef.current = null; };
   });
 

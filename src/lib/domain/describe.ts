@@ -303,3 +303,22 @@ export function venueFillFromReply(reply: string): VenueFill & { missing: string
     missing: missing.filter((l) => !(l === "VIEWS" && views.length)),
   };
 }
+
+// ---- Direct GPT link (D17): the same prompts, split into the text part and the image part ----
+
+/** The text part of a describe or change prompt (everything before "Step 2:"), for the text model. */
+export function descriptionOnly(prompt: string): string {
+  const i = prompt.indexOf("\nStep 2:");
+  return (i >= 0 ? prompt.slice(0, i) : prompt).trim();
+}
+
+/** The image part: the board request, written against the description the text model returned. */
+export function characterBoardPrompt(description: string, style = "photorealistic"): string {
+  return ["Draw this character exactly as described:", stripQuotes(description).trim(), "",
+    characterSheetRequest(style).replace("Step 2: using the description above, create", "Create")].join("\n");
+}
+
+export function venueBoardPrompt(description: string, viewNames?: string[], style = "photorealistic"): string {
+  return ["Draw this place exactly as described:", stripQuotes(description).trim(), "",
+    venueSheetRequest(viewNames, style).replace("Step 2: using the description above, create", "Create")].join("\n");
+}

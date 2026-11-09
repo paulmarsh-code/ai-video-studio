@@ -4,7 +4,7 @@ import { getDb } from "@/db/client";
 import * as repo from "@/lib/repo";
 import * as studio from "@/lib/studioRepo";
 import { characterRefPrompt, MIN_REF_ASPECT, REF_VIEWS } from "@/lib/domain/imagePrompts";
-import { getImageProvider } from "@/lib/providers/images";
+import { getImageProvider, getTextProvider } from "@/lib/providers/images";
 import { setCharacterRefAction } from "@/app/studioActions";
 import { CharacterEditor } from "@/components/CharacterEditor";
 import { ImageSlot } from "@/components/ImageSlot";
@@ -23,6 +23,8 @@ export default async function CharactersPage({ params, searchParams }: { params:
   const chars = studio.listCharacters(db, id);
   const style = String((project.brief as { style?: string }).style ?? "photorealistic");
   const canGenerate = !!getImageProvider();
+  // Both halves of the GPT link (text and image) must be set up for "Create with GPT".
+  const canAuto = canGenerate && !!getTextProvider();
 
   // One character at a time: the one in ?c=, else the first. ?new=1 starts a new one.
   const adding = sp.new === "1" || chars.length === 0;
@@ -52,15 +54,15 @@ export default async function CharactersPage({ params, searchParams }: { params:
 
       <div className="mt-5">
         {adding ? (
-          <CharacterWizard key="new" projectId={id} projectCode={project.code} />
+          <CharacterWizard key="new" canAuto={canAuto} projectId={id} projectCode={project.code} />
         ) : c && !created ? (
-          <CharacterWizard key={c.id} projectId={id} projectCode={project.code}
+          <CharacterWizard key={c.id} canAuto={canAuto} projectId={id} projectCode={project.code}
             existing={{ id: c.id, slug: c.slug, name: c.name, pronoun: c.pronoun, role: c.role, invented: c.invented, consentRef: c.consentRef, voiceLock: c.working?.voiceLock ?? "" }} />
         ) : c && (
           <section className="rounded-xl border border-neutral-200 bg-neutral-50 p-4">
             <h2 className="text-lg font-semibold">{c.name}</h2>
             <div className="mt-3">
-              <CharacterEditor key={c.id} c={c} projectId={id} baseCode={code}
+              <CharacterEditor key={c.id} canAuto={canAuto} c={c} projectId={id} baseCode={code}
                 images={hasImages ? (
                 <div className="grid grid-cols-3 gap-2 self-start">
                   {REF_VIEWS.map((v) => (

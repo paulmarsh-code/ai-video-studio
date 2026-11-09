@@ -12,9 +12,10 @@ import { CHARACTER_SHEET, characterChangePrompt, characterFillFromReply, charact
 import { ChangeRequest, type SubmittedChange } from "./ChangeRequest";
 import { CreateStep } from "./CreateStep";
 import { downloadBoard } from "@/lib/board";
+import { gptCreate } from "@/lib/gptClient";
 import { ActionButton, DoneBadge } from "./ActionButton";
 
-export function CharacterEditor({ c, projectId, baseCode, images }: { c: CharacterRecord; projectId: string; baseCode: string; images?: ReactNode }) {
+export function CharacterEditor({ c, projectId, baseCode, images, canAuto }: { c: CharacterRecord; projectId: string; baseCode: string; images?: ReactNode; canAuto?: boolean }) {
   const router = useRouter();
   const w = c.working;
   const initial = {
@@ -133,6 +134,12 @@ export function CharacterEditor({ c, projectId, baseCode, images }: { c: Charact
             onClick={() => void downloadBoard(board as string[], CHARACTER_SHEET.cols, CHARACTER_SHEET.rows, `${baseCode}_current_board.png`)}>download it here</button>)</>}.</>}
           sheet={{ cols: CHARACTER_SHEET.cols, rows: CHARACTER_SHEET.rows, labels: () => ["Front", "Back", "Face"], minAspect: MIN_REF_ASPECT, request: characterSheetRequest() }}
           onCreate={async (reply, pieces, file) => { const r = await create(reply, pieces, file); if (!r.ok) return r.text; setChanging(null); }}
+          // The current views go to GPT so it keeps the same person and changes only what was asked.
+          auto={canAuto ? () => gptCreate({
+            projectId, what: "character", baseCode,
+            prompt: characterChangePrompt({ appearance: f.appearance, wardrobe: f.wardrobe, mannerisms: f.mannerisms, anchors: anchorsList }, changing),
+            describeImageIds: board[0] ? [board[0]] : [], boardRefIds: board.filter((x): x is string => !!x),
+          }) : undefined}
           footer={<button type="button" onClick={() => setChanging(null)} className="text-sm text-neutral-600 underline" data-testid="change-cancel">Cancel changes</button>}
         />
       </div>

@@ -9,6 +9,7 @@ import { VENUE_SHEET, venueChangePrompt, venueFillFromReply, venueSheetRequest }
 import { ChangeRequest } from "./ChangeRequest";
 import { CreateStep } from "./CreateStep";
 import { downloadBoard } from "@/lib/board";
+import { gptCreate } from "@/lib/gptClient";
 import { ActionButton, DoneBadge } from "./ActionButton";
 
 // Directions are as seen from the main viewpoint (where scenes here usually start).
@@ -23,7 +24,7 @@ const DIRECTIONS = [
   { deg: 315, label: "Behind and right" },
 ];
 
-export function VenueEditor({ venue, projectId, baseCode, images }: { projectId: string; baseCode: string; images?: ReactNode; venue: { id: string; name: string; description: string; setting: string; status: string; views: VenueView[] } }) {
+export function VenueEditor({ venue, projectId, baseCode, images, canAuto }: { projectId: string; baseCode: string; images?: ReactNode; canAuto?: boolean; venue: { id: string; name: string; description: string; setting: string; status: string; views: VenueView[] } }) {
   const router = useRouter();
   // Images are set beside each view, so they are not part of this form's state.
   const initial = { name: venue.name, description: venue.description, setting: (venue.setting === "exterior" ? "exterior" : "interior") as "interior" | "exterior", views: venue.views.map((v) => ({ name: v.name, directionDeg: v.directionDeg })) };
@@ -98,6 +99,11 @@ export function VenueEditor({ venue, projectId, baseCode, images }: { projectId:
             onClick={() => void downloadBoard(board as string[], VENUE_SHEET.cols, VENUE_SHEET.rows, `${baseCode}_current_board.png`)}>download it here</button>)</>}.</>}
           sheet={{ cols: VENUE_SHEET.cols, rows: VENUE_SHEET.rows, labels: (reply) => { const v = venueFillFromReply(reply).views; return v.length === 4 ? v.map((x) => x.name) : names.length === 4 ? names : ["view 1", "view 2", "view 3", "view 4"]; }, request: venueSheetRequest(names.length === 4 ? names : undefined) }}
           onCreate={async (reply, pieces, file) => { const r = await create(reply, pieces, file); if (!r.ok) return r.text; setChanging(null); }}
+          auto={canAuto ? () => gptCreate({
+            projectId, what: "place", baseCode,
+            prompt: venueChangePrompt({ setting: f.setting, description: f.description, views: names }, changing),
+            describeImageIds: board[0] ? [board[0]] : [], boardRefIds: board.filter((x): x is string => !!x),
+          }) : undefined}
           footer={<button type="button" onClick={() => setChanging(null)} className="text-sm text-neutral-600 underline" data-testid="change-cancel">Cancel changes</button>}
         />
       </div>

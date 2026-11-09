@@ -15,6 +15,7 @@ import { VENUE_SHEET, venueDescribePrompt, venueFillFromReply, venueSheetRequest
 import type { VenueView } from "@/lib/studioRepo";
 import { ActionButton } from "./ActionButton";
 import { CreateStep } from "./CreateStep";
+import { gptCreate } from "@/lib/gptClient";
 
 type Source = "picture" | "idea";
 
@@ -23,6 +24,8 @@ export interface VenueWizardProps {
   projectCode: string;
   /** Resume a venue that exists but hasn't been created from a picture yet. */
   existing?: { id: string; name: string; views: VenueView[] };
+  /** A GPT link is set up: offer "Create with GPT". */
+  canAuto?: boolean;
 }
 
 const field = "mt-1 w-full rounded border border-neutral-300 px-2 py-1.5 text-sm";
@@ -39,7 +42,7 @@ function StepHeader({ n, title }: { n: number; title: string }) {
   );
 }
 
-export function VenueWizard({ projectId, projectCode, existing }: VenueWizardProps) {
+export function VenueWizard({ projectId, projectCode, existing, canAuto }: VenueWizardProps) {
   const router = useRouter();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [venueId, setVenueId] = useState<string | null>(existing?.id ?? null);
@@ -190,6 +193,10 @@ export function VenueWizard({ projectId, projectCode, existing }: VenueWizardPro
             instruction={`Go over to ChatGPT, paste the copied description${source === "idea" ? "" : " and upload the picture you used"}.`}
             sheet={{ cols: VENUE_SHEET.cols, rows: VENUE_SHEET.rows, labels: boardLabels, request: venueSheetRequest() }}
             onCreate={create}
+            auto={canAuto && venueId ? () => gptCreate({
+              projectId, what: "place", prompt: promptText, baseCode,
+              describeImageIds: picture ? [picture] : [], boardRefIds: picture ? [picture] : [],
+            }) : undefined}
             footer={<button type="button" onClick={() => setStep(2)} className="text-sm text-neutral-600 underline">Back</button>}
           />
         </>

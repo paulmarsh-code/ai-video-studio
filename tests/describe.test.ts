@@ -147,3 +147,19 @@ describe("Asking for a change", () => {
     expect(p).toContain("FRONT VIEW: reference image of Jade.");
   });
 });
+
+describe("Direct GPT link (D17)", () => {
+  it("splits a describe prompt into the text part and a board prompt", async () => {
+    const { descriptionOnly, characterBoardPrompt, venueBoardPrompt } = await import("../src/lib/domain/describe");
+    const full = characterDescribePrompt("image", "", "dry wit");
+    const textPart = descriptionOnly(full);
+    expect(textPart).toContain("IDENTITY ANCHORS:");
+    expect(textPart).not.toContain("Step 2");
+    expect(textPart).not.toContain("three equal vertical panels");
+    const board = characterBoardPrompt("HAIR: dark bob");
+    expect(board.startsWith("Draw this character exactly as described:\nHAIR: dark bob")).toBe(true);
+    expect(board).toContain("Create ONE photorealistic image: a character reference board");
+    expect(board).not.toContain("Step 2");
+    expect(venueBoardPrompt("PLACE: bar", ["skyline", "bar", "lobby", "lounge"])).toContain("Top-left: looking towards the skyline");
+  });
+});

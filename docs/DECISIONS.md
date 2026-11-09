@@ -164,3 +164,29 @@ Paul's direction: if nothing changes what the person looks like, it should updat
 - **Only "Personality or mannerisms?" answered:** **Submit changes** saves the new mannerisms straight away as a draft version. There's no ChatGPT step and no new board, the images stay, and the page doesn't clear. The message tells the user to check the voice lock still fits, then approve.
 - **Anything about looks or clothes answered** (how they look, what they're wearing, anything else): the full change flow (D16g). Any personality change in the same request goes into that prompt too.
 - **Venue questions are all about the look,** so venue changes always use the full flow.
+
+## D17: Direct GPT link, one click from picture to finished character or venue (9 Nov 2026)
+
+Paul's direction: when the user clicks Create, the app should talk to GPT itself. It sends the prompt and picture, gets back the description and the image board, and updates everything.
+
+- **Create with GPT** (and **Recreate with GPT** for changes) appears in the shared final step when `OPENAI_API_KEY` is set. The manual ChatGPT route stays underneath as "Or do it by hand in ChatGPT", and is the only route when no key is set.
+- **One click does three things** (`/api/gpt/create`):
+  1. The text model writes the labelled description. It gets the description-only half of the prompt, everything before "Step 2", plus the picture where there is one.
+  2. The image model draws the one-image board from that description (`characterBoardPrompt` / `venueBoardPrompt`), at 1536×1024.
+  3. The board is stored, and the browser cuts and saves it exactly as for a manual upload: the same code, the same checks.
+- **Which pictures go where** (likeness rules from D16):
+  - **Inspiration picture:** sent to the text model only, to be described. The image model draws from the description, so a stranger's face is not copied.
+  - **Real person with an uploaded consent form:** the photo is also sent to the image model, for the likeness.
+  - **Place picture:** described, and used as the image reference.
+  - **Changes:** the current views (front, back and face, or the four venue views) go as references, so it stays the same person or place.
+- **If the board fails** (for example, the safety system refuses), GPT's description is kept in the reply box and the error is shown. The user can finish by hand with "Copy board request".
+- **Settings** (`.env.local`):
+  - `OPENAI_API_KEY` (required)
+  - `OPENAI_IMAGE_MODEL`, default `gpt-image-2`
+  - `OPENAI_IMAGE_QUALITY`, default `medium`
+  - `OPENAI_TEXT_MODEL`, default `gpt-5-mini`
+  - `OPENAI_BASE_URL`, used for tests
+  
+  The key is used only on the server and is never sent to the browser.
+- **Cost.** OpenAI's guide, checked 9 Nov 2026, gives GPT Image 2 at 1536×1024 as about $0.005 (low), $0.041 (medium) and $0.165 (high) per image. A character or change is therefore one image plus one short text call: roughly 4–5p at medium quality. API use is billed separately from any ChatGPT subscription, and OpenAI may require organisation verification before GPT Image models can be used.
+- **Testing.** Every check passed against a stand-in server that answers like the OpenAI API and logs each call (models, sizes, reference counts, and which pictures were sent where). **Not yet run against the real OpenAI API**: the first real run will confirm the model names and how OpenAI's policies treat real-person photos.

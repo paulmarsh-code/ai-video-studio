@@ -18,6 +18,7 @@ import { MIN_REF_ASPECT } from "@/lib/domain/imagePrompts";
 import type { Pronoun } from "@/lib/domain/types";
 import { ActionButton } from "./ActionButton";
 import { CreateStep } from "./CreateStep";
+import { gptCreate } from "@/lib/gptClient";
 
 type Source = "inspiration" | "real" | "idea";
 
@@ -26,6 +27,8 @@ export interface CharacterWizardProps {
   projectCode: string;
   /** Resume a character that exists but hasn't been created from a picture yet. */
   existing?: { id: string; slug: string; name: string; pronoun: Pronoun; role: string; invented: boolean; consentRef: string; voiceLock: string };
+  /** A GPT link is set up: offer "Create with GPT". */
+  canAuto?: boolean;
 }
 
 const field = "mt-1 w-full rounded border border-neutral-300 px-2 py-1.5 text-sm";
@@ -40,7 +43,7 @@ function StepHeader({ n, title }: { n: number; title: string }) {
   );
 }
 
-export function CharacterWizard({ projectId, projectCode, existing }: CharacterWizardProps) {
+export function CharacterWizard({ projectId, projectCode, existing, canAuto }: CharacterWizardProps) {
   const router = useRouter();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [ref, setRef] = useState<{ id: string; slug: string } | null>(existing ? { id: existing.id, slug: existing.slug } : null);
@@ -220,6 +223,12 @@ export function CharacterWizard({ projectId, projectCode, existing }: CharacterW
             instruction={`Go over to ChatGPT, paste the copied description${source === "idea" ? "" : " and upload the picture you used"}.`}
             sheet={{ cols: CHARACTER_SHEET.cols, rows: CHARACTER_SHEET.rows, labels: () => ["Front", "Back", "Face"], minAspect: MIN_REF_ASPECT, request: characterSheetRequest() }}
             onCreate={create}
+            // Inspiration pictures are only described, never drawn from, so a stranger's face isn't copied.
+            // A consented real person's photo is drawn from, for the likeness.
+            auto={canAuto && ref ? () => gptCreate({
+              projectId, what: "character", prompt: promptText, baseCode: codeFor(ref.slug),
+              describeImageIds: picture ? [picture] : [], boardRefIds: source === "real" && picture ? [picture] : [],
+            }) : undefined}
             footer={<button type="button" onClick={() => setStep(2)} className="text-sm text-neutral-600 underline">Back</button>}
           />
         </>
