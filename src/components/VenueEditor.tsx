@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { approveVenueAction, saveVenueAction } from "@/app/studioActions";
 import type { VenueView } from "@/lib/studioRepo";
+import { venueDescribePrompt, venueFillFromReply } from "@/lib/domain/describe";
+import { StartFromPanel } from "./StartFromPanel";
 
 // Directions are as seen from the main viewpoint (where scenes here usually start).
 const DIRECTIONS = [
@@ -17,7 +19,7 @@ const DIRECTIONS = [
   { deg: 315, label: "Behind and right" },
 ];
 
-export function VenueEditor({ venue }: { venue: { id: string; name: string; description: string; setting: string; status: string; views: VenueView[] } }) {
+export function VenueEditor({ venue, projectId, baseCode, canDescribe }: { projectId: string; baseCode: string; canDescribe: boolean; venue: { id: string; name: string; description: string; setting: string; status: string; views: VenueView[] } }) {
   const router = useRouter();
   // Images are set beside each view, so they are not part of this form's state.
   const initial = { name: venue.name, description: venue.description, setting: (venue.setting === "exterior" ? "exterior" : "interior") as "interior" | "exterior", views: venue.views.map((v) => ({ name: v.name, directionDeg: v.directionDeg })) };
@@ -26,6 +28,24 @@ export function VenueEditor({ venue }: { venue: { id: string; name: string; desc
   const [pending, start] = useTransition();
   const dirty = JSON.stringify(f) !== JSON.stringify(initial);
   const field = "mt-1 w-full rounded border border-neutral-300 px-2 py-1 text-sm";
+
+  const fillFromReply = (reply: string) => {
+    const r = venueFillFromReply(reply);
+    if (!r.description && !r.views.length) return { ok: false, text: "Couldn't find the labelled lines in that reply. Check you pasted all of ChatGPT's answer." };
+    // Views that already have images keep their names; new suggestions are added after them.
+    const keep = venue.views.filter((v) => v.imageAssetId).map((v) => ({ name: v.name, directionDeg: v.directionDeg }));
+    const added = r.views.filter((v) => !keep.some((k) => k.name.toLowerCase() === v.name.toLowerCase()));
+    setF((x) => ({ ...x, setting: r.setting, description: r.description || x.description, views: r.views.length ? [...keep, ...added] : x.views }));
+    return {
+      ok: true,
+      text: [
+        `Filled in the setting (${r.setting === "exterior" ? "outdoors" : "indoors"}), description${r.views.length ? ` and ${r.views.length} views` : ""}.`,
+        keep.length ? `Kept ${keep.length} view${keep.length > 1 ? "s" : ""} that already have images.` : "",
+        r.missing.length ? `Not in the reply: ${r.missing.map((m) => m.toLowerCase()).join(", ")}.` : "",
+        "Check and edit, then Save.",
+      ].filter(Boolean).join(" "),
+    };
+  };
 
   const save = () => start(async () => {
     const r = await saveVenueAction(venue.id, f);
@@ -44,6 +64,7 @@ export function VenueEditor({ venue }: { venue: { id: string; name: string; desc
         <span className={`rounded px-2 py-0.5 ${venue.status === "approved" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>{venue.status}</span>
       </div>
       <label className="block text-sm">Venue name<input className={field} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
+      <StartFromPanel what="place" projectId={projectId} baseCode={`${baseCode}_SOURCE`} canDescribe={canDescribe} promptFor={venueDescribePrompt} onReply={fillFromReply} />
       <label className="block text-sm">Setting
         <select className={field} value={f.setting} onChange={(e) => setF({ ...f, setting: e.target.value as "interior" | "exterior" })} data-testid="venue-setting">
           <option value="interior">Indoors (a room, hall, office, shop…)</option>

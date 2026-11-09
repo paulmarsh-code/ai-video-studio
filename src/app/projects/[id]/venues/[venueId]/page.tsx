@@ -4,7 +4,7 @@ import { getDb } from "@/db/client";
 import * as repo from "@/lib/repo";
 import * as studio from "@/lib/studioRepo";
 import { venueViewPrompt } from "@/lib/domain/imagePrompts";
-import { getImageProvider } from "@/lib/providers/images";
+import { getImageProvider, getTextProvider } from "@/lib/providers/images";
 import { setVenueViewImageAction } from "@/app/studioActions";
 import { ImageSlot } from "@/components/ImageSlot";
 import { VenueEditor } from "@/components/VenueEditor";
@@ -28,7 +28,7 @@ export default async function VenuePage({ params }: { params: Promise<{ id: stri
       <h1 className="text-2xl font-semibold">Venue: {venue.name}</h1>
       <p className="mt-1 max-w-3xl text-neutral-600">Describe the space and name what you see looking each way. Then make one reference image per view in ChatGPT and upload it. The venue is used for every scene set here.</p>
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_1.4fr]">
-        <VenueEditor key={venue.id} venue={venue} />
+        <VenueEditor key={venue.id} venue={venue} projectId={id} baseCode={`${project.code}_VEN_${slug}`} canDescribe={!!getTextProvider()} />
         <div>
           <p className="mb-2 text-xs text-neutral-600">View images (landscape, no people). Prompts use the saved description and setting.</p>
           <div className="grid gap-3 sm:grid-cols-2">

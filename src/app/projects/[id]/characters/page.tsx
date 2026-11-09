@@ -4,7 +4,7 @@ import { getDb } from "@/db/client";
 import * as repo from "@/lib/repo";
 import * as studio from "@/lib/studioRepo";
 import { characterRefPrompt, MIN_REF_ASPECT, REF_VIEWS } from "@/lib/domain/imagePrompts";
-import { getImageProvider } from "@/lib/providers/images";
+import { getImageProvider, getTextProvider } from "@/lib/providers/images";
 import { setCharacterRefAction } from "@/app/studioActions";
 import { CharacterEditor } from "@/components/CharacterEditor";
 import { ImageSlot } from "@/components/ImageSlot";
@@ -22,6 +22,7 @@ export default async function CharactersPage({ params }: { params: Promise<{ id:
   const chars = studio.listCharacters(db, id);
   const style = String((project.brief as { style?: string }).style ?? "photorealistic");
   const canGenerate = !!getImageProvider();
+  const canDescribe = !!getTextProvider();
 
   return (
     <div className="max-w-6xl">
@@ -41,7 +42,7 @@ export default async function CharactersPage({ params }: { params: Promise<{ id:
             <section key={c.id} className="rounded-xl border border-neutral-200 bg-neutral-50 p-4">
               <h2 className="text-lg font-semibold">{c.name}</h2>
               <div className="mt-3 grid gap-6 lg:grid-cols-[1fr_1.2fr]">
-                <CharacterEditor key={c.working?.id} c={c} />
+                <CharacterEditor key={c.id} c={c} projectId={id} baseCode={code} canDescribe={canDescribe} />
                 <div>
                   <p className="mb-2 text-xs text-neutral-600">Reference images (portrait, no narrower than 1:2). Prompts use the saved description; save first if you&apos;ve changed it.</p>
                   <div className="grid grid-cols-3 gap-2">

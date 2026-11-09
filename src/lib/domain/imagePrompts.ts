@@ -13,6 +13,8 @@ export interface CharacterProfile {
   appearance?: string;
   wardrobe?: string;
   mannerisms?: string;
+  /** 3–5 features that must match in every image (from "Start from a picture" or typed). */
+  anchors?: string[];
   refs?: Partial<Record<RefView, string>>; // asset ids
 }
 
@@ -56,6 +58,7 @@ export function characterRefPrompt(name: string, profile: CharacterProfile, view
     hasFront ? `Use the attached front reference image: this is the same person, with identical face, hair, outfit, bag and shoes. Change only the camera view.` : "",
     profile.appearance ? `Appearance: ${sentence(profile.appearance)}` : "",
     profile.wardrobe ? `Outfit: ${sentence(profile.wardrobe)}` : "",
+    profile.anchors?.length ? `Identity anchors, which must match exactly: ${profile.anchors.map(stripQuotes).join("; ")}.` : "",
     "Plain light-grey studio background, soft even lighting, sharp focus. Portrait orientation, 2:3 aspect ratio (not narrower than 1:2). Exactly one person. No text, no logos, no watermark.",
     `Reminder: ${v.reminder}`,
   ].filter(Boolean).join("\n\n");
@@ -137,6 +140,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     const p = i.profiles[c.id];
     const parts = [p?.appearance, p?.wardrobe ? `wearing ${p.wardrobe}` : ""].filter(Boolean).map((x) => stripQuotes(x!).replace(/[.!?]+$/, ""));
     if (parts.length) lines.push(`${c.name}: ${parts.join("; ")}.`);
+    if (p?.anchors?.length) lines.push(`${c.name} must keep: ${p.anchors.map(stripQuotes).join("; ")}.`);
   }
   lines.push(`Moment: ${sentence(i.description)}`);
   if (i.emotion) lines.push(`Emotion: ${sentence(i.emotion)}`);

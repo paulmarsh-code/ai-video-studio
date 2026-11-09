@@ -33,6 +33,7 @@ export interface CharacterRecord {
   pronoun: Pronoun;
   role: string;
   invented: boolean;
+  consentRef: string;
   versions: CharacterVersionRow[]; // newest first
   approved?: CharacterVersionRow;
   draft?: CharacterVersionRow;
@@ -48,7 +49,7 @@ export function listCharacters(db: DB, projectId: string): CharacterRecord[] {
       .map((v) => ({ id: v.id, version: v.version, status: v.status as CharacterVersionRow["status"], profile: (v.profile ?? {}) as CharacterProfile, voiceLock: v.voiceLock }));
     const approved = versions.find((v) => v.status === "approved");
     const draft = versions.find((v) => v.status === "draft");
-    return { id: c.id, slug: c.slug, name: c.name, pronoun: c.pronoun as Pronoun, role: c.role, invented: c.invented, versions, approved, draft, working: draft ?? approved };
+    return { id: c.id, slug: c.slug, name: c.name, pronoun: c.pronoun as Pronoun, role: c.role, invented: c.invented, consentRef: c.consentRef ?? "", versions, approved, draft, working: draft ?? approved };
   });
 }
 
@@ -77,9 +78,10 @@ export function addCharacter(db: DB, projectId: string, input: { name: string; p
   return { id, slug };
 }
 
-export function updateCharacterBasics(db: DB, characterId: string, input: { name: string; pronoun: Pronoun; role: string }) {
+export function updateCharacterBasics(db: DB, characterId: string, input: { name: string; pronoun: Pronoun; role: string; invented?: boolean; consentRef?: string }) {
   if (!input.name.trim()) throw new Error("A character needs a name.");
-  db.update(t.characters).set({ name: input.name.trim(), pronoun: input.pronoun, role: input.role }).where(eq(t.characters.id, characterId)).run();
+  const consent = { ...(input.invented !== undefined ? { invented: input.invented } : {}), ...(input.consentRef !== undefined ? { consentRef: input.consentRef.trim() || null } : {}) };
+  db.update(t.characters).set({ name: input.name.trim(), pronoun: input.pronoun, role: input.role, ...consent }).where(eq(t.characters.id, characterId)).run();
   persist(db);
 }
 
@@ -113,7 +115,8 @@ export function approveCharacterDraft(db: DB, characterId: string) {
   const draft = db.select().from(t.characterVersions)
     .where(and(eq(t.characterVersions.characterId, characterId), eq(t.characterVersions.status, "draft"))).get();
   if (!draft) throw new Error("There is no draft to approve.");
-  const problems = approvalProblems({ voiceLock: draft.voiceLock, profile: draft.profile as CharacterProfile });
+  const ch = db.select().from(t.characters).where(eq(t.characters.id, characterId)).get();
+  const problems = approvalProblems({ voiceLock: draft.voiceLock, profile: draft.profile as CharacterProfile, invented: ch?.invented, consentRef: ch?.consentRef ?? "" });
   if (problems.length) throw new Error(problems.join(" "));
   db.update(t.characterVersions).set({ status: "superseded" })
     .where(and(eq(t.characterVersions.characterId, characterId), eq(t.characterVersions.status, "approved"))).run();

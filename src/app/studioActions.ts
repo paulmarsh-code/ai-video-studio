@@ -25,7 +25,7 @@ async function run<T>(fn: (db: Awaited<ReturnType<typeof getDb>>) => T): Promise
 export async function addCharacterAction(projectId: string, name: string, pronoun: Pronoun) {
   return run((db) => studio.addCharacter(db, projectId, { name, pronoun }).slug);
 }
-export async function saveCharacterAction(characterId: string, basics: { name: string; pronoun: Pronoun; role: string }, draft: { appearance: string; wardrobe: string; mannerisms: string; voiceLock: string }) {
+export async function saveCharacterAction(characterId: string, basics: { name: string; pronoun: Pronoun; role: string; invented: boolean; consentRef: string }, draft: { appearance: string; wardrobe: string; mannerisms: string; anchors: string[]; voiceLock: string }) {
   return run((db) => {
     studio.updateCharacterBasics(db, characterId, basics);
     const { voiceLock, ...profile } = draft;

@@ -53,3 +53,39 @@ export function getImageProvider(): ImageProvider | null {
   const key = process.env.OPENAI_API_KEY;
   return key ? openAIProvider(key) : null;
 }
+
+// ---- Describe (D16): turn a picture or an idea into labelled fields ----
+
+export interface TextProvider {
+  id: string;
+  label: string;
+  /** Run the prompt, with an optional image, and return the model's text reply. */
+  describe(prompt: string, image?: { data: Buffer; mime: string }): Promise<string>;
+}
+
+/** OpenAI Chat Completions with image input. Untested in the build environment: verify with a real key. */
+export function openAITextProvider(apiKey: string, model = process.env.OPENAI_TEXT_MODEL || "gpt-4o"): TextProvider {
+  return {
+    id: "openai",
+    label: `OpenAI ${model}`,
+    async describe(prompt, image) {
+      const content: unknown[] = [{ type: "text", text: prompt }];
+      if (image) content.push({ type: "image_url", image_url: { url: `data:${image.mime};base64,${image.data.toString("base64")}` } });
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model, messages: [{ role: "user", content }] }),
+      });
+      if (!res.ok) throw new Error(`OpenAI request failed (${res.status}): ${(await res.text()).slice(0, 300)}`);
+      const body = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+      const text = body.choices?.[0]?.message?.content;
+      if (!text) throw new Error("OpenAI returned no text.");
+      return text;
+    },
+  };
+}
+
+export function getTextProvider(): TextProvider | null {
+  const key = process.env.OPENAI_API_KEY;
+  return key ? openAITextProvider(key) : null;
+}

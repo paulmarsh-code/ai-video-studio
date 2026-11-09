@@ -130,6 +130,17 @@ describe("Character Studio", () => {
     expect(studio.getApprovedProfiles(db, projectId).jade?.refs?.front).toBe("img-1");
   });
 
+  it("a real person can't be approved without a consent record", async () => {
+    const { db, projectId } = await fresh();
+    const { id } = studio.addCharacter(db, projectId, { name: "Sam", pronoun: "they" });
+    studio.updateCharacterBasics(db, id, { name: "Sam", pronoun: "they", role: "", invented: false, consentRef: "" });
+    studio.saveCharacterDraft(db, id, { profile: { appearance: "tall", anchors: ["red scarf"] }, voiceLock: "Calm Scottish voice." });
+    expect(() => studio.approveCharacterDraft(db, id)).toThrow(/consent/);
+    studio.updateCharacterBasics(db, id, { name: "Sam", pronoun: "they", role: "", invented: false, consentRef: "Sam Lee, signed release, 9 Nov 2026" });
+    expect(studio.approveCharacterDraft(db, id)).toBe(1);
+    expect(studio.getApprovedProfiles(db, projectId)["sam"]?.anchors).toEqual(["red scarf"]);
+  });
+
   it("gives new characters unique slugs", async () => {
     const { db, projectId } = await fresh();
     expect(studio.addCharacter(db, projectId, { name: "Jade", pronoun: "she" }).slug).toBe("jade-2");
