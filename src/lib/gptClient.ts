@@ -16,6 +16,7 @@ export async function gptCreate(body: {
   baseCode: string;
   describeImageIds?: string[];
   boardRefIds?: string[];
+  references?: { for: string; assetId: string }[];
 }): Promise<{ reply: string; boardAssetId: string }> {
   const res = await fetch("/api/gpt/create", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const r = (await res.json()) as { reply?: string; boardAssetId?: string; error?: string };

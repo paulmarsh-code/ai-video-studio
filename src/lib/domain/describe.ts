@@ -99,12 +99,31 @@ export interface CurrentCharacter {
  * full labelled description with only that change, and draws a new sheet, so the fields and
  * all three views stay in step. Attach the current sheet or front image so the rest stays the same.
  */
-export function characterChangePrompt(current: CurrentCharacter, change: string): string {
+/** A picture the user added to illustrate a change ("a look like this"). */
+export interface ChangeReference {
+  /** What it illustrates, e.g. "What they wear". */
+  for: string;
+}
+
+/** Lines telling the model what to take from each reference picture, and what not to copy. */
+function referenceLines(refs: ChangeReference[] | undefined, what: "character" | "place"): string[] {
+  if (!refs?.length) return [];
+  const n = refs.length;
+  return [
+    `Also attached: ${n === 1 ? "one reference picture" : `${n} reference pictures`} after the current board, in this order: ${refs.map((r, i) => `${i + 1}. ${stripQuotes(r.for).toLowerCase()}`).join("; ")}.`,
+    what === "character"
+      ? "Use each reference picture only for what it illustrates. Do not copy the face, body or identity of anyone in a reference picture: the character keeps their own face and features from the current board."
+      : "Use each reference picture only for what it illustrates (style, materials, light). Keep the layout and the four views of the current board, and leave out any people, signs or text from the references.",
+  ];
+}
+
+export function characterChangePrompt(current: CurrentCharacter, change: string, refs?: ChangeReference[]): string {
   return [
     "I am refining an original character for a short AI video. The current description is below. The attached image board shows how the character looks now: front, back and face side by side.",
     "Your reply will be the updated description and ONE new image board in exactly the same three-panel layout as the attached board.",
     `Change only this: ${stripQuotes(change).trim() || "(describe the change here)"}`,
     "Keep everything else exactly the same: the same person, face, proportions and any details the change does not mention.",
+    ...referenceLines(refs, "character"),
     "",
     "Current description:",
     current.appearance ? `APPEARANCE: ${stripQuotes(current.appearance)}` : "",
@@ -123,12 +142,13 @@ export function characterChangePrompt(current: CurrentCharacter, change: string)
   ].filter((l, i, a) => l !== "" || a[i - 1] !== "").join("\n");
 }
 
-export function venueChangePrompt(current: { setting?: string; description: string; views: string[] }, change: string): string {
+export function venueChangePrompt(current: { setting?: string; description: string; views: string[] }, change: string, refs?: ChangeReference[]): string {
   return [
     "I am refining a location for a short AI video. The current description is below. The attached image board shows how it looks now: four views in a 2 by 2 grid.",
     "Your reply will be the updated description and ONE new image board in exactly the same 2 by 2 layout as the attached board.",
     `Change only this: ${stripQuotes(change).trim() || "(describe the change here)"}`,
     "Keep everything else exactly the same, including the four views and their names unless the change says otherwise.",
+    ...referenceLines(refs, "place"),
     "",
     "Current description:",
     `SETTING: ${current.setting === "exterior" ? "outdoors" : "indoors"}`,
@@ -201,7 +221,17 @@ export function venueDescribePrompt(source: DescribeSource, idea = "", atmospher
 const CHAT_LINE = /^(here(?:'s| is| are)|i(?:'ve| have| will|'ll)|below|now|sure|great|okay|ok[,.!]|let me|this (?:is|sheet|image))\b/i;
 
 /** Parse a labelled reply. Tolerates markdown bold, bullets, numbering, case and line wraps. */
+/**
+ * A model sometimes "helpfully" adds a drawing as code (SVG, HTML) or a fenced code block after
+ * the description. Cut the reply at the first sign of code so only the words remain.
+ */
+export function cleanReply(text: string): string {
+  const cut = text.search(/```|<\?xml|<svg[\s>]|<!DOCTYPE|<html[\s>]|<!--/i);
+  return (cut >= 0 ? text.slice(0, cut) : text).trim();
+}
+
 export function parseLabelled(text: string, fields: Field[]): { values: Record<string, string>; missing: string[]; known: boolean } {
+  text = cleanReply(text);
   const norm = (s: string) => s.toUpperCase().replace(/[^A-Z]/g, "");
   const byLabel = new Map(fields.map((f) => [norm(f.label), f.key]));
   // Accept some natural variants.
@@ -223,6 +253,7 @@ export function parseLabelled(text: string, fields: Field[]): { values: Record<s
     }
     // A wrapped line continues the current field; ChatGPT's own chat ("Here is the sheet…") ends it.
     if (CHAT_LINE.test(line)) { current = undefined; continue; }
+    if (/^<[a-z!?/]/i.test(line)) break; // markup, not description
     if (current) values[current] = `${values[current]} ${line}`.trim();
   }
   for (const k of Object.keys(values)) values[k] = stripQuotes(values[k].replace(/^<|>$/g, "")).trim();
@@ -309,16 +340,18 @@ export function venueFillFromReply(reply: string): VenueFill & { missing: string
 /** The text part of a describe or change prompt (everything before "Step 2:"), for the text model. */
 export function descriptionOnly(prompt: string): string {
   const i = prompt.indexOf("\nStep 2:");
-  return (i >= 0 ? prompt.slice(0, i) : prompt).trim();
+  return `${(i >= 0 ? prompt.slice(0, i) : prompt).trim()}\n\nReply with the labelled lines only, as plain text. Do not draw anything: no SVG, code, markup or images. The picture is made separately.`;
 }
 
 /** The image part: the board request, written against the description the text model returned. */
-export function characterBoardPrompt(description: string, style = "photorealistic"): string {
+export function characterBoardPrompt(description: string, style = "photorealistic", refs?: ChangeReference[]): string {
   return ["Draw this character exactly as described:", stripQuotes(description).trim(), "",
+    ...(refs?.length ? [`The last ${refs.length === 1 ? "input image is a reference" : `${refs.length} input images are references`} for: ${refs.map((r) => stripQuotes(r.for).toLowerCase()).join("; ")}. Use them only for that, never for the face or identity; the face and features come from the earlier images.`, ""] : []),
     characterSheetRequest(style).replace("Step 2: using the description above, create", "Create")].join("\n");
 }
 
-export function venueBoardPrompt(description: string, viewNames?: string[], style = "photorealistic"): string {
+export function venueBoardPrompt(description: string, viewNames?: string[], style = "photorealistic", refs?: ChangeReference[]): string {
   return ["Draw this place exactly as described:", stripQuotes(description).trim(), "",
+    ...(refs?.length ? [`The last ${refs.length === 1 ? "input image is a reference" : `${refs.length} input images are references`} for: ${refs.map((r) => stripQuotes(r.for).toLowerCase()).join("; ")}. Use them only for that; leave out any people, signs or text.`, ""] : []),
     venueSheetRequest(viewNames, style).replace("Step 2: using the description above, create", "Create")].join("\n");
 }

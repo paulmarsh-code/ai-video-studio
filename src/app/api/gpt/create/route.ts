@@ -8,7 +8,7 @@ import fs from "node:fs";
 import { NextResponse } from "next/server";
 import { getDb } from "@/db/client";
 import { cleanBaseCode, storeAsset } from "@/lib/assetStore";
-import { characterBoardPrompt, descriptionOnly, venueBoardPrompt, venueFillFromReply } from "@/lib/domain/describe";
+import { characterBoardPrompt, cleanReply, descriptionOnly, venueBoardPrompt, venueFillFromReply } from "@/lib/domain/describe";
 import { getImageProvider, getTextProvider } from "@/lib/providers/images";
 import * as repo from "@/lib/repo";
 
@@ -23,6 +23,8 @@ interface Body {
   describeImageIds?: string[];
   /** Pictures the image model draws from (a consented real person, the place, or the current views when changing). */
   boardRefIds?: string[];
+  /** Pictures the user added to illustrate a change ("clothes like this"); sent to both models, last. */
+  references?: { for: string; assetId: string }[];
 }
 
 export async function POST(req: Request) {
@@ -37,15 +39,17 @@ export async function POST(req: Request) {
 
   let reply: string;
   try {
-    const [pic] = read(b.describeImageIds);
-    reply = await text.describe(descriptionOnly(b.prompt), pic);
+    // The current/source picture first, then any reference pictures, matching the prompt's order.
+    const pics = [...read(b.describeImageIds).slice(0, 1), ...read((b.references ?? []).map((r) => r.assetId))];
+    reply = cleanReply(await text.describe(descriptionOnly(b.prompt), pics));
   } catch (e) {
     return NextResponse.json({ error: `GPT couldn't write the description: ${e instanceof Error ? e.message : String(e)}` }, { status: 502 });
   }
   try {
     const views = b.what === "place" ? venueFillFromReply(reply).views.map((v) => v.name) : undefined;
-    const boardPrompt = b.what === "character" ? characterBoardPrompt(reply) : venueBoardPrompt(reply, views?.length === 4 ? views : undefined);
-    const img = await image.generate(boardPrompt, read(b.boardRefIds), "landscape");
+    const refs = b.references ?? [];
+    const boardPrompt = b.what === "character" ? characterBoardPrompt(reply, undefined, refs) : venueBoardPrompt(reply, views?.length === 4 ? views : undefined, undefined, refs);
+    const img = await image.generate(boardPrompt, [...read(b.boardRefIds), ...read(refs.map((r) => r.assetId))], "landscape");
     const saved = storeAsset(db, {
       projectId: b.projectId, baseCode: `${cleanBaseCode(b.baseCode)}_GPTBOARD`, kind: "reference-sheet", ext: "png", mime: img.mime, data: img.data, note: img.providerNote,
     });

@@ -1,7 +1,7 @@
 // "Start from a picture or a one-line idea": prompts and reply parsing (D16).
 
 import { describe, expect, it } from "vitest";
-import { characterDescribePrompt, characterFillFromReply, venueDescribePrompt, venueFillFromReply } from "../src/lib/domain/describe";
+import { characterDescribePrompt, characterFillFromReply, cleanReply, descriptionOnly, venueDescribePrompt, venueFillFromReply } from "../src/lib/domain/describe";
 import { characterRefPrompt } from "../src/lib/domain/imagePrompts";
 
 const REPLY = `**AGE RANGE:** mid-twenties
@@ -161,5 +161,36 @@ describe("Direct GPT link (D17)", () => {
     expect(board).toContain("Create ONE photorealistic image: a character reference board");
     expect(board).not.toContain("Step 2");
     expect(venueBoardPrompt("PLACE: bar", ["skyline", "bar", "lobby", "lounge"])).toContain("Top-left: looking towards the skyline");
+  });
+});
+
+describe("Reference pictures for changes", () => {
+  it("change prompt says what each picture is for and not to copy faces", async () => {
+    const { characterChangePrompt, characterBoardPrompt } = await import("../src/lib/domain/describe");
+    const p = characterChangePrompt({ appearance: "Dark bob." }, "What they wear: like the attached", [{ for: "What they wear" }]);
+    expect(p).toContain("Also attached: one reference picture after the current board, in this order: 1. what they wear.");
+    expect(p).toContain("Do not copy the face, body or identity of anyone in a reference picture");
+    expect(characterChangePrompt({ appearance: "x" }, "y")).not.toContain("reference picture");
+    expect(characterBoardPrompt("HAIR: bob", "photorealistic", [{ for: "What they wear" }, { for: "How they look" }])).toContain("The last 2 input images are references for: what they wear; how they look.");
+  });
+});
+
+describe("Replies with a drawing attached", () => {
+  it("drops SVG or code that a model adds after the description", () => {
+    const reply = [
+      "APPEARANCE: tall, dark curly hair",
+      "WARDROBE: forest-green jacket",
+      "MANNERISMS: taps the bar when thinking",
+      "VOICE: Mid-Atlantic, measured, dry wit, pacing deliberate",
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<svg xmlns="http://www.w3.org/2000/svg" width="1200"><rect x="0" y="0"/></svg>',
+    ].join("\n");
+    const fill = characterFillFromReply(reply);
+    expect(fill.voice).toBe("Mid-Atlantic, measured, dry wit, pacing deliberate.");
+    expect(JSON.stringify(fill)).not.toMatch(/svg|rect|xml/);
+    expect(cleanReply("VOICE: calm\n```svg\n<svg/>\n```")).toBe("VOICE: calm");
+  });
+  it("tells the text model not to draw", () => {
+    expect(descriptionOnly("Describe them.\nStep 2: draw")).toMatch(/Do not draw anything/);
   });
 });

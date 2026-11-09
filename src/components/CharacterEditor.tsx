@@ -35,7 +35,7 @@ export function CharacterEditor({ c, projectId, baseCode, images, canAuto }: { c
   const [pending, start] = useTransition();
   const dirty = JSON.stringify(f) !== JSON.stringify(initial);
   const [voiceSuggestion, setVoiceSuggestion] = useState("");
-  const [changing, setChanging] = useState<string | null>(null);
+  const [changing, setChanging] = useState<{ text: string; refs: SubmittedChange["refs"] } | null>(null);
   const problems = approvalProblems({ voiceLock: f.voiceLock, profile: { appearance: f.appearance }, invented: f.invented, consentRef: f.consentRef });
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }));
   const anchorsList = f.anchors.split("\n").map((x) => x.trim()).filter(Boolean);
@@ -100,7 +100,7 @@ export function CharacterEditor({ c, projectId, baseCode, images, canAuto }: { c
   // A change that doesn't affect the look (only personality or mannerisms) is saved straight
   // away as a new draft; the images stay. Anything visual goes through the image flow below.
   const submitChange = async (ch: SubmittedChange) => {
-    if (ch.visual) { setChanging(ch.text); return; }
+    if (ch.visual) { setChanging({ text: ch.text, refs: ch.refs }); return; }
     const raw = ch.parts.personality ?? "";
     const mannerisms = raw ? raw.charAt(0).toUpperCase() + raw.slice(1).replace(/[.]?$/, ".") : f.mannerisms;
     const saved = await saveCharacterAction(c.id, { name: f.name, pronoun: f.pronoun as Pronoun, role: f.role, invented: f.invented, consentRef: f.consentRef },
@@ -122,21 +122,32 @@ export function CharacterEditor({ c, projectId, baseCode, images, canAuto }: { c
           <h2 className="text-lg font-semibold">Create the updated {c.name}</h2>
           <span className="ml-auto text-xs text-neutral-500">Step 2 of 2</span>
         </div>
-        <p className="mb-4 rounded bg-neutral-50 p-2 text-sm text-neutral-700"><span className="font-medium">Your changes:</span> {changing}</p>
+        <p className="mb-4 rounded bg-neutral-50 p-2 text-sm text-neutral-700"><span className="font-medium">Your changes:</span> {changing.text}</p>
+        {changing.refs.length > 0 && (
+          <div className="mb-4 flex flex-wrap gap-3" data-testid="change-refs">
+            {changing.refs.map((r) => (
+              <figure key={r.assetId} className="text-xs text-neutral-600">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`/api/assets/${r.assetId}`} alt={`Reference: ${r.for}`} className="h-20 w-20 rounded object-cover" />
+                <figcaption>{r.for}</figcaption>
+              </figure>
+            ))}
+          </div>
+        )}
         <CreateStep
           id="chg"
           action="Recreate"
           copyLabel={`Copy ${c.name}'s updated description`}
-          prompt={characterChangePrompt({ appearance: f.appearance, wardrobe: f.wardrobe, mannerisms: f.mannerisms, anchors: anchorsList }, changing)}
+          prompt={characterChangePrompt({ appearance: f.appearance, wardrobe: f.wardrobe, mannerisms: f.mannerisms, anchors: anchorsList }, changing.text, changing.refs)}
           instruction={<>Go over to ChatGPT, paste the copied description and upload the current image board{haveBoard && <> (<button type="button" className="text-blue-700 underline" data-testid="download-board"
-            onClick={() => void downloadBoard(board as string[], CHARACTER_SHEET.cols, CHARACTER_SHEET.rows, `${baseCode}_current_board.png`)}>download it here</button>)</>}.</>}
+            onClick={() => void downloadBoard(board as string[], CHARACTER_SHEET.cols, CHARACTER_SHEET.rows, `${baseCode}_current_board.png`)}>download it here</button>)</>}.{changing.refs.length > 0 && <> Then also upload {changing.refs.length === 1 ? "your reference picture" : "your reference pictures"}, after the board: {changing.refs.map((r, i) => <span key={r.assetId}>{i > 0 && ", "}<a className="text-blue-700 underline" href={`/api/assets/${r.assetId}`} download data-testid={`download-ref-${i}`}>{r.for.toLowerCase()}</a></span>)}.</>}</>}
           sheet={{ cols: CHARACTER_SHEET.cols, rows: CHARACTER_SHEET.rows, labels: () => ["Front", "Back", "Face"], minAspect: MIN_REF_ASPECT, request: characterSheetRequest() }}
           onCreate={async (reply, pieces, file) => { const r = await create(reply, pieces, file); if (!r.ok) return r.text; setChanging(null); }}
           // The current views go to GPT so it keeps the same person and changes only what was asked.
           auto={canAuto ? () => gptCreate({
             projectId, what: "character", baseCode,
-            prompt: characterChangePrompt({ appearance: f.appearance, wardrobe: f.wardrobe, mannerisms: f.mannerisms, anchors: anchorsList }, changing),
-            describeImageIds: board[0] ? [board[0]] : [], boardRefIds: board.filter((x): x is string => !!x),
+            prompt: characterChangePrompt({ appearance: f.appearance, wardrobe: f.wardrobe, mannerisms: f.mannerisms, anchors: anchorsList }, changing.text, changing.refs),
+            describeImageIds: board[0] ? [board[0]] : [], boardRefIds: board.filter((x): x is string => !!x), references: changing.refs,
           }) : undefined}
           footer={<button type="button" onClick={() => setChanging(null)} className="text-sm text-neutral-600 underline" data-testid="change-cancel">Cancel changes</button>}
         />
@@ -215,7 +226,7 @@ export function CharacterEditor({ c, projectId, baseCode, images, canAuto }: { c
     </div>
     <div className="space-y-3 self-start">
       {images}
-      <ChangeRequest what="character" onSubmit={submitChange} />
+      <ChangeRequest what="character" projectId={projectId} baseCode={baseCode} onSubmit={submitChange} />
     </div>
     </div>
   );

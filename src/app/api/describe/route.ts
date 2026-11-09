@@ -12,14 +12,14 @@ export async function POST(req: Request) {
   if (!provider) return NextResponse.json({ error: "No GPT connection is set up. Copy the prompt into ChatGPT and paste the reply." }, { status: 501 });
   const body = (await req.json()) as { prompt?: string; assetId?: string };
   if (!body.prompt) return NextResponse.json({ error: "prompt is required" }, { status: 400 });
-  let image: { data: Buffer; mime: string } | undefined;
+  let image: { data: Buffer; mime: string } | undefined; // one optional picture
   if (body.assetId) {
     const a = repo.getAsset(await getDb(), body.assetId);
     if (!a || !fs.existsSync(a.path)) return NextResponse.json({ error: "Picture not found" }, { status: 404 });
     image = { data: fs.readFileSync(a.path), mime: a.mime };
   }
   try {
-    return NextResponse.json({ text: await provider.describe(body.prompt, image) });
+    return NextResponse.json({ text: await provider.describe(body.prompt, image ? [image] : []) });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 502 });
   }

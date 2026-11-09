@@ -67,8 +67,8 @@ export function getImageProvider(): ImageProvider | null {
 export interface TextProvider {
   id: string;
   label: string;
-  /** Run the prompt, with an optional image, and return the model's text reply. */
-  describe(prompt: string, image?: { data: Buffer; mime: string }): Promise<string>;
+  /** Run the prompt, with optional images (in order), and return the model's text reply. */
+  describe(prompt: string, images?: { data: Buffer; mime: string }[]): Promise<string>;
 }
 
 /** OpenAI Chat Completions with optional image input. */
@@ -76,9 +76,9 @@ export function openAITextProvider(apiKey: string, model = process.env.OPENAI_TE
   return {
     id: "openai",
     label: `OpenAI ${model}`,
-    async describe(prompt, image) {
+    async describe(prompt, images = []) {
       const content: unknown[] = [{ type: "text", text: prompt }];
-      if (image) content.push({ type: "image_url", image_url: { url: `data:${image.mime};base64,${image.data.toString("base64")}` } });
+      for (const image of images) content.push({ type: "image_url", image_url: { url: `data:${image.mime};base64,${image.data.toString("base64")}` } });
       const res = await fetch(`${baseUrl()}/chat/completions`, {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },

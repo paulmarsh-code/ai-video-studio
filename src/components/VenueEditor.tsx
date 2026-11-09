@@ -6,7 +6,7 @@ import { approveVenueAction, saveVenueAction } from "@/app/studioActions";
 import { uploadBlob } from "@/lib/clientUpload";
 import type { VenueView } from "@/lib/studioRepo";
 import { VENUE_SHEET, venueChangePrompt, venueFillFromReply, venueSheetRequest } from "@/lib/domain/describe";
-import { ChangeRequest } from "./ChangeRequest";
+import { ChangeRequest, type SubmittedChange } from "./ChangeRequest";
 import { CreateStep } from "./CreateStep";
 import { downloadBoard } from "@/lib/board";
 import { gptCreate } from "@/lib/gptClient";
@@ -30,7 +30,7 @@ export function VenueEditor({ venue, projectId, baseCode, images, canAuto }: { p
   const initial = { name: venue.name, description: venue.description, setting: (venue.setting === "exterior" ? "exterior" : "interior") as "interior" | "exterior", views: venue.views.map((v) => ({ name: v.name, directionDeg: v.directionDeg })) };
   const [f, setF] = useState(initial);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [changing, setChanging] = useState<string | null>(null);
+  const [changing, setChanging] = useState<{ text: string; refs: SubmittedChange["refs"] } | null>(null);
   const dirty = JSON.stringify(f) !== JSON.stringify(initial);
   const field = "mt-1 w-full rounded border border-neutral-300 px-2 py-1 text-sm";
 
@@ -88,20 +88,31 @@ export function VenueEditor({ venue, projectId, baseCode, images, canAuto }: { p
           <h2 className="text-lg font-semibold">Create the updated {venue.name}</h2>
           <span className="ml-auto text-xs text-neutral-500">Step 2 of 2</span>
         </div>
-        <p className="mb-4 rounded bg-neutral-50 p-2 text-sm text-neutral-700"><span className="font-medium">Your changes:</span> {changing}</p>
+        <p className="mb-4 rounded bg-neutral-50 p-2 text-sm text-neutral-700"><span className="font-medium">Your changes:</span> {changing.text}</p>
+        {changing.refs.length > 0 && (
+          <div className="mb-4 flex flex-wrap gap-3" data-testid="change-refs">
+            {changing.refs.map((r) => (
+              <figure key={r.assetId} className="text-xs text-neutral-600">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`/api/assets/${r.assetId}`} alt={`Reference: ${r.for}`} className="h-20 w-20 rounded object-cover" />
+                <figcaption>{r.for}</figcaption>
+              </figure>
+            ))}
+          </div>
+        )}
         <CreateStep
           id="chg"
           action="Recreate"
           copyLabel={`Copy ${venue.name}'s updated description`}
-          prompt={venueChangePrompt({ setting: f.setting, description: f.description, views: names }, changing)}
+          prompt={venueChangePrompt({ setting: f.setting, description: f.description, views: names }, changing.text, changing.refs)}
           instruction={<>Go over to ChatGPT, paste the copied description and upload the current image board{haveBoard && <> (<button type="button" className="text-blue-700 underline" data-testid="download-board"
-            onClick={() => void downloadBoard(board as string[], VENUE_SHEET.cols, VENUE_SHEET.rows, `${baseCode}_current_board.png`)}>download it here</button>)</>}.</>}
+            onClick={() => void downloadBoard(board as string[], VENUE_SHEET.cols, VENUE_SHEET.rows, `${baseCode}_current_board.png`)}>download it here</button>)</>}.{changing.refs.length > 0 && <> Then also upload {changing.refs.length === 1 ? "your reference picture" : "your reference pictures"}, after the board: {changing.refs.map((r, i) => <span key={r.assetId}>{i > 0 && ", "}<a className="text-blue-700 underline" href={`/api/assets/${r.assetId}`} download data-testid={`download-ref-${i}`}>{r.for.toLowerCase()}</a></span>)}.</>}</>}
           sheet={{ cols: VENUE_SHEET.cols, rows: VENUE_SHEET.rows, labels: (reply) => { const v = venueFillFromReply(reply).views; return v.length === 4 ? v.map((x) => x.name) : names.length === 4 ? names : ["view 1", "view 2", "view 3", "view 4"]; }, request: venueSheetRequest(names.length === 4 ? names : undefined) }}
           onCreate={async (reply, pieces, file) => { const r = await create(reply, pieces, file); if (!r.ok) return r.text; setChanging(null); }}
           auto={canAuto ? () => gptCreate({
             projectId, what: "place", baseCode,
-            prompt: venueChangePrompt({ setting: f.setting, description: f.description, views: names }, changing),
-            describeImageIds: board[0] ? [board[0]] : [], boardRefIds: board.filter((x): x is string => !!x),
+            prompt: venueChangePrompt({ setting: f.setting, description: f.description, views: names }, changing.text, changing.refs),
+            describeImageIds: board[0] ? [board[0]] : [], boardRefIds: board.filter((x): x is string => !!x), references: changing.refs,
           }) : undefined}
           footer={<button type="button" onClick={() => setChanging(null)} className="text-sm text-neutral-600 underline" data-testid="change-cancel">Cancel changes</button>}
         />
@@ -155,7 +166,7 @@ export function VenueEditor({ venue, projectId, baseCode, images, canAuto }: { p
     </div>
     <div className="space-y-3 self-start">
       {images}
-      <ChangeRequest what="place" onSubmit={(ch) => setChanging(ch.text)} />
+      <ChangeRequest what="place" projectId={projectId} baseCode={baseCode} onSubmit={(ch) => setChanging({ text: ch.text, refs: ch.refs })} />
     </div>
     </div>
   );
