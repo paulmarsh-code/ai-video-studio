@@ -121,12 +121,18 @@ export function ImageSlot(p: ImageSlotProps) {
       </div>
       {showPrompt && <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-neutral-50 p-2 text-xs">{p.prompt}</pre>}
       {!!p.attach?.length && (
-        <p className="mt-2 text-xs text-neutral-600">
-          Attach in ChatGPT:{" "}
-          {p.attach.map((a, i) => (
-            <span key={a.assetId}>{i > 0 && ", "}<a className="text-blue-700 underline" href={`/api/assets/${a.assetId}`} download>{a.label}</a></span>
-          ))}
-        </p>
+        <div className="mt-2 rounded border border-neutral-200 bg-neutral-50 p-2 text-xs text-neutral-700">
+          <p>Reference for ChatGPT (attach it alongside the prompt; it is not uploaded here):</p>
+          <div className="mt-1 flex flex-wrap gap-2">
+            {p.attach.map((a) => (
+              <a key={a.assetId} className="flex items-center gap-1 text-blue-700 underline" href={`/api/assets/${a.assetId}`} download title="Download to attach in ChatGPT">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`/api/assets/${a.assetId}`} alt="" className="h-10 w-7 rounded object-cover" />
+                Download {a.label}
+              </a>
+            ))}
+          </div>
+        </div>
       )}
       {error && <p className="mt-2 text-xs text-red-700" role="alert">{error}</p>}
     </div>

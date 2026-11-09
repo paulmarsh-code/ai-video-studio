@@ -54,7 +54,7 @@ export default async function CharactersPage({ params }: { params: Promise<{ id:
                         kind="character-ref"
                         assetId={profile.refs?.[v]}
                         prompt={characterRefPrompt(c.name, profile, v, style)}
-                        attach={v !== "front" && profile.refs?.front ? [{ label: `${c.name} front`, assetId: profile.refs.front }] : []}
+                        attach={v !== "front" && profile.refs?.front ? [{ label: `${c.name}'s front image`, assetId: profile.refs.front }] : []}
                         minAspect={MIN_REF_ASPECT}
                         shape="portrait"
                         canGenerate={canGenerate}
