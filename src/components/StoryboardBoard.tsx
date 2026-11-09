@@ -214,6 +214,12 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
                 disabled={!camerasDone} title={camerasDone ? "" : "Let the app choose the cameras first"} onAction={() => drawAll()} testId="draw-all" />
             )}
             {!camerasDone && <p className="mt-1 text-xs text-amber-700">Choose the cameras first, so each picture matches its shot.</p>}
+            {b.canGenerate && camerasDone && toApprove.length > 0 && (
+              <div className="mt-2">
+                <ActionButton label={`Redraw the ${toApprove.length} unapproved`} busyLabel={progress || "Redrawing…"} doneLabel="Redrawn" variant="secondary"
+                  onAction={() => drawAll(toApprove, "Redrawing")} testId="redraw-unapproved" />
+              </div>
+            )}
           </>
         ), "step-pictures")}
         {step(3, "Approve", allApproved, allApproved ? <p>All pictures approved. <Link className="text-blue-700 underline" href={b.designHref.replace(/design$/, "animatic")}>Next: the animatic</Link></p> : (
