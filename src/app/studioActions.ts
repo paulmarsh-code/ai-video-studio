@@ -34,11 +34,12 @@ export async function upsertCharacterBasicsAction(projectId: string, characterId
     return { id: c.id, slug: c.slug };
   });
 }
-export async function saveCharacterAction(characterId: string, basics: { name: string; pronoun: Pronoun; role: string; invented: boolean; consentRef: string }, draft: { appearance: string; wardrobe: string; mannerisms: string; anchors: string[]; voiceLock: string }) {
+/** Save basics and the draft in one step. With refs, the description and images change together (no half-saved state). */
+export async function saveCharacterAction(characterId: string, basics: { name: string; pronoun: Pronoun; role: string; invented: boolean; consentRef: string }, draft: { appearance: string; wardrobe: string; mannerisms: string; anchors: string[]; voiceLock: string }, refs?: { front?: string; back?: string; face?: string }) {
   return run((db) => {
     studio.updateCharacterBasics(db, characterId, basics);
     const { voiceLock, ...profile } = draft;
-    return studio.saveCharacterDraft(db, characterId, { profile, voiceLock });
+    return studio.saveCharacterDraft(db, characterId, { profile, voiceLock, refs });
   });
 }
 export async function approveCharacterAction(characterId: string) {

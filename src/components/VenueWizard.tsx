@@ -9,13 +9,14 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { addVenueAction, saveVenueAction, setVenueViewImageAction } from "@/app/studioActions";
+import { addVenueAction, saveVenueAction } from "@/app/studioActions";
 import { uploadBlob } from "@/lib/clientUpload";
 import { VENUE_SHEET, venueDescribePrompt, venueFillFromReply, venueSheetRequest } from "@/lib/domain/describe";
 import type { VenueView } from "@/lib/studioRepo";
 import { ActionButton } from "./ActionButton";
 import { CreateStep } from "./CreateStep";
 import { gptCreate } from "@/lib/gptClient";
+import { goTo } from "@/lib/nav";
 
 type Source = "picture" | "idea";
 
@@ -102,16 +103,13 @@ export function VenueWizard({ projectId, projectCode, existing, canAuto }: Venue
     const r = venueFillFromReply(reply);
     if (!r.description) return "Couldn't find the labelled description in that reply. Check you pasted all of ChatGPT's answer.";
     if (r.views.length !== 4) return `ChatGPT's reply lists ${r.views.length} views; the image board has 4. Ask ChatGPT for exactly four VIEWS lines, one per direction.`;
-    const saved = await saveVenueAction(venueId, { name, description: r.description, setting: r.setting, views: r.views });
-    if (!saved.ok) return saved.error;
+    // Upload the board and the four views first; then save text and images in one step (D17a).
     await uploadBlob(projectId, `${baseCode}_SHEET`, "reference-sheet", board, board.name);
-    for (const [i, v] of r.views.entries()) {
-      const id = await uploadBlob(projectId, `${baseCode}_${codeName(v.name)}`, "venue-ref", pieces[i], `${v.name}.png`);
-      const a = await setVenueViewImageAction(venueId, v.name, id);
-      if (!a.ok) return a.error;
-    }
-    router.push(`?v=${venueId}`);
-    router.refresh();
+    const views: VenueView[] = [];
+    for (const [i, v] of r.views.entries()) views.push({ ...v, imageAssetId: await uploadBlob(projectId, `${baseCode}_${codeName(v.name)}`, "venue-ref", pieces[i], `${v.name}.png`) });
+    const saved = await saveVenueAction(venueId, { name, description: r.description, setting: r.setting, views });
+    if (!saved.ok) return saved.error;
+    goTo(router, `?v=${venueId}`);
   }
 
   const choice = (value: Source, title: string, detail: string) => (

@@ -27,16 +27,20 @@ export default async function VenuesPage({ params, searchParams }: { params: Pro
   // Both halves of the GPT link (text and image) must be set up for "Create with GPT".
   const canAuto = canGenerate && !!getTextProvider();
 
-  // One venue at a time: the one in ?v=, else the first. ?new=1 starts a new one.
-  const adding = sp.new === "1" || venues.length === 0;
-  const venue = adding ? undefined : venues.find((x) => x.id === sp.v) ?? venues[0];
+  // Opens clean: the names and "+ Add venue" only. ?v= opens one venue; ?new=1 starts a new one.
+  const adding = sp.new === "1";
+  const venue = adding ? undefined : venues.find((x) => x.id === sp.v);
   const hasImages = !!venue?.views.some((v) => v.imageAssetId);
   const created = !!venue && (hasImages || !!venue.description.trim());
   const baseCode = venue ? `${project.code}_VEN_${codeName(venue.name).slice(0, 24)}` : "";
 
   return (
     <div className="max-w-6xl">
-      <p className="text-sm text-neutral-500"><Link href="/">Projects</Link> / <Link href={`/projects/${id}`}>{project.name}</Link> /</p>
+      <nav className="text-sm text-neutral-500" aria-label="Breadcrumb" data-testid="breadcrumb">
+        <Link href="/">Projects</Link> / <Link href={`/projects/${id}`}>{project.name}</Link> / {venue || adding ? <Link href={`/projects/${id}/venues`}>Venues</Link> : <span>Venues</span>}
+        {venue && <> / <span className="text-neutral-800">{venue.name}</span></>}
+        {adding && <> / <span className="text-neutral-800">New venue</span></>}
+      </nav>
       <h1 className="text-2xl font-semibold">Venue creation</h1>
 
       {venues.length > 0 && (
@@ -85,8 +89,9 @@ export default async function VenuesPage({ params, searchParams }: { params: Pro
       </div>
 
       {!adding ? (
-        <div className="mt-6">
-          <Link href="?new=1" className="inline-block rounded-md border border-blue-700 px-4 py-2 text-sm text-blue-700 hover:bg-blue-50" data-testid="add-venue">+ Add venue</Link>
+        <div className={venue ? "mt-6" : "mt-2"}>
+          {!venue && venues.length > 0 && <p className="mb-3 text-sm text-neutral-600">Choose a venue above, or add a new one.</p>}
+          <Link href="?new=1" className={venue ? "inline-block rounded-md border border-blue-700 px-4 py-2 text-sm text-blue-700 hover:bg-blue-50" : "inline-block rounded-md bg-blue-700 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-800"} data-testid="add-venue">+ Add venue</Link>
         </div>
       ) : venues.length > 0 && (
         <p className="mt-4 text-sm"><Link className="text-blue-700 underline" href="?">Cancel</Link></p>

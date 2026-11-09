@@ -11,7 +11,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { saveCharacterAction, setCharacterRefAction, upsertCharacterBasicsAction } from "@/app/studioActions";
+import { saveCharacterAction, upsertCharacterBasicsAction } from "@/app/studioActions";
 import { uploadBlob } from "@/lib/clientUpload";
 import { CHARACTER_SHEET, characterDescribePrompt, characterFillFromReply, characterSheetRequest } from "@/lib/domain/describe";
 import { MIN_REF_ASPECT } from "@/lib/domain/imagePrompts";
@@ -19,6 +19,7 @@ import type { Pronoun } from "@/lib/domain/types";
 import { ActionButton } from "./ActionButton";
 import { CreateStep } from "./CreateStep";
 import { gptCreate } from "@/lib/gptClient";
+import { goTo } from "@/lib/nav";
 
 type Source = "inspiration" | "real" | "idea";
 
@@ -114,19 +115,17 @@ export function CharacterWizard({ projectId, projectCode, existing, canAuto }: C
     if (!ref) return "Go back to step 1 and save the character first.";
     const r = characterFillFromReply(reply);
     if (!r.appearance && !r.wardrobe) return "Couldn't find the labelled description in that reply. Check you pasted all of ChatGPT's answer.";
-    const saved = await saveCharacterAction(ref.id,
-      { name, pronoun, role, invented: source !== "real", consentRef: source === "real" && consent ? `Consent form ${consent.code}` : existing?.consentRef ?? "" },
-      { appearance: r.appearance, wardrobe: r.wardrobe, mannerisms: r.mannerisms, anchors: r.anchors, voiceLock: existing?.voiceLock?.trim() || r.voice });
-    if (!saved.ok) return saved.error;
+    // Upload the board and the three views first; then save text and images in one step,
+    // so the page never shows a half-made character (D17a).
     const code = codeFor(ref.slug);
     await uploadBlob(projectId, `${code}_SHEET`, "reference-sheet", board, board.name);
-    for (const [i, view] of CHARACTER_SHEET.views.entries()) {
-      const id = await uploadBlob(projectId, `${code}_${view.toUpperCase()}`, "character-ref", pieces[i], `${view}.png`);
-      const a = await setCharacterRefAction(ref.id, view, id);
-      if (!a.ok) return a.error;
-    }
-    router.push(`?c=${ref.slug}`);
-    router.refresh();
+    const refs: Record<string, string> = {};
+    for (const [i, view] of CHARACTER_SHEET.views.entries()) refs[view] = await uploadBlob(projectId, `${code}_${view.toUpperCase()}`, "character-ref", pieces[i], `${view}.png`);
+    const saved = await saveCharacterAction(ref.id,
+      { name, pronoun, role, invented: source !== "real", consentRef: source === "real" && consent ? `Consent form ${consent.code}` : existing?.consentRef ?? "" },
+      { appearance: r.appearance, wardrobe: r.wardrobe, mannerisms: r.mannerisms, anchors: r.anchors, voiceLock: existing?.voiceLock?.trim() || r.voice }, refs);
+    if (!saved.ok) return saved.error;
+    goTo(router, `?c=${ref.slug}`);
   }
 
   const choice = (value: Source, title: string, detail: string) => (

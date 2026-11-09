@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition, type ReactNode } from "react";
 import type { CharacterRecord } from "@/lib/studioRepo";
 import { approvalProblems } from "@/lib/domain/approval";
-import { approveCharacterAction, discardCharacterDraftAction, saveCharacterAction, setCharacterRefAction } from "@/app/studioActions";
+import { approveCharacterAction, discardCharacterDraftAction, saveCharacterAction } from "@/app/studioActions";
 import { uploadBlob } from "@/lib/clientUpload";
 import { MIN_REF_ASPECT } from "@/lib/domain/imagePrompts";
 import type { Pronoun } from "@/lib/domain/types";
@@ -52,15 +52,13 @@ export function CharacterEditor({ c, projectId, baseCode, images, canAuto }: { c
       anchors: r.anchors.length ? r.anchors.join("\n") : f.anchors,
       voiceLock: f.voiceLock.trim() ? f.voiceLock : r.voice,
     };
-    const saved = await saveCharacterAction(c.id, { name: next.name, pronoun: next.pronoun as Pronoun, role: next.role, invented: next.invented, consentRef: next.consentRef },
-      { appearance: next.appearance, wardrobe: next.wardrobe, mannerisms: next.mannerisms, anchors: next.anchors.split("\n").map((x) => x.trim()).filter(Boolean), voiceLock: next.voiceLock });
-    if (!saved.ok) return { ok: false, text: saved.error };
+    // Upload first, then save text and images together in one step (D17a).
     await uploadBlob(projectId, `${baseCode}_SHEET`, "reference-sheet", board, board.name);
-    for (const [i, view] of CHARACTER_SHEET.views.entries()) {
-      const id = await uploadBlob(projectId, `${baseCode}_${view.toUpperCase()}`, "character-ref", pieces[i], `${view}.png`);
-      const a = await setCharacterRefAction(c.id, view, id);
-      if (!a.ok) return { ok: false, text: a.error };
-    }
+    const refs: Record<string, string> = {};
+    for (const [i, view] of CHARACTER_SHEET.views.entries()) refs[view] = await uploadBlob(projectId, `${baseCode}_${view.toUpperCase()}`, "character-ref", pieces[i], `${view}.png`);
+    const saved = await saveCharacterAction(c.id, { name: next.name, pronoun: next.pronoun as Pronoun, role: next.role, invented: next.invented, consentRef: next.consentRef },
+      { appearance: next.appearance, wardrobe: next.wardrobe, mannerisms: next.mannerisms, anchors: next.anchors.split("\n").map((x) => x.trim()).filter(Boolean), voiceLock: next.voiceLock }, refs);
+    if (!saved.ok) return { ok: false, text: saved.error };
     setF(next);
     setVoiceSuggestion(f.voiceLock.trim() && r.voice && r.voice !== f.voiceLock ? r.voice : "");
     setMsg(null);

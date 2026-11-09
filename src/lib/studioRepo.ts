@@ -96,9 +96,10 @@ function ensureDraft(db: DB, characterId: string) {
   return row;
 }
 
-export function saveCharacterDraft(db: DB, characterId: string, input: { profile: Omit<CharacterProfile, "refs">; voiceLock: string }) {
+/** Save the draft's text. Pass refs to replace the reference images in the same write. */
+export function saveCharacterDraft(db: DB, characterId: string, input: { profile: Omit<CharacterProfile, "refs">; voiceLock: string; refs?: CharacterProfile["refs"] }) {
   const draft = ensureDraft(db, characterId);
-  const refs = (draft.profile as CharacterProfile).refs;
+  const refs = input.refs ? { ...((draft.profile as CharacterProfile).refs ?? {}), ...input.refs } : (draft.profile as CharacterProfile).refs;
   db.update(t.characterVersions).set({ profile: { ...input.profile, refs }, voiceLock: input.voiceLock.trim() }).where(eq(t.characterVersions.id, draft.id)).run();
   persist(db);
   return draft.version;

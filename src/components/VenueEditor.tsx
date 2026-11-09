@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
-import { approveVenueAction, saveVenueAction, setVenueViewImageAction } from "@/app/studioActions";
+import { approveVenueAction, saveVenueAction } from "@/app/studioActions";
 import { uploadBlob } from "@/lib/clientUpload";
 import type { VenueView } from "@/lib/studioRepo";
 import { VENUE_SHEET, venueChangePrompt, venueFillFromReply, venueSheetRequest } from "@/lib/domain/describe";
@@ -39,18 +39,17 @@ export function VenueEditor({ venue, projectId, baseCode, images, canAuto }: { p
     const r = venueFillFromReply(reply);
     if (!r.description) return { ok: false, text: "Couldn't find the labelled description in that reply. Check you pasted all of ChatGPT's answer." };
     const views = r.views.length === 4 ? r.views : f.views;
-    const next = { ...f, setting: r.setting, description: r.description, views };
-    const saved = await saveVenueAction(venue.id, next);
-    if (!saved.ok) return { ok: false, text: saved.error };
+    // Upload first, then save text and images together in one step (D17a).
     await uploadBlob(projectId, `${baseCode}_SHEET`, "reference-sheet", board, board.name);
     const n = Math.min(views.length, pieces.length);
-    for (let i = 0; i < n; i++) {
-      const v = views[i];
+    const withImages: VenueView[] = [];
+    for (const [i, v] of views.entries()) {
       const code = `${baseCode}_${v.name.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}`;
-      const id = await uploadBlob(projectId, code, "venue-ref", pieces[i], `${v.name}.png`);
-      const a = await setVenueViewImageAction(venue.id, v.name, id);
-      if (!a.ok) return { ok: false, text: a.error };
+      withImages.push(i < n ? { ...v, imageAssetId: await uploadBlob(projectId, code, "venue-ref", pieces[i], `${v.name}.png`) } : v);
     }
+    const next = { ...f, setting: r.setting, description: r.description, views: views.map((v) => ({ name: v.name, directionDeg: v.directionDeg })) };
+    const saved = await saveVenueAction(venue.id, { ...next, views: withImages });
+    if (!saved.ok) return { ok: false, text: saved.error };
     setF(next);
     setMsg(null);
     router.refresh();

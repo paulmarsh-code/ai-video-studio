@@ -26,9 +26,9 @@ export default async function CharactersPage({ params, searchParams }: { params:
   // Both halves of the GPT link (text and image) must be set up for "Create with GPT".
   const canAuto = canGenerate && !!getTextProvider();
 
-  // One character at a time: the one in ?c=, else the first. ?new=1 starts a new one.
-  const adding = sp.new === "1" || chars.length === 0;
-  const c = adding ? undefined : chars.find((x) => x.slug === sp.c) ?? chars[0];
+  // Opens clean: the names and "+ Add character" only. ?c= opens one character; ?new=1 starts a new one.
+  const adding = sp.new === "1";
+  const c = adding ? undefined : chars.find((x) => x.slug === sp.c);
   const profile = c?.working?.profile ?? {};
   const hasImages = REF_VIEWS.some((v) => !!profile.refs?.[v]);
   const created = !!c && (hasImages || !!profile.appearance?.trim());
@@ -37,7 +37,11 @@ export default async function CharactersPage({ params, searchParams }: { params:
 
   return (
     <div className="max-w-6xl">
-      <p className="text-sm text-neutral-500"><Link href="/">Projects</Link> / <Link href={`/projects/${id}`}>{project.name}</Link> /</p>
+      <nav className="text-sm text-neutral-500" aria-label="Breadcrumb" data-testid="breadcrumb">
+        <Link href="/">Projects</Link> / <Link href={`/projects/${id}`}>{project.name}</Link> / {c || adding ? <Link href={`/projects/${id}/characters`}>Characters</Link> : <span>Characters</span>}
+        {c && <> / <span className="text-neutral-800">{c.name}</span></>}
+        {adding && <> / <span className="text-neutral-800">New character</span></>}
+      </nav>
       <h1 className="text-2xl font-semibold">Character creation</h1>
 
       {chars.length > 0 && (
@@ -91,8 +95,9 @@ export default async function CharactersPage({ params, searchParams }: { params:
       </div>
 
       {!adding && (
-        <div className="mt-6">
-          <Link href="?new=1" className="inline-block rounded-md border border-blue-700 px-4 py-2 text-sm text-blue-700 hover:bg-blue-50" data-testid="add-character">+ Add character</Link>
+        <div className={c ? "mt-6" : "mt-2"}>
+          {!c && chars.length > 0 && <p className="mb-3 text-sm text-neutral-600">Choose a character above, or add a new one.</p>}
+          <Link href="?new=1" className={c ? "inline-block rounded-md border border-blue-700 px-4 py-2 text-sm text-blue-700 hover:bg-blue-50" : "inline-block rounded-md bg-blue-700 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-800"} data-testid="add-character">+ Add character</Link>
         </div>
       )}
       {adding && chars.length > 0 && (
