@@ -39,6 +39,8 @@ export interface StoryboardBoardProps {
   size: "portrait" | "landscape";
   canGenerate: boolean;
   panels: BoardPanel[];
+  /** The scene setting is empty: pictures won't know where they are or who else is there. */
+  settingEmpty?: boolean;
 }
 
 /** OpenAI's error, said plainly, with what to do about it. */
@@ -214,6 +216,7 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
                 disabled={!camerasDone} title={camerasDone ? "" : "Let the app choose the cameras first"} onAction={() => drawAll()} testId="draw-all" />
             )}
             {!camerasDone && <p className="mt-1 text-xs text-amber-700">Choose the cameras first, so each picture matches its shot.</p>}
+            {b.settingEmpty && <p className="mt-1 text-xs text-amber-700" data-testid="setting-empty">The scene setting above is empty, so pictures won&apos;t show where they are or who else is there. Fill it in first.</p>}
             {b.canGenerate && camerasDone && toApprove.length > 0 && (
               <div className="mt-2">
                 <ActionButton label={`Redraw the ${toApprove.length} unapproved`} busyLabel={progress || "Redrawing…"} doneLabel="Redrawn" variant="secondary"

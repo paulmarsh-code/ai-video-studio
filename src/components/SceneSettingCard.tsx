@@ -39,11 +39,20 @@ export function SceneSettingCard({ sceneId, staging, hasPictures, suggestPrompt,
   const [msg, setMsg] = useState("");
   const dirty = v.spot !== saved.spot || v.crowd !== saved.crowd;
   const [reply, setReply] = useState("");
-  const use = (text: string) => {
+  async function save(next: SceneStaging, how: string) {
+    const r = await saveSceneStagingAction(sceneId, next);
+    if (!r.ok) { setMsg(r.error); return r; }
+    setV(r.value!.staging); setSaved(r.value!.staging);
+    setMsg(`${how}${r.value!.replanned ? " The floor plan now has everyone around the spot: let the app choose the cameras again, then redraw." : hasPictures ? " Redraw pictures to use it." : ""}`);
+    router.refresh();
+    return r;
+  }
+  // Suggesting saves straight away: one click, nothing left half done.
+  const use = async (text: string) => {
     const s = parseStaging(text);
     if (!s.spot && !s.crowd) { setMsg("Couldn't find SPOT and BACKGROUND lines in that reply."); return false; }
-    setV(s); setMsg("Suggested from the story. Check it, then save.");
-    return true;
+    const r = await save(s, "Suggested from the story and saved.");
+    return r.ok;
   };
   return (
     <section className="rounded-xl border border-neutral-200 bg-white p-4" data-testid="scene-setting">
@@ -59,7 +68,7 @@ export function SceneSettingCard({ sceneId, staging, hasPictures, suggestPrompt,
                 const res = await fetch("/api/describe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: suggestPrompt }) });
                 const body = (await res.json()) as { text?: string; error?: string };
                 if (!res.ok || !body.text) { setMsg(body.error ?? "GPT didn't reply. Try again."); return false; }
-                return use(body.text);
+                return await use(body.text);
               }} />
           )}
           <details open={!canAuto}>
@@ -68,20 +77,14 @@ export function SceneSettingCard({ sceneId, staging, hasPictures, suggestPrompt,
               <ActionButton label="Copy the request" busyLabel="Copying…" doneLabel="Copied" doneForMs={2500} variant="secondary" testId="staging-copy"
                 onAction={async () => { try { await navigator.clipboard.writeText(suggestPrompt); return true; } catch { return false; } }} />
               <textarea className={field} rows={3} value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Paste ChatGPT's reply here" data-testid="staging-reply" />
-              <button type="button" disabled={!reply.trim()} onClick={() => use(reply)} className="rounded-md border border-blue-700 px-3 py-1 text-blue-700 disabled:opacity-40" data-testid="staging-use">Use this</button>
+              <button type="button" disabled={!reply.trim()} onClick={() => void use(reply)} className="rounded-md border border-blue-700 px-3 py-1 text-blue-700 disabled:opacity-40" data-testid="staging-use">Use this</button>
             </div>
           </details>
         </div>
       )}
       <div className="mt-2 flex flex-wrap items-center gap-3">
         <ActionButton label="Save setting" busyLabel="Saving…" doneLabel="Saved" disabled={!dirty} resetKey={v} testId="staging-save"
-          onAction={async () => {
-            const r = await saveSceneStagingAction(sceneId, v);
-            if (!r.ok) { setMsg(r.error); return r; }
-            setSaved(r.value!); setMsg(hasPictures ? "Saved. Pictures already made keep the old setting until you redraw them." : "");
-            router.refresh();
-            return r;
-          }} />
+          onAction={() => save(v, "Saved.")} />
         {msg && <span className="text-sm text-neutral-700" role="status">{msg}</span>}
       </div>
     </section>

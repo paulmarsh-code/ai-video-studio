@@ -504,11 +504,37 @@ export function saveStoryboard(db: DB, sceneId: string, s: { story: string; targ
  */
 export function saveSceneStaging(db: DB, sceneId: string, staging: SceneStaging) {
   const st = asStaging(staging);
+  const scene = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();
+  if (!scene) throw new Error("Scene not found");
   db.update(t.scenes).set({ staging: st }).where(eq(t.scenes.id, sceneId)).run();
+
+  // A floor plan the app made itself is rebuilt around the spot (D18d): the group stands
+  // around the table, and the cameras are chosen again. A plan the user has edited is kept.
+  const plan = db.select().from(t.plans).where(eq(t.plans.sceneId, sceneId)).orderBy(desc(t.plans.version)).get();
+  const replan = !!st.spot && !!plan && AUTO_PLANS.includes(plan.name);
+  if (replan) {
+    const castIds = sceneCastIds(db, scene);
+    const panels: DraftPanel[] = panelsOf(db, sceneId).map((p) => {
+      const d = (p.dialogue as { characterId: string; text: string }[])[0];
+      const shot = shotForPanel(db, p.id);
+      return { action: p.description, inFrame: shot?.spec.visibleIds ?? [], speakerId: d?.characterId, line: d?.text ?? "", emotion: p.emotion, seconds: p.durationSec };
+    });
+    const venue = scene.venueId ? db.select().from(t.venues).where(eq(t.venues.id, scene.venueId)).get() : undefined;
+    db.insert(t.plans).values({ id: randomUUID(), sceneId, name: AUTO_PLANS[0], version: plan!.version + 1, data: defaultPlan(castIds, panels, (venue?.views ?? []) as PlanView[], st) }).run();
+  }
   for (const sh of db.select().from(t.shots).where(eq(t.shots.sceneId, sceneId)).all()) {
-    const spec = { ...(sh.spec as ShotSpec), spot: st.spot || undefined, crowd: st.crowd || undefined };
+    const old = sh.spec as ShotSpec;
+    const spec: ShotSpec = {
+      ...old, spot: st.spot || undefined, crowd: st.crowd || undefined,
+      // In a group scene the others are nearby, not banned from the frame.
+      excludedIds: st.spot ? [] : old.excludedIds,
+      cameraId: replan ? undefined : old.cameraId,
+    };
     db.update(t.shots).set({ spec }).where(eq(t.shots.id, sh.id)).run();
   }
   persist(db);
-  return st;
+  return { staging: st, replanned: replan };
 }
+
+/** Floor plans the app made itself, which it may rebuild; anything else was edited by the user. */
+const AUTO_PLANS = ["First floor plan (from the story)", "Cameras chosen by the app"];

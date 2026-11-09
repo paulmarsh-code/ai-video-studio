@@ -113,20 +113,31 @@ export interface PanelPrompt {
 export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   const genre = i.genre ?? "neutral";
   const shot = i.shot;
-  const visible = (shot?.visibleIds ?? []).map((id) => i.cast.find((c) => c.id === id)).filter((c): c is CastMember => !!c);
+  const byId = (id: string) => i.cast.find((c) => c.id === id);
   const subjectId = shot ? mainSubjectId(shot) : undefined;
-  const name = (id: string) => i.cast.find((c) => c.id === id)?.name ?? id;
+  const name = (id: string) => byId(id)?.name ?? id;
 
   // Read the shot's camera first: it decides who is seen from behind and which view is the background.
   const cam = shot && i.plan?.cameras.find((c) => c.id === shot.cameraId);
   const reading = cam && i.plan ? readCamera(i.plan, cam) : undefined;
-  // Over-the-shoulder foreground: a non-subject person, only when two or more are visible (same rule as the Kling prompt).
-  const fgId = reading && shot && visible.length > 1
+  // A close-up shows its subject only (D18d): anyone between the lens and the subject is out of frame.
+  const closeUp = !!cam && (cam.preset === "single-cu" || cam.preset === "insert") && !!subjectId;
+  const shownIds = closeUp ? [subjectId!] : (shot?.visibleIds ?? []);
+  const visible = shownIds.map(byId).filter((c): c is CastMember => !!c);
+  // Over-the-shoulder foreground: only on an over-the-shoulder camera, a non-subject person,
+  // and only when two or more are visible (same rule as the Kling prompt).
+  const ots = !!cam && (cam.preset === "main-ots" || cam.preset === "reverse-ots");
+  const fgId = ots && reading && shot && visible.length > 1
     ? reading.actors.find((a) => a.foreground && a.characterId !== subjectId && shot.visibleIds.includes(a.characterId))?.characterId
     : undefined;
+  // Others at the same spot whom this camera would see (D18d): partly in frame, not banned.
+  const edgeIds = reading && shot && !closeUp
+    ? reading.actors.filter((a) => a.inView && !shownIds.includes(a.characterId) && !shot.excludedIds.includes(a.characterId) && shot.presentIds.includes(a.characterId)).map((a) => a.characterId)
+    : [];
+  const edge = edgeIds.map(byId).filter((c): c is CastMember => !!c);
 
   const attach: PanelPrompt["attach"] = [];
-  for (const c of visible) {
+  for (const c of [...visible, ...edge]) {
     const refs = i.profiles[c.id]?.refs ?? {};
     // Someone seen from behind gets their back image; everyone else their front (or face).
     const pick = c.id === fgId ? (refs.back ?? refs.front) : (refs.front ?? refs.face);
@@ -141,16 +152,21 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   lines.push(`${(i.style ?? "photorealistic").replace(/^./, (m) => m.toUpperCase())} storyboard frame for a ${i.aspect ?? "9:16"} video, set in the ${i.venueName}.`);
   const people = attach.filter((a) => !a.label.endsWith(" view") && a.assetId !== i.continuity?.assetId);
   if (people.length) lines.push(`Use the attached reference images for ${joinNames(people.map((a) => a.label.replace(/ (reference|back)$/, "")))}; keep their faces, hair and clothes identical.`);
-  if (bgImage) lines.push(`Use the attached ${bgView} image as the background: same place, layout and light.`);
-  if (i.continuity) lines.push(`Use the attached ${i.continuity.label} for continuity: the same spot, furniture, background guests, light and clothes. Change only the camera angle and the moment.`);
+  if (bgImage) lines.push(`Use the attached ${bgView} image as the background: same place, layout and light.${shot?.crowd?.trim() ? " It shows the room empty; fill it with the background guests described below." : ""}`);
   const spot = shot?.spot?.trim();
   const crowd = shot?.crowd?.trim();
-  if (spot) lines.push(`Where: ${sentence(spot)}${visible.length > 1 ? "" : " Keep it visible where the camera would see it."}`);
+  // An older approved picture may show an empty room: keep its spot and look, but add the crowd.
+  if (i.continuity) lines.push(`Use the attached ${i.continuity.label} for continuity: the same spot, furniture, light and clothes${crowd ? ". If it shows fewer background guests than described below, add them" : ", and the same background guests"}. Change only the camera angle and the moment.`);
+  if (spot) lines.push(`Where: ${sentence(spot)} Keep it in the picture wherever the camera would see it.`);
   if (crowd) lines.push(`Background: ${sentence(crowd)} Background guests are out of focus, smaller than the main characters and never look at the camera; none of them look like the main characters.`);
   for (const c of visible) {
     const p = i.profiles[c.id];
     const parts = [p?.appearance, p?.wardrobe ? `wearing ${p.wardrobe}` : ""].filter(Boolean).map((x) => stripQuotes(x!).replace(/[.!?]+$/, ""));
     if (parts.length) lines.push(`${c.name}: ${parts.join("; ")}.`);
+    if (p?.anchors?.length) lines.push(`${c.name} must keep: ${p.anchors.map(stripQuotes).join("; ")}.`);
+  }
+  for (const c of edge) {
+    const p = i.profiles[c.id];
     if (p?.anchors?.length) lines.push(`${c.name} must keep: ${p.anchors.map(stripQuotes).join("; ")}.`);
   }
   lines.push(`Moment: ${sentence(i.description)}`);
@@ -159,13 +175,16 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
 
   if (cam && reading && shot) {
     lines.push(PRESET_TEXT[cam.preset].replace(", static camera", "").replace(" static camera,", ""));
-    const frame = describeFrame(reading, i.cast, shot.visibleIds, subjectId);
+    const frame = describeFrame(reading, i.cast, [...shownIds, ...edgeIds], subjectId);
     if (frame) lines.push(`Positions: ${frame}.`);
     if (fgId) lines.push(`${name(fgId)} in the soft foreground, seen from behind over the shoulder.`);
+    if (edge.length) lines.push(`${joinNames(edge.map((c) => c.name))} ${edge.length === 1 ? "is" : "are"} also there with them: partly visible at the edge of the frame, softly out of focus, listening.`);
+    if (closeUp && (shot.visibleIds.length > 1)) lines.push(`Close on ${name(subjectId!)}; the others are out of frame.`);
   }
   lines.push(`Look: ${GENRE_PROFILES[genre].look}.`);
-  if (visible.length === 1) lines.push(crowd ? `Only ${visible[0].name} in the foreground; other guests only in the background.` : `Only ${visible[0].name} in frame.`);
-  else if (visible.length > 1) lines.push(`Exactly one of each person: ${joinNames(visible.map((c) => c.name))}. No other people in the foreground.`);
+  if (visible.length === 1 && edge.length) lines.push(`Exactly one of each person: ${joinNames([...visible, ...edge].map((c) => c.name))}. ${visible[0].name} is the main subject.`);
+  else if (visible.length === 1) lines.push(crowd ? `Only ${visible[0].name} in the foreground; other guests only in the background.` : `Only ${visible[0].name} in frame.`);
+  else if (visible.length > 1) lines.push(`Exactly one of each person: ${joinNames([...visible, ...edge].map((c) => c.name))}. No other people in the foreground.`);
   lines.push("No text, no logos, no speech bubbles, no watermark.");
   return { text: lines.join("\n"), attach };
 }

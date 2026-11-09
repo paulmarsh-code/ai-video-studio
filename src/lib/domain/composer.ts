@@ -86,11 +86,17 @@ export function composeKlingPrompt(
   const cam = plan?.cameras.find((c) => c.id === shot.cameraId);
   if (plan && cam) {
     const reading = readCamera(plan, cam);
-    const frame = describeFrame(reading, cast, shot.visibleIds, subjectId);
-    // Over-the-shoulder foreground: only a non-subject person, and only when 2+ people are visible.
+    // Others at the same spot whom this camera would see (D18d): partly in frame, silent.
+    const closeUp = cam.preset === "single-cu" || cam.preset === "insert";
+    const edgeIds = closeUp ? [] : reading.actors
+      .filter((a) => a.inView && !shot.visibleIds.includes(a.characterId) && !shot.excludedIds.includes(a.characterId) && shot.presentIds.includes(a.characterId))
+      .map((a) => a.characterId);
+    const frame = describeFrame(reading, cast, [...shot.visibleIds, ...edgeIds], subjectId);
+    // Over-the-shoulder foreground: only on an over-the-shoulder camera, a non-subject person, and only when 2+ people are visible.
     const fg = reading.actors
       .filter(
         (a) =>
+          (cam.preset === "main-ots" || cam.preset === "reverse-ots") &&
           a.foreground &&
           shot.visibleIds.length > 1 &&
           a.characterId !== subjectId &&
@@ -101,6 +107,7 @@ export function composeKlingPrompt(
     s.positions =
       `Positions: ${frame}.` +
       (fg.length ? ` ${joinNames(fg)} in the soft foreground, seen from behind over the shoulder.` : "") +
+      (edgeIds.length ? ` ${joinNames(edgeIds.map((id) => byId(id)?.name ?? id))} partly visible at the edge of frame, out of focus, silent.` : "") +
       (shot.distance && visible.length > 1 ? ` ${distanceText(shot.distance, plan, shot.visibleIds)}` : "");
     if (reading.backgroundView) {
       const subj = subject?.name ?? "the subject";

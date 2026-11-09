@@ -261,3 +261,18 @@ Paul's first real storyboard (11 panels) showed two problems. The group's cockta
 - **Continuity picture.** The approved picture showing the most people is attached to every other panel's request as the "approved scene picture (panel N)". GPT is told to keep the same spot, furniture, background guests, light and clothes, and to change only the camera angle and the moment.
 - **First floor plan.** When the setting names a table, bar, counter, sofa or similar, it is placed between the group.
 - **Redraw the unapproved pictures** redraws, in one go, every picture not yet approved, using the new setting and the continuity picture.
+
+## D18d — Group scenes: blocking around the spot, close-ups, people at the edge of frame (2026-11-09)
+
+From Paul's second run on Jades Entrance. Panels 3, 4, 6, 9 and 11 were close to approval; 5, 8 and 10 were wrong. His data showed four causes:
+
+1. **The setting was never saved.** He suggested it but didn't press Save. **Suggest from the story now saves straight away.** The Pictures step warns when the setting is empty.
+2. **The first floor plan put Marcus and Nina between Chase and Jade.** In panel 10 the close-up on Chase was shot from Jade's side, so Marcus filled Jade's place. **The plan now places people around the spot:** the two main talkers face each other across the table, and everyone else stands on the far side, never between them. The table sits in the middle. Saving the setting rebuilds a floor plan the app made itself and clears its cameras, so the app chooses them again. A plan the user has edited is kept.
+3. **People not named in a panel were banned from it.** In panels 5 and 8 the group vanished from the table. In a group scene, anyone with a setting spot is now *nearby*, not excluded. If the camera would see them, picture and Kling prompts show them partly at the edge of frame, out of focus and silent. Their reference pictures are attached.
+4. **The foreground shoulder rule.** A foreground person "seen from behind over the shoulder" is now used only on over-the-shoulder cameras. A close-up shows only its subject, with "the others are out of frame".
+
+Also:
+- A venue view used as the background is described as an empty room to fill with the described guests.
+- The continuity picture keeps the spot, furniture, light and clothes, but if it shows fewer guests than the setting, GPT adds them.
+
+Checked by replaying Paul's own scene data with the fixes. Every request now carries the table and the crowd. Panels 5 and 8 include Marcus and Nina at the edge. Panel 10 shows the whole group, with Jade where she should be.

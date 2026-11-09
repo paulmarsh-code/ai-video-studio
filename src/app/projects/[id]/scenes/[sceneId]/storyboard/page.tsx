@@ -82,7 +82,7 @@ export default async function StoryboardPage({ params, searchParams }: { params:
       </div>
 
       <div className="mt-5">
-        <StoryboardBoard projectId={id} sceneId={sceneId} designHref={`/projects/${id}/scenes/${sceneId}/design`} baseCode={base} size={portrait ? "portrait" : "landscape"} canGenerate={canGenerate}
+        <StoryboardBoard settingEmpty={!asStaging(s.scene.staging).spot && !asStaging(s.scene.staging).crowd} projectId={id} sceneId={sceneId} designHref={`/projects/${id}/scenes/${sceneId}/design`} baseCode={base} size={portrait ? "portrait" : "landscape"} canGenerate={canGenerate}
           panels={s.panels.map((p) => {
             const shot = s.shots.find((x) => x.panelId === p.id);
             const d = p.dialogue[0];

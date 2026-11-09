@@ -272,7 +272,7 @@ describe("Scene setting (D18c): the same spot and crowd in every picture and cli
     const cast = CAST.map((c) => ({ id: c.id, name: c.name, pronoun: "she" as const, voiceLock: "" }));
     const shot = shotSpecFor(parseStoryReply(REPLY, CAST).panels[0], { code: "P1", venueName: "Launch", castIds: CAST.map((c) => c.id), staging: { spot: "around a tall cocktail table", crowd: "about 30 guests mingling" } });
     const p = panelPrompt({ description: "Jade arrives", shot, cast, profiles: {}, venueName: "Launch", continuity: { assetId: "a-p2", label: "approved scene picture (panel 2)" } });
-    expect(p.text).toContain("Where: around a tall cocktail table. Keep it visible where the camera would see it.");
+    expect(p.text).toContain("Where: around a tall cocktail table. Keep it in the picture wherever the camera would see it.");
     expect(p.text).toContain("Background: about 30 guests mingling. Background guests are out of focus");
     expect(p.text).toContain("Only Jade in the foreground; other guests only in the background.");
     expect(p.text).toContain("Use the attached approved scene picture (panel 2) for continuity");
@@ -318,5 +318,66 @@ describe("Suggest the setting from a saved story", () => {
     expect(p).toMatch(/SCENE\nSPOT: .*\nBACKGROUND: /);
     expect(storyPrompt({ story: "x", characters: CAST, venue: "v", targetSec: 30 })).toContain("If the story is at an event, party, launch");
     expect(parseStaging("Sure!\n**SPOT:** around a high table\nBACKGROUND: a busy launch crowd of about 40 guests\n")).toEqual({ spot: "around a high table", crowd: "a busy launch crowd of about 40 guests" });
+  });
+});
+
+describe("Group scenes (D18d): blocking, close-ups and people at the edge of frame", () => {
+  const ids = CAST.map((c) => c.id);
+  const panels = parseStoryReply(REPLY, CAST).panels;
+  it("puts the two talkers face to face across the table and everyone else on the far side, never between them", () => {
+    const plan = defaultPlan(ids, panels, [], { spot: "around a tall table", crowd: "" });
+    const pos = Object.fromEntries(plan.actors.map((a) => [a.characterId, a.position]));
+    expect(pos.jade.y).toBeCloseTo(pos.chase.y, 5); // face to face
+    expect(Math.abs(pos.jade.x - pos.chase.x)).toBeCloseTo(2, 5);
+    for (const id of ["marcus", "nina"]) {
+      expect(pos[id].y).toBeGreaterThan(pos.jade.y + 0.5); // far side of the line between the talkers
+      expect(Math.hypot(pos[id].x - 0.25, pos[id].y - 4.85)).toBeGreaterThan(0.35); // not inside the table
+    }
+  });
+  it("in a group scene, people not named in a panel are nearby, not banned", () => {
+    const s = shotSpecFor(panels[2], { code: "P3", venueName: "v", castIds: ids, staging: { spot: "around a table", crowd: "" } });
+    expect(s.excludedIds).toEqual([]);
+    expect(shotSpecFor(panels[2], { code: "P3", venueName: "v", castIds: ids }).excludedIds).toEqual(["marcus", "nina"]);
+  });
+  it("shows nearby people at the edge of frame, keeps close-ups close, and only uses a foreground shoulder on over-the-shoulder shots", async () => {
+    const { panelPrompt } = await import("../src/lib/domain/imagePrompts");
+    const cast = CAST.map((c) => ({ id: c.id, name: c.name, pronoun: "she" as const, voiceLock: "" }));
+    const staging = { spot: "around a tall table", crowd: "about 30 guests" };
+    const plan = defaultPlan(ids, panels, [{ name: "bar", directionDeg: 180 }], staging);
+    const J = plan.actors.find((a) => a.characterId === "jade")!.position, C = plan.actors.find((a) => a.characterId === "chase")!.position;
+    // A two-shot from the open side, looking at the whole group.
+    plan.cameras = [
+      { id: "two", name: "two", preset: "two-shot", position: { x: 0.25, y: 1.5 }, lookAt: { x: 0.25, y: 5 } },
+      { id: "cu", name: "cu", preset: "single-cu", position: { x: J.x - 0.6, y: J.y + 0.5 }, lookAt: C },
+    ];
+    const chase = shotSpecFor(panels[2], { code: "P3", venueName: "v", castIds: ids, staging });
+    const two = panelPrompt({ description: "Chase shrugs", shot: { ...chase, cameraId: "two" }, cast, profiles: {}, plan, venueName: "v" });
+    expect(two.text).toMatch(/Marcus and Nina are also there with them: partly visible at the edge of the frame/);
+    expect(two.text).toContain("Exactly one of each person: Chase, Jade, Marcus and Nina.");
+    const cu = panelPrompt({ description: "Chase waves her off", shot: { ...chase, cameraId: "cu" }, cast, profiles: {}, plan, venueName: "v" });
+    expect(cu.text).toContain("Close on Chase; the others are out of frame.");
+    expect(cu.text).not.toMatch(/in the soft foreground, seen from behind/);
+    expect(cu.text).not.toContain("also there with them");
+  });
+  it("saving the setting rebuilds a floor plan the app made, clears its cameras and frees the group", async () => {
+    const { openDb } = await import("../src/db/client");
+    const studio = await import("../src/lib/studioRepo");
+    const repo = await import("../src/lib/repo");
+    const db = await openDb(":memory:");
+    const pid = studio.createProject(db, { name: "T", format: "Advert", audience: "", outline: "", parts: 1, partSec: 30, aspect: "9:16", style: "", genre: "comedy" });
+    for (const c of CAST) studio.addCharacter(db, pid, { name: c.name, pronoun: "they", role: c.role });
+    const sid = studio.addScene(db, pid, { title: "S", venueId: studio.addVenue(db, pid, "Bar"), castIds: ids });
+    studio.saveStoryboard(db, sid, { story: "x", targetSec: 30, panels }); // no setting: others excluded, old-style plan
+    const shot0 = repo.getScene(db, sid)!.shots[2];
+    repo.saveShotSpec(db, shot0.id, { ...shot0.spec, cameraId: "cam-1" });
+    const r = studio.saveSceneStaging(db, sid, { spot: "around a tall table", crowd: "about 30 guests" });
+    expect(r.replanned).toBe(true);
+    const s = repo.getScene(db, sid)!;
+    expect(s.plan!.version).toBe(2);
+    expect(s.plan!.data.furniture![0].name).toBe("tall table");
+    expect(s.shots.every((x) => x.spec.excludedIds.length === 0 && !x.spec.cameraId && x.spec.crowd === "about 30 guests")).toBe(true);
+    // A plan the user edited is kept.
+    repo.savePlan(db, sid, s.plan!.data, "Blocking plan v3");
+    expect(studio.saveSceneStaging(db, sid, { spot: "on the sofas", crowd: "" }).replanned).toBe(false);
   });
 });

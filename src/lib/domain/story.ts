@@ -285,7 +285,9 @@ export function shotSpecFor(p: DraftPanel, i: { code: string; venueName: string;
   return {
     spot: i.staging?.spot || undefined, crowd: i.staging?.crowd || undefined,
     code: i.code, venueName: i.venueName, sceneContext: p.action, presentIds: i.castIds,
-    visibleIds: visible, excludedIds: i.castIds.filter((id) => !visible.includes(id)),
+    // In a group scene (a spot is set) the others are nearby, not banned: a camera that sees them
+    // shows them at the edge of frame (D18d). Without a setting they are kept out.
+    visibleIds: visible, excludedIds: i.staging?.spot ? [] : i.castIds.filter((id) => !visible.includes(id)),
     speakerId: p.line ? p.speakerId : undefined, dialogue: p.line || undefined,
     subjectId: p.line ? undefined : visible[0],
     actions: p.action, emotion: p.emotion || undefined, durationSec: p.seconds,
@@ -301,18 +303,28 @@ export function shotSpecFor(p: DraftPanel, i: { code: string; venueName: string;
 export function defaultPlan(castIds: string[], panels: DraftPanel[], views: PlanView[], staging?: SceneStaging): GeometryPlanData {
   const said = (id: string) => panels.filter((p) => p.speakerId === id).length + panels.filter((p) => p.inFrame.includes(id)).length / 100;
   const order = [...castIds].sort((a, b) => said(b) - said(a));
-  const [main, ...rest] = order;
-  const actors = !main ? [] : rest.length === 0
-    ? [{ characterId: main, position: { x: 0, y: 5 } }]
-    : [{ characterId: main, position: { x: 1.5, y: 5.4 } }, ...rest.map((id, k) => ({ characterId: id, position: { x: -0.6 + 0.4 * k, y: 4.4 + 0.15 * k } }))];
-  // The line of action runs between the two people who talk most.
   const talkers = order.filter((id) => panels.some((p) => p.speakerId === id));
-  const line: [string, string] | undefined = talkers.length >= 2 ? [talkers[1], talkers[0]] : rest.length ? [rest[0], main] : undefined;
+  const [main] = order;
+  // The person the main talker faces: the second talker, else the next most seen.
+  const partner = talkers.find((id) => id !== main) ?? order[1];
+  const others = order.filter((id) => id !== main && id !== partner);
+  // Around a small table (D18d): the two talkers face each other across it, everyone else
+  // stands on the far side, so no one is ever between the two talkers and the cameras.
+  const C = { x: 0.25, y: 4.85 };
+  const at = (deg: number, r: number) => ({ x: +(C.x + r * Math.cos((deg * Math.PI) / 180)).toFixed(2), y: +(C.y + r * Math.sin((deg * Math.PI) / 180)).toFixed(2) });
+  const actors = !main ? [] : !partner
+    ? [{ characterId: main, position: { x: 0, y: 5 } }]
+    : [
+      { characterId: main, position: at(0, 1.0) },
+      { characterId: partner, position: at(180, 1.0) },
+      ...others.map((id, k) => ({ characterId: id, position: at(others.length === 1 ? 90 : 50 + (80 * k) / (others.length - 1), 0.95) })),
+    ];
+  const line: [string, string] | undefined = partner ? [partner, main] : undefined;
   return {
     bounds: { minX: -4.5, maxX: 4.5, minY: 0, maxY: 10 },
     // The thing the group stands around, between them, so the floor plan shows it.
     furniture: staging?.spot && actors.length > 1 && /\b(table|bar|counter|desk|sofa|bench|stall|stand)\b/i.test(staging.spot)
-      ? [{ id: "spot", name: (staging.spot.match(/\b(?:[\w-]+\s+){0,3}(table|bar|counter|desk|sofa|bench|stall|stand)\b/i)?.[0] ?? "table").replace(/^(?:(?:around|at|by|near|on|in|beside|behind|next|to|a|an|the)\s+)+/i, ""), position: { x: 0.25, y: 4.85 }, radiusM: 0.35 }]
+      ? [{ id: "spot", name: (staging.spot.match(/\b(?:[\w-]+\s+){0,3}(table|bar|counter|desk|sofa|bench|stall|stand)\b/i)?.[0] ?? "table").replace(/^(?:(?:around|at|by|near|on|in|beside|behind|next|to|a|an|the)\s+)+/i, ""), position: C, radiusM: 0.35 }]
       : [],
     actors, cameras: [],
     views: views.map((v) => ({ name: v.name, directionDeg: v.directionDeg })),
