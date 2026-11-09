@@ -52,8 +52,10 @@ export function SheetCutter({ file, cols, rows, labels, minAspect, busy, onCut }
   const drag = useRef<{ axis: "x" | "y"; i: number } | null>(null);
 
   useEffect(() => {
+    // In development React runs this twice and abandons the first run; only the live run may report.
     const u = URL.createObjectURL(file);
     setUrl(u);
+    setError("");
     let live = true;
     loadImage(u).then((im) => {
       if (!live) return;
@@ -61,8 +63,9 @@ export function SheetCutter({ file, cols, rows, labels, minAspect, busy, onCut }
       setImg(im);
       setXs(detectCuts(lum, cols, "x"));
       setYs(detectCuts(lum, rows, "y"));
-    }).catch((e: Error) => setError(e.message));
-    return () => { live = false; URL.revokeObjectURL(u); };
+    }).catch((e: Error) => { if (live) setError(e.message); });
+    // Revoke a moment later, so an <img> still showing this URL doesn't log a load error.
+    return () => { live = false; setTimeout(() => URL.revokeObjectURL(u), 2000); };
   }, [file, cols, rows]);
 
   const move = (e: React.PointerEvent) => {
