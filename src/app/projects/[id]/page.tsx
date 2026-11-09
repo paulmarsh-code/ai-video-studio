@@ -64,17 +64,54 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       </div>
       {!scenes.length && <p className="mt-2 text-sm text-neutral-600">No scenes yet. {charsReady && venuesReady ? "Add the first one." : "Create and approve your characters and venue first, then add a scene."}</p>}
       <ul className="mt-3 space-y-2">
-        {scenes.map((s) => (
-          <li key={s.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-neutral-200 bg-white px-4 py-3">
-            <span className="font-mono text-sm">Scene {s.number}</span>
-            <span className="flex-1">{s.title}</span>
-            <Link className="text-sm font-semibold text-blue-700 underline" href={`/projects/${id}/scenes/${s.id}/storyboard`}>Storyboard</Link>
-            <Link className="text-sm text-blue-700 underline" href={`/projects/${id}/scenes/${s.id}`}>Shots</Link>
-            <Link className="text-sm font-semibold text-blue-700 underline" href={`/projects/${id}/scenes/${s.id}/design`}>Design shots</Link>
-            <Link className="text-sm text-blue-700 underline" href={`/projects/${id}/scenes/${s.id}/plan`}>Floor plan</Link>
-            <Link className="text-sm text-blue-700 underline" href={`/projects/${id}/scenes/${s.id}/animatic`}>Animatic</Link>
-          </li>
-        ))}
+        {scenes.map((s) => {
+          const sc = repo.getScene(db, s.id)!;
+          const secs = sc.panels.reduce((n, p) => n + p.durationSec, 0);
+          const pics = sc.panels.filter((p) => p.imageAssetId).length;
+          const ok = sc.panels.filter((p) => p.status === "approved").length;
+          const who = (cid?: string) => cast.find((c) => c.id === cid)?.name;
+          return (
+            <li key={s.id} className="rounded-lg border border-neutral-200 bg-white" data-testid={`scene-${s.number}`}>
+              <details>
+                <summary className="flex cursor-pointer flex-wrap items-center gap-3 px-4 py-3">
+                  <span className="font-mono text-sm">Scene {s.number}</span>
+                  <span className="flex-1 font-medium">{s.title}</span>
+                  <span className="text-sm text-neutral-600">
+                    {sc.panels.length ? `${sc.panels.length} panels · about ${secs} s · ${pics} picture${pics === 1 ? "" : "s"} · ${ok} approved` : "No storyboard yet"}
+                  </span>
+                  <Link className="rounded-md bg-blue-700 px-3 py-1 text-sm text-white hover:bg-blue-800" href={`/projects/${id}/scenes/${s.id}/storyboard`}>Open storyboard</Link>
+                </summary>
+                <div className="border-t border-neutral-100 px-4 py-3">
+                  {sc.panels.length ? (
+                    <ol className="flex gap-3 overflow-x-auto pb-2" data-testid={`scene-${s.number}-panels`}>
+                      {sc.panels.map((p, i) => {
+                        const d = (p.dialogue as { characterId: string; text: string }[])[0];
+                        return (
+                          <li key={p.id} className="w-36 shrink-0 text-xs">
+                            <div className={`overflow-hidden rounded bg-neutral-100 ${brief.aspect === "16:9" ? "aspect-[3/2]" : "aspect-[2/3]"}`}>
+                              {p.imageAssetId
+                                // eslint-disable-next-line @next/next/no-img-element
+                                ? <img src={`/api/assets/${p.imageAssetId}`} alt={`Panel ${i + 1}`} className="h-full w-full object-cover" />
+                                : <span className="flex h-full items-center justify-center text-neutral-400">No picture</span>}
+                            </div>
+                            <p className="mt-1"><span className="font-semibold">{i + 1}</span> · {p.durationSec} s{p.status === "approved" && <span className="text-green-700"> · ✓</span>}</p>
+                            <p className="line-clamp-3 text-neutral-600">{d ? `${who(d.characterId) ?? ""}: ${d.text}` : p.description}</p>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  ) : <p className="text-sm text-neutral-600">Tell this scene&apos;s story to create its panels.</p>}
+                  <p className="mt-2 flex flex-wrap gap-4 text-sm">
+                    <Link className="text-blue-700 underline" href={`/projects/${id}/scenes/${s.id}/design`}>Cameras</Link>
+                    <Link className="text-blue-700 underline" href={`/projects/${id}/scenes/${s.id}/plan`}>Floor plan</Link>
+                    <Link className="text-blue-700 underline" href={`/projects/${id}/scenes/${s.id}`}>Shots and prompts</Link>
+                    <Link className="text-blue-700 underline" href={`/projects/${id}/scenes/${s.id}/animatic`}>Animatic</Link>
+                  </p>
+                </div>
+              </details>
+            </li>
+          );
+        })}
       </ul>
 
       <h2 className="mt-8 text-lg font-semibold">Cast and voice locks</h2>
