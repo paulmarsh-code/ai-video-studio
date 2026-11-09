@@ -189,3 +189,10 @@ export function insertTake(db: DB, take: { shotId: string; number: number; promp
   db.insert(t.takes).values({ id: randomUUID(), ...take, libraryItemIds: take.libraryItemIds ?? [] }).run();
   persist(db);
 }
+
+/** Shot ids in a scene that already have an approved take. */
+export function shotsWithApprovedTakes(db: DB, sceneId: string): Set<string> {
+  const ids = db.select().from(t.shots).where(eq(t.shots.sceneId, sceneId)).all().map((x) => x.id);
+  if (!ids.length) return new Set();
+  return new Set(db.select().from(t.takes).where(and(inArray(t.takes.shotId, ids), eq(t.takes.verdict, "approved"))).all().map((x) => x.shotId));
+}

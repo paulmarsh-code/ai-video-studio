@@ -180,3 +180,56 @@ export function describeFrame(
   }
   return parts.join(", ");
 }
+
+// ---------- Occlusion (R-OCCLUSION) ----------
+
+export const HEAD_RADIUS_M = 0.11;
+export const SHOULDER_HALF_M = 0.23;
+
+const angularRadius = (sizeM: number, depthM: number) => deg(Math.atan2(sizeM, Math.max(depthM, 0.05)));
+
+export interface Occlusion {
+  characterId: string;
+  blockerId: string;
+  /** "face" = face hidden (unusable); "body" = body partly covered (often fine). */
+  level: "face" | "body";
+}
+
+/**
+ * Who is hidden behind whom in a camera, considering only `onlyIds` as present on camera
+ * (excluded characters are framed out, so they block nothing).
+ */
+export function occlusions(reading: CameraReading, onlyIds?: string[]): Occlusion[] {
+  const people = reading.actors.filter((a) => a.depthM > 0 && (!onlyIds || onlyIds.includes(a.characterId)));
+  const out: Occlusion[] = [];
+  for (const target of people) {
+    if (!target.inView) continue;
+    for (const blocker of people) {
+      if (blocker === target || blocker.depthM >= target.depthM - 0.2) continue;
+      const sep = Math.abs(blocker.angleDeg - target.angleDeg);
+      const faceLimit = angularRadius(HEAD_RADIUS_M, blocker.depthM) + 0.6 * angularRadius(HEAD_RADIUS_M, target.depthM);
+      const bodyLimit = angularRadius(SHOULDER_HALF_M, blocker.depthM) + angularRadius(HEAD_RADIUS_M, target.depthM);
+      if (sep < faceLimit) {
+        out.push({ characterId: target.characterId, blockerId: blocker.characterId, level: "face" });
+        break;
+      }
+      if (sep < bodyLimit) out.push({ characterId: target.characterId, blockerId: blocker.characterId, level: "body" });
+    }
+  }
+  return out;
+}
+
+/** Camera inside a person or a piece of furniture, or outside the room. */
+export function cameraPlacementProblem(plan: GeometryPlanData, cam: PlanCamera): string | undefined {
+  const b = plan.bounds;
+  if (b && (cam.position.x < b.minX || cam.position.x > b.maxX || cam.position.y < b.minY || cam.position.y > b.maxY)) {
+    return "outside the room";
+  }
+  for (const a of plan.actors) {
+    if (Math.hypot(a.position.x - cam.position.x, a.position.y - cam.position.y) < 0.3) return `inside ${a.characterId}`;
+  }
+  for (const f of plan.furniture ?? []) {
+    if (Math.hypot(f.position.x - cam.position.x, f.position.y - cam.position.y) < f.radiusM + 0.15) return `inside the ${f.name}`;
+  }
+  return undefined;
+}

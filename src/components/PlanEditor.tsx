@@ -9,6 +9,7 @@ import { useMemo, useState, useTransition } from "react";
 import { Arrow, Circle, Group, Layer, Line, Rect, Stage, Text, Wedge } from "react-konva";
 import { savePlanAction, addPlanToLibraryAction } from "@/app/actions";
 import { checkLineOfAction, describeFrame, PRESET_FOV, readCamera } from "@/lib/domain/geometry";
+import { planImpact, type ShotRef } from "@/lib/domain/impact";
 import type { CameraPreset, CastMember, GeometryPlanData, Point } from "@/lib/domain/types";
 import { CameraView } from "./CameraView";
 import { FindingList } from "./FindingList";
@@ -18,13 +19,20 @@ const PAD = 30;
 const CONE_M = 7;
 const COLOURS = ["#e11d48", "#2563eb", "#16a34a", "#9333ea", "#ea580c", "#0891b2"];
 
-export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; version: number; cast: CastMember[] }) {
+export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; version: number; cast: CastMember[]; shots: ShotRef[] }) {
   const { cast } = props;
   const [plan, setPlan] = useState<GeometryPlanData>(props.initial);
   const [saved, setSaved] = useState<GeometryPlanData>(props.initial);
   const [savedVersion, setSavedVersion] = useState(props.version);
   const [selectedCam, setSelectedCam] = useState(props.initial.cameras[0]?.id ?? "");
   const [status, setStatus] = useState("");
+  const [history, setHistory] = useState<GeometryPlanData[]>([]);
+  const pushHistory = () => setHistory((h) => [...h.slice(-49), plan]);
+  const undo = () => {
+    if (!history.length) return;
+    setPlan(history[history.length - 1]);
+    setHistory((h) => h.slice(0, -1));
+  };
   const [pending, start] = useTransition();
 
   const b = plan.bounds ?? { minX: -5, maxX: 5, minY: 0, maxY: 10 };
@@ -39,6 +47,7 @@ export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; 
   const colour = (id: string) => COLOURS[Math.max(0, cast.findIndex((c) => c.id === id)) % COLOURS.length];
 
   const lineFindings = useMemo(() => checkLineOfAction(plan, cast), [plan, cast]);
+  const impact = useMemo(() => planImpact(saved, plan, props.shots, cast), [saved, plan, props.shots, cast]);
   const cam = plan.cameras.find((c) => c.id === selectedCam);
   const reading = cam ? readCamera(plan, cam) : undefined;
   const dirty = JSON.stringify(plan) !== JSON.stringify(saved);
@@ -110,7 +119,7 @@ export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; 
             {(plan.furniture ?? []).map((f) => {
               const p = toPx(f.position);
               return (
-                <Group key={f.id} x={p.x} y={p.y} draggable onDragMove={(e) => moveFurniture(f.id, toM(e.target.x(), e.target.y()))} onDragEnd={(e) => moveFurniture(f.id, toM(e.target.x(), e.target.y()))}>
+                <Group key={f.id} x={p.x} y={p.y} draggable onDragStart={pushHistory} onDragMove={(e) => moveFurniture(f.id, toM(e.target.x(), e.target.y()))} onDragEnd={(e) => moveFurniture(f.id, toM(e.target.x(), e.target.y()))}>
                   <Circle radius={f.radiusM * SCALE} fill="#e5e5e5" stroke="#737373" />
                   <Text text={f.name} fontSize={10} fill="#525252" x={-40} y={-5} width={80} align="center" />
                 </Group>
@@ -125,13 +134,13 @@ export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; 
               return (
                 <Group key={c.id}>
                   <Arrow points={[p.x, p.y, t.x, t.y]} stroke={sel ? "#2563eb" : "#a3a3a3"} fill={sel ? "#2563eb" : "#a3a3a3"} strokeWidth={1} pointerLength={6} pointerWidth={6} listening={false} />
-                  <Group x={p.x} y={p.y} draggable onMouseDown={() => setSelectedCam(c.id)} onTouchStart={() => setSelectedCam(c.id)}
+                  <Group x={p.x} y={p.y} draggable onDragStart={pushHistory} onMouseDown={() => setSelectedCam(c.id)} onTouchStart={() => setSelectedCam(c.id)}
                     onDragMove={(e) => moveCam(c.id, { position: toM(e.target.x(), e.target.y()) })} onDragEnd={(e) => moveCam(c.id, { position: toM(e.target.x(), e.target.y()) })}>
                     <Rect x={-9} y={-7} width={18} height={14} cornerRadius={3} fill={sel ? "#1d4ed8" : "#404040"} />
                     <Text text={c.name} fontSize={11} fontStyle="bold" fill={sel ? "#1d4ed8" : "#404040"} x={-50} y={10} width={100} align="center" />
                   </Group>
                   {sel && (
-                    <Circle x={t.x} y={t.y} radius={7} fill="#fff" stroke="#2563eb" strokeWidth={2} draggable
+                    <Circle x={t.x} y={t.y} radius={7} fill="#fff" stroke="#2563eb" strokeWidth={2} draggable onDragStart={pushHistory}
                       onDragMove={(e) => moveCam(c.id, { lookAt: toM(e.target.x(), e.target.y()) })} onDragEnd={(e) => moveCam(c.id, { lookAt: toM(e.target.x(), e.target.y()) })} />
                   )}
                 </Group>
@@ -142,7 +151,7 @@ export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; 
             {plan.actors.map((a) => {
               const p = toPx(a.position);
               return (
-                <Group key={a.characterId} x={p.x} y={p.y} draggable onDragMove={(e) => moveActor(a.characterId, toM(e.target.x(), e.target.y()))} onDragEnd={(e) => moveActor(a.characterId, toM(e.target.x(), e.target.y()))}>
+                <Group key={a.characterId} x={p.x} y={p.y} draggable onDragStart={pushHistory} onDragMove={(e) => moveActor(a.characterId, toM(e.target.x(), e.target.y()))} onDragEnd={(e) => moveActor(a.characterId, toM(e.target.x(), e.target.y()))}>
                   <Circle radius={11} fill={colour(a.characterId)} stroke="#fff" strokeWidth={2} />
                   <Text text={name(a.characterId).charAt(0)} fontSize={12} fontStyle="bold" fill="#fff" x={-5} y={-6} />
                   <Text text={name(a.characterId)} fontSize={11} fill="#171717" x={13} y={-6} />
@@ -171,7 +180,7 @@ export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; 
             <div className="mt-4 space-y-3 text-sm">
               <label className="block">
                 Preset
-                <select value={cam.preset} onChange={(e) => moveCam(cam.id, { preset: e.target.value as CameraPreset })}
+                <select value={cam.preset} onChange={(e) => { pushHistory(); moveCam(cam.id, { preset: e.target.value as CameraPreset }); }}
                   className="ml-2 rounded-md border border-neutral-300 px-2 py-1">
                   {Object.keys(PRESET_FOV).map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
@@ -197,6 +206,27 @@ export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; 
                 <input value={cam.overrideReason ?? ""} onChange={(e) => moveCam(cam.id, { overrideReason: e.target.value || undefined })}
                   className="mt-1 w-full rounded-md border border-neutral-300 px-3 py-2" placeholder="Leave empty unless deliberate" />
               </label>
+            </div>
+          )}
+        </div>
+
+        <div className={`rounded-xl border bg-white p-5 ${impact.length ? "border-amber-400" : "border-neutral-200"}`}>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-lg font-semibold">Impact on shots</h2>
+            <button type="button" disabled={!history.length} onClick={undo}
+              className="rounded-md border border-neutral-300 px-3 py-1 text-sm disabled:opacity-40">Undo last move</button>
+          </div>
+          <p className="text-xs text-neutral-500">Changes since the last save, checked against every shot that uses these cameras.</p>
+          {impact.length === 0 ? (
+            <p className="mt-2 text-sm text-green-700">{dirty ? "No shot is affected by these changes." : "No unsaved changes."}</p>
+          ) : (
+            <div className="mt-2 space-y-3">
+              {impact.map((i) => (
+                <div key={i.shotId}>
+                  <p className="font-mono text-sm font-semibold">{i.shotCode}</p>
+                  <FindingList findings={i.changes} />
+                </div>
+              ))}
             </div>
           )}
         </div>

@@ -2,7 +2,7 @@
 // Every rule returns a Finding with a plain-English message and a suggested fix.
 
 import { deriveDuration } from "./duration";
-import { checkLineOfAction, readCamera } from "./geometry";
+import { checkLineOfAction, occlusions, readCamera } from "./geometry";
 import { hasQuotes, mentionsGesture, QUOTE_CHARS } from "./text";
 import {
   KLING_OMNI_PRESET,
@@ -199,6 +199,22 @@ export function validateShot(
         }
       }
       out.push(...checkLineOfAction({ ...plan, cameras: plan.cameras.filter((c) => c.id === cam.id || c.id === (plan.referenceCameraId ?? plan.cameras[0]?.id)) }, cast));
+      const subjectId = shot.subjectId ?? shot.speakerId ?? shot.visibleIds[0];
+      for (const o of occlusions(reading, shot.visibleIds)) {
+        const isSubject = o.characterId === subjectId;
+        if (o.level === "face") {
+          out.push({
+            code: isSubject ? "SUBJECT_HIDDEN" : "FACE_HIDDEN", severity: "warning", field: "cameraId",
+            message: `${name(o.characterId)}${isSubject ? " (the main subject)" : ""} is hidden behind ${name(o.blockerId)} in ${cam.name}.`,
+            fix: `Move ${name(o.blockerId)} or ${cam.name} on the floor plan until ${name(o.characterId)}'s face is clear in the viewfinder.`,
+          });
+        } else if (isSubject) {
+          out.push({
+            code: "SUBJECT_PARTLY_HIDDEN", severity: "info", field: "cameraId",
+            message: `${name(o.blockerId)} partly covers ${name(o.characterId)}'s body in ${cam.name}. Usually fine; check the viewfinder.`,
+          });
+        }
+      }
     }
   }
 
