@@ -5,7 +5,7 @@
 // - Storyboard dialogue is the source of truth: a change flows to the shot (locked dialogue,
 //   speaker, duration) and marks the panel's animatic recording for re-check.
 
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { persist, type DB } from "@/db/client";
 import * as t from "@/db/schema";
@@ -13,7 +13,9 @@ import type { CharacterProfile, RefView } from "./domain/imagePrompts";
 import { approvalProblems } from "./domain/approval";
 import { deriveDuration } from "./domain/duration";
 import { hasQuotes } from "./domain/text";
-import type { Pronoun, ShotSpec } from "./domain/types";
+import type { PlanView, Pronoun, ShotSpec } from "./domain/types";
+import { asGenre, type Genre } from "./domain/genre";
+import { checkStoryboard, defaultPlan, panelSeconds, shotSpecFor, type DraftPanel } from "./domain/story";
 import { getAnimatic, getCast, saveAnimatic, type AnimaticTimeline } from "./repo";
 
 // ---------- Characters ----------
@@ -357,4 +359,138 @@ export function deletePanel(db: DB, panelId: string) {
   if (shot) db.delete(t.shots).where(eq(t.shots.id, shot.id)).run();
   db.delete(t.panels).where(eq(t.panels.id, panelId)).run();
   persist(db);
+}
+
+// ---------- Projects and scenes (D18) ----------
+
+export interface NewProject {
+  name: string;
+  /** What it is: advert, short film, series episode, social content… */
+  format: string;
+  /** Who it's for and where it will be shown. */
+  audience: string;
+  /** The whole story in a few lines. */
+  outline: string;
+  /** How many parts (scenes or episodes), and roughly how long each is in seconds. */
+  parts: number;
+  partSec: number;
+  aspect: "9:16" | "16:9";
+  style: string;
+  genre: Genre;
+}
+
+/** The brief as the story step uses it; older projects stored episodes/episodeSec. */
+export function briefOf(p: { brief: unknown }) {
+  const b = (p.brief ?? {}) as Record<string, unknown>;
+  const num = (v: unknown) => (typeof v === "number" && v > 0 ? v : undefined);
+  return {
+    format: typeof b.format === "string" ? b.format : "",
+    audience: typeof b.audience === "string" ? b.audience : "",
+    outline: typeof b.outline === "string" ? b.outline : typeof b.concept === "string" ? b.concept : "",
+    parts: num(b.parts) ?? num(b.episodes),
+    partSec: num(b.partSec) ?? num(b.episodeSec),
+    aspect: b.aspect === "16:9" ? "16:9" as const : "9:16" as const,
+    style: typeof b.style === "string" && b.style ? b.style : "photorealistic",
+    genre: asGenre(b.genre),
+  };
+}
+
+function projectCode(db: DB, name: string) {
+  const words = name.toUpperCase().replace(/[^A-Z0-9 ]+/g, " ").split(/\s+/).filter(Boolean);
+  let base = (words.length >= 2 ? words.map((w) => w[0]).join("") : words[0] ?? "VID").slice(0, 4);
+  if (base.length < 3) base = (words.join("") + "XXX").slice(0, 3);
+  const taken = new Set(db.select({ code: t.projects.code }).from(t.projects).all().map((r) => r.code));
+  let code = base, n = 2;
+  while (taken.has(code)) code = `${base}${n++}`;
+  return code;
+}
+
+export function createProject(db: DB, p: NewProject): string {
+  if (!p.name.trim()) throw new Error("Give the project a name.");
+  const id = randomUUID();
+  db.insert(t.projects).values({
+    id, code: projectCode(db, p.name), name: p.name.trim(), type: "video",
+    brief: { format: p.format.trim(), parts: Math.max(1, Math.round(p.parts) || 1), partSec: Math.max(5, Math.round(p.partSec) || 30), audience: p.audience.trim(), outline: p.outline.trim(), aspect: p.aspect, style: p.style.trim() || "photorealistic", genre: asGenre(p.genre) },
+  }).run();
+  persist(db);
+  return id;
+}
+
+export function updateProjectBrief(db: DB, projectId: string, patch: Partial<Omit<NewProject, "name">> & { name?: string }) {
+  const p = db.select().from(t.projects).where(eq(t.projects.id, projectId)).get();
+  if (!p) throw new Error("Project not found");
+  const { name, ...rest } = patch;
+  db.update(t.projects).set({ name: name?.trim() || p.name, brief: { ...(p.brief as object), ...rest } }).where(eq(t.projects.id, projectId)).run();
+  persist(db);
+}
+
+export interface NewScene { title: string; venueId: string; castIds: string[]; }
+
+export function addScene(db: DB, projectId: string, s: NewScene): string {
+  if (!s.title.trim()) throw new Error("Give the scene a name.");
+  if (!s.venueId) throw new Error("Choose where the scene takes place.");
+  if (!s.castIds.length) throw new Error("Choose who is in the scene.");
+  const number = (db.select().from(t.scenes).where(and(eq(t.scenes.projectId, projectId), eq(t.scenes.episode, 1))).all().reduce((m, x) => Math.max(m, x.number), 0)) + 1;
+  const id = randomUUID();
+  const project = db.select().from(t.projects).where(eq(t.projects.id, projectId)).get();
+  const targetSec = project ? briefOf(project).partSec ?? 60 : 60;
+  db.insert(t.scenes).values({ id, projectId, venueId: s.venueId, episode: 1, number, title: s.title.trim(), cast: s.castIds, targetSec }).run();
+  persist(db);
+  return id;
+}
+
+/** Character slugs in a scene: its chosen cast, or everyone for older scenes. */
+export function sceneCastIds(db: DB, scene: { projectId: string; cast: unknown }): string[] {
+  const chosen = (scene.cast as string[] | null) ?? [];
+  return chosen.length ? chosen : getCast(db, scene.projectId).map((c) => c.id);
+}
+
+/** Keep the story while it's being written, so the creator can come back to it. */
+export function saveSceneStory(db: DB, sceneId: string, story: string, targetSec: number) {
+  db.update(t.scenes).set({ story, targetSec }).where(eq(t.scenes.id, sceneId)).run();
+  persist(db);
+}
+
+/**
+ * Save the storyboard from the story in one step: every panel with its draft shot, the
+ * story itself and, for a new scene, a first floor plan so the app can choose cameras.
+ * Replaces earlier panels only while none of them is approved.
+ */
+export function saveStoryboard(db: DB, sceneId: string, s: { story: string; targetSec: number; panels: DraftPanel[] }) {
+  const scene = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();
+  if (!scene) throw new Error("Scene not found");
+  if (!s.panels.length) throw new Error("There are no panels to save.");
+  const castIds = sceneCastIds(db, scene);
+  const check = checkStoryboard(s.panels, s.targetSec);
+  if (check.issues.length) throw new Error(`Panel ${check.issues[0].panel}: ${check.issues[0].text}`);
+  for (const [i, p] of s.panels.entries()) {
+    if (p.speakerId && !castIds.includes(p.speakerId)) throw new Error(`Panel ${i + 1}: the speaker isn't in this scene.`);
+  }
+  const old = panelsOf(db, sceneId);
+  if (old.some((p) => p.status === "approved")) throw new Error("Some panels are already approved, so the storyboard can't be replaced from the story.");
+  const oldShots = db.select().from(t.shots).where(eq(t.shots.sceneId, sceneId)).all().map((x) => x.id);
+  if (oldShots.length) {
+    db.delete(t.promptVersions).where(inArray(t.promptVersions.shotId, oldShots)).run();
+    db.delete(t.takes).where(inArray(t.takes.shotId, oldShots)).run();
+    db.delete(t.shots).where(inArray(t.shots.id, oldShots)).run();
+  }
+  db.delete(t.panels).where(eq(t.panels.sceneId, sceneId)).run();
+
+  const venue = scene.venueId ? db.select().from(t.venues).where(eq(t.venues.id, scene.venueId)).get() : undefined;
+  s.panels.forEach((p, i) => {
+    const code = `P${i + 1}`;
+    const panelId = randomUUID();
+    db.insert(t.panels).values({
+      id: panelId, sceneId, code, order: i + 1, description: p.action.trim(), emotion: p.emotion.trim(),
+      dialogue: p.line ? [{ characterId: p.speakerId!, text: p.line.trim() }] : [], durationSec: panelSeconds(p.line, p.seconds), status: "draft",
+    }).run();
+    const spec = shotSpecFor({ ...p, seconds: panelSeconds(p.line, p.seconds) }, { code: shotCode(scene, code), venueName: venue?.name ?? "", castIds });
+    db.insert(t.shots).values({ id: randomUUID(), sceneId, panelId, code: spec.code, spec }).run();
+  });
+  if (!db.select().from(t.plans).where(eq(t.plans.sceneId, sceneId)).get()) {
+    db.insert(t.plans).values({ id: randomUUID(), sceneId, name: "First floor plan (from the story)", version: 1, data: defaultPlan(castIds, s.panels, (venue?.views ?? []) as PlanView[]) }).run();
+  }
+  db.update(t.scenes).set({ story: s.story, targetSec: s.targetSec }).where(eq(t.scenes.id, sceneId)).run();
+  persist(db);
+  return { panels: s.panels.length, totalSec: check.totalSec };
 }

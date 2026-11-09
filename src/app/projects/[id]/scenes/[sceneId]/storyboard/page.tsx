@@ -4,15 +4,19 @@ import { getDb } from "@/db/client";
 import * as repo from "@/lib/repo";
 import * as studio from "@/lib/studioRepo";
 import { panelPrompt } from "@/lib/domain/imagePrompts";
-import { getImageProvider } from "@/lib/providers/images";
+import { getImageProvider, getTextProvider } from "@/lib/providers/images";
+import { GENRE_PROFILES } from "@/lib/domain/genre";
+import { StoryWizard } from "@/components/StoryWizard";
+import { exampleFor } from "@/lib/domain/storyExamples";
 import { setPanelImageAction } from "@/app/studioActions";
 import { ImageSlot } from "@/components/ImageSlot";
 import { PanelEditor } from "@/components/PanelEditor";
 
 export const dynamic = "force-dynamic";
 
-export default async function StoryboardPage({ params }: { params: Promise<{ id: string; sceneId: string }> }) {
+export default async function StoryboardPage({ params, searchParams }: { params: Promise<{ id: string; sceneId: string }>; searchParams: Promise<{ story?: string }> }) {
   const { id, sceneId } = await params;
+  const sp = await searchParams;
   const db = await getDb();
   const project = repo.getProject(db, id);
   const s = repo.getScene(db, sceneId);
@@ -28,15 +32,41 @@ export default async function StoryboardPage({ params }: { params: Promise<{ id:
   const pending = chars.filter((c) => c.draft);
   const missingRefs = chars.filter((c) => c.approved && !c.approved.profile.refs?.front && !c.approved.profile.refs?.face);
   const portrait = (brief.aspect ?? "9:16").startsWith("9");
+  const castIds = studio.sceneCastIds(db, s.scene);
+  const anyApproved = s.panels.some((p) => p.status === "approved");
+  const telling = !anyApproved && (s.panels.length === 0 || sp.story === "1");
+  const total = s.panels.reduce((sum, p) => sum + p.durationSec, 0);
+  const crumbs = (
+    <nav className="text-sm text-neutral-500" aria-label="Breadcrumb">
+      <Link href="/">Projects</Link> / <Link href={`/projects/${id}`}>{project.name}</Link> / <span className="text-neutral-800">Scene {s.scene.number}: {s.scene.title}</span>
+    </nav>
+  );
+  if (telling) {
+    const b = studio.briefOf(project);
+    return (
+      <div className="max-w-6xl">
+        {crumbs}
+        <h1 className="mb-4 text-2xl font-semibold">Storyboard: {s.scene.title}</h1>
+        <StoryWizard sceneId={sceneId} sceneTitle={s.scene.title} venueName={s.venue?.name ?? "the venue"} canAuto={!!getTextProvider()} replacing={s.panels.length > 0}
+          cast={chars.filter((c) => castIds.includes(c.slug)).map((c) => ({ id: c.slug, name: c.name, role: c.role }))}
+          brief={{ format: b.format, parts: b.parts, partSec: b.partSec, audience: b.audience, outline: b.outline, genre: GENRE_PROFILES[b.genre].label }}
+          initialStory={s.scene.story} initialTarget={s.scene.targetSec} example={exampleFor(b.genre, b.format)} />
+        {s.panels.length > 0 && <p className="mt-4 text-sm"><Link className="text-blue-700 underline" href="?">Keep the current storyboard</Link></p>}
+      </div>
+    );
+  }
   let n = s.panels.length + 1;
   while (s.panels.some((p) => p.code.toLowerCase() === `p${n}`)) n++;
 
   return (
     <div className="max-w-6xl">
-      <p className="text-sm text-neutral-500">
-        <Link href="/">Projects</Link> / <Link href={`/projects/${id}`}>{project.name}</Link> / <Link href={`/projects/${id}/scenes/${sceneId}`}>Scene</Link> /
-      </p>
+      {crumbs}
       <h1 className="text-2xl font-semibold">Storyboard: {s.scene.title}</h1>
+      <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-900" data-testid="storyboard-summary">
+        <span><strong>{s.panels.length} panels</strong> · about {total} s · target {s.scene.targetSec} s</span>
+        <Link className="rounded-md bg-blue-700 px-3 py-1.5 text-white hover:bg-blue-800" href={`/projects/${id}/scenes/${sceneId}/design`}>Next: the app chooses the cameras</Link>
+        {!anyApproved && <Link className="text-blue-700 underline" href="?story=1" data-testid="rewrite-story">Rewrite from the story</Link>}
+      </div>
       <p className="mt-1 max-w-3xl text-neutral-600">
         One panel per clip. Write what happens and the exact line, then make the panel image in ChatGPT from the prompt and upload it.
         The prompt uses the approved characters, the venue and, once shots are designed, the camera framing from the floor plan.

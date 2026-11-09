@@ -60,6 +60,11 @@ export const scenes = sqliteTable("scenes", {
   episode: integer("episode").notNull(),
   number: integer("number").notNull(),
   title: text("title").notNull(),
+  /** Character slugs in this scene; empty means everyone (older scenes). */
+  cast: text("cast", { mode: "json" }).notNull().default([]),
+  /** The creator's own telling of the scene (D18). */
+  story: text("story").notNull().default(""),
+  targetSec: integer("target_sec").notNull().default(60),
 }, (t) => [uniqueIndex("scenes_unique").on(t.projectId, t.episode, t.number)]);
 
 export const panels = sqliteTable("panels", {

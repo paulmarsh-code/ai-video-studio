@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { getDb } from "@/db/client";
 import * as repo from "@/lib/repo";
 import { LibraryButton } from "@/components/LibraryButton";
-import { GenrePicker } from "@/components/GenrePicker";
+import { GENRE_PROFILES } from "@/lib/domain/genre";
+import { shapeLine } from "@/lib/domain/story";
 import { addCharacterToLibraryAction } from "@/app/actions";
 import * as studio from "@/lib/studioRepo";
 
@@ -20,6 +21,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   const venues = studio.listVenues(db, id);
   const charsReady = chars.length > 0 && chars.every((c) => c.approved && !c.draft);
   const venuesReady = venues.length > 0 && venues.every((v) => v.status === "approved");
+  const brief = studio.briefOf(project);
 
   return (
     <div className="max-w-5xl">
@@ -27,7 +29,16 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       <h1 className="text-2xl font-semibold">{project.name}</h1>
       {project.demo && <p className="mt-1 text-sm text-amber-700">Demo project. All data is illustrative and editable, not approved production assets.</p>}
 
-      <GenrePicker projectId={id} genre={repo.getProjectGenre(db, id)} />
+      <section className="mt-5 rounded-xl border border-neutral-200 bg-white p-4" data-testid="brief">
+        <div className="flex items-start gap-3">
+          <div className="flex-1 space-y-1 text-sm">
+            <p className="font-semibold">{shapeLine(brief) || "No brief yet"}</p>
+            <p className="text-neutral-600">{GENRE_PROFILES[brief.genre].label} · {brief.style} · {brief.aspect === "16:9" ? "Landscape 16:9" : "Portrait 9:16"}{brief.audience ? ` · For ${brief.audience}` : ""}</p>
+            {brief.outline && <p className="text-neutral-700">{brief.outline}</p>}
+          </div>
+          <Link href={`/projects/${id}/brief`} className="text-sm text-blue-700 underline" data-testid="edit-brief">Edit brief</Link>
+        </div>
+      </section>
 
       <h2 className="mt-8 text-lg font-semibold">Production steps</h2>
       <ol className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
@@ -42,16 +53,20 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           <p className={venuesReady ? "text-green-700" : "text-amber-700"}>{venuesReady ? "Ready" : venues.length ? "Needs approval" : "No venue yet"}</p>
         </li>
         <li className="rounded-lg border border-neutral-200 bg-white p-3">
-          <p className="font-semibold">3. Storyboard, then shots</p>
-          <p className="text-neutral-600">Per scene below: Storyboard → Design shots → Floor plan → Animatic.</p>
+          <p className="font-semibold">3. Scenes and storyboard</p>
+          <p className="text-neutral-600">{scenes.length} scene{scenes.length === 1 ? "" : "s"}{brief.parts ? ` of ${brief.parts} planned` : ""}. Tell each scene&apos;s story; the app turns it into panels.</p>
         </li>
       </ol>
 
-      <h2 className="mt-8 text-lg font-semibold">Scenes</h2>
+      <div className="mt-8 flex items-center gap-3">
+        <h2 className="text-lg font-semibold">Scenes</h2>
+        <Link href={`/projects/${id}/scenes/new`} className="rounded-md bg-blue-700 px-4 py-1.5 text-sm text-white hover:bg-blue-800" data-testid="add-scene">+ Add scene</Link>
+      </div>
+      {!scenes.length && <p className="mt-2 text-sm text-neutral-600">No scenes yet. {charsReady && venuesReady ? "Add the first one." : "Create and approve your characters and venue first, then add a scene."}</p>}
       <ul className="mt-3 space-y-2">
         {scenes.map((s) => (
           <li key={s.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-neutral-200 bg-white px-4 py-3">
-            <span className="font-mono text-sm">EP{String(s.episode).padStart(2, "0")} S{String(s.number).padStart(2, "0")}</span>
+            <span className="font-mono text-sm">Scene {s.number}</span>
             <span className="flex-1">{s.title}</span>
             <Link className="text-sm font-semibold text-blue-700 underline" href={`/projects/${id}/scenes/${s.id}/storyboard`}>Storyboard</Link>
             <Link className="text-sm text-blue-700 underline" href={`/projects/${id}/scenes/${s.id}`}>Shots</Link>

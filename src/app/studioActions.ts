@@ -8,6 +8,7 @@ import { getDb } from "@/db/client";
 import type { RefView } from "@/lib/domain/imagePrompts";
 import type { Pronoun } from "@/lib/domain/types";
 import * as studio from "@/lib/studioRepo";
+import type { DraftPanel } from "@/lib/domain/story";
 
 export type Result<T = undefined> = { ok: true; value?: T } | { ok: false; error: string };
 
@@ -84,4 +85,21 @@ export async function movePanelAction(panelId: string, dir: -1 | 1) {
 }
 export async function deletePanelAction(panelId: string) {
   return run((db) => studio.deletePanel(db, panelId));
+}
+
+// Projects, scenes and the story (D18)
+export async function createProjectAction(p: studio.NewProject) {
+  return run((db) => studio.createProject(db, p));
+}
+export async function updateProjectBriefAction(projectId: string, p: Partial<studio.NewProject>) {
+  return run((db) => studio.updateProjectBrief(db, projectId, p));
+}
+export async function addSceneAction(projectId: string, s: studio.NewScene) {
+  return run((db) => studio.addScene(db, projectId, s));
+}
+export async function saveSceneStoryAction(sceneId: string, story: string, targetSec: number) {
+  return run((db) => studio.saveSceneStory(db, sceneId, story, targetSec));
+}
+export async function saveStoryboardAction(sceneId: string, s: { story: string; targetSec: number; panels: DraftPanel[] }) {
+  return run((db) => studio.saveStoryboard(db, sceneId, s));
 }

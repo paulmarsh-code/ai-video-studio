@@ -1,0 +1,259 @@
+// Story to storyboard (D18). The creator tells the scene in their own words; GPT (or the
+// creator in ChatGPT) breaks it into panels; the app checks every panel against the guide
+// rails before anything is saved: one speaker per clip, a line short enough for one clip,
+// clip lengths Kling can make, and a total close to the target length.
+
+import { countWords, deriveDuration, LEAD_SECONDS, WORDS_PER_SECOND } from "./duration";
+import { cleanReply } from "./describe";
+import { hasQuotes, stripQuotes } from "./text";
+import { KLING_OMNI_PRESET, type GeometryPlanData, type PlanView, type ShotSpec } from "./types";
+
+export const TARGET_LENGTHS = [30, 60, 90] as const;
+export const MIN_CLIP_SEC = KLING_OMNI_PRESET.minDurationSec;
+export const MAX_CLIP_SEC = KLING_OMNI_PRESET.maxDurationSec;
+/** The most words one person can say in a single clip (with the lead-in second). */
+export const MAX_LINE_WORDS = Math.floor((MAX_CLIP_SEC - LEAD_SECONDS) * WORDS_PER_SECOND);
+/** Rough time to allow for each action or reaction beat with no talking. */
+export const SILENT_BEAT_SEC = 3;
+
+export interface StoryCharacter {
+  /** Slug used across plans and shots, e.g. "jade". */
+  id: string;
+  name: string;
+  role?: string;
+}
+
+export interface DraftPanel {
+  action: string;
+  /** Character ids seen in the panel. */
+  inFrame: string[];
+  speakerId?: string;
+  /** Exact spoken words, no quote marks; empty for a silent panel. */
+  line: string;
+  emotion: string;
+  /** Clip length: derived from the line, or the silent length. */
+  seconds: number;
+}
+
+// ---------- The request to GPT ----------
+
+/** The project brief from New project: what it is, who it's for, the whole story in outline. */
+export interface ProjectBrief {
+  /** Kind of video: advert, mini drama, short film… */
+  format?: string;
+  /** How many parts (scenes or episodes) and roughly how long each is. */
+  parts?: number;
+  partSec?: number;
+  audience?: string;
+  outline?: string;
+  /** Genre label, e.g. "Comedy". */
+  genre?: string;
+}
+
+export function storyPrompt(i: { story: string; characters: StoryCharacter[]; venue: string; targetSec: number; brief?: ProjectBrief; sceneTitle?: string }): string {
+  const names = i.characters.map((c) => (c.role?.trim() ? `${c.name} (${c.role.trim()})` : c.name)).join(", ");
+  const b = i.brief ?? {};
+  const about = [
+    (b.format?.trim() || b.parts) && `What it is: ${shapeLine(b)}`,
+    b.genre?.trim() && `Genre: ${b.genre.trim()}`,
+    b.audience?.trim() && `Who it's for: ${b.audience.trim()}`,
+    b.outline?.trim() && `The whole story in outline: ${b.outline.trim()}`,
+  ].filter(Boolean) as string[];
+  return [
+    "You are a storyboard artist for a short AI-generated video. Break the scene's story below into storyboard panels. Each panel becomes one video clip.",
+    "",
+    ...(about.length ? ["About the video (for tone and context; storyboard only this scene):", ...about.map((x) => `- ${x}`), ""] : []),
+    "Rules:",
+    `- The whole scene should run about ${i.targetSec} seconds.`,
+    "- Each panel is one moment: one action, and at most one person speaking.",
+    `- A spoken line belongs to one person. If a line would take more than about ${MAX_LINE_WORDS} words, split it across two panels.`,
+    "- Words in quote marks are used exactly as written; only correct the spelling. Where the story only reports what someone says, write a short, natural line in their voice.",
+    `- Silent panels (arrivals, reactions, gestures) last ${MIN_CLIP_SEC} to 6 seconds.`,
+    `- The characters are: ${names}. Use these names only. Anyone else (guests, crowd, staff) is background and is not named.`,
+    `- The setting is: ${i.venue}.`,
+    "- Keep the story's order and do not add new plot.",
+    "- Give no camera directions; the app chooses the cameras.",
+    "",
+    "Reply with plain text only, with no drawings or code, in exactly this format for every panel:",
+    "",
+    "PANEL 1",
+    "ACTION: what we see, in one or two sentences",
+    "IN FRAME: the characters we see, separated by commas",
+    "SPEAKER: the one character who speaks, or none",
+    "LINE: the exact spoken words without quote marks, or none",
+    "EMOTION: one to three words",
+    "SECONDS: the length in seconds",
+    "",
+    `Scene${i.sceneTitle?.trim() ? `: ${i.sceneTitle.trim()}` : ""}`,
+    "<<<",
+    i.story.trim(),
+    ">>>",
+  ].join("\n");
+}
+
+export const FORMATS = ["Advert", "Mini drama", "Short film", "Series episode", "Social content", "Music video", "Other"] as const;
+
+/** "Mini drama, 4 parts of about 30 s, about 2 min in total". */
+export function shapeLine(b: ProjectBrief): string {
+  const parts = b.parts && b.parts > 0 ? b.parts : 0;
+  const each = b.partSec && b.partSec > 0 ? b.partSec : 0;
+  const total = parts * each;
+  const len = (s: number) => (s >= 120 && s % 60 === 0 ? `${s / 60} min` : s >= 60 ? `${Math.floor(s / 60)} min ${s % 60 ? `${s % 60} s` : ""}`.trim() : `${s} s`);
+  const shape = parts === 1 ? (each ? `one part of about ${len(each)}` : "one part")
+    : parts ? `${parts} parts${each ? ` of about ${len(each)}` : ""}${total ? `, about ${len(total)} in total` : ""}` : "";
+  return [b.format?.trim(), shape].filter(Boolean).join(", ");
+}
+
+// ---------- Reading the reply ----------
+
+const FIELD = /^(ACTION|IN FRAME|INFRAME|SPEAKER|LINE|DIALOGUE|EMOTION|SECONDS|LENGTH|DURATION)\s*:\s*(.*)$/i;
+const NONE = /^(none|no one|nobody|n\/a|-+|—|silent|\(none\)|\(silent\))\.?$/i;
+
+export interface StoryReply {
+  panels: DraftPanel[];
+  /** Names GPT used that aren't characters in this scene. */
+  unknownNames: string[];
+}
+
+export function parseStoryReply(text: string, characters: StoryCharacter[]): StoryReply {
+  const unknown = new Set<string>();
+  const find = (raw: string): string | undefined => {
+    const n = stripQuotes(raw).replace(/[.()*]/g, "").trim().toLowerCase();
+    if (!n || NONE.test(n)) return undefined;
+    const c = characters.find((x) => x.name.toLowerCase() === n || x.id === n || x.name.toLowerCase().split(/\s+/)[0] === n.split(/\s+/)[0]);
+    if (!c) unknown.add(stripQuotes(raw).trim());
+    return c?.id;
+  };
+  const blocks = cleanReply(text).split(/^\s*[#*_\s]*PANEL\s*\d+[^\n]*$/im).slice(1);
+  const panels: DraftPanel[] = [];
+  for (const block of blocks) {
+    const v: Record<string, string> = {};
+    let current: string | undefined;
+    for (const raw of block.split(/\r?\n/)) {
+      const line = raw.replace(/\*\*|__/g, "").replace(/^\s*(?:[-*•]|\d+[.)])\s*/, "").trim();
+      if (!line) continue;
+      const m = line.match(FIELD);
+      if (m) {
+        const k = m[1].toUpperCase().replace(/\s/g, "");
+        current = k === "INFRAME" ? "frame" : k === "DIALOGUE" ? "line" : k === "LENGTH" || k === "DURATION" ? "seconds" : k.toLowerCase();
+        v[current] = m[2].trim();
+      } else if (current && current !== "seconds") {
+        v[current] = `${v[current]} ${line}`.trim();
+      }
+    }
+    const lineText = NONE.test((v.line ?? "").trim()) ? "" : stripQuotes(v.line ?? "").trim();
+    const speakerId = v.speaker ? find(v.speaker) : undefined;
+    const inFrame = (v.frame ?? "").split(/,|\band\b|&/i).map((x) => x.trim()).filter((x) => x && !NONE.test(x)).map(find).filter((x): x is string => !!x);
+    if (speakerId && !inFrame.includes(speakerId)) inFrame.unshift(speakerId);
+    const asked = Number.parseFloat((v.seconds ?? "").replace(/[^\d.]/g, ""));
+    panels.push({
+      action: stripQuotes(v.action ?? "").trim(),
+      inFrame: [...new Set(inFrame)],
+      speakerId: lineText ? speakerId : undefined,
+      line: lineText,
+      emotion: stripQuotes(v.emotion ?? "").replace(/[.]$/, "").trim(),
+      seconds: panelSeconds(lineText, asked),
+    });
+  }
+  return { panels, unknownNames: [...unknown] };
+}
+
+/** A spoken panel is sized to its line (D10); a silent one is kept inside Kling's range. */
+export function panelSeconds(line: string, asked?: number): number {
+  if (line.trim()) return deriveDuration(line);
+  const s = Number.isFinite(asked) && asked! > 0 ? Math.round(asked!) : 4;
+  return Math.min(MAX_CLIP_SEC, Math.max(MIN_CLIP_SEC, s));
+}
+
+// ---------- Guide rails ----------
+
+export interface PanelIssue { panel: number; text: string; }
+
+export interface StoryCheck {
+  totalSec: number;
+  issues: PanelIssue[];
+  /** About the total against the target; empty when it is close enough. */
+  lengthNote: string;
+}
+
+export function checkStoryboard(panels: DraftPanel[], targetSec: number): StoryCheck {
+  const issues: PanelIssue[] = [];
+  panels.forEach((p, i) => {
+    const n = i + 1;
+    if (!p.action.trim()) issues.push({ panel: n, text: "Say what happens in this panel." });
+    if (p.line.trim() && !p.speakerId) issues.push({ panel: n, text: "Choose who says this line." });
+    if (hasQuotes(p.line)) issues.push({ panel: n, text: "Remove the quote marks from the line." });
+    const words = countWords(p.line);
+    if (words > MAX_LINE_WORDS) issues.push({ panel: n, text: `The line is ${words} words, too long for one ${MAX_CLIP_SEC}-second clip. Split it into two panels.` });
+  });
+  const totalSec = panels.reduce((s, p) => s + p.seconds, 0);
+  let lengthNote = "";
+  if (panels.length && totalSec > targetSec * 1.25) lengthNote = `About ${totalSec} s, longer than your ${targetSec} s target. Trim lines or remove panels.`;
+  else if (panels.length && totalSec < targetSec * 0.6) lengthNote = `About ${totalSec} s, well short of your ${targetSec} s target. That's fine if the story is told.`;
+  return { totalSec, issues, lengthNote };
+}
+
+// ---------- Live estimate while typing ----------
+
+export interface StoryEstimate {
+  /** Spoken lines found in quote marks. */
+  lines: number;
+  /** Seconds of talking, including the lead-in second per line. */
+  talkSec: number;
+  /** Quoted lines too long for one clip. */
+  longLines: number;
+}
+
+/** Lines in "double", “curly” or 'single' quote marks; apostrophes inside words are ignored. */
+export function quotedLines(story: string): string[] {
+  const out: string[] = [];
+  for (const m of story.matchAll(/["“”]([^"“”]+)["“”]|(?:^|[\s(—–-])['‘]([^'‘’\n]+?)['’](?=[\s.,!?;:)—–-]|$)/gm)) out.push((m[1] ?? m[2]).trim());
+  return out.filter((x) => countWords(x) > 0);
+}
+
+export function estimateStory(story: string): StoryEstimate {
+  const lines = quotedLines(story);
+  return {
+    lines: lines.length,
+    talkSec: Math.round(lines.reduce((s, l) => s + countWords(l) / WORDS_PER_SECOND + LEAD_SECONDS, 0)),
+    longLines: lines.filter((l) => countWords(l) > MAX_LINE_WORDS).length,
+  };
+}
+
+// ---------- From panels to shots and a first floor plan ----------
+
+/** The draft shot for a panel: who is seen, who speaks, the locked line and its length. */
+export function shotSpecFor(p: DraftPanel, i: { code: string; venueName: string; castIds: string[] }): ShotSpec {
+  const visible = p.inFrame.filter((id) => i.castIds.includes(id));
+  return {
+    code: i.code, venueName: i.venueName, sceneContext: p.action, presentIds: i.castIds,
+    visibleIds: visible, excludedIds: i.castIds.filter((id) => !visible.includes(id)),
+    speakerId: p.line ? p.speakerId : undefined, dialogue: p.line || undefined,
+    subjectId: p.line ? undefined : visible[0],
+    actions: p.action, emotion: p.emotion || undefined, durationSec: p.seconds,
+    audioMode: p.line ? "native-on" : "off", intensity: "natural",
+  };
+}
+
+/**
+ * A first floor plan so the app can choose cameras straight away: the character with the
+ * most lines faces the rest of the group across a small gap. People can be moved on the
+ * floor plan later; the app then shows which shots a move affects.
+ */
+export function defaultPlan(castIds: string[], panels: DraftPanel[], views: PlanView[]): GeometryPlanData {
+  const said = (id: string) => panels.filter((p) => p.speakerId === id).length + panels.filter((p) => p.inFrame.includes(id)).length / 100;
+  const order = [...castIds].sort((a, b) => said(b) - said(a));
+  const [main, ...rest] = order;
+  const actors = !main ? [] : rest.length === 0
+    ? [{ characterId: main, position: { x: 0, y: 5 } }]
+    : [{ characterId: main, position: { x: 1.5, y: 5.4 } }, ...rest.map((id, k) => ({ characterId: id, position: { x: -0.6 + 0.4 * k, y: 4.4 + 0.15 * k } }))];
+  // The line of action runs between the two people who talk most.
+  const talkers = order.filter((id) => panels.some((p) => p.speakerId === id));
+  const line: [string, string] | undefined = talkers.length >= 2 ? [talkers[1], talkers[0]] : rest.length ? [rest[0], main] : undefined;
+  return {
+    bounds: { minX: -4.5, maxX: 4.5, minY: 0, maxY: 10 },
+    furniture: [], actors, cameras: [],
+    views: views.map((v) => ({ name: v.name, directionDeg: v.directionDeg })),
+    lineOfAction: line,
+  };
+}
