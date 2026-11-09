@@ -158,3 +158,18 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   lines.push("No text, no logos, no speech bubbles, no watermark.");
   return { text: lines.join("\n"), attach };
 }
+
+/**
+ * Change one image: attach the current image in ChatGPT and change only what the user asked.
+ * The original brief is repeated so framing, background and rules stay the same.
+ */
+export function imageChangePrompt(change: string, originalPrompt: string): string {
+  return [
+    "Edit the attached image.",
+    `Change only this: ${stripQuotes(change).trim() || "(describe the change here)"}`,
+    "Keep everything else exactly the same: the same people, faces, hair, clothes, framing, camera angle, background and lighting. Same size and aspect ratio.",
+    "",
+    "For reference, the original brief for this image was:",
+    originalPrompt,
+  ].join("\n");
+}

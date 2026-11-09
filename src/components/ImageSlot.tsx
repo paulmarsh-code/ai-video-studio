@@ -6,6 +6,8 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CopyButton } from "./CopyButton";
+import { ActionButton } from "./ActionButton";
+import { imageChangePrompt } from "@/lib/domain/imagePrompts";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -47,10 +49,10 @@ export function ImageSlot(p: ImageSlotProps) {
   const [showPrompt, setShowPrompt] = useState(false);
   const testId = p.baseCode.toLowerCase();
 
-  async function finish(id: string) {
+  async function finish(id: string, how: "upload" | "generate") {
     const r = await p.onAttach(id);
     if (!r.ok) throw new Error(r.error);
-    setJustDone(busy || "upload");
+    setJustDone(how);
     router.refresh();
   }
 
@@ -71,7 +73,7 @@ export function ImageSlot(p: ImageSlotProps) {
       const res = await fetch("/api/assets", { method: "POST", body: fd });
       const body = (await res.json()) as { id?: string; error?: string };
       if (!res.ok || !body.id) throw new Error(body.error ?? "Upload failed");
-      await finish(body.id);
+      await finish(body.id, "upload");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -79,20 +81,27 @@ export function ImageSlot(p: ImageSlotProps) {
     }
   }
 
-  async function generate() {
+  // "Not right? Ask for a change": an edit prompt for the current image.
+  const [changeOpen, setChangeOpen] = useState(false);
+  const [change, setChange] = useState("");
+  const [changePrompt, setChangePrompt] = useState("");
+
+  async function generate(promptText = p.prompt, refs = (p.attach ?? []).map((a) => a.assetId)) {
     setError("");
     setBusy("generate");
     try {
       const res = await fetch("/api/images/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: p.projectId, baseCode: p.baseCode, kind: p.kind, prompt: p.prompt, refAssetIds: (p.attach ?? []).map((a) => a.assetId), size: p.shape }),
+        body: JSON.stringify({ projectId: p.projectId, baseCode: p.baseCode, kind: p.kind, prompt: promptText, refAssetIds: refs, size: p.shape }),
       });
       const body = (await res.json()) as { id?: string; error?: string };
       if (!res.ok || !body.id) throw new Error(body.error ?? "Generation failed");
-      await finish(body.id);
+      await finish(body.id, "generate");
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      return false;
     } finally {
       setBusy("");
     }
@@ -126,6 +135,33 @@ export function ImageSlot(p: ImageSlotProps) {
           </button>
         )}
       </div>
+      {p.assetId && (
+        <div className="mt-2 text-xs">
+          <button type="button" className="text-blue-700 underline" onClick={() => setChangeOpen((o) => !o)} data-testid={`change-open-${testId}`}>
+            {changeOpen ? "Close" : "Not right? Ask for a change"}
+          </button>
+          {changeOpen && (
+            <div className="mt-1 space-y-1 rounded border border-neutral-200 bg-neutral-50 p-2">
+              <textarea className="w-full rounded border border-neutral-300 px-2 py-1" rows={2} value={change} onChange={(e) => setChange(e.target.value)}
+                placeholder="What should change? e.g. show the whole head; remove the handbag" data-testid={`change-text-${testId}`} />
+              <ActionButton size="sm" label="Create change prompt" doneLabel="Change prompt ready" disabled={!change.trim()} resetKey={change}
+                testId={`change-create-${testId}`} onAction={() => setChangePrompt(imageChangePrompt(change, p.prompt))} />
+              {changePrompt && (
+                <div className="space-y-1">
+                  <p className="flex flex-wrap items-center gap-2">1. <CopyButton text={changePrompt} label="Copy change prompt" /> 2. In ChatGPT, attach
+                    <a className="text-blue-700 underline" href={`/api/assets/${p.assetId}`} download>the current image</a>
+                    {!!p.attach?.length && <span>(and the references below)</span>}
+                    3. Upload the result with the button above. The old image is kept.</p>
+                  {p.canGenerate && (
+                    <ActionButton size="sm" variant="secondary" label="Or: generate the change with GPT" busyLabel="Generating…" doneLabel="Generated" resetKey={changePrompt}
+                      onAction={() => generate(changePrompt, [p.assetId!, ...(p.attach ?? []).map((a) => a.assetId)])} />
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
       {showPrompt && <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-neutral-50 p-2 text-xs">{p.prompt}</pre>}
       {!!p.attach?.length && (
         <div className="mt-2 rounded border border-neutral-200 bg-neutral-50 p-2 text-xs text-neutral-700">

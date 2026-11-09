@@ -29,6 +29,12 @@ describe("Character describe prompts", () => {
     expect(p).not.toMatch(/["“”]/);
   });
 
+  it("personality from the user drives mannerisms and voice; left out when empty", () => {
+    const p = characterDescribePrompt("image", "", "dry, deadpan humour; talks with her hands");
+    expect(p).toContain("Personality and mannerisms: dry, deadpan humour; talks with her hands. Use this for MANNERISMS and SUGGESTED VOICE");
+    expect(characterDescribePrompt("image")).not.toContain("Personality and mannerisms:");
+  });
+
   it("idea prompt carries the one-liner without quote marks", () => {
     const p = characterDescribePrompt("idea", 'a "sharp" 1960s-style PR exec');
     expect(p).toContain("a sharp 1960s-style PR exec");
@@ -106,5 +112,31 @@ the sea: right`);
       { name: "sea", directionDeg: 0 },
     ]);
     expect(f.missing).toEqual([]);
+  });
+});
+
+describe("Asking for a change", () => {
+  it("character change prompt carries the saved description, the change only, and the full reply format", async () => {
+    const { characterChangePrompt } = await import("../src/lib/domain/describe");
+    const p = characterChangePrompt({ appearance: "Dark bob.", wardrobe: "Orange dress.", anchors: ["bob", "cat-eye liner"] }, 'make the "dress" lilac');
+    expect(p).toContain("Change only this: make the dress lilac");
+    expect(p).toContain("APPEARANCE: Dark bob.");
+    expect(p).toContain("IDENTITY ANCHORS: bob; cat-eye liner");
+    expect(p).toContain("AGE RANGE:");
+    expect(p).toContain("three equal vertical panels");
+    expect(p).not.toMatch(/["“”]/);
+  });
+
+  it("the reply to a change prompt fills the fields like any other", async () => {
+    const f = characterFillFromReply(REPLY.replace("tangerine centre panel", "lilac centre panel"));
+    expect(f.wardrobe).toContain("lilac centre panel");
+  });
+
+  it("image change prompt asks for an edit of the attached image and repeats the brief", async () => {
+    const { imageChangePrompt } = await import("../src/lib/domain/imagePrompts");
+    const p = imageChangePrompt("remove the handbag", "FRONT VIEW: reference image of Jade.");
+    expect(p.startsWith("Edit the attached image.")).toBe(true);
+    expect(p).toContain("Change only this: remove the handbag");
+    expect(p).toContain("FRONT VIEW: reference image of Jade.");
   });
 });

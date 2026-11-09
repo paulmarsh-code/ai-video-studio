@@ -9,6 +9,7 @@ import { setCharacterRefAction } from "@/app/studioActions";
 import { CharacterEditor } from "@/components/CharacterEditor";
 import { ImageSlot } from "@/components/ImageSlot";
 import { AddCharacterForm } from "@/components/AddForms";
+import { RevealLater } from "@/components/RevealLater";
 
 export const dynamic = "force-dynamic";
 
@@ -43,27 +44,33 @@ export default async function CharactersPage({ params }: { params: Promise<{ id:
               <h2 className="text-lg font-semibold">{c.name}</h2>
               <div className="mt-3 grid gap-6 lg:grid-cols-[1fr_1.2fr]">
                 <CharacterEditor key={c.id} c={c} projectId={id} baseCode={code} canDescribe={canDescribe} />
+                <RevealLater
+                  show={REF_VIEWS.some((v) => !!profile.refs?.[v])}
+                  placeholder={<><p className="font-medium text-neutral-800">Front, back and face images</p><p className="mt-1">These appear here once you&apos;ve uploaded the reference sheet in <span className="font-medium">Start from a picture or a one-line idea</span>. The app cuts it into the three views.</p></>}
+                  revealLabel="Or upload them one at a time"
+                >
                 <div>
-                  <p className="mb-2 text-xs text-neutral-600">Reference images (portrait, no narrower than 1:2). Prompts use the saved description; save first if you&apos;ve changed it.</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {REF_VIEWS.map((v) => (
-                      <ImageSlot
-                        key={v}
-                        label={VIEW_LABEL[v]}
-                        projectId={id}
-                        baseCode={`${code}_${v.toUpperCase()}`}
-                        kind="character-ref"
-                        assetId={profile.refs?.[v]}
-                        prompt={characterRefPrompt(c.name, profile, v, style)}
-                        attach={v !== "front" && profile.refs?.front ? [{ label: `${c.name}'s front image`, assetId: profile.refs.front }] : []}
-                        minAspect={MIN_REF_ASPECT}
-                        shape="portrait"
-                        canGenerate={canGenerate}
-                        onAttach={setCharacterRefAction.bind(null, c.id, v)}
-                      />
-                    ))}
+                    <p className="mb-2 text-xs text-neutral-600">Reference images (portrait, no narrower than 1:2). Prompts use the saved description; save first if you&apos;ve changed it.</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {REF_VIEWS.map((v) => (
+                        <ImageSlot
+                          key={v}
+                          label={VIEW_LABEL[v]}
+                          projectId={id}
+                          baseCode={`${code}_${v.toUpperCase()}`}
+                          kind="character-ref"
+                          assetId={profile.refs?.[v]}
+                          prompt={characterRefPrompt(c.name, profile, v, style)}
+                          attach={v !== "front" && profile.refs?.front ? [{ label: `${c.name}'s front image`, assetId: profile.refs.front }] : []}
+                          minAspect={MIN_REF_ASPECT}
+                          shape="portrait"
+                          canGenerate={canGenerate}
+                          onAttach={setCharacterRefAction.bind(null, c.id, v)}
+                        />
+                      ))}
+                    </div>
                   </div>
-                </div>
+                </RevealLater>
               </div>
             </section>
           );

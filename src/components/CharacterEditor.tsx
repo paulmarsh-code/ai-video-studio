@@ -8,7 +8,7 @@ import { approveCharacterAction, discardCharacterDraftAction, saveCharacterActio
 import { uploadBlob } from "@/lib/clientUpload";
 import { MIN_REF_ASPECT } from "@/lib/domain/imagePrompts";
 import type { Pronoun } from "@/lib/domain/types";
-import { CHARACTER_SHEET, characterDescribePrompt, characterFillFromReply, characterSheetRequest } from "@/lib/domain/describe";
+import { CHARACTER_SHEET, characterChangePrompt, characterDescribePrompt, characterFillFromReply, characterSheetRequest, type DescribeSource } from "@/lib/domain/describe";
 import { StartFromPanel } from "./StartFromPanel";
 import { ActionButton, DoneBadge } from "./ActionButton";
 
@@ -116,7 +116,15 @@ export function CharacterEditor({ c, projectId, baseCode, canDescribe }: { c: Ch
         projectId={projectId}
         baseCode={`${baseCode}_SOURCE`}
         canDescribe={canDescribe}
-        promptFor={characterDescribePrompt}
+        promptFor={(src: DescribeSource, text: string, personality: string) => src === "change"
+          ? characterChangePrompt({ appearance: f.appearance, wardrobe: f.wardrobe, mannerisms: f.mannerisms, anchors: anchorsList }, text)
+          : characterDescribePrompt(src, text, personality)}
+        change={f.appearance.trim() || w?.profile.refs?.front ? {
+          currentImages: [
+            w?.profile.refs?.front && { label: `${c.name}'s front image`, assetId: w.profile.refs.front },
+            w?.profile.refs?.face && { label: `${c.name}'s face image`, assetId: w.profile.refs.face },
+          ].filter((x): x is { label: string; assetId: string } => !!x),
+        } : undefined}
         onReply={fillFromReply}
         sheet={{ cols: CHARACTER_SHEET.cols, rows: CHARACTER_SHEET.rows, labels: ["Front", "Back", "Face"], minAspect: MIN_REF_ASPECT, prompt: characterSheetRequest(), onPieces: attachSheet }}
         gateOk={who === "invented" || (who === "real" && !!f.consentRef.trim())}

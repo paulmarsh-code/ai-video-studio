@@ -83,10 +83,68 @@ export function venueSheetRequest(viewNames?: string[], style = "photorealistic"
 
 const STEP2_FALLBACK = "If you can only do one thing in this reply, write the description and stop; I will then ask for the image.";
 
-export type DescribeSource = "image" | "idea";
+export type DescribeSource = "image" | "idea" | "change";
+
+export interface CurrentCharacter {
+  appearance?: string;
+  wardrobe?: string;
+  mannerisms?: string;
+  anchors?: string[];
+}
+
+/**
+ * "Make changes": the saved description plus what the user wants changed. ChatGPT rewrites the
+ * full labelled description with only that change, and draws a new sheet, so the fields and
+ * all three views stay in step. Attach the current sheet or front image so the rest stays the same.
+ */
+export function characterChangePrompt(current: CurrentCharacter, change: string): string {
+  return [
+    "I am refining an original character for a short AI video. The current description is below, and the attached image shows how the character looks now.",
+    `Change only this: ${stripQuotes(change).trim() || "(describe the change here)"}`,
+    "Keep everything else exactly the same: the same person, face, proportions and any details the change does not mention.",
+    "",
+    "Current description:",
+    current.appearance ? `APPEARANCE: ${stripQuotes(current.appearance)}` : "",
+    current.wardrobe ? `OUTFIT AND ACCESSORIES: ${stripQuotes(current.wardrobe)}` : "",
+    current.anchors?.length ? `IDENTITY ANCHORS: ${current.anchors.map(stripQuotes).join("; ")}` : "",
+    current.mannerisms ? `MANNERISMS: ${stripQuotes(current.mannerisms)}` : "",
+    "",
+    "Do not use brand names, logos or text on clothing.",
+    ...REPLY_RULES,
+    "Rewrite the whole description with the change applied, in this format:",
+    "",
+    format(CHARACTER_FIELDS),
+    "",
+    characterSheetRequest(),
+    STEP2_FALLBACK,
+  ].filter((l, i, a) => l !== "" || a[i - 1] !== "").join("\n");
+}
+
+export function venueChangePrompt(current: { setting?: string; description: string; views: string[] }, change: string): string {
+  return [
+    "I am refining a location for a short AI video. The current description is below, and the attached image shows how it looks now.",
+    `Change only this: ${stripQuotes(change).trim() || "(describe the change here)"}`,
+    "Keep everything else exactly the same, including the four views and their names unless the change says otherwise.",
+    "",
+    "Current description:",
+    `SETTING: ${current.setting === "exterior" ? "outdoors" : "indoors"}`,
+    `DESCRIPTION: ${stripQuotes(current.description)}`,
+    `VIEWS: ${current.views.join("; ")}`,
+    "",
+    ...REPLY_RULES,
+    "Rewrite the whole description with the change applied, in this format:",
+    "",
+    format(VENUE_FIELDS),
+    "",
+    venueSheetRequest(current.views.length === 4 ? current.views : undefined),
+    STEP2_FALLBACK,
+  ].join("\n");
+}
 
 /** Prompt to paste into ChatGPT together with the picture, or with a one-line idea. */
-export function characterDescribePrompt(source: DescribeSource, idea = ""): string {
+export function characterDescribePrompt(source: DescribeSource, idea = "", personality = ""): string {
+  // A picture shows looks, not personality: the user's own words drive mannerisms, voice and expression.
+  const who = stripQuotes(personality).trim();
   const intro = source === "image"
     ? [
         "I am designing an original character for a short AI video. Use the attached picture only as inspiration.",
@@ -99,6 +157,7 @@ export function characterDescribePrompt(source: DescribeSource, idea = ""): stri
       ];
   return [
     ...intro,
+    ...(who ? [`Personality and mannerisms: ${who}. Use this for MANNERISMS and SUGGESTED VOICE, and let it show in the resting expression and posture.`] : []),
     "Be specific and visual: exact colours, cuts, lengths and materials, not general words like nice or stylish.",
     "Do not use brand names, logos or text on clothing.",
     ...REPLY_RULES,

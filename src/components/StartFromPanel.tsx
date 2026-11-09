@@ -15,7 +15,7 @@ export interface StartFromPanelProps {
   projectId: string;
   baseCode: string;
   canDescribe: boolean;
-  promptFor: (source: DescribeSource, idea: string) => string;
+  promptFor: (source: DescribeSource, text: string, personality: string) => string;
   /** Apply the reply to the form; returns a short report for the user. */
   onReply: (reply: string) => { ok: boolean; text: string };
   /** Shown above the steps in picture mode (e.g. the consent choice); steps stay locked until gateOk. */
@@ -33,11 +33,37 @@ export interface StartFromPanelProps {
     blockedReason?: string;
     onPieces: (sheet: File, pieces: Blob[]) => Promise<{ ok: boolean; text: string }>;
   };
+  /** Enables "Change it": the images to attach so ChatGPT keeps everything else the same. */
+  change?: { currentImages: { label: string; assetId: string }[] };
 }
 
+const CHANGE_QUESTIONS = {
+  character: [
+    { key: "look", label: "How they look?", short: "How they look", hint: "e.g. shoulder-length hair; a short beard; looks a bit older" },
+    { key: "wear", label: "What they're wearing?", short: "What they wear", hint: "e.g. a lilac dress instead of orange; swap the satchel for a small black clutch" },
+    { key: "personality", label: "Personality or mannerisms?", short: "Personality and mannerisms", hint: "e.g. more nervous and fidgety; dry, deadpan humour" },
+    { key: "other", label: "Anything else?", short: "Also", hint: "e.g. a warmer smile; standing straighter" },
+  ],
+  place: [
+    { key: "place", label: "The place itself?", short: "The place", hint: "e.g. replace the sofas with high bar stools; add plants along the windows" },
+    { key: "light", label: "Light and time of day?", short: "Light and time of day", hint: "e.g. night-time with warm lamps; brighter daylight" },
+    { key: "other", label: "Anything else?", short: "Also", hint: "e.g. make the screen wall bigger" },
+  ],
+} as const;
+
 export function StartFromPanel(p: StartFromPanelProps) {
-  const [mode, setMode] = useState<DescribeSource>("image");
+  // The starting tab is chosen when the panel is opened ("Change it" if there's something to
+  // change), so filling in the fields never switches tabs under the user.
+  const [chosen, setMode] = useState<DescribeSource>();
+  const mode: DescribeSource = chosen ?? "image";
+  // "Change it" asks guided questions; the answers are combined into one change request.
+  const [wantChange, setWantChange] = useState(false);
+  const [parts, setParts] = useState<Record<string, string>>({});
+  const questions = CHANGE_QUESTIONS[p.what];
+  const change = questions.filter((q) => parts[q.key]?.trim()).map((q) => `${q.short}: ${parts[q.key].trim().replace(/[.]$/, "")}`).join(". ");
+  const [preparedChange, setPreparedChange] = useState("");
   const [idea, setIdea] = useState("");
+  const [personality, setPersonality] = useState("");
   const [sourceId, setSourceId] = useState<string>();
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState(false);
@@ -60,7 +86,11 @@ export function StartFromPanel(p: StartFromPanelProps) {
     }
   }
   const locked = mode === "image" && p.gateOk === false;
-  const prompt = p.promptFor(mode, idea);
+  const prompt = p.promptFor(mode, mode === "change" ? preparedChange : idea, mode === "change" ? "" : personality);
+  // In "Change it", the later steps appear once the updated prompt has been created.
+  const showSteps = mode !== "change" || !!preparedChange.trim();
+  let step = 0;
+  const n = () => `${++step}.`;
   const slug = p.what === "character" ? "character" : "place";
 
   async function upload(file: File) {
@@ -87,7 +117,7 @@ export function StartFromPanel(p: StartFromPanelProps) {
     setBusy(true);
     setReport(null);
     try {
-      const res = await fetch("/api/describe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, assetId: mode === "image" ? sourceId : undefined }) });
+      const res = await fetch("/api/describe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, assetId: mode === "image" ? sourceId : mode === "change" ? p.change?.currentImages[0]?.assetId : undefined }) });
       const body = (await res.json()) as { text?: string; error?: string };
       if (!res.ok || !body.text) throw new Error(body.error ?? "Describe failed");
       setReply(body.text);
@@ -106,22 +136,50 @@ export function StartFromPanel(p: StartFromPanelProps) {
   );
 
   return (
-    <details className="rounded-lg border border-blue-200 bg-blue-50/40 p-3" data-testid={`start-from-${slug}`}>
-      <summary className="cursor-pointer text-sm font-semibold text-blue-900">Start from a picture or a one-line idea</summary>
+    <details className="rounded-lg border border-blue-200 bg-blue-50/40 p-3" data-testid={`start-from-${slug}`}
+      onToggle={(e) => { if (e.currentTarget.open && !chosen) setMode(p.change ? "change" : "image"); }}>
+      <summary className="cursor-pointer text-sm font-semibold text-blue-900">{p.change ? "Change it, or start again from a picture or idea" : "Start from a picture or a one-line idea"}</summary>
       <p className="mt-1 text-xs text-neutral-600">No need to write a detailed description: the app gets ChatGPT to write one in the format it needs, and fills in the fields below for you to check.</p>
-      <div className="mt-2 flex gap-1">{tab("image", "From a picture")}{tab("idea", "From an idea")}</div>
+      <div className="mt-2 flex gap-1">{p.change && tab("change", "Change it")}{tab("image", "From a picture")}{tab("idea", "From an idea")}</div>
       <div className="space-y-2 rounded-b-md rounded-tr-md border border-neutral-300 bg-white p-3 text-sm">
         {mode === "image" && p.gate}
+        {mode === "change" && (
+          <div className="space-y-2">
+            {!wantChange ? (
+              <p className="flex flex-wrap items-center gap-2">Is there anything you want to change?
+                <button type="button" onClick={() => setWantChange(true)} data-testid="change-yes"
+                  className="rounded-md bg-blue-700 px-3 py-1 text-sm text-white hover:bg-blue-800">Yes</button></p>
+            ) : (
+              <>
+                <p>{n()} Fill in only what should change. Everything else stays the same.</p>
+                {questions.map((q) => (
+                  <label key={q.key} className="block">{q.label}
+                    <input className="mt-1 w-full rounded border border-neutral-300 px-2 py-1" value={parts[q.key] ?? ""} placeholder={q.hint}
+                      data-testid={`change-${q.key}`} onChange={(e) => setParts((x) => ({ ...x, [q.key]: e.target.value }))} />
+                  </label>
+                ))}
+                <ActionButton label="Create updated prompt" doneLabel="Prompt updated" testId="change-create" disabled={!change}
+                  onAction={() => { setPreparedChange(change); setReply(""); setReport(null); }} resetKey={change} />
+              </>
+            )}
+          </div>
+        )}
         {mode === "idea" && (
           <label className="block">Your idea in a sentence
             <input className="mt-1 w-full rounded border border-neutral-300 px-2 py-1" value={idea} onChange={(e) => setIdea(e.target.value)} data-testid="start-idea"
               placeholder={p.what === "character" ? "e.g. a mid-20s 1960s-style PR exec, sharp and witty" : "e.g. a rooftop bar in London at dusk"} />
           </label>
         )}
+        {p.what === "character" && mode !== "change" && (
+          <label className="block">Personality and mannerisms <span className="text-neutral-500">(a picture can&apos;t show this; optional but recommended)</span>
+            <input className="mt-1 w-full rounded border border-neutral-300 px-2 py-1" value={personality} onChange={(e) => setPersonality(e.target.value)} data-testid="start-personality"
+              placeholder="e.g. confident and a little smug; quick-witted; talks with her hands" />
+          </label>
+        )}
         <fieldset disabled={locked} className={locked ? "opacity-40" : ""}>
-          {mode === "image" && (
+          {showSteps && mode === "image" && (
             <div className="flex flex-wrap items-center gap-2">
-              <span>1. Your picture:</span>
+              <span>{n()} Your picture:</span>
               {sourceId && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={`/api/assets/${sourceId}`} alt="Your picture" className="h-12 w-12 rounded object-cover" />
@@ -133,24 +191,35 @@ export function StartFromPanel(p: StartFromPanelProps) {
               </label>
             </div>
           )}
+          {showSteps && (<>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span>{mode === "image" ? "2." : "1."} Copy this prompt into a new ChatGPT chat{mode === "image" ? " and attach your picture" : ""}:</span>
-            <CopyButton text={prompt} label="Copy describe prompt" />
+            <span>{n()} Copy this prompt into a new ChatGPT chat{mode === "image" ? " and attach your picture" : mode === "change" ? " and attach the current image" : ""}:</span>
+            <CopyButton text={prompt} label={mode === "change" ? "Copy change prompt" : "Copy describe prompt"} />
             {p.canDescribe && (
               <ActionButton variant="secondary" label="Or: describe with GPT" busyLabel="Describing…" doneLabel="Described"
                 disabled={busy || (mode === "image" && !sourceId) || (mode === "idea" && !idea.trim())}
-                onAction={describe} resetKey={[mode, idea, sourceId]} />
+                onAction={describe} resetKey={[mode, idea, sourceId, preparedChange, personality]} />
             )}
           </div>
+          {mode === "change" && !!p.change?.currentImages.length && (
+            <p className="flex flex-wrap items-center gap-2 text-xs text-neutral-600">Current image to attach:
+              {p.change.currentImages.map((a) => (
+                <a key={a.assetId} className="flex items-center gap-1 text-blue-700 underline" href={`/api/assets/${a.assetId}`} download>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={`/api/assets/${a.assetId}`} alt="" className="h-10 w-7 rounded object-cover" />Download {a.label}
+                </a>
+              ))}
+            </p>
+          )}
           <details className="mt-1 text-xs"><summary className="cursor-pointer text-blue-700">See the prompt</summary><pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-neutral-50 p-2">{prompt}</pre></details>
-          <label className="mt-2 block">{mode === "image" ? "3." : "2."} Paste ChatGPT&apos;s reply here
+          <label className="mt-2 block">{n()} Paste ChatGPT&apos;s reply here
             <textarea className="mt-1 w-full rounded border border-neutral-300 px-2 py-1 font-mono text-xs" rows={5} value={reply} onChange={(e) => setReply(e.target.value)} data-testid="start-reply" />
           </label>
           <div className="mt-1"><ActionButton label="Fill in the fields" doneLabel="Fields filled in" testId="start-fill" disabled={locked}
             onAction={() => apply(reply)} resetKey={reply} /></div>
           {p.sheet && (
             <div className="mt-3 space-y-2 border-t border-neutral-200 pt-3">
-              <p>{mode === "image" ? "4." : "3."} Upload the reference sheet ChatGPT made ({p.sheet.cols * p.sheet.rows} views in one image). The app cuts it into {p.sheet.labels.join(", ")}.</p>
+              <p>{n()} Upload the reference sheet ChatGPT made ({p.sheet.cols * p.sheet.rows} views in one image). The app cuts it into {p.sheet.labels.join(", ")}.</p>
               <p className="flex flex-wrap items-center gap-2 text-xs text-neutral-600">No sheet? If ChatGPT only wrote the description, send this in the same chat:
                 <CopyButton text={p.sheet.prompt} label="Copy sheet request" /></p>
               {p.sheet.blockedReason ? (
@@ -167,6 +236,7 @@ export function StartFromPanel(p: StartFromPanelProps) {
               )}
             </div>
           )}
+          </>)}
         </fieldset>
         {report && <p className={`text-sm ${report.ok ? "text-green-700" : "text-red-700"}`} role="status">{report.text}</p>}
       </div>

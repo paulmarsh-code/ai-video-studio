@@ -5,7 +5,7 @@ import { useState } from "react";
 import { approveVenueAction, saveVenueAction, setVenueViewImageAction } from "@/app/studioActions";
 import { uploadBlob } from "@/lib/clientUpload";
 import type { VenueView } from "@/lib/studioRepo";
-import { VENUE_SHEET, venueDescribePrompt, venueFillFromReply, venueSheetRequest } from "@/lib/domain/describe";
+import { VENUE_SHEET, venueChangePrompt, venueDescribePrompt, venueFillFromReply, venueSheetRequest, type DescribeSource } from "@/lib/domain/describe";
 import { StartFromPanel } from "./StartFromPanel";
 import { ActionButton, DoneBadge } from "./ActionButton";
 
@@ -79,7 +79,12 @@ export function VenueEditor({ venue, projectId, baseCode, canDescribe }: { proje
         <span className={`rounded px-2 py-0.5 ${venue.status === "approved" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>{venue.status}</span>
       </div>
       <label className="block text-sm">Venue name<input className={field} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
-      <StartFromPanel what="place" projectId={projectId} baseCode={`${baseCode}_SOURCE`} canDescribe={canDescribe} promptFor={venueDescribePrompt} onReply={fillFromReply}
+      <StartFromPanel what="place" projectId={projectId} baseCode={`${baseCode}_SOURCE`} canDescribe={canDescribe} promptFor={(src: DescribeSource, text: string) => src === "change"
+          ? venueChangePrompt({ setting: f.setting, description: f.description, views: f.views.map((v) => v.name) }, text)
+          : venueDescribePrompt(src, text)}
+        change={f.description.trim() ? {
+          currentImages: venue.views.filter((v) => v.imageAssetId).map((v) => ({ label: `${v.name} view`, assetId: v.imageAssetId! })),
+        } : undefined} onReply={fillFromReply}
         sheet={{
           cols: VENUE_SHEET.cols, rows: VENUE_SHEET.rows,
           labels: venue.views.length === 4 ? venue.views.map((v) => v.name) : ["view 1", "view 2", "view 3", "view 4"],
