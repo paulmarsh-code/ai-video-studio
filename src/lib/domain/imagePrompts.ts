@@ -89,6 +89,8 @@ export interface PanelPromptInput {
   profiles: Record<string, CharacterProfile>;
   plan?: GeometryPlanData;
   venueName: string;
+  /** Venue views with their approved reference images, so the background can be attached. */
+  venueViews?: { name: string; imageAssetId?: string }[];
   aspect?: string; // e.g. "9:16"
   genre?: Genre;
   style?: string;
@@ -104,31 +106,47 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   const genre = i.genre ?? "neutral";
   const shot = i.shot;
   const visible = (shot?.visibleIds ?? []).map((id) => i.cast.find((c) => c.id === id)).filter((c): c is CastMember => !!c);
+  const subjectId = shot ? mainSubjectId(shot) : undefined;
+  const name = (id: string) => i.cast.find((c) => c.id === id)?.name ?? id;
+
+  // Read the shot's camera first: it decides who is seen from behind and which view is the background.
+  const cam = shot && i.plan?.cameras.find((c) => c.id === shot.cameraId);
+  const reading = cam && i.plan ? readCamera(i.plan, cam) : undefined;
+  // Over-the-shoulder foreground: a non-subject person, only when two or more are visible (same rule as the Kling prompt).
+  const fgId = reading && shot && visible.length > 1
+    ? reading.actors.find((a) => a.foreground && a.characterId !== subjectId && shot.visibleIds.includes(a.characterId))?.characterId
+    : undefined;
+
   const attach: PanelPrompt["attach"] = [];
   for (const c of visible) {
     const refs = i.profiles[c.id]?.refs ?? {};
-    const pick = refs.front ?? refs.face;
-    if (pick) attach.push({ label: `${c.name} reference`, assetId: pick });
+    // Someone seen from behind gets their back image; everyone else their front (or face).
+    const pick = c.id === fgId ? (refs.back ?? refs.front) : (refs.front ?? refs.face);
+    if (pick) attach.push({ label: `${c.name} ${c.id === fgId && refs.back ? "back" : "reference"}`, assetId: pick });
   }
+  const bgView = reading?.backgroundView;
+  const bgImage = bgView ? i.venueViews?.find((v) => v.name === bgView)?.imageAssetId : undefined;
+  if (bgImage) attach.push({ label: `${bgView} view`, assetId: bgImage });
+
   const lines: string[] = [];
   lines.push(`${(i.style ?? "photorealistic").replace(/^./, (m) => m.toUpperCase())} storyboard frame for a ${i.aspect ?? "9:16"} video, set in the ${i.venueName}.`);
-  if (attach.length) lines.push(`Use the attached reference images for ${joinNames(attach.map((a) => a.label.replace(" reference", "")))}; keep their faces, hair and clothes identical.`);
+  const people = attach.filter((a) => !a.label.endsWith(" view"));
+  if (people.length) lines.push(`Use the attached reference images for ${joinNames(people.map((a) => a.label.replace(/ (reference|back)$/, "")))}; keep their faces, hair and clothes identical.`);
+  if (bgImage) lines.push(`Use the attached ${bgView} image as the background: same place, layout and light.`);
   for (const c of visible) {
     const p = i.profiles[c.id];
-    if (p?.appearance || p?.wardrobe) lines.push(`${c.name}: ${[p.appearance, p.wardrobe ? `wearing ${p.wardrobe}` : ""].filter(Boolean).map((x) => stripQuotes(x!)).join(", ")}.`);
+    const parts = [p?.appearance, p?.wardrobe ? `wearing ${p.wardrobe}` : ""].filter(Boolean).map((x) => stripQuotes(x!).replace(/[.!?]+$/, ""));
+    if (parts.length) lines.push(`${c.name}: ${parts.join("; ")}.`);
   }
-  lines.push(`Moment: ${stripQuotes(i.description)}.`);
-  if (i.emotion) lines.push(`Emotion: ${stripQuotes(i.emotion)}.`);
-  if (shot?.actions) lines.push(stripQuotes(shot.actions));
+  lines.push(`Moment: ${sentence(i.description)}`);
+  if (i.emotion) lines.push(`Emotion: ${sentence(i.emotion)}`);
+  if (shot?.actions) lines.push(sentence(shot.actions));
 
-  const cam = shot && i.plan?.cameras.find((c) => c.id === shot.cameraId);
-  if (cam && i.plan && shot) {
-    const reading = readCamera(i.plan, cam);
+  if (cam && reading && shot) {
     lines.push(PRESET_TEXT[cam.preset].replace(", static camera", "").replace(" static camera,", ""));
-    const frame = describeFrame(reading, i.cast, shot.visibleIds, mainSubjectId(shot));
+    const frame = describeFrame(reading, i.cast, shot.visibleIds, subjectId);
     if (frame) lines.push(`Positions: ${frame}.`);
-    const fg = reading.actors.find((a) => a.foreground && shot.visibleIds.includes(a.characterId));
-    if (fg) lines.push(`${i.cast.find((c) => c.id === fg.characterId)?.name} in the soft foreground, seen from behind over the shoulder.`);
+    if (fgId) lines.push(`${name(fgId)} in the soft foreground, seen from behind over the shoulder.`);
   }
   lines.push(`Look: ${GENRE_PROFILES[genre].look}.`);
   if (visible.length === 1) lines.push(`Only ${visible[0].name} in frame.`);

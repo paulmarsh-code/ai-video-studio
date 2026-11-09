@@ -67,6 +67,19 @@ describe("GPT image prompts", () => {
     expect(attach).toEqual([{ label: "Jade reference", assetId: "asset-jade-front" }]);
   });
 
+  it("attaches the background view image and, for an over-the-shoulder, the back image of the person seen from behind", () => {
+    const shot = { code: "C2b", venueName: "v", sceneContext: "", presentIds: CAST.map((c) => c.id), visibleIds: ["chase", "jade"], excludedIds: ["marcus", "nina"], speakerId: "chase", dialogue: "We'll let you know.", actions: "", durationSec: 3, audioMode: "native-on" as const, cameraId: "reverse" };
+    const views = SCENE1_PLAN.views.map((v) => ({ name: v.name, imageAssetId: `img-${v.name}` }));
+    const profiles = { jade: { refs: { front: "jf", back: "jb" } }, chase: { refs: { front: "cf" } } };
+    const { text, attach } = panelPrompt({ description: "Chase brushes her off.", shot, cast: CAST, profiles, plan: SCENE1_PLAN, venueName: "venue", venueViews: views });
+    const bg = attach.find((a) => a.label.endsWith(" view"));
+    expect(bg).toBeDefined();
+    expect(text).toContain(`Use the attached ${bg!.label.replace(/ view$/, "")} image as the background`);
+    if (text.includes("Jade in the soft foreground")) expect(attach).toContainEqual({ label: "Jade back", assetId: "jb" });
+    expect(attach).toContainEqual({ label: "Chase reference", assetId: "cf" });
+    expect(text).not.toContain("..");
+  });
+
   it("is deterministic", () => {
     const a = characterRefPrompt("Jade", jade, "face");
     expect(characterRefPrompt("Jade", jade, "face")).toBe(a);

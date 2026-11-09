@@ -55,7 +55,7 @@ export default async function StoryboardPage({ params }: { params: Promise<{ id:
           const d = p.dialogue[0];
           const prompt = panelPrompt({
             description: p.description, emotion: p.emotion, shot: shot?.spec, cast, profiles, plan: s.plan?.data,
-            venueName: s.venue?.name ?? "venue", aspect: brief.aspect, genre, style: brief.style,
+            venueName: s.venue?.name ?? "venue", venueViews: s.venue?.views as { name: string; imageAssetId?: string }[] | undefined, aspect: brief.aspect, genre, style: brief.style,
           });
           return (
             <li key={p.id} className="grid gap-4 rounded-xl border border-neutral-200 bg-white p-4 md:grid-cols-[1fr_16rem]" data-testid={`panel-${p.code}`}>
