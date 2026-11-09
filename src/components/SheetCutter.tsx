@@ -1,11 +1,13 @@
 "use client";
 
-// Shows a reference sheet with draggable cut lines (placed automatically on the joins),
-// then cuts it into separate images, padding any piece narrower than the minimum aspect.
+// Shows a reference sheet with draggable cut lines (placed automatically on the joins).
+// The page's single Create button calls the cutter (via cutterRef) to get the pieces;
+// any piece narrower than the minimum aspect is padded, never squashed.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { detectCuts, paddedWidth, pieceRects } from "@/lib/domain/sheet";
-import { ActionButton } from "./ActionButton";
+
+export type Cutter = () => Promise<Blob[]>;
 
 export interface SheetCutterProps {
   file: File;
@@ -13,8 +15,8 @@ export interface SheetCutterProps {
   rows: number;
   labels: string[];
   minAspect?: number;
-  busy?: boolean;
-  onCut: (pieces: Blob[]) => Promise<{ ok: boolean }>;
+  /** Filled with a function that cuts the sheet at the current lines. */
+  cutterRef: MutableRefObject<Cutter | null>;
 }
 
 function loadImage(url: string): Promise<HTMLImageElement> {
@@ -43,7 +45,7 @@ function toBlob(c: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => c.toBlob((b) => (b ? resolve(b) : reject(new Error("Could not create the image."))), "image/png"));
 }
 
-export function SheetCutter({ file, cols, rows, labels, minAspect, busy, onCut }: SheetCutterProps) {
+export function SheetCutter({ file, cols, rows, labels, minAspect, cutterRef }: SheetCutterProps) {
   const [url, setUrl] = useState<string>();
   const [img, setImg] = useState<HTMLImageElement>();
   const [xs, setXs] = useState<number[]>([]);
@@ -81,10 +83,10 @@ export function SheetCutter({ file, cols, rows, labels, minAspect, busy, onCut }
     (d.axis === "x" ? setXs : setYs)(next);
   };
 
-  async function cut() {
-    if (!img) return { ok: false };
+  async function cut(): Promise<Blob[]> {
+    if (!img) throw new Error("The image board is still loading. Try again in a moment.");
     setError("");
-    try {
+    {
       const W = img.naturalWidth;
       const H = img.naturalHeight;
       const blobs: Blob[] = [];
@@ -105,18 +107,19 @@ export function SheetCutter({ file, cols, rows, labels, minAspect, busy, onCut }
         }
         blobs.push(await toBlob(c));
       }
-      return await onCut(blobs);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      return { ok: false };
+      return blobs;
     }
   }
+  useEffect(() => {
+    cutterRef.current = cut;
+    return () => { cutterRef.current = null; };
+  });
 
   const xb = [0, ...xs, 1];
   const yb = [0, ...ys, 1];
   return (
     <div className="space-y-2" data-testid="sheet-cutter">
-      <p className="text-xs text-neutral-600">The cut lines are placed on the joins automatically. Drag a line if it&apos;s off, then cut.</p>
+      <p className="text-xs text-neutral-600">The red lines show where the board will be cut. They&apos;re placed on the joins automatically; drag one if it&apos;s off.</p>
       {url && (
         <div ref={box} className="relative w-full select-none touch-none" onPointerMove={move} onPointerUp={() => { drag.current = null; }} onPointerLeave={() => { drag.current = null; }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -143,8 +146,6 @@ export function SheetCutter({ file, cols, rows, labels, minAspect, busy, onCut }
           )))}
         </div>
       )}
-      <ActionButton label={`Cut into ${cols * rows} and attach`} busyLabel="Cutting and saving…" doneLabel={`${cols * rows} images attached`}
-        testId="sheet-cut" disabled={!img || busy} onAction={cut} resetKey={[xs, ys, file.name, file.size]} />
       {error && <p className="text-xs text-red-700" role="alert">{error}</p>}
     </div>
   );

@@ -26,15 +26,16 @@ export default async function VenuePage({ params }: { params: Promise<{ id: stri
     <div className="max-w-6xl">
       <p className="text-sm text-neutral-500"><Link href="/">Projects</Link> / <Link href={`/projects/${id}`}>{project.name}</Link> /</p>
       <h1 className="text-2xl font-semibold">Venue: {venue.name}</h1>
-      <p className="mt-1 max-w-3xl text-neutral-600">Describe the space and name what you see looking each way. Then make one reference image per view in ChatGPT and upload it. The venue is used for every scene set here.</p>
+      <p className="mt-1 max-w-3xl text-neutral-600">Start from a picture or a one-line idea. ChatGPT writes the description and draws the four views, and the app does the rest. The venue is used for every scene set here.</p>
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_1.4fr]">
         <VenueEditor key={venue.id} venue={venue} projectId={id} baseCode={`${project.code}_VEN_${slug}`} canDescribe={!!getTextProvider()} />
-        <div>
-          <p className="mb-2 text-xs text-neutral-600">View images (landscape, no people). Prompts use the saved description and setting.</p>
-          <div className="grid gap-3 sm:grid-cols-2">
+        {/* Nothing here until Create has made the view images. */}
+        {venue.views.some((v) => v.imageAssetId) ? (
+          <div className="grid gap-3 self-start sm:grid-cols-2">
             {venue.views.map((v) => (
               <ImageSlot
                 key={v.name}
+                simple
                 label={v.name}
                 projectId={id}
                 baseCode={`${project.code}_VEN_${slug}_${v.name.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}`}
@@ -47,7 +48,7 @@ export default async function VenuePage({ params }: { params: Promise<{ id: stri
               />
             ))}
           </div>
-        </div>
+        ) : <div />}
       </div>
     </div>
   );

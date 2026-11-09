@@ -24,6 +24,8 @@ export interface ImageSlotProps {
   shape: "portrait" | "landscape";
   canGenerate: boolean;
   onAttach: (assetId: string) => Promise<Result>;
+  /** Result view (images made by Create): just the image and "Need to change something?". */
+  simple?: boolean;
 }
 
 function imageAspect(file: File): Promise<number> {
@@ -111,17 +113,19 @@ export function ImageSlot(p: ImageSlotProps) {
     <div className="rounded-lg border border-neutral-200 bg-white p-3" data-testid={`slot-${testId}`}>
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-semibold">{p.label}</span>
-        {p.assetId ? <span className="text-xs text-green-700">Image attached</span> : <span className="text-xs text-neutral-500">No image yet</span>}
+        {!p.simple && (p.assetId ? <span className="text-xs text-green-700">Image attached</span> : <span className="text-xs text-neutral-500">No image yet</span>)}
       </div>
       <div className={`mt-2 flex items-center justify-center overflow-hidden rounded bg-neutral-100 ${p.shape === "portrait" ? "aspect-[2/3]" : "aspect-video"}`}>
         {p.assetId ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={`/api/assets/${p.assetId}`} alt={p.label} className="h-full w-full object-contain" />
+        ) : p.simple ? (
+          <span className="px-3 text-center text-xs text-neutral-500">No image</span>
         ) : (
           <span className="px-3 text-center text-xs text-neutral-500">1. Copy the GPT prompt. 2. Make the image in ChatGPT{p.attach?.length ? ", attaching the reference images listed below" : ""}. 3. Upload it here.</span>
         )}
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
+      {!p.simple && <div className="mt-2 flex flex-wrap items-center gap-2">
         <CopyButton text={p.prompt} label="Copy GPT prompt" />
         <button type="button" className="text-xs text-blue-700 underline" onClick={() => setShowPrompt((s) => !s)}>{showPrompt ? "Hide prompt" : "Show prompt"}</button>
         <label className={`cursor-pointer rounded-md px-3 py-1 text-sm ${justDone === "upload" ? "border border-green-600 bg-green-50 text-green-800" : busy ? "bg-neutral-400 text-white" : "bg-blue-700 text-white hover:bg-blue-800"}`}>
@@ -134,11 +138,11 @@ export function ImageSlot(p: ImageSlotProps) {
             {busy === "generate" ? "Generating…" : justDone === "generate" ? "✓ Generated" : "Generate with GPT"}
           </button>
         )}
-      </div>
+      </div>}
       {p.assetId && (
         <div className="mt-2 text-xs">
           <button type="button" className="text-blue-700 underline" onClick={() => setChangeOpen((o) => !o)} data-testid={`change-open-${testId}`}>
-            {changeOpen ? "Close" : "Not right? Ask for a change"}
+            {changeOpen ? "Close" : p.simple ? "Need to change something?" : "Not right? Ask for a change"}
           </button>
           {changeOpen && (
             <div className="mt-1 space-y-1 rounded border border-neutral-200 bg-neutral-50 p-2">
@@ -150,8 +154,17 @@ export function ImageSlot(p: ImageSlotProps) {
                 <div className="space-y-1">
                   <p className="flex flex-wrap items-center gap-2">1. <CopyButton text={changePrompt} label="Copy change prompt" /> 2. In ChatGPT, attach
                     <a className="text-blue-700 underline" href={`/api/assets/${p.assetId}`} download>the current image</a>
-                    {!!p.attach?.length && <span>(and the references below)</span>}
-                    3. Upload the result with the button above. The old image is kept.</p>
+                    {!!p.attach?.length && (p.simple
+                      ? <span>and {p.attach.map((a, i) => <span key={a.assetId}>{i > 0 && ", "}<a className="text-blue-700 underline" href={`/api/assets/${a.assetId}`} download>{a.label}</a></span>)}</span>
+                      : <span>(and the references below)</span>)}
+                    3. {p.simple ? "Upload the new image here." : "Upload the result with the button above."} The old image is kept.</p>
+                  {p.simple && <div>
+                    <label className={`cursor-pointer rounded-md px-3 py-1 text-sm ${justDone === "upload" ? "border border-green-600 bg-green-50 text-green-800" : busy ? "bg-neutral-400 text-white" : "bg-blue-700 text-white hover:bg-blue-800"}`}>
+                      {busy === "upload" ? "Uploading…" : justDone === "upload" ? "✓ Uploaded" : p.assetId ? "Replace image" : "Upload image"}
+                      <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" disabled={!!busy} data-testid={`upload-${testId}`}
+                        onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void upload(f); }} />
+                    </label>
+                  </div>}
                   {p.canGenerate && (
                     <ActionButton size="sm" variant="secondary" label="Or: generate the change with GPT" busyLabel="Generating…" doneLabel="Generated" resetKey={changePrompt}
                       onAction={() => generate(changePrompt, [p.assetId!, ...(p.attach ?? []).map((a) => a.assetId)])} />
@@ -162,8 +175,8 @@ export function ImageSlot(p: ImageSlotProps) {
           )}
         </div>
       )}
-      {showPrompt && <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-neutral-50 p-2 text-xs">{p.prompt}</pre>}
-      {!!p.attach?.length && (
+      {!p.simple && showPrompt && <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-neutral-50 p-2 text-xs">{p.prompt}</pre>}
+      {!p.simple && !!p.attach?.length && (
         <div className="mt-2 rounded border border-neutral-200 bg-neutral-50 p-2 text-xs text-neutral-700">
           <p>Reference for ChatGPT (attach it alongside the prompt; it is not uploaded here):</p>
           <div className="mt-1 flex flex-wrap gap-2">

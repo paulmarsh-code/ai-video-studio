@@ -30,35 +30,38 @@ export function VenueEditor({ venue, projectId, baseCode, canDescribe }: { proje
   const dirty = JSON.stringify(f) !== JSON.stringify(initial);
   const field = "mt-1 w-full rounded border border-neutral-300 px-2 py-1 text-sm";
 
-  const attachSheet = async (sheet: File, pieces: Blob[]) => {
-    await uploadBlob(projectId, `${baseCode}_SHEET`, "reference-sheet", sheet, sheet.name);
-    for (const [i, v] of venue.views.entries()) {
+  // Create: fill in and save the description and views, then attach the cut views in order.
+  const create = async (reply: string, pieces: Blob[], board: File) => {
+    const r = venueFillFromReply(reply);
+    if (!r.description) return { ok: false, text: "Couldn't find the labelled description in that reply. Check you pasted all of ChatGPT's answer." };
+    const views = r.views.length === 4 ? r.views : f.views;
+    const next = { ...f, setting: r.setting, description: r.description, views };
+    const saved = await saveVenueAction(venue.id, next);
+    if (!saved.ok) return { ok: false, text: saved.error };
+    await uploadBlob(projectId, `${baseCode}_SHEET`, "reference-sheet", board, board.name);
+    const n = Math.min(views.length, pieces.length);
+    for (let i = 0; i < n; i++) {
+      const v = views[i];
       const code = `${baseCode}_${v.name.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}`;
       const id = await uploadBlob(projectId, code, "venue-ref", pieces[i], `${v.name}.png`);
-      const r = await setVenueViewImageAction(venue.id, v.name, id);
-      if (!r.ok) throw new Error(r.error);
+      const a = await setVenueViewImageAction(venue.id, v.name, id);
+      if (!a.ok) return { ok: false, text: a.error };
     }
+    setF(next);
+    setMsg(null);
     router.refresh();
-    return { ok: true, text: "Four view images attached (on the right). Check them, then approve the venue." };
-  };
-
-  const fillFromReply = (reply: string) => {
-    const r = venueFillFromReply(reply);
-    if (!r.description && !r.views.length) return { ok: false, text: "Couldn't find the labelled lines in that reply. Check you pasted all of ChatGPT's answer." };
-    // Views that already have images keep their names; new suggestions are added after them.
-    const keep = venue.views.filter((v) => v.imageAssetId).map((v) => ({ name: v.name, directionDeg: v.directionDeg }));
-    const added = r.views.filter((v) => !keep.some((k) => k.name.toLowerCase() === v.name.toLowerCase()));
-    setF((x) => ({ ...x, setting: r.setting, description: r.description || x.description, views: r.views.length ? [...keep, ...added] : x.views }));
     return {
       ok: true,
       text: [
-        `Filled in the setting (${r.setting === "exterior" ? "outdoors" : "indoors"}), description${r.views.length ? ` and ${r.views.length} views` : ""}.`,
-        keep.length ? `Kept ${keep.length} view${keep.length > 1 ? "s" : ""} that already have images.` : "",
+        `Created: description and ${views.length} views saved, and ${n} view images are on the right. Check them, then approve the venue.`,
+        views.length !== 4 ? `The board has 4 panels but the venue has ${views.length} views, so only ${n} were matched.` : "",
         r.missing.length ? `Not in the reply: ${r.missing.map((m) => m.toLowerCase()).join(", ")}.` : "",
-        "Check and edit, then Save.",
       ].filter(Boolean).join(" "),
     };
   };
+  // A brand-new venue shows only the start panel until Create fills in the details.
+  const [byHand, setByHand] = useState(false);
+  const showDetails = byHand || venue.views.some((v) => v.imageAssetId) || !!f.description.trim();
 
   const save = async () => {
     const r = await saveVenueAction(venue.id, f);
@@ -84,14 +87,15 @@ export function VenueEditor({ venue, projectId, baseCode, canDescribe }: { proje
           : venueDescribePrompt(src, text)}
         change={f.description.trim() ? {
           currentImages: venue.views.filter((v) => v.imageAssetId).map((v) => ({ label: `${v.name} view`, assetId: v.imageAssetId! })),
-        } : undefined} onReply={fillFromReply}
+        } : undefined} onCreate={create} defaultOpen={!showDetails}
         sheet={{
           cols: VENUE_SHEET.cols, rows: VENUE_SHEET.rows,
-          labels: venue.views.length === 4 ? venue.views.map((v) => v.name) : ["view 1", "view 2", "view 3", "view 4"],
-          prompt: venueSheetRequest(venue.views.length === 4 ? venue.views.map((v) => v.name) : undefined),
-          blockedReason: dirty ? "Save the venue first, so the four views have their names." : venue.views.length !== 4 ? `The sheet has four panels, but this venue has ${venue.views.length} views. Make it four and save, or upload view images one by one.` : undefined,
-          onPieces: attachSheet,
+          labels: showDetails && f.views.length === 4 ? f.views.map((v) => v.name) : ["view 1", "view 2", "view 3", "view 4"],
+          prompt: venueSheetRequest(showDetails && f.views.length === 4 ? f.views.map((v) => v.name) : undefined),
         }} />
+      {!showDetails ? (
+        <button type="button" className="text-xs text-neutral-500 underline" onClick={() => setByHand(true)}>Or fill in the details by hand</button>
+      ) : (<>
       <label className="block text-sm">Setting
         <select className={field} value={f.setting} onChange={(e) => setF({ ...f, setting: e.target.value as "interior" | "exterior" })} data-testid="venue-setting">
           <option value="interior">Indoors (a room, hall, office, shop…)</option>
@@ -128,6 +132,7 @@ export function VenueEditor({ venue, projectId, baseCode, canDescribe }: { proje
         {dirty && <span className="text-xs text-amber-700">Unsaved changes</span>}
       </div>
       {msg && <p className={`text-sm ${msg.ok ? "text-green-700" : "text-red-700"}`} role="status">{msg.text}</p>}
+      </>)}
     </div>
   );
 }

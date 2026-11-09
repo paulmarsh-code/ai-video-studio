@@ -37,27 +37,44 @@ export function CharacterEditor({ c, projectId, baseCode, canDescribe }: { c: Ch
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }));
   const anchorsList = f.anchors.split("\n").map((x) => x.trim()).filter(Boolean);
 
-  const fillFromReply = (reply: string) => {
+  // Create: fill in and save the description as a draft, then attach the cut views.
+  const create = async (reply: string, pieces: Blob[], board: File) => {
     const r = characterFillFromReply(reply);
-    const got = [r.appearance && "appearance", r.wardrobe && "wardrobe", r.mannerisms && "mannerisms", r.anchors.length && "identity anchors"].filter(Boolean) as string[];
-    if (!got.length) return { ok: false, text: "Couldn't find the labelled lines in that reply. Check you pasted all of ChatGPT's answer." };
-    setF((x) => ({
-      ...x,
-      appearance: r.appearance || x.appearance,
-      wardrobe: r.wardrobe || x.wardrobe,
-      mannerisms: r.mannerisms || x.mannerisms,
-      anchors: r.anchors.length ? r.anchors.join("\n") : x.anchors,
-      voiceLock: x.voiceLock.trim() ? x.voiceLock : r.voice,
-    }));
-    setVoiceSuggestion(f.voiceLock.trim() && r.voice ? r.voice : "");
-    const notes = [
-      `Filled in ${got.join(", ")}${!f.voiceLock.trim() && r.voice ? " and a suggested voice lock" : ""}.`,
-      r.missing.length ? `Not in the reply: ${r.missing.map((m) => m.toLowerCase()).join(", ")}.` : "",
-      r.known ? "ChatGPT says the picture shows a known person or character, so it described a different original character. Check the result isn't a lookalike." : "",
-      "Check and edit the fields, then Save draft.",
-    ];
-    return { ok: !r.known, text: notes.filter(Boolean).join(" ") };
+    if (!r.appearance && !r.wardrobe) return { ok: false, text: "Couldn't find the labelled description in that reply. Check you pasted all of ChatGPT's answer." };
+    const next = {
+      ...f,
+      appearance: r.appearance || f.appearance,
+      wardrobe: r.wardrobe || f.wardrobe,
+      mannerisms: r.mannerisms || f.mannerisms,
+      anchors: r.anchors.length ? r.anchors.join("\n") : f.anchors,
+      voiceLock: f.voiceLock.trim() ? f.voiceLock : r.voice,
+    };
+    const saved = await saveCharacterAction(c.id, { name: next.name, pronoun: next.pronoun as Pronoun, role: next.role, invented: next.invented, consentRef: next.consentRef },
+      { appearance: next.appearance, wardrobe: next.wardrobe, mannerisms: next.mannerisms, anchors: next.anchors.split("\n").map((x) => x.trim()).filter(Boolean), voiceLock: next.voiceLock });
+    if (!saved.ok) return { ok: false, text: saved.error };
+    await uploadBlob(projectId, `${baseCode}_SHEET`, "reference-sheet", board, board.name);
+    for (const [i, view] of CHARACTER_SHEET.views.entries()) {
+      const id = await uploadBlob(projectId, `${baseCode}_${view.toUpperCase()}`, "character-ref", pieces[i], `${view}.png`);
+      const a = await setCharacterRefAction(c.id, view, id);
+      if (!a.ok) return { ok: false, text: a.error };
+    }
+    setF(next);
+    setVoiceSuggestion(f.voiceLock.trim() && r.voice && r.voice !== f.voiceLock ? r.voice : "");
+    setMsg(null);
+    router.refresh();
+    return {
+      ok: !r.known,
+      text: [
+        `Created: description saved as draft v${saved.value}, and the front, back and face images are on the right. Check them, then approve.`,
+        r.missing.length ? `Not in the reply: ${r.missing.map((m) => m.toLowerCase()).join(", ")}.` : "",
+        r.known ? "ChatGPT says the picture shows a known person or character, so it described a different original character. Check the result isn't a lookalike." : "",
+      ].filter(Boolean).join(" "),
+    };
   };
+  // A brand-new character shows only the start panel until Create fills in the details.
+  const hasRefs = !!(w?.profile.refs?.front || w?.profile.refs?.back || w?.profile.refs?.face);
+  const [byHand, setByHand] = useState(false);
+  const showDetails = byHand || hasRefs || !!f.appearance.trim() || !!f.wardrobe.trim();
   const field = "mt-1 w-full rounded border border-neutral-300 px-2 py-1 text-sm";
 
   const save = async () => {
@@ -73,17 +90,6 @@ export function CharacterEditor({ c, projectId, baseCode, canDescribe }: { c: Ch
     router.refresh();
     return r;
   };
-  const attachSheet = async (sheet: File, pieces: Blob[]) => {
-    await uploadBlob(projectId, `${baseCode}_SHEET`, "reference-sheet", sheet, sheet.name);
-    for (const [i, view] of CHARACTER_SHEET.views.entries()) {
-      const id = await uploadBlob(projectId, `${baseCode}_${view.toUpperCase()}`, "character-ref", pieces[i], `${view}.png`);
-      const r = await setCharacterRefAction(c.id, view, id);
-      if (!r.ok) throw new Error(r.error);
-    }
-    router.refresh();
-    return { ok: true, text: "Front, back and face attached to the draft (on the right). Check them, save any field changes, then approve." };
-  };
-
   const discard = () => start(async () => {
     const r = await discardCharacterDraftAction(c.id);
     setMsg(r.ok ? { kind: "ok", text: "Draft discarded." } : { kind: "error", text: r.error });
@@ -125,8 +131,9 @@ export function CharacterEditor({ c, projectId, baseCode, canDescribe }: { c: Ch
             w?.profile.refs?.face && { label: `${c.name}'s face image`, assetId: w.profile.refs.face },
           ].filter((x): x is { label: string; assetId: string } => !!x),
         } : undefined}
-        onReply={fillFromReply}
-        sheet={{ cols: CHARACTER_SHEET.cols, rows: CHARACTER_SHEET.rows, labels: ["Front", "Back", "Face"], minAspect: MIN_REF_ASPECT, prompt: characterSheetRequest(), onPieces: attachSheet }}
+        onCreate={create}
+        defaultOpen={!showDetails}
+        sheet={{ cols: CHARACTER_SHEET.cols, rows: CHARACTER_SHEET.rows, labels: ["Front", "Back", "Face"], minAspect: MIN_REF_ASPECT, prompt: characterSheetRequest() }}
         gateOk={who === "invented" || (who === "real" && !!f.consentRef.trim())}
         gate={
           <div className="space-y-1 rounded border border-amber-200 bg-amber-50 p-2 text-xs">
@@ -141,6 +148,9 @@ export function CharacterEditor({ c, projectId, baseCode, canDescribe }: { c: Ch
           </div>
         }
       />
+      {!showDetails ? (
+        <button type="button" className="text-xs text-neutral-500 underline" onClick={() => setByHand(true)}>Or fill in the details by hand</button>
+      ) : (<>
       <label className="block text-sm">Appearance <span className="text-neutral-500">(face, hair, age, build — used in every image prompt)</span>
         <textarea className={field} rows={2} value={f.appearance} onChange={set("appearance")} data-testid="appearance" />
       </label>
@@ -175,6 +185,7 @@ export function CharacterEditor({ c, projectId, baseCode, canDescribe }: { c: Ch
       </div>
       {(c.draft || dirty) && problems.length > 0 && <ul className="list-disc pl-5 text-xs text-amber-800">{problems.map((p) => <li key={p}>{p}</li>)}</ul>}
       {msg && <p className={`text-sm ${msg.kind === "ok" ? "text-green-700" : "text-red-700"}`} role="status">{msg.text}</p>}
+      </>)}
       {c.versions.length > 1 && (
         <details className="text-xs text-neutral-600">
           <summary className="cursor-pointer">Version history ({c.versions.length})</summary>
