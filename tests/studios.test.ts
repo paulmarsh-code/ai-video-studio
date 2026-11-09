@@ -21,10 +21,19 @@ describe("GPT image prompts", () => {
 
   it("character reference prompts state the view, a plain background, and the 1:2 limit", () => {
     const p = characterRefPrompt("Jade", jade, "back");
-    expect(p).toContain("Full-body back view");
+    expect(p.startsWith("BACK VIEW")).toBe(true);
+    expect(p.trim().endsWith("the face must not be visible.")).toBe(true);
     expect(p).toContain("emerald satin dress");
     expect(p).toContain("not narrower than 1:2");
     expect(p).toContain("Exactly one person");
+  });
+
+  it("back and face prompts point to the front image; no doubled full stops", () => {
+    const p = characterRefPrompt("Jade", { appearance: "Dark bob.", wardrobe: "Orange dress.", refs: { front: "f1" } }, "face");
+    expect(p.startsWith("FACE CLOSE-UP")).toBe(true);
+    expect(p).toContain("attached front reference image");
+    expect(p).not.toContain("..");
+    expect(characterRefPrompt("Jade", { refs: { front: "f1" } }, "front")).not.toContain("attached front reference");
   });
 
   it("prompts never carry quote marks, even if the profile does", () => {

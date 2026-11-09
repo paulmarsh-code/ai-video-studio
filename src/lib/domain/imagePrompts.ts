@@ -19,26 +19,46 @@ export interface CharacterProfile {
 export type RefView = "front" | "back" | "face";
 export const REF_VIEWS: RefView[] = ["front", "back", "face"];
 
-const REF_FRAMING: Record<RefView, string> = {
-  front: "Full-body front view, standing naturally, arms relaxed, facing the camera",
-  back: "Full-body back view, standing naturally, facing away from the camera, same outfit and hairstyle",
-  face: "Head-and-shoulders portrait, facing the camera, neutral expression",
+// The view comes first and is repeated last, so a long description can't bury it.
+const REF_VIEW: Record<RefView, { title: string; framing: string; reminder: string }> = {
+  front: {
+    title: "FRONT VIEW",
+    framing: "Full body, head to toe, standing naturally, arms relaxed, facing the camera.",
+    reminder: "Front view: full body, facing the camera.",
+  },
+  back: {
+    title: "BACK VIEW",
+    framing: "Full body, head to toe, seen from directly behind, facing away from the camera. The face is not visible. Show the back of the hair, the back of the outfit, and how the bag and shoes look from behind.",
+    reminder: "Back view only: the person faces away from the camera and the face must not be visible.",
+  },
+  face: {
+    title: "FACE CLOSE-UP",
+    framing: "Head and shoulders only, facing the camera straight on, neutral relaxed expression, eyes to camera. Face fills most of the frame.",
+    reminder: "Face close-up: head and shoulders only, not full body.",
+  },
 };
 
 /** Minimum width ÷ height for character reference images (narrower images were rejected by image models). */
 export const MIN_REF_ASPECT = 0.5;
 
+/** End a user-written sentence with exactly one full stop. */
+function sentence(text: string): string {
+  const t = stripQuotes(text).trim();
+  return /[.!?]$/.test(t) ? t : `${t}.`;
+}
+
 export function characterRefPrompt(name: string, profile: CharacterProfile, view: RefView, style = "photorealistic"): string {
+  const v = REF_VIEW[view];
+  const hasFront = view !== "front" && !!profile.refs?.front;
+  const styleWord = style.charAt(0).toUpperCase() + style.slice(1);
   return [
-    `${style.charAt(0).toUpperCase() + style.slice(1)} character reference image of ${name}.`,
-    profile.appearance ? `${name}: ${stripQuotes(profile.appearance)}.` : "",
-    profile.wardrobe ? `Wearing ${stripQuotes(profile.wardrobe)}.` : "",
-    `${REF_FRAMING[view]}.`,
-    view !== "front" && profile.refs?.front ? "Same person as the attached front reference: identical face, hair and clothes." : "",
-    "Plain light-grey studio background, soft even lighting, sharp focus.",
-    "Portrait orientation, 2:3 aspect ratio (not narrower than 1:2).",
-    "Exactly one person. No text, no logos, no watermark.",
-  ].filter(Boolean).join(" ");
+    `${v.title}: ${styleWord} character reference image of ${name}. ${v.framing}`,
+    hasFront ? `Use the attached front reference image: this is the same person, with identical face, hair, outfit, bag and shoes. Change only the camera view.` : "",
+    profile.appearance ? `Appearance: ${sentence(profile.appearance)}` : "",
+    profile.wardrobe ? `Outfit: ${sentence(profile.wardrobe)}` : "",
+    "Plain light-grey studio background, soft even lighting, sharp focus. Portrait orientation, 2:3 aspect ratio (not narrower than 1:2). Exactly one person. No text, no logos, no watermark.",
+    `Reminder: ${v.reminder}`,
+  ].filter(Boolean).join("\n\n");
 }
 
 export function venueViewPrompt(venueName: string, description: string, viewName: string, genre: Genre = "neutral", style = "photorealistic"): string {
