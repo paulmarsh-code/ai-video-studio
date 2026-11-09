@@ -26,6 +26,8 @@ export interface ImageSlotProps {
   onAttach: (assetId: string) => Promise<Result>;
   /** Result view (images made by Create): just the image and "Need to change something?". */
   simple?: boolean;
+  /** Hide the per-image change link (the page has one change control for all images). */
+  noChange?: boolean;
 }
 
 function imageAspect(file: File): Promise<number> {
@@ -139,7 +141,7 @@ export function ImageSlot(p: ImageSlotProps) {
           </button>
         )}
       </div>}
-      {p.assetId && (
+      {p.assetId && !p.noChange && (
         <div className="mt-2 text-xs">
           <button type="button" className="text-blue-700 underline" onClick={() => setChangeOpen((o) => !o)} data-testid={`change-open-${testId}`}>
             {changeOpen ? "Close" : p.simple ? "Fix just this image" : "Not right? Ask for a change"}

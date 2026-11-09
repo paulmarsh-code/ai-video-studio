@@ -68,6 +68,7 @@ export default async function CharactersPage({ params, searchParams }: { params:
                     <ImageSlot
                       key={v}
                       simple
+                      noChange
                       label={VIEW_LABEL[v]}
                       projectId={id}
                       baseCode={`${code}_${v.toUpperCase()}`}
