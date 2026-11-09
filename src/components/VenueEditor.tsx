@@ -1,12 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { approveVenueAction, saveVenueAction, setVenueViewImageAction } from "@/app/studioActions";
 import { uploadBlob } from "@/lib/clientUpload";
 import type { VenueView } from "@/lib/studioRepo";
 import { VENUE_SHEET, venueDescribePrompt, venueFillFromReply, venueSheetRequest } from "@/lib/domain/describe";
 import { StartFromPanel } from "./StartFromPanel";
+import { ActionButton, DoneBadge } from "./ActionButton";
 
 // Directions are as seen from the main viewpoint (where scenes here usually start).
 const DIRECTIONS = [
@@ -26,7 +27,6 @@ export function VenueEditor({ venue, projectId, baseCode, canDescribe }: { proje
   const initial = { name: venue.name, description: venue.description, setting: (venue.setting === "exterior" ? "exterior" : "interior") as "interior" | "exterior", views: venue.views.map((v) => ({ name: v.name, directionDeg: v.directionDeg })) };
   const [f, setF] = useState(initial);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [pending, start] = useTransition();
   const dirty = JSON.stringify(f) !== JSON.stringify(initial);
   const field = "mt-1 w-full rounded border border-neutral-300 px-2 py-1 text-sm";
 
@@ -60,16 +60,18 @@ export function VenueEditor({ venue, projectId, baseCode, canDescribe }: { proje
     };
   };
 
-  const save = () => start(async () => {
+  const save = async () => {
     const r = await saveVenueAction(venue.id, f);
     setMsg(r.ok ? { ok: true, text: "Saved. The venue is back to draft until you approve it." } : { ok: false, text: r.error });
     router.refresh();
-  });
-  const approve = () => start(async () => {
+    return r;
+  };
+  const approve = async () => {
     const r = await approveVenueAction(venue.id);
     setMsg(r.ok ? { ok: true, text: "Venue approved." } : { ok: false, text: r.error });
     router.refresh();
-  });
+    return r;
+  };
 
   return (
     <div className="space-y-3 rounded-xl border border-neutral-200 bg-white p-4">
@@ -114,8 +116,10 @@ export function VenueEditor({ venue, projectId, baseCode, canDescribe }: { proje
         <button type="button" className="mt-2 text-sm text-blue-700 underline" onClick={() => setF({ ...f, views: [...f.views, { name: "", directionDeg: 45 }] })}>Add a view</button>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" disabled={!dirty || pending} onClick={save} className="rounded-md bg-blue-700 px-3 py-1 text-sm text-white disabled:opacity-50">Save</button>
-        <button type="button" disabled={dirty || pending || venue.status === "approved"} onClick={approve} className="rounded-md bg-green-700 px-3 py-1 text-sm text-white disabled:opacity-50">Approve venue</button>
+        <ActionButton label="Save" busyLabel="Saving…" doneLabel="Saved" disabled={!dirty} onAction={save} resetKey={f} />
+        {venue.status === "approved" && !dirty ? <DoneBadge text="Venue approved" /> : (
+          <ActionButton variant="approve" label="Approve venue" busyLabel="Approving…" doneLabel="Venue approved" disabled={dirty} onAction={approve} resetKey={f} />
+        )}
         {dirty && <span className="text-xs text-amber-700">Unsaved changes</span>}
       </div>
       {msg && <p className={`text-sm ${msg.ok ? "text-green-700" : "text-red-700"}`} role="status">{msg.text}</p>}

@@ -10,6 +10,7 @@ import { MIN_REF_ASPECT } from "@/lib/domain/imagePrompts";
 import type { Pronoun } from "@/lib/domain/types";
 import { CHARACTER_SHEET, characterDescribePrompt, characterFillFromReply, characterSheetRequest } from "@/lib/domain/describe";
 import { StartFromPanel } from "./StartFromPanel";
+import { ActionButton, DoneBadge } from "./ActionButton";
 
 export function CharacterEditor({ c, projectId, baseCode, canDescribe }: { c: CharacterRecord; projectId: string; baseCode: string; canDescribe: boolean }) {
   const router = useRouter();
@@ -59,17 +60,19 @@ export function CharacterEditor({ c, projectId, baseCode, canDescribe }: { c: Ch
   };
   const field = "mt-1 w-full rounded border border-neutral-300 px-2 py-1 text-sm";
 
-  const save = () => start(async () => {
+  const save = async () => {
     const r = await saveCharacterAction(c.id, { name: f.name, pronoun: f.pronoun as Pronoun, role: f.role, invented: f.invented, consentRef: f.consentRef },
       { appearance: f.appearance, wardrobe: f.wardrobe, mannerisms: f.mannerisms, anchors: anchorsList, voiceLock: f.voiceLock });
     setMsg(r.ok ? { kind: "ok", text: `Saved as draft version ${r.value}. Approve it to use it in prompts.` } : { kind: "error", text: r.error });
     router.refresh();
-  });
-  const approve = () => start(async () => {
+    return r;
+  };
+  const approve = async () => {
     const r = await approveCharacterAction(c.id);
     setMsg(r.ok ? { kind: "ok", text: `Version ${r.value} approved. Earlier versions are kept as superseded.` } : { kind: "error", text: r.error });
     router.refresh();
-  });
+    return r;
+  };
   const attachSheet = async (sheet: File, pieces: Blob[]) => {
     await uploadBlob(projectId, `${baseCode}_SHEET`, "reference-sheet", sheet, sheet.name);
     for (const [i, view] of CHARACTER_SHEET.views.entries()) {
@@ -150,12 +153,12 @@ export function CharacterEditor({ c, projectId, baseCode, canDescribe }: { c: Ch
           <button type="button" className="text-blue-700 underline" onClick={() => setF((x) => ({ ...x, voiceLock: voiceSuggestion }))}>Use this instead</button></p>
       )}
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" disabled={!dirty || pending} onClick={save} className="rounded-md bg-blue-700 px-3 py-1 text-sm text-white disabled:opacity-50">Save draft</button>
+        <ActionButton label="Save draft" busyLabel="Saving…" doneLabel="Saved" disabled={!dirty || pending} onAction={save} resetKey={f} />
         {c.draft ? (
-          <button type="button" disabled={dirty || pending || problems.length > 0} onClick={approve}
-            title={dirty ? "Save first" : problems.join(" ")} className="rounded-md bg-green-700 px-3 py-1 text-sm text-white disabled:opacity-50">
-            Approve v{c.draft.version}
-          </button>
+          <ActionButton variant="approve" label={`Approve v${c.draft.version}`} busyLabel="Approving…" doneLabel={`v${c.draft.version} approved`}
+            disabled={dirty || pending || problems.length > 0} title={dirty ? "Save first" : problems.join(" ")} onAction={approve} resetKey={c.draft.id} />
+        ) : c.approved && !dirty && msg?.text.startsWith("Version") ? (
+          <DoneBadge text={`v${c.approved.version} approved`} />
         ) : (
           !dirty && <span className="text-xs text-neutral-500">Approved. Saving a change starts v{(c.versions[0]?.version ?? 0) + 1} as a draft.</span>
         )}

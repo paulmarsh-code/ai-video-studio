@@ -10,22 +10,24 @@ export function AddCharacterForm({ projectId }: { projectId: string }) {
   const [name, setName] = useState("");
   const [pronoun, setPronoun] = useState<Pronoun>("they");
   const [error, setError] = useState("");
+  const [added, setAdded] = useState("");
   const [pending, start] = useTransition();
   return (
     <form className="flex flex-wrap items-end gap-2" onSubmit={(e) => {
       e.preventDefault();
       start(async () => {
         const r = await addCharacterAction(projectId, name, pronoun);
-        if (r.ok) { setName(""); setError(""); router.refresh(); } else setError(r.error);
+        if (r.ok) { setAdded(name.trim()); setName(""); setError(""); router.refresh(); } else setError(r.error);
       });
     }}>
-      <label className="text-sm">New character name<input className="mt-1 block rounded border border-neutral-300 px-2 py-1" value={name} onChange={(e) => setName(e.target.value)} /></label>
+      <label className="text-sm">New character name<input className="mt-1 block rounded border border-neutral-300 px-2 py-1" value={name} onChange={(e) => { setName(e.target.value); setAdded(""); }} /></label>
       <label className="text-sm">Pronoun
         <select className="mt-1 block rounded border border-neutral-300 px-2 py-1" value={pronoun} onChange={(e) => setPronoun(e.target.value as Pronoun)}>
           <option value="she">she</option><option value="he">he</option><option value="they">they</option>
         </select>
       </label>
-      <button disabled={pending || !name.trim()} className="rounded-md bg-blue-700 px-3 py-1.5 text-sm text-white disabled:opacity-50">Add character</button>
+      <button disabled={pending || !name.trim()} className="rounded-md bg-blue-700 px-3 py-1.5 text-sm text-white disabled:opacity-50">{pending ? "Adding…" : "Add character"}</button>
+      {added && <span className="rounded-md border border-green-600 bg-green-50 px-3 py-1 text-sm text-green-800" role="status">✓ {added} added below</span>}
       {error && <span className="text-sm text-red-700">{error}</span>}
     </form>
   );
@@ -45,7 +47,7 @@ export function AddVenueForm({ projectId }: { projectId: string }) {
       });
     }}>
       <label className="text-sm">New venue name<input className="mt-1 block rounded border border-neutral-300 px-2 py-1" value={name} onChange={(e) => setName(e.target.value)} /></label>
-      <button disabled={pending || !name.trim()} className="rounded-md bg-blue-700 px-3 py-1.5 text-sm text-white disabled:opacity-50">Add venue</button>
+      <button disabled={pending || !name.trim()} className="rounded-md bg-blue-700 px-3 py-1.5 text-sm text-white disabled:opacity-50">{pending ? "Adding…" : "Add venue"}</button>
       {error && <span className="text-sm text-red-700">{error}</span>}
     </form>
   );

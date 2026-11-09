@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { addPanelAction, approvePanelAction, deletePanelAction, movePanelAction, updatePanelAction } from "@/app/studioActions";
 import { countWords, deriveDuration } from "@/lib/domain/duration";
 import { hasQuotes } from "@/lib/domain/text";
+import { ActionButton, DoneBadge } from "./ActionButton";
 
 export interface PanelEditorProps {
   panel?: { id: string; code: string; description: string; emotion: string; speakerId?: string; line?: string; durationSec: number; status: string; version: number; hasImage: boolean };
@@ -29,12 +30,27 @@ export function PanelEditor({ panel, sceneId, cast, first, last, suggestedCode }
   const field = "mt-1 w-full rounded border border-neutral-300 px-2 py-1 text-sm";
   const input = { code: f.code, description: f.description, emotion: f.emotion, speakerId: f.speakerId || undefined, line: f.line, durationSec: Number(f.durationSec) };
 
-  const act = (fn: () => Promise<{ ok: true; value?: unknown } | { ok: false; error: string }>, okText: (v: unknown) => string) => start(async () => {
+  // After a save the server may adjust values (e.g. clip length from the new line): reload the form.
+  const [lastVersion, setLastVersion] = useState(panel?.version);
+  if (panel && panel.version !== lastVersion) {
+    setLastVersion(panel.version);
+    setF(initial);
+  }
+
+  // When the suggested code for a new panel moves on (after adding one), start the form afresh.
+  const [lastSuggested, setLastSuggested] = useState(suggestedCode);
+  if (!panel && suggestedCode !== lastSuggested) {
+    setLastSuggested(suggestedCode);
+    setF({ ...initial, code: suggestedCode ?? "" });
+  }
+
+  const call = async (fn: () => Promise<{ ok: true; value?: unknown } | { ok: false; error: string }>, okText: (v: unknown) => string) => {
     const r = await fn();
     setMsg(r.ok ? { ok: true, text: okText(r.value) } : { ok: false, text: r.error });
-    if (r.ok && !panel) setF(initial);
     router.refresh();
-  });
+    return r;
+  };
+  const act = (fn: Parameters<typeof call>[0], okText: Parameters<typeof call>[1]) => start(async () => { await call(fn, okText); });
 
   return (
     <div className="space-y-2">
@@ -70,14 +86,16 @@ export function PanelEditor({ panel, sceneId, cast, first, last, suggestedCode }
       <div className="flex flex-wrap items-center gap-2">
         {panel ? (
           <>
-            <button type="button" disabled={!dirty || pending} className="rounded-md bg-blue-700 px-3 py-1 text-sm text-white disabled:opacity-50"
-              onClick={() => act(() => updatePanelAction(panel.id, input), (v) => {
+            <ActionButton label="Save" busyLabel="Saving…" doneLabel="Saved" disabled={!dirty || pending} resetKey={f}
+              onAction={() => call(() => updatePanelAction(panel.id, input), (v) => {
                 const c = v as { dialogueChanged: boolean; animaticMarked: boolean };
                 return c.dialogueChanged ? `Saved. Shot dialogue updated${c.animaticMarked ? "; animatic flagged for re-check" : ""}.` : "Saved.";
-              })}>Save</button>
-            <button type="button" disabled={dirty || pending || panel.status === "approved" || !panel.hasImage} title={panel.hasImage ? "" : "Upload the panel image first"}
-              className="rounded-md bg-green-700 px-3 py-1 text-sm text-white disabled:opacity-50"
-              onClick={() => act(() => approvePanelAction(panel.id), () => "Panel approved.")}>Approve</button>
+              })} />
+            {panel.status === "approved" && !dirty ? <DoneBadge text="Approved" /> : (
+              <ActionButton variant="approve" label="Approve" busyLabel="Approving…" doneLabel="Approved" resetKey={f}
+                disabled={dirty || pending || !panel.hasImage} title={panel.hasImage ? "" : "Upload the panel image first"}
+                onAction={() => call(() => approvePanelAction(panel.id), () => "Panel approved.")} />
+            )}
             <button type="button" disabled={first || pending} className="rounded border border-neutral-300 px-2 py-1 text-sm disabled:opacity-40" aria-label="Move up"
               onClick={() => act(() => movePanelAction(panel.id, -1), () => "Moved up.")}>↑</button>
             <button type="button" disabled={last || pending} className="rounded border border-neutral-300 px-2 py-1 text-sm disabled:opacity-40" aria-label="Move down"
@@ -86,8 +104,8 @@ export function PanelEditor({ panel, sceneId, cast, first, last, suggestedCode }
               onClick={() => { if (window.confirm(`Delete panel ${panel.code} and its shot?`)) act(() => deletePanelAction(panel.id), () => "Deleted."); }}>Delete</button>
           </>
         ) : (
-          <button type="button" disabled={pending || !f.code.trim() || !f.description.trim()} className="rounded-md bg-blue-700 px-3 py-1 text-sm text-white disabled:opacity-50"
-            onClick={() => act(() => addPanelAction(sceneId, input), () => "Panel added. Run Design shots to choose its camera.")}>Add panel</button>
+          <ActionButton label="Add panel" busyLabel="Adding…" doneLabel="Panel added" doneForMs={2500} disabled={pending || !f.code.trim() || !f.description.trim()}
+            onAction={() => call(() => addPanelAction(sceneId, input), () => "Panel added above. Run Design shots to choose its camera.")} />
         )}
         {dirty && panel && <span className="text-xs text-amber-700">Unsaved changes</span>}
       </div>

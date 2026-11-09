@@ -5,6 +5,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { detectCuts, paddedWidth, pieceRects } from "@/lib/domain/sheet";
+import { ActionButton } from "./ActionButton";
 
 export interface SheetCutterProps {
   file: File;
@@ -13,7 +14,7 @@ export interface SheetCutterProps {
   labels: string[];
   minAspect?: number;
   busy?: boolean;
-  onCut: (pieces: Blob[]) => void;
+  onCut: (pieces: Blob[]) => Promise<{ ok: boolean }>;
 }
 
 function loadImage(url: string): Promise<HTMLImageElement> {
@@ -81,7 +82,7 @@ export function SheetCutter({ file, cols, rows, labels, minAspect, busy, onCut }
   };
 
   async function cut() {
-    if (!img) return;
+    if (!img) return { ok: false };
     setError("");
     try {
       const W = img.naturalWidth;
@@ -104,9 +105,10 @@ export function SheetCutter({ file, cols, rows, labels, minAspect, busy, onCut }
         }
         blobs.push(await toBlob(c));
       }
-      onCut(blobs);
+      return await onCut(blobs);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      return { ok: false };
     }
   }
 
@@ -141,10 +143,8 @@ export function SheetCutter({ file, cols, rows, labels, minAspect, busy, onCut }
           )))}
         </div>
       )}
-      <button type="button" disabled={!img || busy} onClick={() => void cut()} data-testid="sheet-cut"
-        className="rounded-md bg-blue-700 px-3 py-1 text-sm text-white disabled:opacity-50">
-        {busy ? "Saving…" : `Cut into ${cols * rows} and attach`}
-      </button>
+      <ActionButton label={`Cut into ${cols * rows} and attach`} busyLabel="Cutting and saving…" doneLabel={`${cols * rows} images attached`}
+        testId="sheet-cut" disabled={!img || busy} onAction={cut} resetKey={[xs, ys, file.name, file.size]} />
       {error && <p className="text-xs text-red-700" role="alert">{error}</p>}
     </div>
   );

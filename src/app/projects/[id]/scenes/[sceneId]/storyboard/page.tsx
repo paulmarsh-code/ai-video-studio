@@ -68,7 +68,7 @@ export default async function StoryboardPage({ params }: { params: Promise<{ id:
                   {recheck[p.id] && <span className="rounded bg-red-100 px-2 py-0.5 text-red-800">Animatic re-check</span>}
                 </div>
                 <PanelEditor
-                  key={`${p.id}-${p.version}-${p.order}-${p.status}-${!!p.imageAssetId}`}
+                  key={p.id}
                   sceneId={sceneId}
                   cast={cast.map((c) => ({ id: c.id, name: c.name }))}
                   first={i === 0}
@@ -95,7 +95,7 @@ export default async function StoryboardPage({ params }: { params: Promise<{ id:
 
       <div className="mt-6 rounded-xl border border-dashed border-neutral-300 p-4">
         <h2 className="mb-2 font-semibold">Add a panel</h2>
-        <PanelEditor key={`new-${n}`} sceneId={sceneId} cast={cast.map((c) => ({ id: c.id, name: c.name }))} suggestedCode={`P${n}`} />
+        <PanelEditor key="new" sceneId={sceneId} cast={cast.map((c) => ({ id: c.id, name: c.name }))} suggestedCode={`P${n}`} />
       </div>
     </div>
   );

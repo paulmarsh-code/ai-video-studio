@@ -4,7 +4,7 @@
 // uploads it here. If a GPT connection is configured (D15), a Generate button also appears.
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CopyButton } from "./CopyButton";
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -37,6 +37,12 @@ function imageAspect(file: File): Promise<number> {
 export function ImageSlot(p: ImageSlotProps) {
   const router = useRouter();
   const [busy, setBusy] = useState<"" | "upload" | "generate">("");
+  const [justDone, setJustDone] = useState<"" | "upload" | "generate">("");
+  useEffect(() => {
+    if (!justDone) return;
+    const t = setTimeout(() => setJustDone(""), 3000);
+    return () => clearTimeout(t);
+  }, [justDone]);
   const [error, setError] = useState("");
   const [showPrompt, setShowPrompt] = useState(false);
   const testId = p.baseCode.toLowerCase();
@@ -44,6 +50,7 @@ export function ImageSlot(p: ImageSlotProps) {
   async function finish(id: string) {
     const r = await p.onAttach(id);
     if (!r.ok) throw new Error(r.error);
+    setJustDone(busy || "upload");
     router.refresh();
   }
 
@@ -108,14 +115,14 @@ export function ImageSlot(p: ImageSlotProps) {
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <CopyButton text={p.prompt} label="Copy GPT prompt" />
         <button type="button" className="text-xs text-blue-700 underline" onClick={() => setShowPrompt((s) => !s)}>{showPrompt ? "Hide prompt" : "Show prompt"}</button>
-        <label className={`cursor-pointer rounded-md px-3 py-1 text-sm text-white ${busy ? "bg-neutral-400" : "bg-blue-700 hover:bg-blue-800"}`}>
-          {busy === "upload" ? "Uploading…" : p.assetId ? "Replace image" : "Upload image"}
+        <label className={`cursor-pointer rounded-md px-3 py-1 text-sm ${justDone === "upload" ? "border border-green-600 bg-green-50 text-green-800" : busy ? "bg-neutral-400 text-white" : "bg-blue-700 text-white hover:bg-blue-800"}`}>
+          {busy === "upload" ? "Uploading…" : justDone === "upload" ? "✓ Uploaded" : p.assetId ? "Replace image" : "Upload image"}
           <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" disabled={!!busy} data-testid={`upload-${testId}`}
             onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void upload(f); }} />
         </label>
         {p.canGenerate && (
           <button type="button" disabled={!!busy} onClick={() => void generate()} className="rounded-md border border-blue-700 px-3 py-1 text-sm text-blue-700 disabled:opacity-50">
-            {busy === "generate" ? "Generating…" : "Generate with GPT"}
+            {busy === "generate" ? "Generating…" : justDone === "generate" ? "✓ Generated" : "Generate with GPT"}
           </button>
         )}
       </div>

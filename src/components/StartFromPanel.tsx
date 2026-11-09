@@ -7,6 +7,7 @@
 import { useState, type ReactNode } from "react";
 import { CopyButton } from "./CopyButton";
 import { SheetCutter } from "./SheetCutter";
+import { ActionButton } from "./ActionButton";
 import type { DescribeSource } from "@/lib/domain/describe";
 
 export interface StartFromPanelProps {
@@ -45,14 +46,15 @@ export function StartFromPanel(p: StartFromPanelProps) {
   const [cutting, setCutting] = useState(false);
 
   async function cutDone(pieces: Blob[]) {
-    if (!p.sheet || !sheetFile) return;
+    if (!p.sheet || !sheetFile) return { ok: false };
     setCutting(true);
     try {
       const r = await p.sheet.onPieces(sheetFile, pieces);
       setReport(r);
-      if (r.ok) setSheetFile(undefined);
+      return r;
     } catch (e) {
       setReport({ ok: false, text: e instanceof Error ? e.message : String(e) });
+      return { ok: false };
     } finally {
       setCutting(false);
     }
@@ -75,8 +77,10 @@ export function StartFromPanel(p: StartFromPanelProps) {
   }
 
   function apply(text: string) {
-    if (!text.trim()) { setReport({ ok: false, text: "Paste ChatGPT's reply first." }); return; }
-    setReport(p.onReply(text));
+    if (!text.trim()) { const r = { ok: false, text: "Paste ChatGPT's reply first." }; setReport(r); return r; }
+    const r = p.onReply(text);
+    setReport(r);
+    return r;
   }
 
   async function describe() {
@@ -87,9 +91,10 @@ export function StartFromPanel(p: StartFromPanelProps) {
       const body = (await res.json()) as { text?: string; error?: string };
       if (!res.ok || !body.text) throw new Error(body.error ?? "Describe failed");
       setReply(body.text);
-      apply(body.text);
+      return apply(body.text);
     } catch (e) {
       setReport({ ok: false, text: e instanceof Error ? e.message : String(e) });
+      return { ok: false };
     } finally {
       setBusy(false);
     }
@@ -132,15 +137,17 @@ export function StartFromPanel(p: StartFromPanelProps) {
             <span>{mode === "image" ? "2." : "1."} Copy this prompt into a new ChatGPT chat{mode === "image" ? " and attach your picture" : ""}:</span>
             <CopyButton text={prompt} label="Copy describe prompt" />
             {p.canDescribe && (
-              <button type="button" disabled={busy || (mode === "image" && !sourceId) || (mode === "idea" && !idea.trim())} onClick={() => void describe()}
-                className="rounded-md border border-blue-700 px-3 py-1 text-sm text-blue-700 disabled:opacity-50">{busy ? "Describing…" : "Or: describe with GPT"}</button>
+              <ActionButton variant="secondary" label="Or: describe with GPT" busyLabel="Describing…" doneLabel="Described"
+                disabled={busy || (mode === "image" && !sourceId) || (mode === "idea" && !idea.trim())}
+                onAction={describe} resetKey={[mode, idea, sourceId]} />
             )}
           </div>
           <details className="mt-1 text-xs"><summary className="cursor-pointer text-blue-700">See the prompt</summary><pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-neutral-50 p-2">{prompt}</pre></details>
           <label className="mt-2 block">{mode === "image" ? "3." : "2."} Paste ChatGPT&apos;s reply here
             <textarea className="mt-1 w-full rounded border border-neutral-300 px-2 py-1 font-mono text-xs" rows={5} value={reply} onChange={(e) => setReply(e.target.value)} data-testid="start-reply" />
           </label>
-          <button type="button" onClick={() => apply(reply)} className="mt-1 rounded-md bg-blue-700 px-3 py-1 text-sm text-white" data-testid="start-fill">Fill in the fields</button>
+          <div className="mt-1"><ActionButton label="Fill in the fields" doneLabel="Fields filled in" testId="start-fill" disabled={locked}
+            onAction={() => apply(reply)} resetKey={reply} /></div>
           {p.sheet && (
             <div className="mt-3 space-y-2 border-t border-neutral-200 pt-3">
               <p>{mode === "image" ? "4." : "3."} Upload the reference sheet ChatGPT made ({p.sheet.cols * p.sheet.rows} views in one image). The app cuts it into {p.sheet.labels.join(", ")}.</p>
@@ -156,7 +163,7 @@ export function StartFromPanel(p: StartFromPanelProps) {
                 </label>
               )}
               {sheetFile && !p.sheet.blockedReason && (
-                <SheetCutter file={sheetFile} cols={p.sheet.cols} rows={p.sheet.rows} labels={p.sheet.labels} minAspect={p.sheet.minAspect} busy={cutting} onCut={(b) => void cutDone(b)} />
+                <SheetCutter file={sheetFile} cols={p.sheet.cols} rows={p.sheet.rows} labels={p.sheet.labels} minAspect={p.sheet.minAspect} busy={cutting} onCut={cutDone} />
               )}
             </div>
           )}

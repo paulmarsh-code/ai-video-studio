@@ -5,11 +5,12 @@
 // and each line can have an uploaded recording. No speech service is involved.
 // Preview audio is never sent to Kling (spec v1.3 rule).
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { saveAnimaticAction } from "@/app/actions";
 import { countWords, spokenSeconds } from "@/lib/domain/duration";
 import type { CastMember } from "@/lib/domain/types";
 import type { AnimaticTimeline, PanelRow } from "@/lib/repo";
+import { ActionButton } from "./ActionButton";
 
 const PRE_GAP = 0.3;
 
@@ -33,7 +34,6 @@ export function AnimaticPlayer(props: {
   const [playing, setPlaying] = useState(false);
   const [subtitles, setSubtitles] = useState(true);
   const [status, setStatus] = useState("");
-  const [pending, start] = useTransition();
   const audioRefs = useRef<Record<string, HTMLAudioElement | null>>({});
   const last = useRef<number | null>(null);
 
@@ -222,11 +222,8 @@ export function AnimaticPlayer(props: {
           );
         })}
         <div className="flex flex-wrap items-center gap-3">
-          <button type="button" disabled={!sceneDirty || pending}
-            onClick={() => start(async () => { const r = await saveAnimaticAction(props.sceneId, timeline); setSaved(timeline); setSavedVersion(r.version); setStatus(`Animatic saved as version ${r.version}.`); })}
-            className="rounded-md bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-50">
-            Save animatic (new version)
-          </button>
+          <ActionButton label="Save animatic (new version)" busyLabel="Saving…" doneLabel={`Saved as v${savedVersion}`} disabled={!sceneDirty} resetKey={timeline}
+            onAction={async () => { const r = await saveAnimaticAction(props.sceneId, timeline); setSaved(timeline); setSavedVersion(r.version); setStatus(`Animatic saved as version ${r.version}.`); }} />
           <span className="text-sm text-neutral-600">{savedVersion ? `Current: v${savedVersion}` : "Not saved yet"}</span>
         </div>
         {status && <p className="text-sm text-green-700">{status}</p>}

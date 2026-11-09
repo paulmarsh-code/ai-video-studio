@@ -3,7 +3,7 @@
 // Shot Director (Stage 6) with live checks (Stage 8) and the composed prompt (Stage 7).
 // The rules engine runs in the browser as you type; saving is server-side.
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import { addShotToLibraryAction, savePromptAction, saveShotAction } from "@/app/actions";
 import { composeKlingPrompt, mainSubjectId } from "@/lib/domain/composer";
 import { deriveDuration } from "@/lib/domain/duration";
@@ -13,6 +13,7 @@ import { validatePrompt, validateShot } from "@/lib/domain/validator";
 import { CopyButton } from "./CopyButton";
 import { CameraView } from "./CameraView";
 import { FindingList } from "./FindingList";
+import { ActionButton } from "./ActionButton";
 
 type Presence = "visible" | "offscreen" | "excluded" | "absent";
 
@@ -48,7 +49,6 @@ export function ShotDirector(props: {
   const [spec, setSpec] = useState<ShotSpec>(props.initial);
   const [saved, setSaved] = useState<ShotSpec>(props.initial);
   const [status, setStatus] = useState<string>("");
-  const [pending, start] = useTransition();
   const set = <K extends keyof ShotSpec>(k: K, v: ShotSpec[K]) => setSpec((s) => ({ ...s, [k]: v }));
 
   const composed = useMemo(() => composeKlingPrompt(spec, cast, plan, undefined, props.genre), [spec, cast, plan, props.genre]);
@@ -189,22 +189,10 @@ export function ShotDirector(props: {
         </label>
 
         <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            disabled={pending || !dirty}
-            onClick={() => start(async () => { await saveShotAction(props.shotId, spec); setSaved(spec); setStatus("Shot saved."); })}
-            className="rounded-md bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-50"
-          >
-            Save shot
-          </button>
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => start(async () => { await addShotToLibraryAction(props.shotId, `${spec.code} set-up`); setStatus("Shot set-up saved to your library."); })}
-            className="rounded-md border border-neutral-300 px-4 py-2 text-sm"
-          >
-            Save set-up to library
-          </button>
+          <ActionButton label="Save shot" busyLabel="Saving…" doneLabel="Shot saved" disabled={!dirty} resetKey={spec}
+            onAction={async () => { await saveShotAction(props.shotId, spec); setSaved(spec); setStatus("Shot saved."); }} />
+          <ActionButton variant="secondary" label="Save set-up to library" busyLabel="Saving…" doneLabel="In your library" disabled={false} resetKey={spec}
+            onAction={async () => { await addShotToLibraryAction(props.shotId, `${spec.code} set-up`); setStatus("Shot set-up saved to your library."); }} />
           {status && <span className="text-sm text-green-700">{status}</span>}
         </div>
       </section>
@@ -222,15 +210,9 @@ export function ShotDirector(props: {
             <h2 className="text-lg font-semibold">Kling prompt</h2>
             <div className="flex gap-2">
               <CopyButton text={composed.text} />
-              <button
-                type="button"
-                disabled={pending || dirty || hasErrors}
-                title={dirty ? "Save the shot first" : hasErrors ? "Fix errors first" : ""}
-                onClick={() => start(async () => { const r = await savePromptAction(props.shotId, props.projectId); setStatus(`Prompt version v${r.version} recorded.`); })}
-                className="rounded-md border border-neutral-300 bg-white px-3 py-1 text-sm hover:bg-neutral-100 disabled:opacity-50"
-              >
-                Record prompt version
-              </button>
+              <ActionButton variant="secondary" label="Record prompt version" busyLabel="Recording…" doneLabel="Version recorded" resetKey={composed.text}
+                disabled={dirty || hasErrors} title={dirty ? "Save the shot first" : hasErrors ? "Fix errors first" : ""}
+                onAction={async () => { const r = await savePromptAction(props.shotId, props.projectId); setStatus(`Prompt version v${r.version} recorded.`); }} />
             </div>
           </div>
           <p className="mt-1 text-xs text-neutral-600">

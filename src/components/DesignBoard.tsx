@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { applyShotDesignAction } from "@/app/actions";
 import type { SceneDesign, ShotInput } from "@/lib/domain/director";
 import type { CastMember, GeometryPlanData } from "@/lib/domain/types";
 import { CameraView } from "./CameraView";
+import { ActionButton } from "./ActionButton";
 
 const MOMENT_LABEL = {
   establishing: "Establishing",
@@ -26,7 +27,6 @@ export function DesignBoard(props: {
   const { design, plan, cast } = props;
   const [picked, setPicked] = useState<Record<string, number>>(() => Object.fromEntries(design.shots.map((s) => [s.shotId, 0])));
   const [status, setStatus] = useState("");
-  const [pending, start] = useTransition();
   const name = (id: string) => cast.find((c) => c.id === id)?.name ?? id;
   const ready = design.shots.every((s) => s.options.length > 0);
 
@@ -88,20 +88,12 @@ export function DesignBoard(props: {
       )}
 
       <div className="sticky bottom-0 flex flex-wrap items-center gap-3 border-t border-neutral-200 bg-neutral-50 py-3">
-        <button
-          type="button"
-          disabled={!ready || pending}
-          onClick={() =>
-            start(async () => {
-              const choices = design.shots.map((s) => ({ shotId: s.shotId, shotCode: s.shotCode, option: s.options[picked[s.shotId]] }));
-              const r = await applyShotDesignAction(props.sceneId, choices, design.lineOfAction);
-              setStatus(`Applied as floor plan v${r.version}. Every shot now uses its chosen camera.`);
-            })
-          }
-          className="rounded-md bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-50"
-        >
-          Apply these cameras to the floor plan
-        </button>
+        <ActionButton label="Apply these cameras to the floor plan" busyLabel="Applying…" doneLabel="Cameras applied" disabled={!ready} resetKey={picked}
+          onAction={async () => {
+            const choices = design.shots.map((s) => ({ shotId: s.shotId, shotCode: s.shotCode, option: s.options[picked[s.shotId]] }));
+            const r = await applyShotDesignAction(props.sceneId, choices, design.lineOfAction);
+            setStatus(`Applied as floor plan v${r.version}. Every shot now uses its chosen camera.`);
+          }} />
         {status && (
           <span className="text-sm text-green-700">
             {status} <Link className="underline" href={`/projects/${props.projectId}/scenes/${props.sceneId}/plan`}>Open floor plan</Link>

@@ -5,7 +5,7 @@
 // camera live: who is frame-left/centre/right, the soft foreground, the background view,
 // and 180° line warnings. Characters are only ever moved by the user.
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import { Arrow, Circle, Group, Layer, Line, Rect, Stage, Text, Wedge } from "react-konva";
 import { savePlanAction, addPlanToLibraryAction } from "@/app/actions";
 import { checkLineOfAction, describeFrame, PRESET_FOV, readCamera } from "@/lib/domain/geometry";
@@ -13,6 +13,7 @@ import { planImpact, type ShotRef } from "@/lib/domain/impact";
 import type { CameraPreset, CastMember, GeometryPlanData, Point } from "@/lib/domain/types";
 import { CameraView } from "./CameraView";
 import { FindingList } from "./FindingList";
+import { ActionButton } from "./ActionButton";
 
 const SCALE = 66; // pixels per metre
 const PAD = 30;
@@ -33,7 +34,6 @@ export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; 
     setPlan(history[history.length - 1]);
     setHistory((h) => h.slice(0, -1));
   };
-  const [pending, start] = useTransition();
 
   const b = plan.bounds ?? { minX: -5, maxX: 5, minY: 0, maxY: 10 };
   const width = (b.maxX - b.minX) * SCALE + PAD * 2;
@@ -237,17 +237,11 @@ export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; 
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <button type="button" disabled={!dirty || pending}
-            onClick={() => start(async () => { const r = await savePlanAction(props.sceneId, plan); setSaved(plan); setSavedVersion(r.version); setStatus(`Saved as plan version ${r.version}. Earlier versions are kept.`); })}
-            className="rounded-md bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-50">
-            Save plan (new version)
-          </button>
-          <button type="button" disabled={dirty || pending}
+          <ActionButton label="Save plan (new version)" busyLabel="Saving…" doneLabel={`Saved as v${savedVersion}`} disabled={!dirty} resetKey={plan}
+            onAction={async () => { const r = await savePlanAction(props.sceneId, plan); setSaved(plan); setSavedVersion(r.version); setStatus(`Saved as plan version ${r.version}. Earlier versions are kept.`); }} />
+          <ActionButton variant="secondary" label="Save to library" busyLabel="Saving…" doneLabel="In your library" disabled={dirty} resetKey={plan}
             title={dirty ? "Save the plan first" : ""}
-            onClick={() => start(async () => { await addPlanToLibraryAction(props.sceneId, "Venue and blocking plan"); setStatus("Plan saved to your library."); })}
-            className="rounded-md border border-neutral-300 px-4 py-2 text-sm disabled:opacity-50">
-            Save to library
-          </button>
+            onAction={async () => { await addPlanToLibraryAction(props.sceneId, "Venue and blocking plan"); setStatus("Plan saved to your library."); }} />
           <span className="text-sm text-neutral-600">Current: v{savedVersion}{dirty ? " (unsaved changes)" : ""}</span>
           {status && <span className="text-sm text-green-700">{status}</span>}
         </div>
