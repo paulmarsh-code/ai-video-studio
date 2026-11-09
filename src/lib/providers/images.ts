@@ -9,7 +9,42 @@
 // The same interfaces can be backed by an MCP connector later.
 // The app never claims an image was generated unless a provider actually returned one.
 
+import sharp from "sharp";
+import { Agent, setGlobalDispatcher } from "undici";
+
 const baseUrl = () => (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
+
+// Image requests with several reference pictures can take minutes. Node's built-in fetch
+// gives up after 5 minutes of silence; allow 10 (D18b).
+setGlobalDispatcher(new Agent({ headersTimeout: 600_000, bodyTimeout: 600_000, connectTimeout: 30_000 }));
+
+/**
+ * Reference pictures are only a guide for the model, so send them small: longest side 1024 px,
+ * JPEG. A full-size PNG board can be several MB; five of them made requests fail mid-upload.
+ */
+export async function shrinkRef<T extends { data: Buffer; mime: string; name?: string }>(r: T): Promise<T> {
+  try {
+    const data = await sharp(r.data).rotate().resize({ width: 1024, height: 1024, fit: "inside", withoutEnlargement: true }).flatten({ background: "#ffffff" }).jpeg({ quality: 85 }).toBuffer();
+    return data.length < r.data.length ? { ...r, data, mime: "image/jpeg", ...(r.name ? { name: r.name.replace(/\.\w+$/, "") + ".jpg" } : {}) } : r;
+  } catch {
+    return r; // not an image sharp can read: send it as it is
+  }
+}
+
+/** fetch with one retry when the connection itself fails (not when OpenAI answers with an error). */
+async function fetchWithRetry(url: string, init: () => RequestInit): Promise<Response> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fetch(url, init());
+    } catch (e) {
+      if (attempt >= 2) {
+        const cause = (e as { cause?: { code?: string; message?: string } }).cause;
+        throw new Error(`Couldn't reach OpenAI: ${(e as Error).message}${cause ? ` (${cause.code ?? cause.message})` : ""}`);
+      }
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+  }
+}
 
 export interface GeneratedImage {
   data: Buffer;
@@ -33,19 +68,22 @@ export function openAIProvider(apiKey: string, model = process.env.OPENAI_IMAGE_
     async generate(prompt, refs, size) {
       let res: Response;
       if (refs.length) {
-        const form = new FormData();
-        form.set("model", model);
-        form.set("prompt", prompt);
-        form.set("size", SIZES[size]);
-        form.set("quality", quality);
-        for (const r of refs) form.append("image[]", new Blob([new Uint8Array(r.data)], { type: r.mime }), r.name);
-        res = await fetch(`${baseUrl()}/images/edits`, { method: "POST", headers: { Authorization: `Bearer ${apiKey}` }, body: form });
+        const small = await Promise.all(refs.map(shrinkRef));
+        res = await fetchWithRetry(`${baseUrl()}/images/edits`, () => {
+          const form = new FormData();
+          form.set("model", model);
+          form.set("prompt", prompt);
+          form.set("size", SIZES[size]);
+          form.set("quality", quality);
+          for (const r of small) form.append("image[]", new Blob([new Uint8Array(r.data)], { type: r.mime }), r.name);
+          return { method: "POST", headers: { Authorization: `Bearer ${apiKey}` }, body: form };
+        });
       } else {
-        res = await fetch(`${baseUrl()}/images/generations`, {
+        res = await fetchWithRetry(`${baseUrl()}/images/generations`, () => ({
           method: "POST",
           headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
           body: JSON.stringify({ model, prompt, size: SIZES[size], quality }),
-        });
+        }));
       }
       if (!res.ok) throw new Error(`OpenAI image request failed (${res.status}): ${(await res.text()).slice(0, 300)}`);
       const body = (await res.json()) as { data?: { b64_json?: string }[] };
@@ -78,12 +116,12 @@ export function openAITextProvider(apiKey: string, model = process.env.OPENAI_TE
     label: `OpenAI ${model}`,
     async describe(prompt, images = []) {
       const content: unknown[] = [{ type: "text", text: prompt }];
-      for (const image of images) content.push({ type: "image_url", image_url: { url: `data:${image.mime};base64,${image.data.toString("base64")}` } });
-      const res = await fetch(`${baseUrl()}/chat/completions`, {
+      for (const image of await Promise.all(images.map(shrinkRef))) content.push({ type: "image_url", image_url: { url: `data:${image.mime};base64,${image.data.toString("base64")}` } });
+      const res = await fetchWithRetry(`${baseUrl()}/chat/completions`, () => ({
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({ model, messages: [{ role: "user", content }] }),
-      });
+      }));
       if (!res.ok) throw new Error(`OpenAI request failed (${res.status}): ${(await res.text()).slice(0, 300)}`);
       const body = (await res.json()) as { choices?: { message?: { content?: string } }[] };
       const text = body.choices?.[0]?.message?.content;

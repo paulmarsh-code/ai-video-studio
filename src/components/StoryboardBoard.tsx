@@ -41,6 +41,15 @@ export interface StoryboardBoardProps {
   panels: BoardPanel[];
 }
 
+/** OpenAI's error, said plainly, with what to do about it. */
+export function plainReason(error: string): string {
+  if (/safety|moderation|content[_ ]policy|rejected/i.test(error)) return "GPT's safety check refused the picture request. Use \"Edit the words on a panel\" to soften strong words (swearing, rude gestures, violence), then try again.";
+  if (/\b(429|rate limit|quota|billing|insufficient)/i.test(error)) return "OpenAI says the account has hit a limit (credit or rate). Check the OpenAI billing page, wait a minute, then try again.";
+  if (/\b(timeout|timed out|ETIMEDOUT|ECONNRESET|fetch failed|socket)/i.test(error)) return "The request to OpenAI timed out. Try again.";
+  if (/\b(400)\b/.test(error)) return `OpenAI didn't accept the request: ${error.replace(/^.*?\(400\):\s*/, "").slice(0, 160)}`;
+  return `GPT said: ${error.slice(0, 200)}`;
+}
+
 async function drawPicture(p: { projectId: string; baseCode: string; prompt: string; refs: string[]; size: "portrait" | "landscape" }) {
   const res = await fetch("/api/images/generate", {
     method: "POST", headers: { "Content-Type": "application/json" },
@@ -125,6 +134,7 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
   async function drawAll() {
     setMsg(null); setFailed({});
     let done = 0, bad = 0;
+    const reasons = new Set<string>();
     for (const p of missing) {
       setProgress(`Drawing ${done + bad + 1} of ${missing.length}…`);
       setDrawing((x) => ({ ...x, [p.id]: "Drawing…" }));
@@ -135,13 +145,15 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
         done++;
       } catch (e) {
         bad++;
-        setFailed((x) => ({ ...x, [p.id]: e instanceof Error ? e.message : String(e) }));
+        const why = e instanceof Error ? e.message : String(e);
+        reasons.add(plainReason(why));
+        setFailed((x) => ({ ...x, [p.id]: why }));
       } finally {
         setDrawing((x) => { const y = { ...x }; delete y[p.id]; return y; });
       }
     }
     setProgress("");
-    setMsg(bad ? { ok: false, text: `${done} picture${done === 1 ? "" : "s"} drawn; ${bad} failed. Try again, or make ${bad === 1 ? "it" : "them"} in ChatGPT.` } : { ok: true, text: `${done} picture${done === 1 ? "" : "s"} drawn.` });
+    setMsg(bad ? { ok: false, text: `${done} picture${done === 1 ? "" : "s"} drawn; ${bad} failed. ${[...reasons].join(" ")} The reason is also shown under each panel.` } : { ok: true, text: `${done} picture${done === 1 ? "" : "s"} drawn.` });
     router.refresh();
     return bad === 0;
   }
@@ -223,7 +235,7 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
             </div>
             <p className="mt-1 text-sm">{p.line ? <><span className="font-medium">{p.speaker}:</span> {p.line}</> : <span className="text-neutral-500">Silent</span>}</p>
             <p className="mt-1 text-xs text-neutral-600">{p.description}</p>
-            {failed[p.id] && <p className="mt-1 text-xs text-red-700" role="alert">GPT couldn&apos;t draw this one: {failed[p.id]}</p>}
+            {failed[p.id] && <p className="mt-1 text-xs text-red-700" role="alert" data-testid={`board-${p.code}-failed`}>GPT couldn&apos;t draw this one. {plainReason(failed[p.id])}</p>}
 
             <div className="mt-3 space-y-2">
               {p.imageAssetId && p.status !== "approved" && (

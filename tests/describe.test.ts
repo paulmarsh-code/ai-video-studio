@@ -194,3 +194,19 @@ describe("Replies with a drawing attached", () => {
     expect(descriptionOnly("Describe them.\nStep 2: draw")).toMatch(/Do not draw anything/);
   });
 });
+
+describe("Reference pictures are sent small (D18b)", () => {
+  it("shrinks a large PNG to a JPEG no larger than 1024 px, and leaves non-images alone", async () => {
+    const sharp = (await import("sharp")).default;
+    const { shrinkRef } = await import("../src/lib/providers/images");
+    const big = await sharp({ create: { width: 1536, height: 2304, channels: 3, background: { r: 200, g: 120, b: 80 } } }).png({ compressionLevel: 0 }).toBuffer();
+    const r = await shrinkRef({ data: big, mime: "image/png", name: "jade_front.png" });
+    const meta = await sharp(r.data).metadata();
+    expect(r.mime).toBe("image/jpeg");
+    expect(r.name).toBe("jade_front.jpg");
+    expect(Math.max(meta.width!, meta.height!)).toBe(1024);
+    expect(r.data.length).toBeLessThan(big.length / 10);
+    const pdf = { data: Buffer.from("%PDF-1.4 not an image"), mime: "application/pdf", name: "consent.pdf" };
+    expect(await shrinkRef(pdf)).toBe(pdf);
+  });
+});

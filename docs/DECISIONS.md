@@ -239,3 +239,13 @@ After the story is saved, the storyboard is one screen with three steps across t
 **Need to change something?** on any picture asks two things, "What should change in this picture?" and "Anything else?", and accepts an optional reference picture. GPT redraws from the current picture, then the character and venue pictures, then the reference. By hand, it shows the change request to copy and the pictures to attach.
 
 The old per-panel editor is tucked under "Edit the words on a panel", along with "Add a panel". Rewriting from the story is offered until any panel is approved.
+
+## D18b — Sturdier GPT requests: smaller reference pictures, longer wait, one retry (2026-11-09)
+
+Paul's first real storyboard run drew 7 of 11 panels. The other 4 failed every time with "fetch failed": the connection to OpenAI dropped, so the request never got an answer. The failures matched the panels with the most people, each sending four or five full-size reference pictures.
+
+- Reference pictures are now sent at no more than 1024 px on the longest side, as JPEG, to both the image model and the text model. A full-size PNG board is several MB; the smaller version is about a tenth of that. This also cuts the input cost.
+- The server now waits up to 10 minutes for OpenAI instead of Node's default 5.
+- If the connection fails, the request is retried once. If it fails again, the error includes the network cause.
+- Failures are explained in plain words in the summary and on each panel (safety check, account limit, timeout, refused request), and logged in the terminal with the number of reference pictures.
+- `sharp` and `undici` are now direct dependencies.

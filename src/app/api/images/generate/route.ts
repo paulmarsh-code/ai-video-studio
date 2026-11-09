@@ -23,6 +23,8 @@ export async function POST(req: Request) {
     });
     return NextResponse.json(saved);
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 502 });
+    const error = e instanceof Error ? e.message : String(e);
+    console.error(`[images/generate] ${body.baseCode} (${refs.length} reference pictures): ${error}`);
+    return NextResponse.json({ error }, { status: 502 });
   }
 }
