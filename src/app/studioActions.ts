@@ -25,6 +25,15 @@ async function run<T>(fn: (db: Awaited<ReturnType<typeof getDb>>) => T): Promise
 export async function addCharacterAction(projectId: string, name: string, pronoun: Pronoun) {
   return run((db) => studio.addCharacter(db, projectId, { name, pronoun }).slug);
 }
+/** Wizard step 1: create the character (or update it when resuming) with name, pronoun, role and consent. */
+export async function upsertCharacterBasicsAction(projectId: string, characterId: string | null, basics: { name: string; pronoun: Pronoun; role: string; invented: boolean; consentRef: string }) {
+  return run((db) => {
+    const ref = characterId ? { id: characterId, slug: "" } : studio.addCharacter(db, projectId, { name: basics.name, pronoun: basics.pronoun });
+    studio.updateCharacterBasics(db, ref.id, basics);
+    const c = studio.listCharacters(db, projectId).find((x) => x.id === ref.id)!;
+    return { id: c.id, slug: c.slug };
+  });
+}
 export async function saveCharacterAction(characterId: string, basics: { name: string; pronoun: Pronoun; role: string; invented: boolean; consentRef: string }, draft: { appearance: string; wardrobe: string; mannerisms: string; anchors: string[]; voiceLock: string }) {
   return run((db) => {
     studio.updateCharacterBasics(db, characterId, basics);

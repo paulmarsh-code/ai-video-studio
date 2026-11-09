@@ -16,6 +16,7 @@ const ALLOWED: Record<string, string> = {
   "audio/mp4": "m4a",
   "audio/x-m4a": "m4a",
   "audio/aac": "aac",
+  "application/pdf": "pdf", // consent forms
   ...IMAGE_EXT,
 };
 const MAX_BYTES = 25 * 1024 * 1024;
@@ -30,7 +31,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "file, projectId and baseCode are required" }, { status: 400 });
   }
   const ext = ALLOWED[file.type];
-  if (!ext) return NextResponse.json({ error: `Unsupported file type ${file.type || "(unknown)"}. Use PNG, JPG or WebP for images.` }, { status: 415 });
+  if (!ext) return NextResponse.json({ error: `Unsupported file type ${file.type || "(unknown)"}. Use PNG, JPG or WebP for images, or PDF for consent forms.` }, { status: 415 });
   if (file.size > MAX_BYTES) return NextResponse.json({ error: "File is larger than 25 MB" }, { status: 413 });
 
   const db = await getDb();

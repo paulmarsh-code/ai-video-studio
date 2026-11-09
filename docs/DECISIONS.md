@@ -120,3 +120,13 @@ Paul's direction: the flow is **picture or idea → copy the prompt → in ChatG
 - **Nothing shows until there's something to show.** A new character or venue shows only its name and the open start panel. The description fields stay hidden (with an "Or fill in the details by hand" link), and the right-hand side is empty until Create has made the images.
 - **Simple image boxes.** Each box has the image and "Need to change something?" only. Inside it, the user describes the change, copies the change prompt, attaches the current image and uploads the new one. The "Reference images…" text is gone.
 - **The panel stays open after Create** to show the result, and offers "Change it" for further changes.
+
+### D16d: Character creation, step by step (9 Nov 2026)
+
+Paul's direction: too much on the screen. The Characters page is now **Character creation**:
+- **One character at a time.** A row of names switches between characters, and **+ Add character** sits underneath.
+- **A new character is built in three steps** (`CharacterWizard`):
+  1. **Name, pronoun and role, and where the look comes from.** The options are an inspiration picture (an invented character with a similar look), a real person who has agreed, or no picture (describe an idea). A real person requires an **uploaded consent form** (PDF or image) before the picture can be uploaded, and the consent record is saved with the character. Then: Upload picture, "✓ Picture uploaded successfully", Next.
+  2. **Personality and mannerisms,** then Next.
+  3. **Copy [name]'s description** (the button shows "Copied"), with the message: "Go over to ChatGPT, paste the copied description and upload the picture you used". Then paste the reply, upload the image board and click **Create**.
+- **After Create,** the page shows the full details on the left and front, back and face on the right. Later edits go through "Need to change this character?".

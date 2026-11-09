@@ -132,6 +132,7 @@ export function CharacterEditor({ c, projectId, baseCode, canDescribe }: { c: Ch
           ].filter((x): x is { label: string; assetId: string } => !!x),
         } : undefined}
         onCreate={create}
+        changeOnly
         defaultOpen={!showDetails}
         sheet={{ cols: CHARACTER_SHEET.cols, rows: CHARACTER_SHEET.rows, labels: ["Front", "Back", "Face"], minAspect: MIN_REF_ASPECT, prompt: characterSheetRequest() }}
         gateOk={who === "invented" || (who === "real" && !!f.consentRef.trim())}

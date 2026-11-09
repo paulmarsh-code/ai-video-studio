@@ -38,6 +38,8 @@ export interface StartFromPanelProps {
   change?: { currentImages: { label: string; assetId: string }[] };
   /** Open the panel straight away (nothing has been created yet). */
   defaultOpen?: boolean;
+  /** Only offer "Change it" (the item was created with the step-by-step builder). */
+  changeOnly?: boolean;
 }
 
 const CHANGE_QUESTIONS = {
@@ -59,7 +61,7 @@ export function StartFromPanel(p: StartFromPanelProps) {
   const [chosen, setMode] = useState<DescribeSource>();
   // Open state is kept here, so the panel stays open after Create even though the item is no longer new.
   const [open, setOpen] = useState(!!p.defaultOpen);
-  const mode: DescribeSource = chosen ?? "image";
+  const mode: DescribeSource = p.changeOnly ? "change" : chosen ?? "image";
   const [wantChange, setWantChange] = useState(false);
   const [parts, setParts] = useState<Record<string, string>>({});
   const questions = CHANGE_QUESTIONS[p.what];
@@ -137,14 +139,14 @@ export function StartFromPanel(p: StartFromPanelProps) {
   return (
     <details className="rounded-lg border border-blue-200 bg-blue-50/40 p-3" data-testid={`start-from-${slug}`} open={open}
       onToggle={(e) => { const o = e.currentTarget.open; setOpen(o); if (o && !chosen && !p.defaultOpen) setMode(p.change ? "change" : "image"); }}>
-      <summary className="cursor-pointer text-sm font-semibold text-blue-900">{p.change ? "Change it, or start again from a picture or idea" : "Start from a picture or a one-line idea"}</summary>
-      <div className="mt-2 flex gap-1">{p.change && tab("change", "Change it")}{tab("image", "From a picture")}{tab("idea", "From an idea")}</div>
+      <summary className="cursor-pointer text-sm font-semibold text-blue-900">{p.changeOnly ? `Need to change this ${p.what}?` : p.change ? "Change it, or start again from a picture or idea" : "Start from a picture or a one-line idea"}</summary>
+      {!p.changeOnly && <div className="mt-2 flex gap-1">{p.change && tab("change", "Change it")}{tab("image", "From a picture")}{tab("idea", "From an idea")}</div>}
       <div className="space-y-3 rounded-b-md rounded-tr-md border border-neutral-300 bg-white p-3 text-sm">
         {mode === "image" && p.gate}
         {mode === "change" && (
           <div className="space-y-2">
             {!wantChange ? (
-              <p className="flex flex-wrap items-center gap-2">Is there anything you want to change?
+              <p className="mt-1 flex flex-wrap items-center gap-2">Is there anything you want to change?
                 <button type="button" onClick={() => setWantChange(true)} data-testid="change-yes"
                   className="rounded-md bg-blue-700 px-3 py-1 text-sm text-white hover:bg-blue-800">Yes</button></p>
             ) : (
