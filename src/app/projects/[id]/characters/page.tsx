@@ -60,9 +60,9 @@ export default async function CharactersPage({ params, searchParams }: { params:
         ) : c && (
           <section className="rounded-xl border border-neutral-200 bg-neutral-50 p-4">
             <h2 className="text-lg font-semibold">{c.name}</h2>
-            <div className="mt-3 grid gap-6 lg:grid-cols-[1fr_1.2fr]">
-              <CharacterEditor key={c.id} c={c} projectId={id} baseCode={code} canDescribe={canDescribe} />
-              {hasImages ? (
+            <div className="mt-3">
+              <CharacterEditor key={c.id} c={c} projectId={id} baseCode={code} canDescribe={canDescribe}
+                images={hasImages ? (
                 <div className="grid grid-cols-3 gap-2 self-start">
                   {REF_VIEWS.map((v) => (
                     <ImageSlot
@@ -82,7 +82,7 @@ export default async function CharactersPage({ params, searchParams }: { params:
                     />
                   ))}
                 </div>
-              ) : <div />}
+) : null} />
             </div>
           </section>
         )}

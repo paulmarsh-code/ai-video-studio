@@ -142,12 +142,12 @@ export function ImageSlot(p: ImageSlotProps) {
       {p.assetId && (
         <div className="mt-2 text-xs">
           <button type="button" className="text-blue-700 underline" onClick={() => setChangeOpen((o) => !o)} data-testid={`change-open-${testId}`}>
-            {changeOpen ? "Close" : p.simple ? "Need to change something?" : "Not right? Ask for a change"}
+            {changeOpen ? "Close" : p.simple ? "Fix just this image" : "Not right? Ask for a change"}
           </button>
           {changeOpen && (
             <div className="mt-1 space-y-1 rounded border border-neutral-200 bg-neutral-50 p-2">
               <textarea className="w-full rounded border border-neutral-300 px-2 py-1" rows={2} value={change} onChange={(e) => setChange(e.target.value)}
-                placeholder="What should change? e.g. show the whole head; remove the handbag" data-testid={`change-text-${testId}`} />
+                placeholder={p.simple ? "A problem with this one image only, e.g. the head is cut off" : "What should change? e.g. show the whole head; remove the handbag"} data-testid={`change-text-${testId}`} />
               <ActionButton size="sm" label="Create change prompt" doneLabel="Change prompt ready" disabled={!change.trim()} resetKey={change}
                 testId={`change-create-${testId}`} onAction={() => setChangePrompt(imageChangePrompt(change, p.prompt))} />
               {changePrompt && (

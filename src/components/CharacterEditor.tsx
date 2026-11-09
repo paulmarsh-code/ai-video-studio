@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import type { CharacterRecord } from "@/lib/studioRepo";
 import { approvalProblems } from "@/lib/domain/approval";
 import { approveCharacterAction, discardCharacterDraftAction, saveCharacterAction, setCharacterRefAction } from "@/app/studioActions";
@@ -12,7 +12,7 @@ import { CHARACTER_SHEET, characterChangePrompt, characterDescribePrompt, charac
 import { StartFromPanel } from "./StartFromPanel";
 import { ActionButton, DoneBadge } from "./ActionButton";
 
-export function CharacterEditor({ c, projectId, baseCode, canDescribe }: { c: CharacterRecord; projectId: string; baseCode: string; canDescribe: boolean }) {
+export function CharacterEditor({ c, projectId, baseCode, canDescribe, images }: { c: CharacterRecord; projectId: string; baseCode: string; canDescribe: boolean; images?: ReactNode }) {
   const router = useRouter();
   const w = c.working;
   const initial = {
@@ -97,7 +97,8 @@ export function CharacterEditor({ c, projectId, baseCode, canDescribe }: { c: Ch
   });
 
   return (
-    <div className="space-y-3" data-testid={`character-${c.slug}`}>
+    <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]" data-testid={`character-${c.slug}`}>
+    <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2 text-xs">
         {c.approved && <span className="rounded bg-green-100 px-2 py-0.5 text-green-800">v{c.approved.version} approved</span>}
         {c.draft && <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-800">v{c.draft.version} draft, not used in prompts yet</span>}
@@ -117,38 +118,6 @@ export function CharacterEditor({ c, projectId, baseCode, canDescribe }: { c: Ch
           <input className={field} value={f.consentRef} onChange={set("consentRef")} data-testid="consent-ref" placeholder="e.g. Sam Lee, signed release form, 9 Nov 2026" />
         </label>
       )}
-      <StartFromPanel
-        what="character"
-        projectId={projectId}
-        baseCode={`${baseCode}_SOURCE`}
-        canDescribe={canDescribe}
-        promptFor={(src: DescribeSource, text: string, personality: string) => src === "change"
-          ? characterChangePrompt({ appearance: f.appearance, wardrobe: f.wardrobe, mannerisms: f.mannerisms, anchors: anchorsList }, text)
-          : characterDescribePrompt(src, text, personality)}
-        change={f.appearance.trim() || w?.profile.refs?.front ? {
-          currentImages: [
-            w?.profile.refs?.front && { label: `${c.name}'s front image`, assetId: w.profile.refs.front },
-            w?.profile.refs?.face && { label: `${c.name}'s face image`, assetId: w.profile.refs.face },
-          ].filter((x): x is { label: string; assetId: string } => !!x),
-        } : undefined}
-        onCreate={create}
-        changeOnly
-        defaultOpen={!showDetails}
-        sheet={{ cols: CHARACTER_SHEET.cols, rows: CHARACTER_SHEET.rows, labels: ["Front", "Back", "Face"], minAspect: MIN_REF_ASPECT, prompt: characterSheetRequest() }}
-        gateOk={who === "invented" || (who === "real" && !!f.consentRef.trim())}
-        gate={
-          <div className="space-y-1 rounded border border-amber-200 bg-amber-50 p-2 text-xs">
-            <p className="font-semibold">Who is in the picture?</p>
-            <label className="flex items-start gap-2"><input type="radio" name={`who-${c.id}`} checked={who === "invented"} data-testid="who-invented"
-              onChange={() => { setWho("invented"); setF((x) => ({ ...x, invented: true })); }} />
-              <span>Inspiration only. This will be an invented character with a similar look, not a copy of anyone.</span></label>
-            <label className="flex items-start gap-2"><input type="radio" name={`who-${c.id}`} checked={who === "real"} data-testid="who-real"
-              onChange={() => { setWho("real"); setF((x) => ({ ...x, invented: false })); }} />
-              <span>A real person who has agreed to be portrayed. Record their consent in the field above first.</span></label>
-            <p className="text-neutral-600">Don&apos;t use pictures of celebrities or of people who haven&apos;t agreed.</p>
-          </div>
-        }
-      />
       {!showDetails ? (
         <button type="button" className="text-xs text-neutral-500 underline" onClick={() => setByHand(true)}>Or fill in the details by hand</button>
       ) : (<>
@@ -195,6 +164,42 @@ export function CharacterEditor({ c, projectId, baseCode, canDescribe }: { c: Ch
           </ul>
         </details>
       )}
+    </div>
+    <div className="space-y-3 self-start">
+      {images}
+        <StartFromPanel
+        what="character"
+        projectId={projectId}
+        baseCode={`${baseCode}_SOURCE`}
+        canDescribe={canDescribe}
+        promptFor={(src: DescribeSource, text: string, personality: string) => src === "change"
+          ? characterChangePrompt({ appearance: f.appearance, wardrobe: f.wardrobe, mannerisms: f.mannerisms, anchors: anchorsList }, text)
+          : characterDescribePrompt(src, text, personality)}
+        change={f.appearance.trim() || w?.profile.refs?.front ? {
+          currentImages: [
+            w?.profile.refs?.front && { label: `${c.name}'s front image`, assetId: w.profile.refs.front },
+            w?.profile.refs?.face && { label: `${c.name}'s face image`, assetId: w.profile.refs.face },
+          ].filter((x): x is { label: string; assetId: string } => !!x),
+        } : undefined}
+        onCreate={create}
+        changeOnly
+        defaultOpen={!showDetails}
+        sheet={{ cols: CHARACTER_SHEET.cols, rows: CHARACTER_SHEET.rows, labels: ["Front", "Back", "Face"], minAspect: MIN_REF_ASPECT, prompt: characterSheetRequest() }}
+        gateOk={who === "invented" || (who === "real" && !!f.consentRef.trim())}
+        gate={
+          <div className="space-y-1 rounded border border-amber-200 bg-amber-50 p-2 text-xs">
+            <p className="font-semibold">Who is in the picture?</p>
+            <label className="flex items-start gap-2"><input type="radio" name={`who-${c.id}`} checked={who === "invented"} data-testid="who-invented"
+              onChange={() => { setWho("invented"); setF((x) => ({ ...x, invented: true })); }} />
+              <span>Inspiration only. This will be an invented character with a similar look, not a copy of anyone.</span></label>
+            <label className="flex items-start gap-2"><input type="radio" name={`who-${c.id}`} checked={who === "real"} data-testid="who-real"
+              onChange={() => { setWho("real"); setF((x) => ({ ...x, invented: false })); }} />
+              <span>A real person who has agreed to be portrayed. Record their consent in the field above first.</span></label>
+            <p className="text-neutral-600">Don&apos;t use pictures of celebrities or of people who haven&apos;t agreed.</p>
+          </div>
+        }
+      />
+    </div>
     </div>
   );
 }

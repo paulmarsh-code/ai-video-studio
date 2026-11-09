@@ -130,3 +130,9 @@ Paul's direction: too much on the screen. The Characters page is now **Character
   2. **Personality and mannerisms,** then Next.
   3. **Copy [name]'s description** (the button shows "Copied"), with the message: "Go over to ChatGPT, paste the copied description and upload the picture you used". Then paste the reply, upload the image board and click **Create**.
 - **After Create,** the page shows the full details on the left and front, back and face on the right. Later edits go through "Need to change this character?".
+
+### D16e: Changing a character changes all three views and the description (9 Nov 2026)
+
+Paul's test: he deliberately used a picture of someone dressed wrongly for a bartender role, then asked for a change to the outfit through the link under one image. ChatGPT made a good edit, but of that one image only. The other two views, and the saved description that every storyboard and Kling prompt uses, still showed the old outfit.
+- **"Need to change something?" now sits directly under the three images** and changes the character. It produces an updated labelled description plus a new three-view board, and **Create** replaces the description and all three images together.
+- **The per-image link is now a small "Fix just this image"**, for one-off problems with a single picture, such as a cropped head.

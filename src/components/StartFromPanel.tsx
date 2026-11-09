@@ -139,7 +139,8 @@ export function StartFromPanel(p: StartFromPanelProps) {
   return (
     <details className="rounded-lg border border-blue-200 bg-blue-50/40 p-3" data-testid={`start-from-${slug}`} open={open}
       onToggle={(e) => { const o = e.currentTarget.open; setOpen(o); if (o && !chosen && !p.defaultOpen) setMode(p.change ? "change" : "image"); }}>
-      <summary className="cursor-pointer text-sm font-semibold text-blue-900">{p.changeOnly ? `Need to change this ${p.what}?` : p.change ? "Change it, or start again from a picture or idea" : "Start from a picture or a one-line idea"}</summary>
+      <summary className="cursor-pointer text-sm font-semibold text-blue-900">{p.changeOnly ? "Need to change something?" : p.change ? "Change it, or start again from a picture or idea" : "Start from a picture or a one-line idea"}</summary>
+      {p.changeOnly && <p className="mt-1 text-xs text-neutral-600">Changes the description and all {p.sheet.cols * p.sheet.rows} images together, so every later prompt stays in step.</p>}
       {!p.changeOnly && <div className="mt-2 flex gap-1">{p.change && tab("change", "Change it")}{tab("image", "From a picture")}{tab("idea", "From an idea")}</div>}
       <div className="space-y-3 rounded-b-md rounded-tr-md border border-neutral-300 bg-white p-3 text-sm">
         {mode === "image" && p.gate}
