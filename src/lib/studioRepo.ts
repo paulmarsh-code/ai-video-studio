@@ -323,8 +323,9 @@ export function updatePanel(db: DB, panelId: string, input: PanelInput): PanelCh
   return { dialogueChanged, animaticMarked, shotUpdated };
 }
 
+/** A new picture always needs approving again. */
 export function setPanelImage(db: DB, panelId: string, assetId: string) {
-  db.update(t.panels).set({ imageAssetId: assetId }).where(eq(t.panels.id, panelId)).run();
+  db.update(t.panels).set({ imageAssetId: assetId, status: "draft" }).where(eq(t.panels.id, panelId)).run();
   persist(db);
 }
 

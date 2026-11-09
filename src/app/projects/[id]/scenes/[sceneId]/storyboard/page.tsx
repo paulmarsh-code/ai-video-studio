@@ -8,8 +8,7 @@ import { getImageProvider, getTextProvider } from "@/lib/providers/images";
 import { GENRE_PROFILES } from "@/lib/domain/genre";
 import { StoryWizard } from "@/components/StoryWizard";
 import { exampleFor } from "@/lib/domain/storyExamples";
-import { setPanelImageAction } from "@/app/studioActions";
-import { ImageSlot } from "@/components/ImageSlot";
+import { StoryboardBoard } from "@/components/StoryboardBoard";
 import { PanelEditor } from "@/components/PanelEditor";
 
 export const dynamic = "force-dynamic";
@@ -64,69 +63,54 @@ export default async function StoryboardPage({ params, searchParams }: { params:
       <h1 className="text-2xl font-semibold">Storyboard: {s.scene.title}</h1>
       <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-900" data-testid="storyboard-summary">
         <span><strong>{s.panels.length} panels</strong> · about {total} s · target {s.scene.targetSec} s</span>
-        <Link className="rounded-md bg-blue-700 px-3 py-1.5 text-white hover:bg-blue-800" href={`/projects/${id}/scenes/${sceneId}/design`}>Next: the app chooses the cameras</Link>
+        {s.venue && <span>· {s.venue.name}{s.venue.status !== "approved" && <span className="text-amber-700"> (venue not approved yet)</span>}</span>}
         {!anyApproved && <Link className="text-blue-700 underline" href="?story=1" data-testid="rewrite-story">Rewrite from the story</Link>}
       </div>
-      <p className="mt-1 max-w-3xl text-neutral-600">
-        One panel per clip. Write what happens and the exact line, then make the panel image in ChatGPT from the prompt and upload it.
-        The prompt uses the approved characters, the venue and, once shots are designed, the camera framing from the floor plan.
-      </p>
+      {pending.length > 0 && <p className="mt-2 text-sm text-amber-700">Unapproved character changes: {pending.map((c) => c.name).join(", ")}. Pictures use the last approved version. <Link className="underline" href={`/projects/${id}/characters`}>Review characters</Link></p>}
+      {missingRefs.length > 0 && <p className="mt-2 text-sm text-amber-700">No approved pictures yet for {missingRefs.map((c) => c.name).join(", ")}. Create them in <Link className="underline" href={`/projects/${id}/characters`}>Characters</Link> so every panel keeps them consistent.</p>}
 
-      <div className="mt-3 space-y-1 text-sm">
-        {s.venue && <p>Venue: <Link className="text-blue-700 underline" href={`/projects/${id}/venues/${s.venue.id}`}>{s.venue.name}</Link> {s.venue.status !== "approved" && <span className="text-amber-700">(not approved yet)</span>}</p>}
-        {pending.length > 0 && <p className="text-amber-700">Unapproved character changes: {pending.map((c) => c.name).join(", ")}. Prompts below use the last approved version. <Link className="underline" href={`/projects/${id}/characters`}>Review characters</Link></p>}
-        {missingRefs.length > 0 && <p className="text-amber-700">No approved reference image yet for {missingRefs.map((c) => c.name).join(", ")}. Add one in <Link className="underline" href={`/projects/${id}/characters`}>Characters</Link> so ChatGPT keeps them consistent.</p>}
-        <p className="text-neutral-600">Next: <Link className="text-blue-700 underline" href={`/projects/${id}/scenes/${sceneId}/design`}>Design shots</Link> · <Link className="text-blue-700 underline" href={`/projects/${id}/scenes/${sceneId}/animatic`}>Animatic</Link></p>
+      <div className="mt-5">
+        <StoryboardBoard projectId={id} sceneId={sceneId} designHref={`/projects/${id}/scenes/${sceneId}/design`} baseCode={base} size={portrait ? "portrait" : "landscape"} canGenerate={canGenerate}
+          panels={s.panels.map((p) => {
+            const shot = s.shots.find((x) => x.panelId === p.id);
+            const d = p.dialogue[0];
+            const prompt = panelPrompt({
+              description: p.description, emotion: p.emotion, shot: shot?.spec, cast, profiles, plan: s.plan?.data,
+              venueName: s.venue?.name ?? "venue", venueViews: s.venue?.views as { name: string; imageAssetId?: string }[] | undefined, aspect: brief.aspect, genre, style: brief.style,
+            });
+            return {
+              id: p.id, code: p.code, description: p.description, seconds: p.durationSec, status: p.status, imageAssetId: p.imageAssetId ?? undefined,
+              speaker: d ? cast.find((c) => c.id === d.characterId)?.name : undefined, line: d?.text,
+              hasCamera: !!shot?.spec.cameraId, prompt: prompt.text, attach: prompt.attach,
+            };
+          })} />
       </div>
 
-      <ol className="mt-6 space-y-4">
-        {s.panels.map((p, i) => {
-          const shot = s.shots.find((x) => x.panelId === p.id);
-          const d = p.dialogue[0];
-          const prompt = panelPrompt({
-            description: p.description, emotion: p.emotion, shot: shot?.spec, cast, profiles, plan: s.plan?.data,
-            venueName: s.venue?.name ?? "venue", venueViews: s.venue?.views as { name: string; imageAssetId?: string }[] | undefined, aspect: brief.aspect, genre, style: brief.style,
-          });
-          return (
-            <li key={p.id} className="grid gap-4 rounded-xl border border-neutral-200 bg-white p-4 md:grid-cols-[1fr_16rem]" data-testid={`panel-${p.code}`}>
-              <div>
+      <details className="mt-8 rounded-xl border border-neutral-200 bg-white p-4" data-testid="edit-words">
+        <summary className="cursor-pointer font-semibold">Edit the words on a panel</summary>
+        <p className="mt-1 text-sm text-neutral-600">Changing a line updates its shot and clip length, and flags the animatic for a re-check.</p>
+        <ol className="mt-4 space-y-4">
+          {s.panels.map((p, i) => {
+            const shot = s.shots.find((x) => x.panelId === p.id);
+            const d = p.dialogue[0];
+            return (
+              <li key={p.id} className="rounded-lg border border-neutral-200 p-3" data-testid={`panel-${p.code}`}>
                 <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
-                  <span className="font-mono text-sm font-semibold">{i + 1}. {p.code}</span>
-                  <span className={`rounded px-2 py-0.5 ${p.status === "approved" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>{p.status} · v{p.version}</span>
-                  {shot && <Link className="text-blue-700 underline" href={`/projects/${id}/shots/${shot.id}`}>Shot {shot.code}</Link>}
-                  {shot && !shot.spec.cameraId && <span className="text-amber-700">no camera yet</span>}
+                  <span className="text-sm font-semibold">{i + 1}</span>
+                  {shot && <Link className="text-blue-700 underline" href={`/projects/${id}/shots/${shot.id}`}>Shot details</Link>}
                   {recheck[p.id] && <span className="rounded bg-red-100 px-2 py-0.5 text-red-800">Animatic re-check</span>}
                 </div>
-                <PanelEditor
-                  key={p.id}
-                  sceneId={sceneId}
-                  cast={cast.map((c) => ({ id: c.id, name: c.name }))}
-                  first={i === 0}
-                  last={i === s.panels.length - 1}
-                  panel={{ id: p.id, code: p.code, description: p.description, emotion: p.emotion, speakerId: d?.characterId, line: d?.text, durationSec: p.durationSec, status: p.status, version: p.version, hasImage: !!p.imageAssetId }}
-                />
-              </div>
-              <ImageSlot
-                label="Panel image"
-                projectId={id}
-                baseCode={`${base}_${p.code}_PANEL`}
-                kind="panel"
-                assetId={p.imageAssetId ?? undefined}
-                prompt={prompt.text}
-                attach={prompt.attach}
-                shape={portrait ? "portrait" : "landscape"}
-                canGenerate={canGenerate}
-                onAttach={setPanelImageAction.bind(null, p.id)}
-              />
-            </li>
-          );
-        })}
-      </ol>
-
-      <div className="mt-6 rounded-xl border border-dashed border-neutral-300 p-4">
-        <h2 className="mb-2 font-semibold">Add a panel</h2>
-        <PanelEditor key="new" sceneId={sceneId} cast={cast.map((c) => ({ id: c.id, name: c.name }))} suggestedCode={`P${n}`} />
-      </div>
+                <PanelEditor key={p.id} sceneId={sceneId} cast={cast.map((c) => ({ id: c.id, name: c.name }))} first={i === 0} last={i === s.panels.length - 1}
+                  panel={{ id: p.id, code: p.code, description: p.description, emotion: p.emotion, speakerId: d?.characterId, line: d?.text, durationSec: p.durationSec, status: p.status, version: p.version, hasImage: !!p.imageAssetId }} />
+              </li>
+            );
+          })}
+        </ol>
+        <div className="mt-4 rounded-lg border border-dashed border-neutral-300 p-3">
+          <h3 className="mb-2 text-sm font-semibold">Add a panel</h3>
+          <PanelEditor key="new" sceneId={sceneId} cast={cast.map((c) => ({ id: c.id, name: c.name }))} suggestedCode={`P${n}`} />
+        </div>
+      </details>
     </div>
   );
 }

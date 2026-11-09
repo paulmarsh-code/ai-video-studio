@@ -22,6 +22,16 @@ async function run<T>(fn: (db: Awaited<ReturnType<typeof getDb>>) => T): Promise
   }
 }
 
+async function runAsync<T>(fn: (db: Awaited<ReturnType<typeof getDb>>) => Promise<T>): Promise<Result<T>> {
+  try {
+    const value = await fn(await getDb());
+    revalidatePath("/", "layout");
+    return { ok: true, value };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 // Characters
 export async function addCharacterAction(projectId: string, name: string, pronoun: Pronoun) {
   return run((db) => studio.addCharacter(db, projectId, { name, pronoun }).slug);
@@ -102,4 +112,35 @@ export async function saveSceneStoryAction(sceneId: string, story: string, targe
 }
 export async function saveStoryboardAction(sceneId: string, s: { story: string; targetSec: number; panels: DraftPanel[] }) {
   return run((db) => studio.saveStoryboard(db, sceneId, s));
+}
+
+/**
+ * One click: the app chooses a camera for every panel (its top-rated option from the film
+ * grammar rules) and saves them on a new floor plan version (D18a). Design shots still
+ * lets the user pick other options.
+ */
+export async function chooseCamerasAction(sceneId: string) {
+  return runAsync(async (db) => {
+    const repo = await import("@/lib/repo");
+    const { designScene, applyDesign } = await import("@/lib/domain/director");
+    const s = repo.getScene(db, sceneId);
+    if (!s?.plan) throw new Error("This scene has no floor plan yet. Save the storyboard first.");
+    const cast = repo.getCast(db, s.scene.projectId);
+    const name = (id: string) => cast.find((c) => c.id === id)?.name ?? id;
+    const inputs = s.shots.map((sh) => ({ id: sh.id, code: sh.code, spec: sh.spec, description: s.panels.find((p) => p.id === sh.panelId)?.description }));
+    const design = designScene(s.plan.data, inputs, name, repo.getProjectGenre(db, s.scene.projectId));
+    const choices = design.shots.filter((d) => d.options.length).map((d) => ({ shotId: d.shotId, shotCode: d.shotCode, option: d.options[0] }));
+    if (!choices.length) throw new Error("The app couldn't find a camera for any panel. Check who is in frame on each panel.");
+    const { plan, assign } = applyDesign(s.plan.data, choices, design.lineOfAction);
+    repo.savePlan(db, sceneId, plan, "Cameras chosen by the app");
+    for (const ch of choices) {
+      const shot = repo.getShot(db, ch.shotId);
+      if (shot) repo.saveShotSpec(db, ch.shotId, { ...shot.spec, cameraId: assign[ch.shotId] });
+    }
+    return { chosen: choices.length, missing: design.shots.filter((d) => !d.options.length).map((d) => d.shotCode.split("_").pop()) };
+  });
+}
+
+export async function approvePanelsAction(panelIds: string[]) {
+  return run((db) => { for (const id of panelIds) studio.approvePanel(db, id); return panelIds.length; });
 }

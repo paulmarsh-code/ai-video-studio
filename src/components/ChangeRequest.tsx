@@ -18,6 +18,10 @@ const QUESTIONS = {
     { key: "personality", label: "Personality or mannerisms?", short: "Personality and mannerisms", hint: "e.g. more nervous and fidgety; dry, deadpan humour", visual: false },
     { key: "other", label: "Anything else?", short: "Also", hint: "e.g. a warmer smile; standing straighter" },
   ],
+  panel: [
+    { key: "picture", label: "What should change in this picture?", short: "Change", hint: "e.g. Chase holds a champagne glass; Jade looks angrier; move them closer together" },
+    { key: "other", label: "Anything else?", short: "Also", hint: "e.g. warmer light; more guests in the background" },
+  ],
   place: [
     { key: "place", label: "The place itself?", short: "The place", hint: "e.g. replace the sofas with high bar stools; add plants along the windows" },
     { key: "light", label: "Light and time of day?", short: "Light and time of day", hint: "e.g. night-time with warm lamps; brighter daylight" },
@@ -37,7 +41,7 @@ export interface SubmittedChange {
 }
 
 export interface ChangeRequestProps {
-  what: "character" | "place";
+  what: "character" | "place" | "panel";
   /** Where pictures added to a change are stored. */
   projectId: string;
   baseCode: string;
@@ -119,7 +123,7 @@ export function ChangeRequest({ what, projectId, baseCode, onSubmit }: ChangeReq
               ))}
             </div>
           ))}
-          {Object.keys(pics).length > 0 && <p className="text-xs text-neutral-600">A picture is only used for what you added it to. {what === "character" ? "The face and features stay the same." : "People, signs and text in it are left out."}</p>}
+          {Object.keys(pics).length > 0 && <p className="text-xs text-neutral-600">A picture is only used for what you added it to. {what === "place" ? "People, signs and text in it are left out." : "The faces and features stay the same."}</p>}
           {picError && <p className="text-xs text-red-700" role="alert">{picError}</p>}
           <div className="flex items-center gap-3">
             <ActionButton label="Submit changes" busyLabel="Submitting…" doneLabel="Submitted" testId="change-submit" disabled={!change || !!uploading}
