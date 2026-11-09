@@ -248,7 +248,12 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
               {p.imageAssetId
                 // eslint-disable-next-line @next/next/no-img-element
                 ? <img src={`/api/assets/${p.imageAssetId}`} alt={`Panel ${i + 1}`} className="h-full w-full object-cover" />
-                : <span className="absolute inset-0 flex items-center justify-center text-sm text-neutral-500">No picture yet</span>}
+                : p.hasCamera && p.shotId
+                  // Before a picture exists, show what the camera sees (D19): check the angle first.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <><img src={`/api/layout/${p.shotId}?v=${encodeURIComponent(p.prompt.length + p.code)}`} alt={`Layout for panel ${i + 1}`} className="h-full w-full object-cover opacity-80" data-testid={`board-${p.code}-sketch`} />
+                    <span className="absolute bottom-2 left-2 rounded bg-white/90 px-2 py-0.5 text-xs text-neutral-700">Camera view from the floor plan</span></>
+                  : <span className="absolute inset-0 flex items-center justify-center text-sm text-neutral-500">No picture yet</span>}
               {drawing[p.id] && <span className="absolute inset-0 flex items-center justify-center bg-white/70 text-sm font-medium" data-testid={`board-${p.code}-drawing`}>{drawing[p.id]}</span>}
             </div>
             <div className="mt-2 flex items-center gap-2 text-sm">
@@ -256,6 +261,7 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
               <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs">{p.seconds} s</span>
               {p.status === "approved" ? <DoneBadge text="Approved" /> : p.imageAssetId ? <span className="text-xs text-amber-700">to check</span> : null}
               {!p.hasCamera && <span className="text-xs text-amber-700">no camera yet</span>}
+              {p.hasCamera && p.shotId && p.imageAssetId && <a className="ml-auto text-xs text-blue-700 underline" href={`/api/layout/${p.shotId}`} target="_blank" rel="noreferrer">See the layout</a>}
             </div>
             <p className="mt-1 text-sm">{p.line ? <><span className="font-medium">{p.speaker}:</span> {p.line}</> : <span className="text-neutral-500">Silent</span>}</p>
             <p className="mt-1 text-xs text-neutral-600">{p.description}</p>

@@ -131,10 +131,12 @@ export async function chooseCamerasAction(sceneId: string) {
     const cast = repo.getCast(db, s.scene.projectId);
     const name = (id: string) => cast.find((c) => c.id === id)?.name ?? id;
     const inputs = s.shots.map((sh) => ({ id: sh.id, code: sh.code, spec: sh.spec, description: s.panels.find((p) => p.id === sh.panelId)?.description }));
-    const design = designScene(s.plan.data, inputs, name, repo.getProjectGenre(db, s.scene.projectId));
+    // Lens angles depend on the video's shape (D19).
+    const base = { ...s.plan.data, aspect: s.plan.data.aspect ?? studio.projectAspect(db, s.scene.projectId) };
+    const design = designScene(base, inputs, name, repo.getProjectGenre(db, s.scene.projectId));
     const choices = design.shots.filter((d) => d.options.length).map((d) => ({ shotId: d.shotId, shotCode: d.shotCode, option: d.options[0] }));
     if (!choices.length) throw new Error("The app couldn't find a camera for any panel. Check who is in frame on each panel.");
-    const { plan, assign } = applyDesign(s.plan.data, choices, design.lineOfAction);
+    const { plan, assign } = applyDesign(base, choices, design.lineOfAction);
     repo.savePlan(db, sceneId, plan, "Cameras chosen by the app");
     for (const ch of choices) {
       const shot = repo.getShot(db, ch.shotId);

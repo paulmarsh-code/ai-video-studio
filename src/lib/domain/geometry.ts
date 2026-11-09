@@ -64,8 +64,18 @@ export interface CameraReading {
   backgroundView?: string;
 }
 
+/**
+ * The camera's horizontal field of view (D19). Preset angles are for the frame's long side:
+ * in a portrait frame the width is the short side, so it sees a narrower slice of the room.
+ */
+export function horizontalFov(plan: Pick<GeometryPlanData, "aspect">, cam: PlanCamera): number {
+  const long = cam.fovDeg ?? PRESET_FOV[cam.preset];
+  if (plan.aspect !== "9:16") return long;
+  return (2 * Math.atan(Math.tan((long * Math.PI) / 360) * (9 / 16)) * 180) / Math.PI;
+}
+
 export function readCamera(plan: GeometryPlanData, cam: PlanCamera): CameraReading {
-  const fov = cam.fovDeg ?? PRESET_FOV[cam.preset];
+  const fov = horizontalFov(plan, cam);
   const half = fov / 2;
   const f = norm(sub(cam.lookAt, cam.position));
   const r = { x: f.y, y: -f.x }; // right-hand vector when looking along f
@@ -199,12 +209,15 @@ export interface Occlusion {
  * Who is hidden behind whom in a camera, considering only `onlyIds` as present on camera
  * (excluded characters are framed out, so they block nothing).
  */
-export function occlusions(reading: CameraReading, onlyIds?: string[]): Occlusion[] {
+export function occlusions(reading: CameraReading, onlyIds?: string[], blockerIds?: string[]): Occlusion[] {
   const people = reading.actors.filter((a) => a.depthM > 0 && (!onlyIds || onlyIds.includes(a.characterId)));
+  // Anyone standing there can block (D19): by default the people on camera; pass everyone
+  // not framed out so a nearby person in front of the subject counts.
+  const blockers = blockerIds ? reading.actors.filter((a) => a.depthM > 0 && blockerIds.includes(a.characterId)) : people;
   const out: Occlusion[] = [];
   for (const target of people) {
     if (!target.inView) continue;
-    for (const blocker of people) {
+    for (const blocker of blockers) {
       if (blocker === target || blocker.depthM >= target.depthM - 0.2) continue;
       const sep = Math.abs(blocker.angleDeg - target.angleDeg);
       const faceLimit = angularRadius(HEAD_RADIUS_M, blocker.depthM) + 0.6 * angularRadius(HEAD_RADIUS_M, target.depthM);

@@ -490,7 +490,7 @@ export function saveStoryboard(db: DB, sceneId: string, s: { story: string; targ
     db.insert(t.shots).values({ id: randomUUID(), sceneId, panelId, code: spec.code, spec }).run();
   });
   if (!db.select().from(t.plans).where(eq(t.plans.sceneId, sceneId)).get()) {
-    db.insert(t.plans).values({ id: randomUUID(), sceneId, name: "First floor plan (from the story)", version: 1, data: defaultPlan(castIds, s.panels, (venue?.views ?? []) as PlanView[], staging) }).run();
+    db.insert(t.plans).values({ id: randomUUID(), sceneId, name: "First floor plan (from the story)", version: 1, data: defaultPlan(castIds, s.panels, (venue?.views ?? []) as PlanView[], staging, projectAspect(db, scene.projectId)) }).run();
   }
   db.update(t.scenes).set({ story: s.story, targetSec: s.targetSec, staging }).where(eq(t.scenes.id, sceneId)).run();
   persist(db);
@@ -520,7 +520,7 @@ export function saveSceneStaging(db: DB, sceneId: string, staging: SceneStaging)
       return { action: p.description, inFrame: shot?.spec.visibleIds ?? [], speakerId: d?.characterId, line: d?.text ?? "", emotion: p.emotion, seconds: p.durationSec };
     });
     const venue = scene.venueId ? db.select().from(t.venues).where(eq(t.venues.id, scene.venueId)).get() : undefined;
-    db.insert(t.plans).values({ id: randomUUID(), sceneId, name: AUTO_PLANS[0], version: plan!.version + 1, data: defaultPlan(castIds, panels, (venue?.views ?? []) as PlanView[], st) }).run();
+    db.insert(t.plans).values({ id: randomUUID(), sceneId, name: AUTO_PLANS[0], version: plan!.version + 1, data: defaultPlan(castIds, panels, (venue?.views ?? []) as PlanView[], st, projectAspect(db, scene.projectId)) }).run();
   }
   for (const sh of db.select().from(t.shots).where(eq(t.shots.sceneId, sceneId)).all()) {
     const old = sh.spec as ShotSpec;
@@ -538,3 +538,9 @@ export function saveSceneStaging(db: DB, sceneId: string, staging: SceneStaging)
 
 /** Floor plans the app made itself, which it may rebuild; anything else was edited by the user. */
 const AUTO_PLANS = ["First floor plan (from the story)", "Cameras chosen by the app"];
+
+/** The project's video shape, for lens angles on the floor plan (D19). */
+export function projectAspect(db: DB, projectId: string): "9:16" | "16:9" {
+  const p = db.select().from(t.projects).where(eq(t.projects.id, projectId)).get();
+  return p ? briefOf(p).aspect : "9:16";
+}

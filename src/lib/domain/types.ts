@@ -66,6 +66,11 @@ export interface GeometryPlanData {
   lineOfAction?: [string, string];
   /** Camera id that sets the reference side of the line (normally the main camera). */
   referenceCameraId?: string;
+  /**
+   * The video's shape (D19). Lens angles are for the frame's long side, so a portrait (9:16)
+   * frame sees a narrower width. Missing means landscape (older plans).
+   */
+  aspect?: "9:16" | "16:9";
 }
 
 export type DistancePreset = "conversational" | "social-group" | "across-room";

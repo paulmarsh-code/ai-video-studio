@@ -301,7 +301,7 @@ export function shotSpecFor(p: DraftPanel, i: { code: string; venueName: string;
  * most lines faces the rest of the group across a small gap. People can be moved on the
  * floor plan later; the app then shows which shots a move affects.
  */
-export function defaultPlan(castIds: string[], panels: DraftPanel[], views: PlanView[], staging?: SceneStaging): GeometryPlanData {
+export function defaultPlan(castIds: string[], panels: DraftPanel[], views: PlanView[], staging?: SceneStaging, aspect?: "9:16" | "16:9"): GeometryPlanData {
   const said = (id: string) => panels.filter((p) => p.speakerId === id).length + panels.filter((p) => p.inFrame.includes(id)).length / 100;
   const order = [...castIds].sort((a, b) => said(b) - said(a));
   const talkers = order.filter((id) => panels.some((p) => p.speakerId === id));
@@ -330,5 +330,6 @@ export function defaultPlan(castIds: string[], panels: DraftPanel[], views: Plan
     actors, cameras: [],
     views: views.map((v) => ({ name: v.name, directionDeg: v.directionDeg })),
     lineOfAction: line,
+    aspect,
   };
 }

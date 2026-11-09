@@ -3,7 +3,7 @@
 // the same plan and storyboard always give the same proposals.
 
 import { deriveDuration } from "./duration";
-import { cameraPlacementProblem, occlusions, PRESET_FOV, readCamera, type CameraReading } from "./geometry";
+import { cameraPlacementProblem, horizontalFov, occlusions, readCamera, type CameraReading } from "./geometry";
 import { GENRE_PROFILES, genreBonus, type Genre } from "./genre";
 import type { CameraPreset, GeometryPlanData, PlanCamera, Point, ShotSpec } from "./types";
 
@@ -96,6 +96,14 @@ function makeCam(id: string, name: string, preset: CameraPreset, position: Point
   return { id, name, preset, position: round(position), lookAt: round(lookAt) };
 }
 
+/** How far back a camera must stand for everyone visible to fit across the frame (D19). */
+export function groupFitDistance(plan: GeometryPlanData, shot: ShotSpec, preset: CameraPreset): number {
+  const pts = shot.visibleIds.map((id) => plan.actors.find((a) => a.characterId === id)?.position).filter((p): p is Point => !!p);
+  const spread = pts.reduce((m, p) => Math.max(m, ...pts.map((q) => Math.hypot(p.x - q.x, p.y - q.y))), 0);
+  const hfov = horizontalFov(plan, { id: "", name: "", preset, position: { x: 0, y: 0 }, lookAt: { x: 1, y: 0 } });
+  return spread / 2 / Math.tan((hfov * Math.PI) / 360) + 0.6;
+}
+
 function candidates(plan: GeometryPlanData, shot: ShotSpec, moment: MomentKind, partnerId: string | undefined, name: (id: string) => string): Candidate[] {
   const pos = (id: string) => plan.actors.find((a) => a.characterId === id)?.position;
   const subjectId = shot.subjectId ?? shot.speakerId ?? shot.visibleIds[0];
@@ -134,11 +142,13 @@ function candidates(plan: GeometryPlanData, shot: ShotSpec, moment: MomentKind, 
     }
   }
 
-  // Group / reaction shot (R-REACTION).
+  // Group / reaction shot (R-REACTION). The camera stands far enough back for everyone to fit
+  // side by side across the frame's width (D19): a portrait frame needs more distance.
   const visiblePts = shot.visibleIds.map(pos).filter((p): p is Point => !!p);
+  const radii = (base: number[], preset: CameraPreset) => { const fit = groupFitDistance(plan, shot, preset); return [...new Set([...base, fit, fit * 1.2, fit * 1.45].map((r) => +r.toFixed(2)))]; };
   if (visiblePts.length >= 2 && (moment === "reaction" || moment === "dialogue" || moment === "exit" || moment === "peak")) {
     const c = centroid(visiblePts);
-    for (const radius of [2.0, 2.6, 3.2]) for (let a = 0; a < 360; a += 15) {
+    for (const radius of radii([2.0, 2.6, 3.2], "two-shot")) for (let a = 0; a < 360; a += 15) {
       const camPos = add(c, mul({ x: Math.cos((a * Math.PI) / 180), y: Math.sin((a * Math.PI) / 180) }, radius));
       out.push({ camera: makeCam("group", "Group shot", "two-shot", camPos, c), kind: "Group shot", role: "group" });
     }
@@ -148,7 +158,7 @@ function candidates(plan: GeometryPlanData, shot: ShotSpec, moment: MomentKind, 
   if (moment === "establishing" || moment === "exit" || moment === "reaction") {
     const pts = visiblePts.length ? visiblePts : [S];
     const c = centroid(pts);
-    for (const radius of [3.5, 4.5, 5.5]) for (let a = 0; a < 360; a += 15) {
+    for (const radius of radii([3.5, 4.5, 5.5], "wide")) for (let a = 0; a < 360; a += 15) {
       const camPos = add(c, mul({ x: Math.cos((a * Math.PI) / 180), y: Math.sin((a * Math.PI) / 180) }, radius));
       out.push({ camera: makeCam("wide", "Wide", "wide", camPos, c), kind: "Wide (master)", role: "wide" });
     }
@@ -187,12 +197,15 @@ function score(
     const a = reading.actors.find((x) => x.characterId === id);
     if (!a || !a.inView) return { ok: false, score: 0, reasons: [] };
   }
-  const occ = occlusions(reading, cand.role === "cu" ? [subjectId] : shot.visibleIds);
+  // Everyone not framed out is physically there and can stand in the way (D19).
+  const standing = shot.presentIds.length ? shot.presentIds.filter((id) => !shot.excludedIds.includes(id)) : shot.visibleIds;
+  const occ = occlusions(reading, cand.role === "cu" ? [subjectId] : shot.visibleIds, [...new Set([...standing, ...shot.visibleIds])]);
+  // A hidden face is unusable, whoever is in the way.
   if (occ.some((o) => o.level === "face")) return { ok: false, score: 0, reasons: [] };
 
   let s = 0;
   const reasons: string[] = ["R-180: on the scene's side of the line of action"];
-  const fov = cam.fovDeg ?? PRESET_FOV[cam.preset];
+  const fov = horizontalFov(plan, cam);
   const subj = reading.actors.find((a) => a.characterId === subjectId)!;
 
   // Preferred camera type per moment (R-MASTER, R-OTS, R-CU-EMOTION, R-REACTION).
@@ -228,7 +241,9 @@ function score(
   }
 
   // Subject size suited to the shot (closer for emotion).
-  const ideal = (cand.role === "cu" ? 1.6 : cand.role === "ots" ? 2.2 : cand.role === "group" ? 2.6 : 4.5) * GENRE_PROFILES[genre].distanceFactor;
+  let ideal = (cand.role === "cu" ? 1.6 : cand.role === "ots" ? 2.2 : cand.role === "group" ? 2.6 : 4.5) * GENRE_PROFILES[genre].distanceFactor;
+  // A group shot is as close as it can be while everyone still fits across the frame (D19).
+  if (cand.role === "group" || cand.role === "wide") ideal = Math.max(ideal, groupFitDistance(plan, shot, cam.preset) * (cand.role === "wide" ? 1.3 : 1));
   s += 1 - Math.min(1, Math.abs(subj.depthM - ideal) / ideal);
 
   // R-SCREEN: characters keep their side of the screen.
@@ -258,8 +273,20 @@ function score(
     else { s -= 2; }
   }
 
-  // Body overlap on the subject and excluded people in frame (cost to frame out).
-  if (occ.some((o) => o.characterId === subjectId && o.level === "body")) s -= 0.75;
+  // Body overlap: on the subject, and on anyone else who should be seen (D19). In an
+  // over-the-shoulder shot the partner's shoulder is meant to overlap, so it is free.
+  for (const o of occ) {
+    if (o.level !== "body" || (cand.role === "ots" && o.blockerId === cand.partnerId)) continue;
+    // In group and wide shots everyone must be seen, so any overlap costs more.
+    const group = cand.role === "group" || cand.role === "wide";
+    s -= o.characterId === subjectId ? (group ? 3 : 2) : (group ? 2.5 : 1.25);
+  }
+  // Someone much nearer the lens than the rest, in a shot that isn't over-the-shoulder,
+  // fills the frame and hides the scene (D19).
+  if (cand.role === "group" || cand.role === "wide") {
+    const depths = reading.actors.filter((a) => a.inView && standing.includes(a.characterId)).map((a) => a.depthM).sort((a, b) => a - b);
+    if (depths.length >= 2 && depths[0] < 0.6 * depths[Math.floor(depths.length / 2)]) s -= 2.5;
+  }
   const excludedInView = shot.excludedIds.filter((id) => reading.actors.find((a) => a.characterId === id)?.inView).length;
   s -= 0.4 * excludedInView;
 

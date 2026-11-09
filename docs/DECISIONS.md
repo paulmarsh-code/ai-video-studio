@@ -297,3 +297,19 @@ Words like "frame-left" are read loosely, so positions drift even when the floor
 The sketch is rendered as SVG, then turned into a PNG with sharp. It is attached last to every GPT picture request and change, with "use it for positions, sizes, angle and the table; copy nothing of its style". It can also be downloaded on the by-hand route from `/api/layout/[shotId]`.
 
 The sketches also showed that the camera chooser places cameras badly for a group around a table: people stand in front of the subject in two-shots, and the wide shot is too far back. That, together with approving and locking positions and cameras and adding key props, is the next work (D19).
+
+## D19 (part 1) — Camera chooser fixes for groups and portrait frames; sketches on the board (2026-11-10)
+
+Paul's principles (general, for every project): positions and props are fixed by the geometry and approved once; cameras are approved once; pictures and clips only follow them.
+
+Part 1 fixes the camera chooser, which the layout sketches showed was placing cameras badly for a group around a table:
+
+- **Portrait lens angle.** A preset's lens angle now applies to the frame's long side. A 9:16 frame sees a narrower width (`horizontalFov`, from `plan.aspect`). Before, portrait "wide" shots were extreme wide-angles with tiny people. The project's shape is stored on new floor plans and added when cameras are chosen. Older plans without it count as landscape, so they behave as before.
+- **People nearby block the view.** Face and body occlusion now count everyone standing there who isn't framed out, not just the panel's named people. A hidden face still rules a camera out.
+- **Overlap is costly.** Any visible person covered by another costs more, especially in group and wide shots where everyone must be seen. The over-the-shoulder partner is exempt. A group or wide camera with someone much nearer the lens than the rest is penalised.
+- **Group and wide distance fit the group.** Cameras stand far enough back for everyone to fit across the frame, and the ideal distance is scored the same way.
+- **Sketches on the board.** Before a picture exists, each panel shows its camera view from the floor plan, so the angle can be checked before paying for a picture. Once a picture exists, there is a "See the layout" link.
+
+Result on Jades Entrance: the over-the-shoulder shots and close-ups are correct, and four group shots show all four around the table, unblocked. The two-shots at panels 2 and 9 and the opening wide still overlap slightly.
+
+**Part 2 (next):** key props in the scene build. Approve and lock positions, then cameras, with lock enforcement on the floor plan, Design shots and setting saves. Pictures only from approved geometry.

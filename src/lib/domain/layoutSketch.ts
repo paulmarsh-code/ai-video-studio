@@ -3,7 +3,7 @@
 // come from the geometry, not from GPT's reading of words like "frame-left".
 // Pure: returns an SVG string; the server turns it into a PNG.
 
-import { PRESET_FOV } from "./geometry";
+import { horizontalFov } from "./geometry";
 import type { GeometryPlanData, PlanCamera } from "./types";
 
 export interface SketchPerson { id: string; name: string; heightM?: number; }
@@ -33,7 +33,7 @@ export function layoutSketchSvg(i: {
   const f = { x: fx / fl, y: fy / fl };
   const r = { x: f.y, y: -f.x }; // right-hand side when looking along f (same as readCamera)
   // The preset's field of view spans the frame's width.
-  const tanH = Math.tan(((cam.fovDeg ?? PRESET_FOV[cam.preset]) * Math.PI) / 360);
+  const tanH = Math.tan((horizontalFov(i.plan, cam) * Math.PI) / 360);
   const focal = W / 2 / tanH;
   const toScreen = (p: { x: number; y: number }, z: number) => {
     const rel = { x: p.x - cam.position.x, y: p.y - cam.position.y };
