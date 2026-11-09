@@ -10,15 +10,14 @@
 // character's full details.
 
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { saveCharacterAction, setCharacterRefAction, upsertCharacterBasicsAction } from "@/app/studioActions";
 import { uploadBlob } from "@/lib/clientUpload";
 import { CHARACTER_SHEET, characterDescribePrompt, characterFillFromReply, characterSheetRequest } from "@/lib/domain/describe";
 import { MIN_REF_ASPECT } from "@/lib/domain/imagePrompts";
 import type { Pronoun } from "@/lib/domain/types";
 import { ActionButton } from "./ActionButton";
-import { CopyButton } from "./CopyButton";
-import { SheetCutter, type Cutter } from "./SheetCutter";
+import { CreateStep } from "./CreateStep";
 
 type Source = "inspiration" | "real" | "idea";
 
@@ -53,11 +52,7 @@ export function CharacterWizard({ projectId, projectCode, existing }: CharacterW
   const [picture, setPicture] = useState<string>();
   const [idea, setIdea] = useState("");
   const [personality, setPersonality] = useState("");
-  const [reply, setReply] = useState("");
-  const [board, setBoard] = useState<File>();
-  const cutter = useRef<Cutter | null>(null);
   const [error, setError] = useState("");
-  const [result, setResult] = useState("");
 
   const shown = name.trim() || "your character";
   const possessive = name.trim() ? `${name.trim()}'s` : "your character's";
@@ -112,33 +107,23 @@ export function CharacterWizard({ projectId, projectCode, existing }: CharacterW
 
   const promptText = characterDescribePrompt(source === "idea" ? "idea" : "image", idea, personality);
 
-  async function create() {
-    setError("");
-    try {
-      if (!ref) throw new Error("Go back to step 1 and save the character first.");
-      if (!board || !cutter.current) throw new Error("Upload the image board first.");
-      const r = characterFillFromReply(reply);
-      if (!r.appearance && !r.wardrobe) throw new Error("Couldn't find the labelled description in that reply. Check you pasted all of ChatGPT's answer.");
-      const pieces = await cutter.current();
-      const saved = await saveCharacterAction(ref.id,
-        { name, pronoun, role, invented: source !== "real", consentRef: source === "real" && consent ? `Consent form ${consent.code}` : existing?.consentRef ?? "" },
-        { appearance: r.appearance, wardrobe: r.wardrobe, mannerisms: r.mannerisms, anchors: r.anchors, voiceLock: existing?.voiceLock?.trim() || r.voice });
-      if (!saved.ok) throw new Error(saved.error);
-      const code = codeFor(ref.slug);
-      await uploadBlob(projectId, `${code}_SHEET`, "reference-sheet", board, board.name);
-      for (const [i, view] of CHARACTER_SHEET.views.entries()) {
-        const id = await uploadBlob(projectId, `${code}_${view.toUpperCase()}`, "character-ref", pieces[i], `${view}.png`);
-        const a = await setCharacterRefAction(ref.id, view, id);
-        if (!a.ok) throw new Error(a.error);
-      }
-      setResult(r.known ? "Created. ChatGPT says the picture shows a known person or character, so it described a different original character: check the result isn't a lookalike." : "Created.");
-      router.push(`?c=${ref.slug}`);
-      router.refresh();
-      return true;
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      return false;
+  async function create(reply: string, pieces: Blob[], board: File): Promise<string | void> {
+    if (!ref) return "Go back to step 1 and save the character first.";
+    const r = characterFillFromReply(reply);
+    if (!r.appearance && !r.wardrobe) return "Couldn't find the labelled description in that reply. Check you pasted all of ChatGPT's answer.";
+    const saved = await saveCharacterAction(ref.id,
+      { name, pronoun, role, invented: source !== "real", consentRef: source === "real" && consent ? `Consent form ${consent.code}` : existing?.consentRef ?? "" },
+      { appearance: r.appearance, wardrobe: r.wardrobe, mannerisms: r.mannerisms, anchors: r.anchors, voiceLock: existing?.voiceLock?.trim() || r.voice });
+    if (!saved.ok) return saved.error;
+    const code = codeFor(ref.slug);
+    await uploadBlob(projectId, `${code}_SHEET`, "reference-sheet", board, board.name);
+    for (const [i, view] of CHARACTER_SHEET.views.entries()) {
+      const id = await uploadBlob(projectId, `${code}_${view.toUpperCase()}`, "character-ref", pieces[i], `${view}.png`);
+      const a = await setCharacterRefAction(ref.id, view, id);
+      if (!a.ok) return a.error;
     }
+    router.push(`?c=${ref.slug}`);
+    router.refresh();
   }
 
   const choice = (value: Source, title: string, detail: string) => (
@@ -228,36 +213,15 @@ export function CharacterWizard({ projectId, projectCode, existing }: CharacterW
       {step === 3 && (
         <>
           <StepHeader n={3} title={`Create ${shown}`} />
-          <div className="space-y-4 text-sm">
-            <div className="flex flex-wrap items-center gap-3">
-              <CopyButton text={promptText} label={`Copy ${possessive} description`} />
-              <span className="text-neutral-700">
-                Go over to ChatGPT, paste the copied description{source === "idea" ? "" : " and upload the picture you used"}.
-                ChatGPT replies with a written description and one image board showing front, back and face.
-              </span>
-            </div>
-            <label className="block">Paste ChatGPT&apos;s reply here
-              <textarea className={`${field} font-mono text-xs`} rows={6} value={reply} onChange={(e) => setReply(e.target.value)} data-testid="wiz-reply" />
-            </label>
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <label className="cursor-pointer rounded-md border border-neutral-300 px-3 py-1 hover:bg-neutral-50">
-                  {board ? "Choose a different image board" : "Upload the image board"}
-                  <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" data-testid="wiz-board"
-                    onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) { setError(""); setBoard(f); } }} />
-                </label>
-                <span className="text-xs text-neutral-500">No image board? Send this in the same chat: <CopyButton text={characterSheetRequest()} label="Copy board request" /></span>
-              </div>
-              {board && <SheetCutter file={board} cols={CHARACTER_SHEET.cols} rows={CHARACTER_SHEET.rows} labels={["Front", "Back", "Face"]} minAspect={MIN_REF_ASPECT} cutterRef={cutter} />}
-            </div>
-            <div className="flex items-center gap-3">
-              <button type="button" onClick={() => setStep(2)} className="text-sm text-neutral-600 underline">Back</button>
-              <ActionButton label="Create" busyLabel="Creating…" doneLabel="Created" testId="wiz-create" disabled={!reply.trim() || !board}
-                title={!reply.trim() ? "Paste ChatGPT's reply first" : !board ? "Upload the image board first" : ""}
-                onAction={create} resetKey={[reply, board?.name, board?.lastModified]} />
-            </div>
-            {result && <p className="text-green-700" role="status">{result}</p>}
-          </div>
+          <CreateStep
+            id="wiz"
+            copyLabel={`Copy ${possessive} description`}
+            prompt={promptText}
+            instruction={`Go over to ChatGPT, paste the copied description${source === "idea" ? "" : " and upload the picture you used"}.`}
+            sheet={{ cols: CHARACTER_SHEET.cols, rows: CHARACTER_SHEET.rows, labels: () => ["Front", "Back", "Face"], minAspect: MIN_REF_ASPECT, request: characterSheetRequest() }}
+            onCreate={create}
+            footer={<button type="button" onClick={() => setStep(2)} className="text-sm text-neutral-600 underline">Back</button>}
+          />
         </>
       )}
       {error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}

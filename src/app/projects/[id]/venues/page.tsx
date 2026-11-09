@@ -4,7 +4,7 @@ import { getDb } from "@/db/client";
 import * as repo from "@/lib/repo";
 import * as studio from "@/lib/studioRepo";
 import { venueViewPrompt } from "@/lib/domain/imagePrompts";
-import { getImageProvider, getTextProvider } from "@/lib/providers/images";
+import { getImageProvider } from "@/lib/providers/images";
 import { setVenueViewImageAction } from "@/app/studioActions";
 import { ImageSlot } from "@/components/ImageSlot";
 import { VenueEditor } from "@/components/VenueEditor";
@@ -24,7 +24,6 @@ export default async function VenuesPage({ params, searchParams }: { params: Pro
   const style = String((project.brief as { style?: string }).style ?? "photorealistic");
   const genre = repo.getProjectGenre(db, id);
   const canGenerate = !!getImageProvider();
-  const canDescribe = !!getTextProvider();
 
   // One venue at a time: the one in ?v=, else the first. ?new=1 starts a new one.
   const adding = sp.new === "1" || venues.length === 0;
@@ -58,7 +57,7 @@ export default async function VenuesPage({ params, searchParams }: { params: Pro
         ) : venue && (
           <section className="rounded-xl border border-neutral-200 bg-neutral-50 p-4">
             <h2 className="mb-3 text-lg font-semibold">{venue.name}</h2>
-            <VenueEditor key={venue.id} venue={venue} projectId={id} baseCode={baseCode} canDescribe={canDescribe}
+            <VenueEditor key={venue.id} venue={venue} projectId={id} baseCode={baseCode}
               images={hasImages ? (
                 <div className="grid gap-3 sm:grid-cols-2">
                   {venue.views.map((v) => (

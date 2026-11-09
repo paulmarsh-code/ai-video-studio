@@ -8,11 +8,13 @@ import { approveCharacterAction, discardCharacterDraftAction, saveCharacterActio
 import { uploadBlob } from "@/lib/clientUpload";
 import { MIN_REF_ASPECT } from "@/lib/domain/imagePrompts";
 import type { Pronoun } from "@/lib/domain/types";
-import { CHARACTER_SHEET, characterChangePrompt, characterDescribePrompt, characterFillFromReply, characterSheetRequest, type DescribeSource } from "@/lib/domain/describe";
-import { StartFromPanel } from "./StartFromPanel";
+import { CHARACTER_SHEET, characterChangePrompt, characterFillFromReply, characterSheetRequest } from "@/lib/domain/describe";
+import { ChangeRequest } from "./ChangeRequest";
+import { CreateStep } from "./CreateStep";
+import { downloadBoard } from "@/lib/board";
 import { ActionButton, DoneBadge } from "./ActionButton";
 
-export function CharacterEditor({ c, projectId, baseCode, canDescribe, images }: { c: CharacterRecord; projectId: string; baseCode: string; canDescribe: boolean; images?: ReactNode }) {
+export function CharacterEditor({ c, projectId, baseCode, images }: { c: CharacterRecord; projectId: string; baseCode: string; images?: ReactNode }) {
   const router = useRouter();
   const w = c.working;
   const initial = {
@@ -31,8 +33,8 @@ export function CharacterEditor({ c, projectId, baseCode, canDescribe, images }:
   const [msg, setMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [pending, start] = useTransition();
   const dirty = JSON.stringify(f) !== JSON.stringify(initial);
-  const [who, setWho] = useState<"" | "invented" | "real">(c.invented ? "" : "real");
   const [voiceSuggestion, setVoiceSuggestion] = useState("");
+  const [changing, setChanging] = useState<string | null>(null);
   const problems = approvalProblems({ voiceLock: f.voiceLock, profile: { appearance: f.appearance }, invented: f.invented, consentRef: f.consentRef });
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }));
   const anchorsList = f.anchors.split("\n").map((x) => x.trim()).filter(Boolean);
@@ -95,6 +97,32 @@ export function CharacterEditor({ c, projectId, baseCode, canDescribe, images }:
     setMsg(r.ok ? { kind: "ok", text: "Draft discarded." } : { kind: "error", text: r.error });
     router.refresh();
   });
+
+  // After "Submit changes" the page clears and runs the same final step as a new character.
+  if (changing) {
+    const board = [w?.profile.refs?.front, w?.profile.refs?.back, w?.profile.refs?.face];
+    const haveBoard = board.every(Boolean);
+    return (
+      <div className="rounded-xl border border-neutral-200 bg-white p-5" data-testid="change-flow">
+        <div className="mb-3 flex items-center gap-2">
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-700 text-sm font-semibold text-white">2</span>
+          <h2 className="text-lg font-semibold">Create the updated {c.name}</h2>
+          <span className="ml-auto text-xs text-neutral-500">Step 2 of 2</span>
+        </div>
+        <p className="mb-4 rounded bg-neutral-50 p-2 text-sm text-neutral-700"><span className="font-medium">Your changes:</span> {changing}</p>
+        <CreateStep
+          id="chg"
+          copyLabel={`Copy ${c.name}'s updated description`}
+          prompt={characterChangePrompt({ appearance: f.appearance, wardrobe: f.wardrobe, mannerisms: f.mannerisms, anchors: anchorsList }, changing)}
+          instruction={<>Go over to ChatGPT, paste the copied description and upload the current image board{haveBoard && <> (<button type="button" className="text-blue-700 underline" data-testid="download-board"
+            onClick={() => void downloadBoard(board as string[], CHARACTER_SHEET.cols, CHARACTER_SHEET.rows, `${baseCode}_current_board.png`)}>download it here</button>)</>}.</>}
+          sheet={{ cols: CHARACTER_SHEET.cols, rows: CHARACTER_SHEET.rows, labels: () => ["Front", "Back", "Face"], minAspect: MIN_REF_ASPECT, request: characterSheetRequest() }}
+          onCreate={async (reply, pieces, file) => { const r = await create(reply, pieces, file); if (!r.ok) return r.text; setChanging(null); }}
+          footer={<button type="button" onClick={() => setChanging(null)} className="text-sm text-neutral-600 underline" data-testid="change-cancel">Cancel changes</button>}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]" data-testid={`character-${c.slug}`}>
@@ -167,40 +195,7 @@ export function CharacterEditor({ c, projectId, baseCode, canDescribe, images }:
     </div>
     <div className="space-y-3 self-start">
       {images}
-        <StartFromPanel
-        what="character"
-        projectId={projectId}
-        baseCode={`${baseCode}_SOURCE`}
-        canDescribe={canDescribe}
-        promptFor={(src: DescribeSource, text: string, personality: string) => src === "change"
-          ? characterChangePrompt({ appearance: f.appearance, wardrobe: f.wardrobe, mannerisms: f.mannerisms, anchors: anchorsList }, text)
-          : characterDescribePrompt(src, text, personality)}
-        change={f.appearance.trim() || w?.profile.refs?.front ? {
-          // In board order (front, back, face), so the app can rebuild the current board.
-          currentImages: [
-            w?.profile.refs?.front && { label: `${c.name}'s front image`, assetId: w.profile.refs.front },
-            w?.profile.refs?.back && { label: `${c.name}'s back image`, assetId: w.profile.refs.back },
-            w?.profile.refs?.face && { label: `${c.name}'s face image`, assetId: w.profile.refs.face },
-          ].filter((x): x is { label: string; assetId: string } => !!x),
-        } : undefined}
-        onCreate={create}
-        changeOnly
-        defaultOpen={!showDetails}
-        sheet={{ cols: CHARACTER_SHEET.cols, rows: CHARACTER_SHEET.rows, labels: ["Front", "Back", "Face"], minAspect: MIN_REF_ASPECT, prompt: characterSheetRequest() }}
-        gateOk={who === "invented" || (who === "real" && !!f.consentRef.trim())}
-        gate={
-          <div className="space-y-1 rounded border border-amber-200 bg-amber-50 p-2 text-xs">
-            <p className="font-semibold">Who is in the picture?</p>
-            <label className="flex items-start gap-2"><input type="radio" name={`who-${c.id}`} checked={who === "invented"} data-testid="who-invented"
-              onChange={() => { setWho("invented"); setF((x) => ({ ...x, invented: true })); }} />
-              <span>Inspiration only. This will be an invented character with a similar look, not a copy of anyone.</span></label>
-            <label className="flex items-start gap-2"><input type="radio" name={`who-${c.id}`} checked={who === "real"} data-testid="who-real"
-              onChange={() => { setWho("real"); setF((x) => ({ ...x, invented: false })); }} />
-              <span>A real person who has agreed to be portrayed. Record their consent in the field above first.</span></label>
-            <p className="text-neutral-600">Don&apos;t use pictures of celebrities or of people who haven&apos;t agreed.</p>
-          </div>
-        }
-      />
+      <ChangeRequest what="character" onSubmit={setChanging} />
     </div>
     </div>
   );

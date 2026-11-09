@@ -8,14 +8,13 @@
 // Create saves the description and the four named views, and attaches the four images.
 
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { addVenueAction, saveVenueAction, setVenueViewImageAction } from "@/app/studioActions";
 import { uploadBlob } from "@/lib/clientUpload";
 import { VENUE_SHEET, venueDescribePrompt, venueFillFromReply, venueSheetRequest } from "@/lib/domain/describe";
 import type { VenueView } from "@/lib/studioRepo";
 import { ActionButton } from "./ActionButton";
-import { CopyButton } from "./CopyButton";
-import { SheetCutter, type Cutter } from "./SheetCutter";
+import { CreateStep } from "./CreateStep";
 
 type Source = "picture" | "idea";
 
@@ -27,6 +26,7 @@ export interface VenueWizardProps {
 }
 
 const field = "mt-1 w-full rounded border border-neutral-300 px-2 py-1.5 text-sm";
+const boardLabels = (reply: string) => { const v = venueFillFromReply(reply).views; return v.length === 4 ? v.map((x) => x.name) : ["view 1", "view 2", "view 3", "view 4"]; };
 const codeName = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_|_$/g, "");
 
 function StepHeader({ n, title }: { n: number; title: string }) {
@@ -49,9 +49,6 @@ export function VenueWizard({ projectId, projectCode, existing }: VenueWizardPro
   const [idea, setIdea] = useState("");
   const [setting, setSetting] = useState<"interior" | "exterior">("interior");
   const [atmosphere, setAtmosphere] = useState("");
-  const [reply, setReply] = useState("");
-  const [board, setBoard] = useState<File>();
-  const cutter = useRef<Cutter | null>(null);
   const [error, setError] = useState("");
 
   const shown = name.trim() || "your venue";
@@ -97,30 +94,21 @@ export function VenueWizard({ projectId, projectCode, existing }: VenueWizardPro
   const mood = [setting === "exterior" ? "outdoors" : "indoors", atmosphere.trim()].filter(Boolean).join(", ");
   const promptText = venueDescribePrompt(source === "idea" ? "idea" : "image", idea, mood);
 
-  async function create() {
-    setError("");
-    try {
-      if (!venueId) throw new Error("Go back to step 1 and save the venue first.");
-      if (!board || !cutter.current) throw new Error("Upload the image board first.");
-      const r = venueFillFromReply(reply);
-      if (!r.description) throw new Error("Couldn't find the labelled description in that reply. Check you pasted all of ChatGPT's answer.");
-      if (r.views.length !== 4) throw new Error(`ChatGPT's reply lists ${r.views.length} views; the image board has 4. Ask ChatGPT for exactly four VIEWS lines, one per direction.`);
-      const pieces = await cutter.current();
-      const saved = await saveVenueAction(venueId, { name, description: r.description, setting: r.setting, views: r.views });
-      if (!saved.ok) throw new Error(saved.error);
-      await uploadBlob(projectId, `${baseCode}_SHEET`, "reference-sheet", board, board.name);
-      for (const [i, v] of r.views.entries()) {
-        const id = await uploadBlob(projectId, `${baseCode}_${codeName(v.name)}`, "venue-ref", pieces[i], `${v.name}.png`);
-        const a = await setVenueViewImageAction(venueId, v.name, id);
-        if (!a.ok) throw new Error(a.error);
-      }
-      router.push(`?v=${venueId}`);
-      router.refresh();
-      return true;
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      return false;
+  async function create(reply: string, pieces: Blob[], board: File): Promise<string | void> {
+    if (!venueId) return "Go back to step 1 and save the venue first.";
+    const r = venueFillFromReply(reply);
+    if (!r.description) return "Couldn't find the labelled description in that reply. Check you pasted all of ChatGPT's answer.";
+    if (r.views.length !== 4) return `ChatGPT's reply lists ${r.views.length} views; the image board has 4. Ask ChatGPT for exactly four VIEWS lines, one per direction.`;
+    const saved = await saveVenueAction(venueId, { name, description: r.description, setting: r.setting, views: r.views });
+    if (!saved.ok) return saved.error;
+    await uploadBlob(projectId, `${baseCode}_SHEET`, "reference-sheet", board, board.name);
+    for (const [i, v] of r.views.entries()) {
+      const id = await uploadBlob(projectId, `${baseCode}_${codeName(v.name)}`, "venue-ref", pieces[i], `${v.name}.png`);
+      const a = await setVenueViewImageAction(venueId, v.name, id);
+      if (!a.ok) return a.error;
     }
+    router.push(`?v=${venueId}`);
+    router.refresh();
   }
 
   const choice = (value: Source, title: string, detail: string) => (
@@ -195,35 +183,15 @@ export function VenueWizard({ projectId, projectCode, existing }: VenueWizardPro
       {step === 3 && (
         <>
           <StepHeader n={3} title={`Create ${shown}`} />
-          <div className="space-y-4 text-sm">
-            <div className="flex flex-wrap items-center gap-3">
-              <CopyButton text={promptText} label={`Copy ${possessive} description`} />
-              <span className="text-neutral-700">
-                Go over to ChatGPT, paste the copied description{source === "idea" ? "" : " and upload the picture you used"}.
-                ChatGPT replies with a written description and one image board showing the four views.
-              </span>
-            </div>
-            <label className="block">Paste ChatGPT&apos;s reply here
-              <textarea className={`${field} font-mono text-xs`} rows={6} value={reply} onChange={(e) => setReply(e.target.value)} data-testid="vwiz-reply" />
-            </label>
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <label className="cursor-pointer rounded-md border border-neutral-300 px-3 py-1 hover:bg-neutral-50">
-                  {board ? "Choose a different image board" : "Upload the image board"}
-                  <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" data-testid="vwiz-board"
-                    onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) { setError(""); setBoard(f); } }} />
-                </label>
-                <span className="text-xs text-neutral-500">No image board? Send this in the same chat: <CopyButton text={venueSheetRequest()} label="Copy board request" /></span>
-              </div>
-              {board && <SheetCutter file={board} cols={VENUE_SHEET.cols} rows={VENUE_SHEET.rows} labels={(() => { const v = venueFillFromReply(reply).views; return v.length === 4 ? v.map((x) => x.name) : ["view 1", "view 2", "view 3", "view 4"]; })()} cutterRef={cutter} />}
-            </div>
-            <div className="flex items-center gap-3">
-              <button type="button" onClick={() => setStep(2)} className="text-sm text-neutral-600 underline">Back</button>
-              <ActionButton label="Create" busyLabel="Creating…" doneLabel="Created" testId="vwiz-create" disabled={!reply.trim() || !board}
-                title={!reply.trim() ? "Paste ChatGPT's reply first" : !board ? "Upload the image board first" : ""}
-                onAction={create} resetKey={[reply, board?.name, board?.lastModified]} />
-            </div>
-          </div>
+          <CreateStep
+            id="vwiz"
+            copyLabel={`Copy ${possessive} description`}
+            prompt={promptText}
+            instruction={`Go over to ChatGPT, paste the copied description${source === "idea" ? "" : " and upload the picture you used"}.`}
+            sheet={{ cols: VENUE_SHEET.cols, rows: VENUE_SHEET.rows, labels: boardLabels, request: venueSheetRequest() }}
+            onCreate={create}
+            footer={<button type="button" onClick={() => setStep(2)} className="text-sm text-neutral-600 underline">Back</button>}
+          />
         </>
       )}
       {error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}

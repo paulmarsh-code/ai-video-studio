@@ -5,8 +5,10 @@ import { useState, type ReactNode } from "react";
 import { approveVenueAction, saveVenueAction, setVenueViewImageAction } from "@/app/studioActions";
 import { uploadBlob } from "@/lib/clientUpload";
 import type { VenueView } from "@/lib/studioRepo";
-import { VENUE_SHEET, venueChangePrompt, venueDescribePrompt, venueFillFromReply, venueSheetRequest, type DescribeSource } from "@/lib/domain/describe";
-import { StartFromPanel } from "./StartFromPanel";
+import { VENUE_SHEET, venueChangePrompt, venueFillFromReply, venueSheetRequest } from "@/lib/domain/describe";
+import { ChangeRequest } from "./ChangeRequest";
+import { CreateStep } from "./CreateStep";
+import { downloadBoard } from "@/lib/board";
 import { ActionButton, DoneBadge } from "./ActionButton";
 
 // Directions are as seen from the main viewpoint (where scenes here usually start).
@@ -21,12 +23,13 @@ const DIRECTIONS = [
   { deg: 315, label: "Behind and right" },
 ];
 
-export function VenueEditor({ venue, projectId, baseCode, canDescribe, images }: { projectId: string; baseCode: string; canDescribe: boolean; images?: ReactNode; venue: { id: string; name: string; description: string; setting: string; status: string; views: VenueView[] } }) {
+export function VenueEditor({ venue, projectId, baseCode, images }: { projectId: string; baseCode: string; images?: ReactNode; venue: { id: string; name: string; description: string; setting: string; status: string; views: VenueView[] } }) {
   const router = useRouter();
   // Images are set beside each view, so they are not part of this form's state.
   const initial = { name: venue.name, description: venue.description, setting: (venue.setting === "exterior" ? "exterior" : "interior") as "interior" | "exterior", views: venue.views.map((v) => ({ name: v.name, directionDeg: v.directionDeg })) };
   const [f, setF] = useState(initial);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [changing, setChanging] = useState<string | null>(null);
   const dirty = JSON.stringify(f) !== JSON.stringify(initial);
   const field = "mt-1 w-full rounded border border-neutral-300 px-2 py-1 text-sm";
 
@@ -72,6 +75,33 @@ export function VenueEditor({ venue, projectId, baseCode, canDescribe, images }:
     router.refresh();
     return r;
   };
+
+  // After "Submit changes" the page clears and runs the same final step as a new venue.
+  if (changing) {
+    const board = venue.views.map((v) => v.imageAssetId);
+    const haveBoard = board.length === 4 && board.every(Boolean);
+    const names = f.views.map((v) => v.name);
+    return (
+      <div className="rounded-xl border border-neutral-200 bg-white p-5" data-testid="change-flow">
+        <div className="mb-3 flex items-center gap-2">
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-700 text-sm font-semibold text-white">2</span>
+          <h2 className="text-lg font-semibold">Create the updated {venue.name}</h2>
+          <span className="ml-auto text-xs text-neutral-500">Step 2 of 2</span>
+        </div>
+        <p className="mb-4 rounded bg-neutral-50 p-2 text-sm text-neutral-700"><span className="font-medium">Your changes:</span> {changing}</p>
+        <CreateStep
+          id="chg"
+          copyLabel={`Copy ${venue.name}'s updated description`}
+          prompt={venueChangePrompt({ setting: f.setting, description: f.description, views: names }, changing)}
+          instruction={<>Go over to ChatGPT, paste the copied description and upload the current image board{haveBoard && <> (<button type="button" className="text-blue-700 underline" data-testid="download-board"
+            onClick={() => void downloadBoard(board as string[], VENUE_SHEET.cols, VENUE_SHEET.rows, `${baseCode}_current_board.png`)}>download it here</button>)</>}.</>}
+          sheet={{ cols: VENUE_SHEET.cols, rows: VENUE_SHEET.rows, labels: (reply) => { const v = venueFillFromReply(reply).views; return v.length === 4 ? v.map((x) => x.name) : names.length === 4 ? names : ["view 1", "view 2", "view 3", "view 4"]; }, request: venueSheetRequest(names.length === 4 ? names : undefined) }}
+          onCreate={async (reply, pieces, file) => { const r = await create(reply, pieces, file); if (!r.ok) return r.text; setChanging(null); }}
+          footer={<button type="button" onClick={() => setChanging(null)} className="text-sm text-neutral-600 underline" data-testid="change-cancel">Cancel changes</button>}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_1.4fr]" data-testid="venue-details">
@@ -119,17 +149,7 @@ export function VenueEditor({ venue, projectId, baseCode, canDescribe, images }:
     </div>
     <div className="space-y-3 self-start">
       {images}
-      <StartFromPanel what="place" projectId={projectId} baseCode={`${baseCode}_SOURCE`} canDescribe={canDescribe} changeOnly
-        promptFor={(src: DescribeSource, text: string) => src === "change"
-          ? venueChangePrompt({ setting: f.setting, description: f.description, views: f.views.map((v) => v.name) }, text)
-          : venueDescribePrompt(src, text)}
-        change={{ currentImages: venue.views.filter((v) => v.imageAssetId).map((v) => ({ label: `${v.name} view`, assetId: v.imageAssetId! })) }}
-        onCreate={create}
-        sheet={{
-          cols: VENUE_SHEET.cols, rows: VENUE_SHEET.rows,
-          labels: f.views.length === 4 ? f.views.map((v) => v.name) : ["view 1", "view 2", "view 3", "view 4"],
-          prompt: venueSheetRequest(f.views.length === 4 ? f.views.map((v) => v.name) : undefined),
-        }} />
+      <ChangeRequest what="place" onSubmit={setChanging} />
     </div>
     </div>
   );

@@ -4,7 +4,7 @@ import { getDb } from "@/db/client";
 import * as repo from "@/lib/repo";
 import * as studio from "@/lib/studioRepo";
 import { characterRefPrompt, MIN_REF_ASPECT, REF_VIEWS } from "@/lib/domain/imagePrompts";
-import { getImageProvider, getTextProvider } from "@/lib/providers/images";
+import { getImageProvider } from "@/lib/providers/images";
 import { setCharacterRefAction } from "@/app/studioActions";
 import { CharacterEditor } from "@/components/CharacterEditor";
 import { ImageSlot } from "@/components/ImageSlot";
@@ -23,7 +23,6 @@ export default async function CharactersPage({ params, searchParams }: { params:
   const chars = studio.listCharacters(db, id);
   const style = String((project.brief as { style?: string }).style ?? "photorealistic");
   const canGenerate = !!getImageProvider();
-  const canDescribe = !!getTextProvider();
 
   // One character at a time: the one in ?c=, else the first. ?new=1 starts a new one.
   const adding = sp.new === "1" || chars.length === 0;
@@ -61,7 +60,7 @@ export default async function CharactersPage({ params, searchParams }: { params:
           <section className="rounded-xl border border-neutral-200 bg-neutral-50 p-4">
             <h2 className="text-lg font-semibold">{c.name}</h2>
             <div className="mt-3">
-              <CharacterEditor key={c.id} c={c} projectId={id} baseCode={code} canDescribe={canDescribe}
+              <CharacterEditor key={c.id} c={c} projectId={id} baseCode={code}
                 images={hasImages ? (
                 <div className="grid grid-cols-3 gap-2 self-start">
                   {REF_VIEWS.map((v) => (
