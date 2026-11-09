@@ -252,3 +252,71 @@ describe("Show me an example", () => {
     expect(exampleFor("horror", "Mini drama")).toBe(STORY_EXAMPLES.horror);
   });
 });
+
+describe("Scene setting (D18c): the same spot and crowd in every picture and clip", () => {
+  const withScene = `SCENE\nSPOT: around a tall round cocktail table with a white cloth, near the bar\nBACKGROUND: about 30 well-dressed guests mingling with drinks\n\n${REPLY}`;
+  it("asks GPT for the setting first and reads it back", () => {
+    expect(storyPrompt({ story: "x", characters: CAST, venue: "v", targetSec: 30 })).toMatch(/SCENE\nSPOT: .*\nBACKGROUND: /);
+    const r = parseStoryReply(withScene, CAST);
+    expect(r.staging).toEqual({ spot: "around a tall round cocktail table with a white cloth, near the bar", crowd: "about 30 well-dressed guests mingling with drinks" });
+    expect(r.panels).toHaveLength(7);
+    expect(parseStoryReply("SCENE\nSPOT: on a park bench\nBACKGROUND: none\nPANEL 1\nACTION: x", CAST).staging).toEqual({ spot: "on a park bench", crowd: "" });
+  });
+  it("puts the table on the first floor plan", () => {
+    const plan = defaultPlan(CAST.map((c) => c.id), parseStoryReply(REPLY, CAST).panels, [], { spot: "around a tall round cocktail table", crowd: "" });
+    expect(plan.furniture).toEqual([{ id: "spot", name: "tall round cocktail table", position: { x: 0.25, y: 4.85 }, radiusM: 0.35 }]);
+    expect(defaultPlan(["jade"], [], [], { spot: "around a table", crowd: "" }).furniture).toEqual([]);
+  });
+  it("picture requests carry the spot, the background guests and the approved scene picture", async () => {
+    const { panelPrompt } = await import("../src/lib/domain/imagePrompts");
+    const cast = CAST.map((c) => ({ id: c.id, name: c.name, pronoun: "she" as const, voiceLock: "" }));
+    const shot = shotSpecFor(parseStoryReply(REPLY, CAST).panels[0], { code: "P1", venueName: "Launch", castIds: CAST.map((c) => c.id), staging: { spot: "around a tall cocktail table", crowd: "about 30 guests mingling" } });
+    const p = panelPrompt({ description: "Jade arrives", shot, cast, profiles: {}, venueName: "Launch", continuity: { assetId: "a-p2", label: "approved scene picture (panel 2)" } });
+    expect(p.text).toContain("Where: around a tall cocktail table. Keep it visible where the camera would see it.");
+    expect(p.text).toContain("Background: about 30 guests mingling. Background guests are out of focus");
+    expect(p.text).toContain("Only Jade in the foreground; other guests only in the background.");
+    expect(p.text).toContain("Use the attached approved scene picture (panel 2) for continuity");
+    expect(p.attach).toContainEqual({ label: "approved scene picture (panel 2)", assetId: "a-p2" });
+    const bare = panelPrompt({ description: "Jade arrives", shot: { ...shot, spot: undefined, crowd: undefined }, cast, profiles: {}, venueName: "Launch" });
+    expect(bare.text).toContain("Only Jade in frame.");
+    expect(bare.text).not.toContain("Background:");
+  });
+  it("Kling prompts carry them too, and no longer say no other people", async () => {
+    const { composeKlingPrompt: composePrompt } = await import("../src/lib/domain/composer");
+    const cast = CAST.map((c) => ({ id: c.id, name: c.name, pronoun: "she" as const, voiceLock: "a calm voice" }));
+    const shot = shotSpecFor(parseStoryReply(REPLY, CAST).panels[0], { code: "P1", venueName: "Launch", castIds: CAST.map((c) => c.id), staging: { spot: "around a tall cocktail table", crowd: "about 30 guests mingling" } });
+    const t = composePrompt(shot, cast).text;
+    expect(t).toContain("They are around a tall cocktail table. In the background: about 30 guests mingling, out of focus.");
+    expect(t).toContain("Only Jade is in the foreground. Background guests stay out of focus");
+    expect(t).not.toContain("No other people visible");
+  });
+  it("saving the setting updates every shot in the scene", async () => {
+    const { openDb } = await import("../src/db/client");
+    const studio = await import("../src/lib/studioRepo");
+    const repo = await import("../src/lib/repo");
+    const db = await openDb(":memory:");
+    const pid = studio.createProject(db, { name: "Test", format: "Advert", audience: "", outline: "", parts: 1, partSec: 30, aspect: "9:16", style: "", genre: "comedy" });
+    for (const c of CAST) studio.addCharacter(db, pid, { name: c.name, pronoun: "they", role: c.role });
+    const sid = studio.addScene(db, pid, { title: "S", venueId: studio.addVenue(db, pid, "Bar"), castIds: CAST.map((c) => c.id) });
+    const parsed = parseStoryReply(`SCENE\nSPOT: around a tall table\nBACKGROUND: guests\n${REPLY}`, CAST);
+    studio.saveStoryboard(db, sid, { story: "x", targetSec: 30, panels: parsed.panels, staging: parsed.staging });
+    expect(repo.getScene(db, sid)!.shots[0].spec.spot).toBe("around a tall table");
+    expect(repo.getScene(db, sid)!.plan!.data.furniture![0].name).toBe("tall table");
+    studio.saveSceneStaging(db, sid, { spot: "on the sofas", crowd: "none" });
+    const s = repo.getScene(db, sid)!;
+    expect(s.scene.staging).toEqual({ spot: "on the sofas", crowd: "" });
+    expect(s.shots.every((x) => x.spec.spot === "on the sofas" && x.spec.crowd === undefined)).toBe(true);
+  });
+});
+
+describe("Suggest the setting from a saved story", () => {
+  it("asks for the setting only, insists on background people at events, and reads the reply", async () => {
+    const { stagingPrompt, parseStaging } = await import("../src/lib/domain/story");
+    const p = stagingPrompt({ story: GLOWVANE_STORY, venue: "GLOWVANE launch party", characters: CAST });
+    expect(p).toContain("If the story is at an event, party, launch");
+    expect(p).toContain("lots of industry people will be there");
+    expect(p).toMatch(/SCENE\nSPOT: .*\nBACKGROUND: /);
+    expect(storyPrompt({ story: "x", characters: CAST, venue: "v", targetSec: 30 })).toContain("If the story is at an event, party, launch");
+    expect(parseStaging("Sure!\n**SPOT:** around a high table\nBACKGROUND: a busy launch crowd of about 40 guests\n")).toEqual({ spot: "around a high table", crowd: "a busy launch crowd of about 40 guests" });
+  });
+});

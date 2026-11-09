@@ -1,0 +1,1 @@
+ALTER TABLE `scenes` ADD `staging` text DEFAULT '{}' NOT NULL;

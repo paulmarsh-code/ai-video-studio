@@ -97,6 +97,11 @@ export interface PanelPromptInput {
   aspect?: string; // e.g. "9:16"
   genre?: Genre;
   style?: string;
+  /**
+   * An approved picture of this scene (D18c), attached so later panels keep the same spot,
+   * furniture, background guests, light and clothes. Not used for the panel's own picture.
+   */
+  continuity?: { assetId: string; label: string };
 }
 
 export interface PanelPrompt {
@@ -127,15 +132,21 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     const pick = c.id === fgId ? (refs.back ?? refs.front) : (refs.front ?? refs.face);
     if (pick) attach.push({ label: `${c.name} ${c.id === fgId && refs.back ? "back" : "reference"}`, assetId: pick });
   }
+  if (i.continuity) attach.push({ label: i.continuity.label, assetId: i.continuity.assetId });
   const bgView = reading?.backgroundView;
   const bgImage = bgView ? i.venueViews?.find((v) => v.name === bgView)?.imageAssetId : undefined;
   if (bgImage) attach.push({ label: `${bgView} view`, assetId: bgImage });
 
   const lines: string[] = [];
   lines.push(`${(i.style ?? "photorealistic").replace(/^./, (m) => m.toUpperCase())} storyboard frame for a ${i.aspect ?? "9:16"} video, set in the ${i.venueName}.`);
-  const people = attach.filter((a) => !a.label.endsWith(" view"));
+  const people = attach.filter((a) => !a.label.endsWith(" view") && a.assetId !== i.continuity?.assetId);
   if (people.length) lines.push(`Use the attached reference images for ${joinNames(people.map((a) => a.label.replace(/ (reference|back)$/, "")))}; keep their faces, hair and clothes identical.`);
   if (bgImage) lines.push(`Use the attached ${bgView} image as the background: same place, layout and light.`);
+  if (i.continuity) lines.push(`Use the attached ${i.continuity.label} for continuity: the same spot, furniture, background guests, light and clothes. Change only the camera angle and the moment.`);
+  const spot = shot?.spot?.trim();
+  const crowd = shot?.crowd?.trim();
+  if (spot) lines.push(`Where: ${sentence(spot)}${visible.length > 1 ? "" : " Keep it visible where the camera would see it."}`);
+  if (crowd) lines.push(`Background: ${sentence(crowd)} Background guests are out of focus, smaller than the main characters and never look at the camera; none of them look like the main characters.`);
   for (const c of visible) {
     const p = i.profiles[c.id];
     const parts = [p?.appearance, p?.wardrobe ? `wearing ${p.wardrobe}` : ""].filter(Boolean).map((x) => stripQuotes(x!).replace(/[.!?]+$/, ""));
@@ -153,7 +164,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     if (fgId) lines.push(`${name(fgId)} in the soft foreground, seen from behind over the shoulder.`);
   }
   lines.push(`Look: ${GENRE_PROFILES[genre].look}.`);
-  if (visible.length === 1) lines.push(`Only ${visible[0].name} in frame.`);
+  if (visible.length === 1) lines.push(crowd ? `Only ${visible[0].name} in the foreground; other guests only in the background.` : `Only ${visible[0].name} in frame.`);
   else if (visible.length > 1) lines.push(`Exactly one of each person: ${joinNames(visible.map((c) => c.name))}. No other people in the foreground.`);
   lines.push("No text, no logos, no speech bubbles, no watermark.");
   return { text: lines.join("\n"), attach };

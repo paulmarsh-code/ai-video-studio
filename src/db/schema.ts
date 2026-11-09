@@ -65,6 +65,8 @@ export const scenes = sqliteTable("scenes", {
   /** The creator's own telling of the scene (D18). */
   story: text("story").notNull().default(""),
   targetSec: integer("target_sec").notNull().default(60),
+  /** Where the characters are and who else is there, used in every picture and clip (D18c). */
+  staging: text("staging", { mode: "json" }).notNull().default({}),
 }, (t) => [uniqueIndex("scenes_unique").on(t.projectId, t.episode, t.number)]);
 
 export const panels = sqliteTable("panels", {

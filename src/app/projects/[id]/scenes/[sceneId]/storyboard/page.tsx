@@ -9,6 +9,8 @@ import { GENRE_PROFILES } from "@/lib/domain/genre";
 import { StoryWizard } from "@/components/StoryWizard";
 import { exampleFor } from "@/lib/domain/storyExamples";
 import { StoryboardBoard } from "@/components/StoryboardBoard";
+import { SceneSettingCard } from "@/components/SceneSettingCard";
+import { asStaging, stagingPrompt } from "@/lib/domain/story";
 import { PanelEditor } from "@/components/PanelEditor";
 
 export const dynamic = "force-dynamic";
@@ -54,6 +56,11 @@ export default async function StoryboardPage({ params, searchParams }: { params:
       </div>
     );
   }
+  // The approved picture showing the most people keeps the rest of the scene consistent (D18c).
+  const anchor = s.panels
+    .map((p, i) => ({ panel: p, n: i + 1, people: s.shots.find((x) => x.panelId === p.id)?.spec.visibleIds.length ?? 0 }))
+    .filter((x) => x.panel.status === "approved" && x.panel.imageAssetId)
+    .sort((a, b) => b.people - a.people || a.n - b.n)[0];
   let n = s.panels.length + 1;
   while (s.panels.some((p) => p.code.toLowerCase() === `p${n}`)) n++;
 
@@ -70,6 +77,11 @@ export default async function StoryboardPage({ params, searchParams }: { params:
       {missingRefs.length > 0 && <p className="mt-2 text-sm text-amber-700">No approved pictures yet for {missingRefs.map((c) => c.name).join(", ")}. Create them in <Link className="underline" href={`/projects/${id}/characters`}>Characters</Link> so every panel keeps them consistent.</p>}
 
       <div className="mt-5">
+        <SceneSettingCard sceneId={sceneId} staging={asStaging(s.scene.staging)} hasPictures={s.panels.some((p) => p.imageAssetId)} canAuto={!!getTextProvider()}
+          suggestPrompt={s.scene.story.trim() ? stagingPrompt({ story: s.scene.story, venue: s.venue?.name ?? "the venue", characters: chars.filter((c) => castIds.includes(c.slug)).map((c) => ({ id: c.slug, name: c.name, role: c.role })) }) : undefined} />
+      </div>
+
+      <div className="mt-5">
         <StoryboardBoard projectId={id} sceneId={sceneId} designHref={`/projects/${id}/scenes/${sceneId}/design`} baseCode={base} size={portrait ? "portrait" : "landscape"} canGenerate={canGenerate}
           panels={s.panels.map((p) => {
             const shot = s.shots.find((x) => x.panelId === p.id);
@@ -77,6 +89,7 @@ export default async function StoryboardPage({ params, searchParams }: { params:
             const prompt = panelPrompt({
               description: p.description, emotion: p.emotion, shot: shot?.spec, cast, profiles, plan: s.plan?.data,
               venueName: s.venue?.name ?? "venue", venueViews: s.venue?.views as { name: string; imageAssetId?: string }[] | undefined, aspect: brief.aspect, genre, style: brief.style,
+              continuity: anchor && anchor.panel.id !== p.id ? { assetId: anchor.panel.imageAssetId!, label: `approved scene picture (panel ${anchor.n})` } : undefined,
             });
             return {
               id: p.id, code: p.code, description: p.description, seconds: p.durationSec, status: p.status, imageAssetId: p.imageAssetId ?? undefined,

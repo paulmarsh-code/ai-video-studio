@@ -78,6 +78,9 @@ export function composeKlingPrompt(
 
   // 2. Scene and story moment — quotes removed so nothing earlier is re-spoken.
   s.scene = stripQuotes(shot.sceneContext);
+  // Scene setting (D18c): the same spot and background people in every clip of the scene.
+  if (shot.spot?.trim()) s.scene += ` They are ${stripQuotes(shot.spot).trim().replace(/[.]$/, "")}.`;
+  if (shot.crowd?.trim()) s.scene += ` In the background: ${stripQuotes(shot.crowd).trim().replace(/[.]$/, "")}, out of focus.`;
 
   // 3 + 7. Positions, distance and background from the plan.
   const cam = plan?.cameras.find((c) => c.id === shot.cameraId);
@@ -138,7 +141,9 @@ export function composeKlingPrompt(
     guards.push("No one speaks. No dialogue, no humming, no vocal sounds.");
   }
   if (visible.length === 1) {
-    guards.push(`Only ${visible[0].name} is in frame. No other people visible.`);
+    guards.push(shot.crowd?.trim()
+      ? `Only ${visible[0].name} is in the foreground. Background guests stay out of focus and never speak to the camera.`
+      : `Only ${visible[0].name} is in frame. No other people visible.`);
   } else if (visible.length > 1) {
     guards.push(`Exactly one of each person: ${joinNames(visible.map((c) => c.name))}.`);
   }

@@ -23,6 +23,20 @@ export interface StoryCharacter {
   role?: string;
 }
 
+/** The scene setting (D18c): kept the same in every picture and clip of the scene. */
+export interface SceneStaging {
+  /** Where the characters are and what they stand or sit around. */
+  spot: string;
+  /** Who else is there and what they are doing; empty for no one. */
+  crowd: string;
+}
+
+export function asStaging(v: unknown): SceneStaging {
+  const o = (v ?? {}) as Record<string, unknown>;
+  const clean = (x: unknown) => (typeof x === "string" && !NONE.test(x.trim()) ? stripQuotes(x).trim() : "");
+  return { spot: clean(o.spot), crowd: clean(o.crowd) };
+}
+
 export interface DraftPanel {
   action: string;
   /** Character ids seen in the panel. */
@@ -73,8 +87,15 @@ export function storyPrompt(i: { story: string; characters: StoryCharacter[]; ve
     `- The setting is: ${i.venue}.`,
     "- Keep the story's order and do not add new plot.",
     "- Give no camera directions; the app chooses the cameras.",
+    `- ${CROWD_RULE}`,
     "",
-    "Reply with plain text only, with no drawings or code, in exactly this format for every panel:",
+    "Reply with plain text only, with no drawings or code, in exactly this format. First the scene setting, which stays the same in every panel:",
+    "",
+    "SCENE",
+    "SPOT: where the characters are and what they stand or sit around, specific enough to draw the same way every time (for example: around a tall round cocktail table with a white cloth, near the bar)",
+    "BACKGROUND: who else is there and what they are doing (for example: about 30 well-dressed guests mingling with drinks), or none if the characters are alone",
+    "",
+    "Then every panel:",
     "",
     "PANEL 1",
     "ACTION: what we see, in one or two sentences",
@@ -104,12 +125,47 @@ export function shapeLine(b: ProjectBrief): string {
   return [b.format?.trim(), shape].filter(Boolean).join(", ");
 }
 
+/** Events, parties and busy places need people in the background, or every picture comes out empty. */
+const CROWD_RULE = "If the story is at an event, party, launch, bar, restaurant, street or any busy place, or mentions other people being there, BACKGROUND must describe them: roughly how many, how they are dressed and what they are doing.";
+
+/** For a scene saved before the setting existed: ask GPT for the setting only (D18c). */
+export function stagingPrompt(i: { story: string; venue: string; characters: StoryCharacter[] }): string {
+  return [
+    "You are a storyboard artist. Read the scene below and describe its setting, which stays the same in every picture and video clip of the scene.",
+    "",
+    `The setting is: ${i.venue}. The characters are: ${i.characters.map((c) => c.name).join(", ")}.`,
+    CROWD_RULE,
+    "",
+    "Reply with plain text only, in exactly this format:",
+    "",
+    "SCENE",
+    "SPOT: where the characters are and what they stand or sit around, specific enough to draw the same way every time",
+    "BACKGROUND: who else is there and what they are doing, or none",
+    "",
+    "Scene:",
+    "<<<",
+    i.story.trim(),
+    ">>>",
+  ].join("\n");
+}
+
+/** Read SPOT and BACKGROUND lines (from a story reply's preamble or a setting-only reply). */
+export function parseStaging(text: string): SceneStaging {
+  const scene: Record<string, string> = {};
+  for (const raw of cleanReply(text).split(/^\s*[#*_\s]*PANEL\s*\d+[^\n]*$/im)[0].split(/\r?\n/)) {
+    const m = raw.replace(/\*\*|__/g, "").replace(/^\s*[-*•]\s*/, "").trim().match(/^(SPOT|WHERE|BACKGROUND|CROWD|EXTRAS)\s*:\s*(.*)$/i);
+    if (m) scene[/^(SPOT|WHERE)$/i.test(m[1]) ? "spot" : "crowd"] = m[2];
+  }
+  return asStaging(scene);
+}
+
 // ---------- Reading the reply ----------
 
 const FIELD = /^(ACTION|IN FRAME|INFRAME|SPEAKER|LINE|DIALOGUE|EMOTION|SECONDS|LENGTH|DURATION)\s*:\s*(.*)$/i;
 const NONE = /^(none|no one|nobody|n\/a|-+|—|silent|\(none\)|\(silent\))\.?$/i;
 
 export interface StoryReply {
+  staging: SceneStaging;
   panels: DraftPanel[];
   /** Names GPT used that aren't characters in this scene. */
   unknownNames: string[];
@@ -124,7 +180,8 @@ export function parseStoryReply(text: string, characters: StoryCharacter[]): Sto
     if (!c) unknown.add(stripQuotes(raw).trim());
     return c?.id;
   };
-  const blocks = cleanReply(text).split(/^\s*[#*_\s]*PANEL\s*\d+[^\n]*$/im).slice(1);
+  const parts = cleanReply(text).split(/^\s*[#*_\s]*PANEL\s*\d+[^\n]*$/im);
+  const blocks = parts.slice(1);
   const panels: DraftPanel[] = [];
   for (const block of blocks) {
     const v: Record<string, string> = {};
@@ -155,7 +212,7 @@ export function parseStoryReply(text: string, characters: StoryCharacter[]): Sto
       seconds: panelSeconds(lineText, asked),
     });
   }
-  return { panels, unknownNames: [...unknown] };
+  return { staging: parseStaging(parts[0] ?? ""), panels, unknownNames: [...unknown] };
 }
 
 /** A spoken panel is sized to its line (D10); a silent one is kept inside Kling's range. */
@@ -223,9 +280,10 @@ export function estimateStory(story: string): StoryEstimate {
 // ---------- From panels to shots and a first floor plan ----------
 
 /** The draft shot for a panel: who is seen, who speaks, the locked line and its length. */
-export function shotSpecFor(p: DraftPanel, i: { code: string; venueName: string; castIds: string[] }): ShotSpec {
+export function shotSpecFor(p: DraftPanel, i: { code: string; venueName: string; castIds: string[]; staging?: SceneStaging }): ShotSpec {
   const visible = p.inFrame.filter((id) => i.castIds.includes(id));
   return {
+    spot: i.staging?.spot || undefined, crowd: i.staging?.crowd || undefined,
     code: i.code, venueName: i.venueName, sceneContext: p.action, presentIds: i.castIds,
     visibleIds: visible, excludedIds: i.castIds.filter((id) => !visible.includes(id)),
     speakerId: p.line ? p.speakerId : undefined, dialogue: p.line || undefined,
@@ -240,7 +298,7 @@ export function shotSpecFor(p: DraftPanel, i: { code: string; venueName: string;
  * most lines faces the rest of the group across a small gap. People can be moved on the
  * floor plan later; the app then shows which shots a move affects.
  */
-export function defaultPlan(castIds: string[], panels: DraftPanel[], views: PlanView[]): GeometryPlanData {
+export function defaultPlan(castIds: string[], panels: DraftPanel[], views: PlanView[], staging?: SceneStaging): GeometryPlanData {
   const said = (id: string) => panels.filter((p) => p.speakerId === id).length + panels.filter((p) => p.inFrame.includes(id)).length / 100;
   const order = [...castIds].sort((a, b) => said(b) - said(a));
   const [main, ...rest] = order;
@@ -252,7 +310,11 @@ export function defaultPlan(castIds: string[], panels: DraftPanel[], views: Plan
   const line: [string, string] | undefined = talkers.length >= 2 ? [talkers[1], talkers[0]] : rest.length ? [rest[0], main] : undefined;
   return {
     bounds: { minX: -4.5, maxX: 4.5, minY: 0, maxY: 10 },
-    furniture: [], actors, cameras: [],
+    // The thing the group stands around, between them, so the floor plan shows it.
+    furniture: staging?.spot && actors.length > 1 && /\b(table|bar|counter|desk|sofa|bench|stall|stand)\b/i.test(staging.spot)
+      ? [{ id: "spot", name: (staging.spot.match(/\b(?:[\w-]+\s+){0,3}(table|bar|counter|desk|sofa|bench|stall|stand)\b/i)?.[0] ?? "table").replace(/^(?:(?:around|at|by|near|on|in|beside|behind|next|to|a|an|the)\s+)+/i, ""), position: { x: 0.25, y: 4.85 }, radiusM: 0.35 }]
+      : [],
+    actors, cameras: [],
     views: views.map((v) => ({ name: v.name, directionDeg: v.directionDeg })),
     lineOfAction: line,
   };

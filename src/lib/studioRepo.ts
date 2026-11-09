@@ -15,7 +15,7 @@ import { deriveDuration } from "./domain/duration";
 import { hasQuotes } from "./domain/text";
 import type { PlanView, Pronoun, ShotSpec } from "./domain/types";
 import { asGenre, type Genre } from "./domain/genre";
-import { checkStoryboard, defaultPlan, panelSeconds, shotSpecFor, type DraftPanel } from "./domain/story";
+import { asStaging, checkStoryboard, defaultPlan, panelSeconds, shotSpecFor, type DraftPanel, type SceneStaging } from "./domain/story";
 import { getAnimatic, getCast, saveAnimatic, type AnimaticTimeline } from "./repo";
 
 // ---------- Characters ----------
@@ -457,7 +457,8 @@ export function saveSceneStory(db: DB, sceneId: string, story: string, targetSec
  * story itself and, for a new scene, a first floor plan so the app can choose cameras.
  * Replaces earlier panels only while none of them is approved.
  */
-export function saveStoryboard(db: DB, sceneId: string, s: { story: string; targetSec: number; panels: DraftPanel[] }) {
+export function saveStoryboard(db: DB, sceneId: string, s: { story: string; targetSec: number; panels: DraftPanel[]; staging?: SceneStaging }) {
+  const staging = asStaging(s.staging);
   const scene = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();
   if (!scene) throw new Error("Scene not found");
   if (!s.panels.length) throw new Error("There are no panels to save.");
@@ -485,13 +486,29 @@ export function saveStoryboard(db: DB, sceneId: string, s: { story: string; targ
       id: panelId, sceneId, code, order: i + 1, description: p.action.trim(), emotion: p.emotion.trim(),
       dialogue: p.line ? [{ characterId: p.speakerId!, text: p.line.trim() }] : [], durationSec: panelSeconds(p.line, p.seconds), status: "draft",
     }).run();
-    const spec = shotSpecFor({ ...p, seconds: panelSeconds(p.line, p.seconds) }, { code: shotCode(scene, code), venueName: venue?.name ?? "", castIds });
+    const spec = shotSpecFor({ ...p, seconds: panelSeconds(p.line, p.seconds) }, { code: shotCode(scene, code), venueName: venue?.name ?? "", castIds, staging });
     db.insert(t.shots).values({ id: randomUUID(), sceneId, panelId, code: spec.code, spec }).run();
   });
   if (!db.select().from(t.plans).where(eq(t.plans.sceneId, sceneId)).get()) {
-    db.insert(t.plans).values({ id: randomUUID(), sceneId, name: "First floor plan (from the story)", version: 1, data: defaultPlan(castIds, s.panels, (venue?.views ?? []) as PlanView[]) }).run();
+    db.insert(t.plans).values({ id: randomUUID(), sceneId, name: "First floor plan (from the story)", version: 1, data: defaultPlan(castIds, s.panels, (venue?.views ?? []) as PlanView[], staging) }).run();
   }
-  db.update(t.scenes).set({ story: s.story, targetSec: s.targetSec }).where(eq(t.scenes.id, sceneId)).run();
+  db.update(t.scenes).set({ story: s.story, targetSec: s.targetSec, staging }).where(eq(t.scenes.id, sceneId)).run();
   persist(db);
   return { panels: s.panels.length, totalSec: check.totalSec };
+}
+
+/**
+ * Change the scene setting (D18c). Every shot carries the setting, so the picture and Kling
+ * prompts of the whole scene change together. Pictures already made keep the old setting
+ * until they are redrawn.
+ */
+export function saveSceneStaging(db: DB, sceneId: string, staging: SceneStaging) {
+  const st = asStaging(staging);
+  db.update(t.scenes).set({ staging: st }).where(eq(t.scenes.id, sceneId)).run();
+  for (const sh of db.select().from(t.shots).where(eq(t.shots.sceneId, sceneId)).all()) {
+    const spec = { ...(sh.spec as ShotSpec), spot: st.spot || undefined, crowd: st.crowd || undefined };
+    db.update(t.shots).set({ spec }).where(eq(t.shots.id, sh.id)).run();
+  }
+  persist(db);
+  return st;
 }

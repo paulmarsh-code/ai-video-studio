@@ -8,7 +8,7 @@ import { getDb } from "@/db/client";
 import type { RefView } from "@/lib/domain/imagePrompts";
 import type { Pronoun } from "@/lib/domain/types";
 import * as studio from "@/lib/studioRepo";
-import type { DraftPanel } from "@/lib/domain/story";
+import type { DraftPanel, SceneStaging } from "@/lib/domain/story";
 
 export type Result<T = undefined> = { ok: true; value?: T } | { ok: false; error: string };
 
@@ -110,7 +110,10 @@ export async function addSceneAction(projectId: string, s: studio.NewScene) {
 export async function saveSceneStoryAction(sceneId: string, story: string, targetSec: number) {
   return run((db) => studio.saveSceneStory(db, sceneId, story, targetSec));
 }
-export async function saveStoryboardAction(sceneId: string, s: { story: string; targetSec: number; panels: DraftPanel[] }) {
+export async function saveSceneStagingAction(sceneId: string, staging: SceneStaging) {
+  return run((db) => studio.saveSceneStaging(db, sceneId, staging));
+}
+export async function saveStoryboardAction(sceneId: string, s: { story: string; targetSec: number; panels: DraftPanel[]; staging?: SceneStaging }) {
   return run((db) => studio.saveStoryboard(db, sceneId, s));
 }
 

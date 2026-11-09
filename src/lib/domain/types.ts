@@ -98,6 +98,10 @@ export interface ShotSpec {
   /** Any audio/voice reference files attached (should be none — v1.3 rule). */
   audioReferenceCodes?: string[];
   additionalInstructions?: string;
+  /** From the scene setting (D18c): where the characters are, e.g. "around a tall cocktail table". */
+  spot?: string;
+  /** Background people, e.g. "about 30 guests mingling"; empty means no one else. */
+  crowd?: string;
 }
 
 export type Severity = "error" | "warning" | "info";

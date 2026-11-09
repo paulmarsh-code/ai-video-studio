@@ -13,8 +13,9 @@ import { saveSceneStoryAction, saveStoryboardAction } from "@/app/studioActions"
 import { countWords } from "@/lib/domain/duration";
 import {
   checkStoryboard, estimateStory, MAX_CLIP_SEC, MAX_LINE_WORDS, MIN_CLIP_SEC, panelSeconds, parseStoryReply, SILENT_BEAT_SEC, storyPrompt,
-  type DraftPanel, type ProjectBrief, type StoryCharacter,
+  type DraftPanel, type ProjectBrief, type SceneStaging, type StoryCharacter,
 } from "@/lib/domain/story";
+import { StagingFields } from "./SceneSettingCard";
 import { ActionButton } from "./ActionButton";
 
 const field = "mt-1 w-full rounded border border-neutral-300 px-2 py-1.5 text-sm";
@@ -55,6 +56,7 @@ export function StoryWizard(p: StoryWizardProps) {
   const [reply, setReply] = useState("");
   const [panels, setPanels] = useState<DraftPanel[]>([]);
   const [unknown, setUnknown] = useState<string[]>([]);
+  const [staging, setStaging] = useState<SceneStaging>({ spot: "", crowd: "" });
   const [error, setError] = useState("");
   const [showExample, setShowExample] = useState(false);
 
@@ -76,6 +78,7 @@ export function StoryWizard(p: StoryWizardProps) {
     const r = parseStoryReply(text, p.cast);
     if (!r.panels.length) { setError("Couldn't find any panels in that reply. Check it has lines starting PANEL 1, PANEL 2 and so on."); return false; }
     setPanels(r.panels);
+    setStaging(r.staging);
     setUnknown(r.unknownNames);
     setReply(text);
     setError("");
@@ -108,7 +111,7 @@ export function StoryWizard(p: StoryWizardProps) {
 
   async function save() {
     setError("");
-    const r = await saveStoryboardAction(p.sceneId, { story, targetSec: target, panels });
+    const r = await saveStoryboardAction(p.sceneId, { story, targetSec: target, panels, staging });
     if (!r.ok) { setError(r.error); return r; }
     router.push(pathname); // drops ?story=1 and shows the saved storyboard
     router.refresh();
@@ -194,6 +197,10 @@ export function StoryWizard(p: StoryWizardProps) {
           <div className="mb-3 rounded bg-blue-50 px-3 py-2 text-sm text-blue-900" data-testid="story-total">
             {panels.length} panels · about <strong>{check.totalSec} s</strong> · target {target} s
             {check.lengthNote && <span className="block text-amber-800">{check.lengthNote}</span>}
+          </div>
+          <div className="mb-4 rounded-lg border border-neutral-200 p-3" data-testid="story-staging">
+            <p className="mb-2 text-sm font-semibold">Scene setting <span className="font-normal text-neutral-600">· kept the same in every picture and clip</span></p>
+            <StagingFields value={staging} onChange={setStaging} />
           </div>
           {unknown.length > 0 && <p className="mb-3 text-sm text-amber-700">GPT also mentioned {unknown.join(", ")}, who {unknown.length > 1 ? "aren't characters" : "isn't a character"} in this scene. They are treated as background.</p>}
           <ol className="space-y-3">

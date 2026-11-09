@@ -131,13 +131,13 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
     return r;
   }
 
-  async function drawAll() {
+  async function drawAll(list: BoardPanel[] = missing, verb = "Drawing") {
     setMsg(null); setFailed({});
     let done = 0, bad = 0;
     const reasons = new Set<string>();
-    for (const p of missing) {
-      setProgress(`Drawing ${done + bad + 1} of ${missing.length}…`);
-      setDrawing((x) => ({ ...x, [p.id]: "Drawing…" }));
+    for (const p of list) {
+      setProgress(`${verb} ${done + bad + 1} of ${list.length}…`);
+      setDrawing((x) => ({ ...x, [p.id]: `${verb}…` }));
       try {
         const id = await drawPicture({ projectId: b.projectId, baseCode: codeOf(p), prompt: p.prompt, refs: p.attach.map((a) => a.assetId), size: b.size });
         const r = await setPanelImageAction(p.id, id);
@@ -195,12 +195,23 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
             <ActionButton label="Let the app choose the cameras" busyLabel="Choosing…" doneLabel="Chosen" onAction={chooseCameras} testId="choose-cameras" />
           </>
         ), "step-cameras")}
-        {step(2, "Pictures", missing.length === 0, missing.length === 0 ? <p>Every panel has a picture.</p> : (
+        {step(2, "Pictures", missing.length === 0, missing.length === 0 ? (
+          <>
+            <p>Every panel has a picture.</p>
+            {b.canGenerate && toApprove.length > 0 && (
+              <div className="mt-2">
+                <ActionButton label={`Redraw the ${toApprove.length} unapproved`} busyLabel={progress || "Redrawing…"} doneLabel="Redrawn" variant="secondary"
+                  onAction={() => drawAll(toApprove, "Redrawing")} testId="redraw-unapproved" />
+                <p className="mt-1 text-xs text-neutral-600">Uses the scene setting{b.panels.some((p) => p.status === "approved") ? " and your approved pictures for continuity" : ""}. About 5p each.</p>
+              </div>
+            )}
+          </>
+        ) : (
           <>
             <p className="mb-2 text-neutral-700">{withPictures.length} of {b.panels.length} done.{b.canGenerate ? ` About 4p each with GPT.` : " Make each one in ChatGPT using the steps on the panel."}</p>
             {b.canGenerate && (
               <ActionButton label={`Create ${missing.length} picture${missing.length === 1 ? "" : "s"} with GPT`} busyLabel={progress || "Drawing…"} doneLabel="Drawn"
-                disabled={!camerasDone} title={camerasDone ? "" : "Let the app choose the cameras first"} onAction={drawAll} testId="draw-all" />
+                disabled={!camerasDone} title={camerasDone ? "" : "Let the app choose the cameras first"} onAction={() => drawAll()} testId="draw-all" />
             )}
             {!camerasDone && <p className="mt-1 text-xs text-amber-700">Choose the cameras first, so each picture matches its shot.</p>}
           </>
