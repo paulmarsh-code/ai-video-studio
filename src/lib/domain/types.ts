@@ -53,6 +53,10 @@ export interface PlanFurniture {
   name: string; // e.g. "cocktail table"
   position: Point;
   radiusM: number;
+  /** Height in metres (D19): drawn at this height in every camera view. */
+  heightM?: number;
+  /** Size, height and colour in words, kept identical in every picture and clip. */
+  detail?: string;
 }
 
 export interface GeometryPlanData {
@@ -107,6 +111,8 @@ export interface ShotSpec {
   spot?: string;
   /** Background people, e.g. "about 30 guests mingling"; empty means no one else. */
   crowd?: string;
+  /** Key props of the scene (D19), identical in every picture and clip. */
+  props?: { name: string; detail: string }[];
 }
 
 export type Severity = "error" | "warning" | "info";

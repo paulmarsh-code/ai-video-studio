@@ -92,6 +92,7 @@ export function DesignBoard(props: {
           onAction={async () => {
             const choices = design.shots.map((s) => ({ shotId: s.shotId, shotCode: s.shotCode, option: s.options[picked[s.shotId]] }));
             const r = await applyShotDesignAction(props.sceneId, choices, design.lineOfAction);
+            if ("error" in r && r.error) { setStatus(r.error); return false; }
             setStatus(`Applied as floor plan v${r.version}. Every shot now uses its chosen camera.`);
           }} />
         {status && (

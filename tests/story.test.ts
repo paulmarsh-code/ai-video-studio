@@ -256,16 +256,16 @@ describe("Show me an example", () => {
 describe("Scene setting (D18c): the same spot and crowd in every picture and clip", () => {
   const withScene = `SCENE\nSPOT: around a tall round cocktail table with a white cloth, near the bar\nBACKGROUND: about 30 well-dressed guests mingling with drinks\n\n${REPLY}`;
   it("asks GPT for the setting first and reads it back", () => {
-    expect(storyPrompt({ story: "x", characters: CAST, venue: "v", targetSec: 30 })).toMatch(/SCENE\nSPOT: .*\nBACKGROUND: /);
+    expect(storyPrompt({ story: "x", characters: CAST, venue: "v", targetSec: 30 })).toMatch(/SCENE\nSPOT: .*\nPROP: .*\nOTHER PEOPLE: /);
     const r = parseStoryReply(withScene, CAST);
-    expect(r.staging).toEqual({ spot: "around a tall round cocktail table with a white cloth, near the bar", crowd: "about 30 well-dressed guests mingling with drinks" });
+    expect(r.staging).toMatchObject({ spot: "around a tall round cocktail table with a white cloth, near the bar", crowd: "about 30 well-dressed guests mingling with drinks", crowdLevel: "busy" });
     expect(r.panels).toHaveLength(7);
-    expect(parseStoryReply("SCENE\nSPOT: on a park bench\nBACKGROUND: none\nPANEL 1\nACTION: x", CAST).staging).toEqual({ spot: "on a park bench", crowd: "" });
+    expect(parseStoryReply("SCENE\nSPOT: on a park bench\nBACKGROUND: none\nPANEL 1\nACTION: x", CAST).staging).toMatchObject({ spot: "on a park bench", crowd: "", crowdLevel: "none" });
   });
   it("puts the table on the first floor plan", () => {
     const plan = defaultPlan(CAST.map((c) => c.id), parseStoryReply(REPLY, CAST).panels, [], { spot: "around a tall round cocktail table", crowd: "" });
-    expect(plan.furniture).toEqual([{ id: "spot", name: "tall round cocktail table", position: { x: 0.25, y: 4.85 }, radiusM: 0.35 }]);
-    expect(defaultPlan(["jade"], [], [], { spot: "around a table", crowd: "" }).furniture).toEqual([]);
+    expect(plan.furniture).toMatchObject([{ id: "spot", name: "tall round cocktail table", position: { x: 0.25, y: 4.85 }, radiusM: 0.35, heightM: 1.1 }]);
+    expect(defaultPlan(["jade"], [], [], { spot: "around a table", crowd: "" }).furniture).toMatchObject([{ name: "table", position: { x: 0.65, y: 5 } }]);
   });
   it("picture requests carry the spot, the background guests and the approved scene picture", async () => {
     const { panelPrompt } = await import("../src/lib/domain/imagePrompts");
@@ -304,7 +304,7 @@ describe("Scene setting (D18c): the same spot and crowd in every picture and cli
     expect(repo.getScene(db, sid)!.plan!.data.furniture![0].name).toBe("tall table");
     studio.saveSceneStaging(db, sid, { spot: "on the sofas", crowd: "none" });
     const s = repo.getScene(db, sid)!;
-    expect(s.scene.staging).toEqual({ spot: "on the sofas", crowd: "" });
+    expect(s.scene.staging).toMatchObject({ spot: "on the sofas", crowd: "", crowdLevel: "none" });
     expect(s.shots.every((x) => x.spec.spot === "on the sofas" && x.spec.crowd === undefined)).toBe(true);
   });
 });
@@ -315,9 +315,9 @@ describe("Suggest the setting from a saved story", () => {
     const p = stagingPrompt({ story: GLOWVANE_STORY, venue: "GLOWVANE launch party", characters: CAST });
     expect(p).toContain("If the story is at an event, party, launch");
     expect(p).toContain("lots of industry people will be there");
-    expect(p).toMatch(/SCENE\nSPOT: .*\nBACKGROUND: /);
+    expect(p).toMatch(/SCENE\nSPOT: .*\nPROP: .*\nOTHER PEOPLE: /);
     expect(storyPrompt({ story: "x", characters: CAST, venue: "v", targetSec: 30 })).toContain("If the story is at an event, party, launch");
-    expect(parseStaging("Sure!\n**SPOT:** around a high table\nBACKGROUND: a busy launch crowd of about 40 guests\n")).toEqual({ spot: "around a high table", crowd: "a busy launch crowd of about 40 guests" });
+    expect(parseStaging("Sure!\n**SPOT:** around a high table\nBACKGROUND: a busy launch crowd of about 40 guests\n")).toMatchObject({ spot: "around a high table", crowd: "a busy launch crowd of about 40 guests", crowdLevel: "busy" });
   });
 });
 
@@ -408,5 +408,81 @@ describe("Layout sketch (D18f)", () => {
     expect(x("Chase")).toBeLessThan(x("Jade")); // camera on the near side: Chase (west) on the left, Jade (east) on the right
     expect(svg).toContain("behind: bar");
     expect(svg).toContain("tall table");
+  });
+});
+
+describe("Key props and other people (D19)", () => {
+  it("reads PROP and OTHER PEOPLE lines, with heights for the floor plan", async () => {
+    const { parseStaging, propHeight, crowdLevelOf } = await import("../src/lib/domain/story");
+    const st = parseStaging("SCENE\nSPOT: standing around the cocktail table, near the bar\nPROP: cocktail table - round, about 70 cm across, chest-high at 110 cm, white floor-length cloth\nPROP: Glowvane bottle display - a lit glass plinth, 1 m tall\nOTHER PEOPLE: busy - about 40 well-dressed industry guests mingling with drinks");
+    expect(st.props).toEqual([{ name: "cocktail table", detail: "round, about 70 cm across, chest-high at 110 cm, white floor-length cloth" }, { name: "Glowvane bottle display", detail: "a lit glass plinth, 1 m tall" }]);
+    expect(st).toMatchObject({ crowdLevel: "busy", crowd: "about 40 well-dressed industry guests mingling with drinks" });
+    expect(propHeight("cocktail table chest-high at 110 cm")).toBe(1.1);
+    expect(propHeight("coffee table")).toBe(0.45);
+    expect(propHeight("desk")).toBe(0.75);
+    expect(crowdLevelOf("two waiters")).toBe("few");
+    expect(crowdLevelOf("a packed dance floor")).toBe("busy");
+    expect(crowdLevelOf("none")).toBe("none");
+    // The gathering prop stands in the middle of the group; others a few metres away.
+    const plan = defaultPlan(CAST.map((c) => c.id), parseStoryReply(REPLY, CAST).panels, [], st);
+    expect(plan.furniture![0]).toMatchObject({ name: "cocktail table", position: { x: 0.25, y: 4.85 }, heightM: 1.1 });
+    expect(Math.hypot(plan.furniture![1].position.x - 0.25, plan.furniture![1].position.y - 4.85)).toBeCloseTo(2.4, 1);
+    expect(shotSpecFor(parseStoryReply(REPLY, CAST).panels[0], { code: "P1", venueName: "v", castIds: ["jade"], staging: st }).props).toHaveLength(2);
+  });
+});
+
+describe("Approve and lock positions, then cameras (D19)", () => {
+  it("locks people and props, then cameras; refuses changes until unlocked on purpose", async () => {
+    const { openDb } = await import("../src/db/client");
+    const studio = await import("../src/lib/studioRepo");
+    const repo = await import("../src/lib/repo");
+    const db = await openDb(":memory:");
+    const pid = studio.createProject(db, { name: "Lock", format: "Advert", audience: "", outline: "", parts: 1, partSec: 30, aspect: "9:16", style: "", genre: "comedy" });
+    for (const c of CAST) studio.addCharacter(db, pid, { name: c.name, pronoun: "they", role: c.role });
+    const sid = studio.addScene(db, pid, { title: "S", venueId: studio.addVenue(db, pid, "Bar"), castIds: CAST.map((c) => c.id) });
+    const parsed = parseStoryReply(`SCENE\nSPOT: standing around the cocktail table\nPROP: cocktail table - round, chest-high\nOTHER PEOPLE: busy - 40 guests\n${REPLY}`, CAST);
+    studio.saveStoryboard(db, sid, { story: "x", targetSec: 30, panels: parsed.panels, staging: parsed.staging });
+    expect(studio.sceneLocks(db, sid)).toEqual({});
+    expect(() => studio.approveCameras(db, sid)).toThrow(/Approve the positions first/);
+    const v = studio.approvePositions(db, sid);
+    const plan = repo.getScene(db, sid)!.plan!.data;
+    expect(plan.aspect).toBe("9:16");
+    // A locked plan can't move a person or a prop, and isn't rebuilt by a setting change.
+    const moved = { ...plan, actors: plan.actors.map((a, i) => (i === 0 ? { ...a, position: { x: a.position.x + 0.5, y: a.position.y } } : a)) };
+    expect(() => studio.checkPlanChange(db, sid, moved)).toThrow(/positions are approved and locked/);
+    expect(() => studio.checkPlanChange(db, sid, { ...plan, cameras: [{ id: "c1", name: "c", preset: "wide", position: { x: 0, y: 0 }, lookAt: { x: 0, y: 5 } }] })).not.toThrow();
+    expect(studio.saveSceneStaging(db, sid, { ...parsed.staging, spot: "on the sofas" }).replanned).toBe(false);
+    expect(repo.getScene(db, sid)!.plan!.version).toBe(v);
+    // Cameras: none yet, so they can't be approved.
+    expect(() => studio.approveCameras(db, sid)).toThrow(/no camera yet/);
+    const withCam = { ...plan, cameras: [{ id: "c1", name: "c", preset: "wide" as const, position: { x: 0.25, y: 0.5 }, lookAt: { x: 0.25, y: 5 } }] };
+    repo.savePlan(db, sid, withCam, "Cameras chosen by the app");
+    for (const sh of repo.getScene(db, sid)!.shots) repo.saveShotSpec(db, sh.id, { ...sh.spec, cameraId: "c1" });
+    studio.approveCameras(db, sid);
+    expect(() => studio.checkPlanChange(db, sid, { ...withCam, cameras: [] })).toThrow(/cameras are approved and locked/);
+    // Unlocking positions on purpose unlocks cameras too.
+    studio.unlockScene(db, sid, "cameras");
+    expect(studio.sceneLocks(db, sid)).toEqual({ positions: v, cameras: undefined });
+    studio.unlockScene(db, sid, "positions");
+    expect(studio.sceneLocks(db, sid)).toEqual({ positions: undefined, cameras: undefined });
+  });
+});
+
+describe("Picture check against the approved layout (D19)", () => {
+  it("asks the vision model what it sees, and decides pass or fail by rule", async () => {
+    const { checkPrompt, judgePicture, fixLine } = await import("../src/lib/domain/pictureCheck");
+    const e = { order: ["Nina", "Chase Whitmore", "Marcus", "Jade"], props: ["cocktail table"], crowd: "busy" as const };
+    const p = checkPrompt(e, ["Nina", "Chase Whitmore", "Marcus", "Jade"]);
+    expect(p).toContain("Expected main characters, left to right: Nina, Chase Whitmore, Marcus, Jade.");
+    expect(p).toContain("Reply with JSON only");
+    const ok = judgePicture(e, '{"left_to_right": ["Nina", "Chase", "Marcus", "Jade"], "props_seen": ["round cocktail table"], "background_people": "busy", "notes": ""}');
+    expect(ok).toEqual({ pass: true, problems: [] });
+    const swapped = judgePicture(e, '```json\n{"left_to_right": ["Marcus", "Chase", "Nina", "Jade"], "props_seen": ["table"], "background_people": "few"}\n```');
+    expect(swapped.pass).toBe(false);
+    expect(swapped.problems[0]).toMatch(/Wrong order: expected Nina, Chase Whitmore, Marcus, Jade/);
+    const missing = judgePicture(e, '{"left_to_right": ["Chase", "Jade"], "props_seen": [], "background_people": "none"}');
+    expect(missing.problems).toEqual(["Nina and Marcus are missing.", "The cocktail table is missing.", "No background people, but the scene has them."]);
+    expect(judgePicture(e, "I can't tell").pass).toBe(false);
+    expect(fixLine(missing.problems)).toContain("Fix these problems: Nina and Marcus are missing.");
   });
 });

@@ -29,6 +29,20 @@
       "when": 1794265333926,
       "tag": "0003_scene_staging",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1794269057374,
+      "tag": "0004_scene_locks",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1794269550189,
+      "tag": "0005_panel_check",
+      "breakpoints": true
     }
   ]
 }

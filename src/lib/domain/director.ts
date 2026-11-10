@@ -192,6 +192,9 @@ function score(
   if (line && sideOf(line[0], line[1], cam.position) !== sceneSide) return { ok: false, score: 0, reasons: [] };
   const reading = readCamera(plan, cam);
   const subjectId = shot.subjectId ?? shot.speakerId ?? shot.visibleIds[0];
+  // The panel says who is in frame (D19): a close-up drops everyone else, so it is only for a
+  // panel of one or two people, or an emotional peak.
+  if (cand.role === "cu" && shot.visibleIds.length > 2 && moment !== "peak") return { ok: false, score: 0, reasons: [] };
   const required = cand.role === "cu" ? [subjectId] : shot.visibleIds;
   for (const id of required) {
     const a = reading.actors.find((x) => x.characterId === id);

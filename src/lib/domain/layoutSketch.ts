@@ -24,6 +24,8 @@ export function layoutSketchSvg(i: {
   size: "portrait" | "landscape";
   /** E.g. "bar": the venue view behind, named at the top. */
   backgroundView?: string;
+  /** Other people in the scene (D19): drawn as grey figures in fixed places around the room. */
+  crowd?: "none" | "few" | "busy";
 }): string {
   const W = i.size === "portrait" ? 768 : 1152;
   const H = i.size === "portrait" ? 1152 : 768;
@@ -46,12 +48,34 @@ export function layoutSketchSvg(i: {
   const items: Item[] = [];
   const near = 0.25;
 
+  // Other people: the same grey figures in the same places in every camera view of the scene.
+  if (i.crowd === "few" || i.crowd === "busy") {
+    const n = i.crowd === "busy" ? 22 : 6;
+    // Background people stay behind the cast: never between the camera and the characters.
+    const castDepths = i.plan.actors.map((a) => toScreen(a.position, 1).depth).filter((d) => d > near);
+    const behind = (castDepths.length ? Math.max(...castDepths) : 0) + 0.6;
+    const occupied = [...i.plan.actors.map((a) => a.position), ...(i.plan.furniture ?? []).map((x) => x.position)];
+    const C = occupied.length ? { x: occupied.reduce((s, p) => s + p.x, 0) / occupied.length, y: occupied.reduce((s, p) => s + p.y, 0) / occupied.length } : { x: 0, y: 5 };
+    for (let k = 0; k < n; k++) {
+      const ring = 2.6 + (k % 3) * 0.9;
+      const ang = (k * 137.5 * Math.PI) / 180; // golden angle: spread evenly, same every time
+      const pos = { x: C.x + ring * Math.cos(ang), y: C.y + ring * Math.sin(ang) };
+      if (occupied.some((p) => Math.hypot(p.x - pos.x, p.y - pos.y) < 1.1)) continue;
+      if (Math.hypot(pos.x - cam.position.x, pos.y - cam.position.y) < 1.2) continue;
+      const head = toScreen(pos, 1.6);
+      if (head.depth < Math.max(1, behind)) continue;
+      const feet = toScreen(pos, 0);
+      const half = (0.2 / head.depth) * focal;
+      items.push({ depth: head.depth, svg: `<g opacity="0.55"><rect x="${(head.x - half).toFixed(1)}" y="${(head.y + half * 0.5).toFixed(1)}" width="${(half * 2).toFixed(1)}" height="${Math.max(0, feet.y - head.y - half * 0.5).toFixed(1)}" rx="${(half * 0.6).toFixed(1)}" fill="#9ca3af"/><circle cx="${head.x.toFixed(1)}" cy="${head.y.toFixed(1)}" r="${(half * 0.55).toFixed(1)}" fill="#9ca3af"/></g>` });
+    }
+  }
+
   for (const fu of i.plan.furniture ?? []) {
-    const c = toScreen(fu.position, TABLE_HEIGHT);
+    const c = toScreen(fu.position, fu.heightM ?? TABLE_HEIGHT);
     if (c.depth < near) continue;
     const rx = (fu.radiusM / c.depth) * focal;
     const floor = toScreen(fu.position, 0);
-    const ry = Math.max(4, rx * Math.min(0.5, (EYE_HEIGHT - TABLE_HEIGHT) / c.depth));
+    const ry = Math.max(4, rx * Math.min(0.5, Math.abs(EYE_HEIGHT - (fu.heightM ?? TABLE_HEIGHT)) / c.depth));
     items.push({
       depth: c.depth,
       svg: `<g><rect x="${(c.x - rx * 0.12).toFixed(1)}" y="${c.y.toFixed(1)}" width="${(rx * 0.24).toFixed(1)}" height="${Math.max(0, floor.y - c.y).toFixed(1)}" fill="#a3a3a3"/>`
@@ -77,9 +101,9 @@ export function layoutSketchSvg(i: {
     const labelY = Math.min(H - 24, Math.max(fs + 8, (shoulders.y + feet.y) / 2));
     items.push({
       depth: head.depth,
-      svg: `<g><rect x="${(head.x - half).toFixed(1)}" y="${shoulders.y.toFixed(1)}" width="${(half * 2).toFixed(1)}" height="${Math.max(0, feet.y - shoulders.y).toFixed(1)}" rx="${(half * 0.6).toFixed(1)}" fill="${col}" fill-opacity="0.35" stroke="${col}" stroke-width="${bold ? 8 : 4}"/>`
-        + `<circle cx="${head.x.toFixed(1)}" cy="${head.y.toFixed(1)}" r="${headR.toFixed(1)}" fill="${col}" fill-opacity="0.35" stroke="${col}" stroke-width="${bold ? 8 : 4}"/>`
-        + `<text x="${head.x.toFixed(1)}" y="${labelY.toFixed(1)}" font-size="${fs.toFixed(0)}" font-weight="700" text-anchor="middle" fill="#111" font-family="sans-serif">${esc(p.name)}</text></g>`,
+      svg: `<g><rect x="${(head.x - half).toFixed(1)}" y="${shoulders.y.toFixed(1)}" width="${(half * 2).toFixed(1)}" height="${Math.max(0, feet.y - shoulders.y).toFixed(1)}" rx="${(half * 0.6).toFixed(1)}" fill="${col}" fill-opacity="0.8" stroke="${col}" stroke-width="${bold ? 8 : 4}"/>`
+        + `<circle cx="${head.x.toFixed(1)}" cy="${head.y.toFixed(1)}" r="${headR.toFixed(1)}" fill="${col}" fill-opacity="0.8" stroke="${col}" stroke-width="${bold ? 8 : 4}"/>`
+        + `<text x="${head.x.toFixed(1)}" y="${labelY.toFixed(1)}" font-size="${fs.toFixed(0)}" font-weight="700" text-anchor="middle" fill="#fff" font-family="sans-serif">${esc(p.name)}</text></g>`,
     });
   });
 

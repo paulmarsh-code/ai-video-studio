@@ -10,9 +10,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { approvePanelAction, approvePanelsAction, chooseCamerasAction, setPanelImageAction } from "@/app/studioActions";
+import { approveCamerasAction, approvePanelAction, approvePanelsAction, approvePositionsAction, chooseCamerasAction, setPanelImageAction, unlockSceneAction } from "@/app/studioActions";
+import type { GeometryPlanData } from "@/lib/domain/types";
+import { PlanThumb } from "./PlanThumb";
 import { uploadBlob } from "@/lib/clientUpload";
 import { imageChangePrompt } from "@/lib/domain/imagePrompts";
+import { fixLine } from "@/lib/domain/pictureCheck";
 import { ActionButton, DoneBadge } from "./ActionButton";
 import { ChangeRequest, type SubmittedChange } from "./ChangeRequest";
 
@@ -28,6 +31,8 @@ export interface BoardPanel {
   hasCamera: boolean;
   /** Its shot, for the layout sketch (D18f). */
   shotId?: string;
+  /** The automatic check against the approved layout (D19). */
+  check?: { pass: boolean; problems: string[] };
   /** The GPT picture request, built from the camera, characters and venue. */
   prompt: string;
   attach: { label: string; assetId: string; href?: string }[];
@@ -40,9 +45,17 @@ export interface StoryboardBoardProps {
   baseCode: string;
   size: "portrait" | "landscape";
   canGenerate: boolean;
+  /** A GPT text model is set up, so pictures are checked against the layout. */
+  canCheck?: boolean;
   panels: BoardPanel[];
   /** The scene setting is empty: pictures won't know where they are or who else is there. */
   settingEmpty?: boolean;
+  /** Approved and locked (D19). */
+  locks: { positions: boolean; cameras: boolean };
+  /** For the top-down view of positions. */
+  plan?: GeometryPlanData;
+  names: Record<string, string>;
+  planHref: string;
 }
 
 /** OpenAI's error, said plainly, with what to do about it. */
@@ -64,6 +77,14 @@ async function drawPicture(p: { projectId: string; baseCode: string; prompt: str
   const body = (await res.json()) as { id?: string; error?: string };
   if (!res.ok || !body.id) throw new Error(body.error ?? "GPT didn't return a picture.");
   return body.id;
+}
+
+async function checkPicture(panelId: string, assetId: string): Promise<{ pass: boolean; problems: string[] } | null> {
+  try {
+    const res = await fetch("/api/images/check", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ panelId, assetId }) });
+    const body = (await res.json()) as { pass?: boolean; problems?: string[]; skipped?: boolean };
+    return res.ok && typeof body.pass === "boolean" ? { pass: body.pass, problems: body.problems ?? [] } : null;
+  } catch { return null; }
 }
 
 /** The change request for one picture: the current picture first, then any reference pictures. */
@@ -137,6 +158,27 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
     return r;
   }
 
+  /**
+   * Draw a picture, then check it against the approved layout (D19). If it doesn't match, redraw
+   * once with the problems spelled out; if it still doesn't, keep it and show why on the panel.
+   */
+  async function drawChecked(p: BoardPanel, prompt: string, refs: string[]) {
+    const layoutShotId = p.hasCamera ? p.shotId : undefined;
+    let id = await drawPicture({ projectId: b.projectId, baseCode: codeOf(p), prompt, refs, size: b.size, layoutShotId });
+    let r = await setPanelImageAction(p.id, id);
+    if (!r.ok) throw new Error(r.error);
+    if (!b.canCheck || !layoutShotId) return;
+    setDrawing((x) => ({ ...x, [p.id]: "Checking against the layout…" }));
+    const first = await checkPicture(p.id, id);
+    if (!first || first.pass) return;
+    setDrawing((x) => ({ ...x, [p.id]: "Didn't match the layout: redrawing…" }));
+    id = await drawPicture({ projectId: b.projectId, baseCode: codeOf(p), prompt: prompt + fixLine(first.problems), refs, size: b.size, layoutShotId });
+    r = await setPanelImageAction(p.id, id);
+    if (!r.ok) throw new Error(r.error);
+    setDrawing((x) => ({ ...x, [p.id]: "Checking again…" }));
+    await checkPicture(p.id, id);
+  }
+
   async function drawAll(list: BoardPanel[] = missing, verb = "Drawing") {
     setMsg(null); setFailed({});
     let done = 0, bad = 0;
@@ -145,9 +187,7 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
       setProgress(`${verb} ${done + bad + 1} of ${list.length}…`);
       setDrawing((x) => ({ ...x, [p.id]: `${verb}…` }));
       try {
-        const id = await drawPicture({ projectId: b.projectId, baseCode: codeOf(p), prompt: p.prompt, refs: assetIds(p.attach), size: b.size, layoutShotId: p.hasCamera ? p.shotId : undefined });
-        const r = await setPanelImageAction(p.id, id);
-        if (!r.ok) throw new Error(r.error);
+        await drawChecked(p, p.prompt, assetIds(p.attach));
         done++;
       } catch (e) {
         bad++;
@@ -170,9 +210,7 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
     setDrawing((x) => ({ ...x, [p.id]: "Redrawing…" }));
     try {
       const req = changeRequestFor(p, ch);
-      const id = await drawPicture({ projectId: b.projectId, baseCode: codeOf(p), prompt: req.prompt, refs: req.refs, size: b.size, layoutShotId: p.hasCamera ? p.shotId : undefined });
-      const r = await setPanelImageAction(p.id, id);
-      if (!r.ok) throw new Error(r.error);
+      await drawChecked(p, req.prompt, req.refs);
     } catch (e) {
       setFailed((x) => ({ ...x, [p.id]: e instanceof Error ? e.message : String(e) }));
     } finally {
@@ -192,19 +230,41 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-3 md:grid-cols-3">
-        {step(1, "Cameras", camerasDone, camerasDone ? (
-          <p>The app has chosen a camera for every panel. <Link className="text-blue-700 underline" href={b.designHref}>Review or change them</Link></p>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {step(1, "Positions", b.locks.positions, (
+          <>
+            {b.plan && <div className="mb-2"><PlanThumb plan={b.plan} names={b.names} /></div>}
+            {b.locks.positions ? (
+              <p>Approved and locked. <button type="button" className="text-blue-700 underline" data-testid="unlock-positions"
+                onClick={async () => { if (window.confirm("Unlock the positions? The cameras will be unlocked too and should be chosen again.")) { await unlockSceneAction(b.sceneId, "positions"); router.refresh(); } }}>Change positions</button></p>
+            ) : (
+              <>
+                <p className="mb-2 text-neutral-700">Who stands where, and the key props. Check them, <Link className="text-blue-700 underline" href={b.planHref}>adjust on the floor plan</Link> if needed, then approve.</p>
+                <ActionButton variant="approve" label="Approve positions" busyLabel="Approving…" doneLabel="Approved" testId="approve-positions"
+                  onAction={async () => { const r = await approvePositionsAction(b.sceneId); if (!r.ok) setMsg({ ok: false, text: r.error }); router.refresh(); return r; }} />
+              </>
+            )}
+          </>
+        ), "step-positions")}
+        {step(2, "Cameras", b.locks.cameras, b.locks.cameras ? (
+          <p>Approved and locked. Each panel shows its camera view. <button type="button" className="text-blue-700 underline" data-testid="unlock-cameras"
+            onClick={async () => { if (window.confirm("Unlock the cameras? Pictures already made may no longer match.")) { await unlockSceneAction(b.sceneId, "cameras"); router.refresh(); } }}>Change cameras</button></p>
+        ) : !b.locks.positions ? (
+          <p className="text-neutral-600">Approve the positions first: the cameras are chosen from them.</p>
         ) : (
           <>
-            <p className="mb-2 text-neutral-700">The app chooses each camera from the floor plan and film grammar, so the pictures match the real shots.</p>
-            <ActionButton label="Let the app choose the cameras" busyLabel="Choosing…" doneLabel="Chosen" onAction={chooseCameras} testId="choose-cameras" />
+            <p className="mb-2 text-neutral-700">{camerasDone ? "Check each panel's camera view below, " : "The app chooses each camera from the approved positions, "}<Link className="text-blue-700 underline" href={b.designHref}>change any</Link>{camerasDone ? ", then approve." : "."}</p>
+            <div className="flex flex-wrap gap-2">
+              <ActionButton label={camerasDone ? "Choose again" : "Let the app choose the cameras"} busyLabel="Choosing…" doneLabel="Chosen" variant={camerasDone ? "secondary" : "primary"} onAction={chooseCameras} testId="choose-cameras" />
+              {camerasDone && <ActionButton variant="approve" label="Approve cameras" busyLabel="Approving…" doneLabel="Approved" testId="approve-cameras"
+                onAction={async () => { const r = await approveCamerasAction(b.sceneId); if (!r.ok) setMsg({ ok: false, text: r.error }); router.refresh(); return r; }} />}
+            </div>
           </>
         ), "step-cameras")}
-        {step(2, "Pictures", missing.length === 0, missing.length === 0 ? (
+        {step(3, "Pictures", missing.length === 0, missing.length === 0 ? (
           <>
             <p>Every panel has a picture.</p>
-            {b.canGenerate && toApprove.length > 0 && (
+            {b.canGenerate && b.locks.cameras && toApprove.length > 0 && (
               <div className="mt-2">
                 <ActionButton label={`Redraw the ${toApprove.length} unapproved`} busyLabel={progress || "Redrawing…"} doneLabel="Redrawn" variant="secondary"
                   onAction={() => drawAll(toApprove, "Redrawing")} testId="redraw-unapproved" />
@@ -217,11 +277,11 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
             <p className="mb-2 text-neutral-700">{withPictures.length} of {b.panels.length} done.{b.canGenerate ? ` About 4p each with GPT.` : " Make each one in ChatGPT using the steps on the panel."}</p>
             {b.canGenerate && (
               <ActionButton label={`Create ${missing.length} picture${missing.length === 1 ? "" : "s"} with GPT`} busyLabel={progress || "Drawing…"} doneLabel="Drawn"
-                disabled={!camerasDone} title={camerasDone ? "" : "Let the app choose the cameras first"} onAction={() => drawAll()} testId="draw-all" />
+                disabled={!b.locks.cameras} title={b.locks.cameras ? "" : "Approve the cameras first"} onAction={() => drawAll()} testId="draw-all" />
             )}
-            {!camerasDone && <p className="mt-1 text-xs text-amber-700">Choose the cameras first, so each picture matches its shot.</p>}
+            {!b.locks.cameras && <p className="mt-1 text-xs text-amber-700">Approve the positions and cameras first, so every picture follows them.</p>}
             {b.settingEmpty && <p className="mt-1 text-xs text-amber-700" data-testid="setting-empty">The scene setting above is empty, so pictures won&apos;t show where they are or who else is there. Fill it in first.</p>}
-            {b.canGenerate && camerasDone && toApprove.length > 0 && (
+            {b.canGenerate && b.locks.cameras && toApprove.length > 0 && (
               <div className="mt-2">
                 <ActionButton label={`Redraw the ${toApprove.length} unapproved`} busyLabel={progress || "Redrawing…"} doneLabel="Redrawn" variant="secondary"
                   onAction={() => drawAll(toApprove, "Redrawing")} testId="redraw-unapproved" />
@@ -229,7 +289,7 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
             )}
           </>
         ), "step-pictures")}
-        {step(3, "Approve", allApproved, allApproved ? <p>All pictures approved. <Link className="text-blue-700 underline" href={b.designHref.replace(/design$/, "animatic")}>Next: the animatic</Link></p> : (
+        {step(4, "Approve", allApproved, allApproved ? <p>All pictures approved. <Link className="text-blue-700 underline" href={b.designHref.replace(/design$/, "animatic")}>Next: the animatic</Link></p> : (
           <>
             <p className="mb-2 text-neutral-700">{b.panels.filter((p) => p.status === "approved").length} of {b.panels.length} approved. Check each picture; change any that are wrong.</p>
             {toApprove.length > 0 && (
@@ -265,6 +325,9 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
             </div>
             <p className="mt-1 text-sm">{p.line ? <><span className="font-medium">{p.speaker}:</span> {p.line}</> : <span className="text-neutral-500">Silent</span>}</p>
             <p className="mt-1 text-xs text-neutral-600">{p.description}</p>
+            {p.imageAssetId && p.check && (p.check.pass
+              ? <p className="mt-1 text-xs text-green-700" data-testid={`board-${p.code}-check`}>✓ Matches the approved layout</p>
+              : <p className="mt-1 text-xs text-amber-700" data-testid={`board-${p.code}-check`}>⚠ Doesn&apos;t match the approved layout: {p.check.problems.join(" ")} Redraw it, or change it below.</p>)}
             {failed[p.id] && <p className="mt-1 text-xs text-red-700" role="alert" data-testid={`board-${p.code}-failed`}>GPT couldn&apos;t draw this one. {plainReason(failed[p.id])}</p>}
 
             <div className="mt-3 space-y-2">

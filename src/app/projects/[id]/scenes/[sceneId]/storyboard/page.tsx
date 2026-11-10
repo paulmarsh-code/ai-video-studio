@@ -34,6 +34,7 @@ export default async function StoryboardPage({ params, searchParams }: { params:
   const missingRefs = chars.filter((c) => c.approved && !c.approved.profile.refs?.front && !c.approved.profile.refs?.face);
   const portrait = (brief.aspect ?? "9:16").startsWith("9");
   const castIds = studio.sceneCastIds(db, s.scene);
+  const locks = studio.sceneLocks(db, sceneId);
   const anyApproved = s.panels.some((p) => p.status === "approved");
   const telling = !anyApproved && (s.panels.length === 0 || sp.story === "1");
   const total = s.panels.reduce((sum, p) => sum + p.durationSec, 0);
@@ -82,7 +83,8 @@ export default async function StoryboardPage({ params, searchParams }: { params:
       </div>
 
       <div className="mt-5">
-        <StoryboardBoard settingEmpty={!asStaging(s.scene.staging).spot && !asStaging(s.scene.staging).crowd} projectId={id} sceneId={sceneId} designHref={`/projects/${id}/scenes/${sceneId}/design`} baseCode={base} size={portrait ? "portrait" : "landscape"} canGenerate={canGenerate}
+        <StoryboardBoard canCheck={!!getTextProvider()} locks={{ positions: !!locks.positions, cameras: !!locks.cameras }} plan={s.plan?.data} planHref={`/projects/${id}/scenes/${sceneId}/plan`}
+          names={Object.fromEntries(cast.map((c) => [c.id, c.name]))} settingEmpty={!asStaging(s.scene.staging).spot && !asStaging(s.scene.staging).crowd} projectId={id} sceneId={sceneId} designHref={`/projects/${id}/scenes/${sceneId}/design`} baseCode={base} size={portrait ? "portrait" : "landscape"} canGenerate={canGenerate}
           panels={s.panels.map((p) => {
             const shot = s.shots.find((x) => x.panelId === p.id);
             const d = p.dialogue[0];
@@ -95,7 +97,8 @@ export default async function StoryboardPage({ params, searchParams }: { params:
             return {
               id: p.id, code: p.code, description: p.description, seconds: p.durationSec, status: p.status, imageAssetId: p.imageAssetId ?? undefined,
               speaker: d ? cast.find((c) => c.id === d.characterId)?.name : undefined, line: d?.text,
-              hasCamera: !!shot?.spec.cameraId, shotId: shot?.id, prompt: prompt.text, attach: prompt.attach,
+              hasCamera: !!shot?.spec.cameraId, shotId: shot?.id,
+              check: p.check?.pass === undefined ? undefined : { pass: p.check.pass, problems: p.check.problems ?? [] }, prompt: prompt.text, attach: prompt.attach,
             };
           })} />
       </div>

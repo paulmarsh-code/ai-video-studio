@@ -6,6 +6,7 @@ import type { DB } from "@/db/client";
 import { readCamera } from "./domain/geometry";
 import { layoutSketchSvg } from "./domain/layoutSketch";
 import { mainSubjectId } from "./domain/composer";
+import { crowdLevelOf } from "./domain/story";
 import * as repo from "./repo";
 
 export async function renderLayoutForShot(db: DB, shotId: string): Promise<Buffer | null> {
@@ -22,6 +23,7 @@ export async function renderLayoutForShot(db: DB, shotId: string): Promise<Buffe
     plan, camera: cam, size: aspect.startsWith("16") ? "landscape" : "portrait",
     people: plan.actors.map((a) => ({ id: a.characterId, name: cast.find((c) => c.id === a.characterId)?.name ?? a.characterId })),
     subjectId: mainSubjectId(shot.spec), backgroundView: readCamera(plan, cam).backgroundView,
+    crowd: crowdLevelOf(shot.spec.crowd ?? ""),
   });
   return sharp(Buffer.from(svg)).png().toBuffer();
 }

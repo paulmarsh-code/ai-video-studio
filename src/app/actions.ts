@@ -31,8 +31,10 @@ export async function savePromptAction(shotId: string, projectId: string) {
   return { version };
 }
 
-export async function savePlanAction(sceneId: string, data: GeometryPlanData) {
+export async function savePlanAction(sceneId: string, data: GeometryPlanData): Promise<{ version: number; error?: undefined } | { error: string; version?: undefined }> {
   const db = await getDb();
+  const { checkPlanChange } = await import("@/lib/studioRepo");
+  try { checkPlanChange(db, sceneId, data); } catch (e) { return { error: (e as Error).message }; }
   const version = repo.savePlan(db, sceneId, data);
   revalidatePath("/", "layout");
   return { version };
@@ -90,6 +92,8 @@ export async function applyShotDesignAction(
 ) {
   const { applyDesign } = await import("@/lib/domain/director");
   const db = await getDb();
+  const { sceneLocks } = await import("@/lib/studioRepo");
+  if (sceneLocks(db, sceneId).cameras) return { error: "The cameras are approved and locked. Unlock them on the storyboard to change them." };
   const current = repo.getLatestPlan(db, sceneId);
   if (!current) throw new Error("No floor plan for this scene");
   const { plan, assign } = applyDesign(current.data, choices, lineOfAction);

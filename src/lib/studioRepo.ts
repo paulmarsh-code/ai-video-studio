@@ -13,7 +13,7 @@ import type { CharacterProfile, RefView } from "./domain/imagePrompts";
 import { approvalProblems } from "./domain/approval";
 import { deriveDuration } from "./domain/duration";
 import { hasQuotes } from "./domain/text";
-import type { PlanView, Pronoun, ShotSpec } from "./domain/types";
+import type { GeometryPlanData, PlanView, Pronoun, ShotSpec } from "./domain/types";
 import { asGenre, type Genre } from "./domain/genre";
 import { asStaging, checkStoryboard, defaultPlan, panelSeconds, shotSpecFor, type DraftPanel, type SceneStaging } from "./domain/story";
 import { getAnimatic, getCast, saveAnimatic, type AnimaticTimeline } from "./repo";
@@ -325,7 +325,7 @@ export function updatePanel(db: DB, panelId: string, input: PanelInput): PanelCh
 
 /** A new picture always needs approving again. */
 export function setPanelImage(db: DB, panelId: string, assetId: string) {
-  db.update(t.panels).set({ imageAssetId: assetId, status: "draft" }).where(eq(t.panels.id, panelId)).run();
+  db.update(t.panels).set({ imageAssetId: assetId, status: "draft", check: {} }).where(eq(t.panels.id, panelId)).run();
   persist(db);
 }
 
@@ -457,7 +457,7 @@ export function saveSceneStory(db: DB, sceneId: string, story: string, targetSec
  * story itself and, for a new scene, a first floor plan so the app can choose cameras.
  * Replaces earlier panels only while none of them is approved.
  */
-export function saveStoryboard(db: DB, sceneId: string, s: { story: string; targetSec: number; panels: DraftPanel[]; staging?: SceneStaging }) {
+export function saveStoryboard(db: DB, sceneId: string, s: { story: string; targetSec: number; panels: DraftPanel[]; staging?: Partial<SceneStaging> }) {
   const staging = asStaging(s.staging);
   const scene = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();
   if (!scene) throw new Error("Scene not found");
@@ -492,7 +492,8 @@ export function saveStoryboard(db: DB, sceneId: string, s: { story: string; targ
   if (!db.select().from(t.plans).where(eq(t.plans.sceneId, sceneId)).get()) {
     db.insert(t.plans).values({ id: randomUUID(), sceneId, name: "First floor plan (from the story)", version: 1, data: defaultPlan(castIds, s.panels, (venue?.views ?? []) as PlanView[], staging, projectAspect(db, scene.projectId)) }).run();
   }
-  db.update(t.scenes).set({ story: s.story, targetSec: s.targetSec, staging }).where(eq(t.scenes.id, sceneId)).run();
+  const locks = (scene.locks ?? {}) as SceneLocks;
+  db.update(t.scenes).set({ story: s.story, targetSec: s.targetSec, staging, locks: { positions: locks.positions } }).where(eq(t.scenes.id, sceneId)).run();
   persist(db);
   return { panels: s.panels.length, totalSec: check.totalSec };
 }
@@ -502,7 +503,7 @@ export function saveStoryboard(db: DB, sceneId: string, s: { story: string; targ
  * prompts of the whole scene change together. Pictures already made keep the old setting
  * until they are redrawn.
  */
-export function saveSceneStaging(db: DB, sceneId: string, staging: SceneStaging) {
+export function saveSceneStaging(db: DB, sceneId: string, staging: Partial<SceneStaging>) {
   const st = asStaging(staging);
   const scene = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();
   if (!scene) throw new Error("Scene not found");
@@ -511,7 +512,7 @@ export function saveSceneStaging(db: DB, sceneId: string, staging: SceneStaging)
   // A floor plan the app made itself is rebuilt around the spot (D18d): the group stands
   // around the table, and the cameras are chosen again. A plan the user has edited is kept.
   const plan = db.select().from(t.plans).where(eq(t.plans.sceneId, sceneId)).orderBy(desc(t.plans.version)).get();
-  const replan = !!st.spot && !!plan && AUTO_PLANS.includes(plan.name);
+  const replan = !!st.spot && !!plan && AUTO_PLANS.includes(plan.name) && !sceneLocks(db, sceneId).positions;
   if (replan) {
     const castIds = sceneCastIds(db, scene);
     const panels: DraftPanel[] = panelsOf(db, sceneId).map((p) => {
@@ -525,7 +526,7 @@ export function saveSceneStaging(db: DB, sceneId: string, staging: SceneStaging)
   for (const sh of db.select().from(t.shots).where(eq(t.shots.sceneId, sceneId)).all()) {
     const old = sh.spec as ShotSpec;
     const spec: ShotSpec = {
-      ...old, spot: st.spot || undefined, crowd: st.crowd || undefined,
+      ...old, spot: st.spot || undefined, crowd: st.crowd || undefined, props: st.props.length ? st.props : undefined,
       // In a group scene the others are nearby, not banned from the frame.
       excludedIds: st.spot ? [] : old.excludedIds,
       cameraId: replan ? undefined : old.cameraId,
@@ -543,4 +544,82 @@ const AUTO_PLANS = ["First floor plan (from the story)", "Cameras chosen by the 
 export function projectAspect(db: DB, projectId: string): "9:16" | "16:9" {
   const p = db.select().from(t.projects).where(eq(t.projects.id, projectId)).get();
   return p ? briefOf(p).aspect : "9:16";
+}
+
+// ---------- Approve and lock (D19) ----------
+
+export interface SceneLocks {
+  /** Plan version whose positions (people and props) were approved. */
+  positions?: number;
+  /** Plan version whose cameras were approved. */
+  cameras?: number;
+}
+
+export function sceneLocks(db: DB, sceneId: string): SceneLocks {
+  const s = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();
+  const l = (s?.locks ?? {}) as SceneLocks;
+  return { positions: typeof l.positions === "number" ? l.positions : undefined, cameras: typeof l.cameras === "number" ? l.cameras : undefined };
+}
+
+function setLocks(db: DB, sceneId: string, locks: SceneLocks) {
+  db.update(t.scenes).set({ locks }).where(eq(t.scenes.id, sceneId)).run();
+  persist(db);
+}
+
+function latestPlan(db: DB, sceneId: string) {
+  const p = db.select().from(t.plans).where(eq(t.plans.sceneId, sceneId)).orderBy(desc(t.plans.version)).get();
+  return p ? { ...p, data: p.data as GeometryPlanData } : undefined;
+}
+
+export function approvePositions(db: DB, sceneId: string) {
+  const plan = latestPlan(db, sceneId);
+  if (!plan || !plan.data.actors.length) throw new Error("There is no floor plan to approve yet.");
+  setLocks(db, sceneId, { positions: plan.version });
+  return plan.version;
+}
+
+export function approveCameras(db: DB, sceneId: string) {
+  const locks = sceneLocks(db, sceneId);
+  if (!locks.positions) throw new Error("Approve the positions first.");
+  const plan = latestPlan(db, sceneId)!;
+  const shots = db.select().from(t.shots).where(eq(t.shots.sceneId, sceneId)).all().map((s) => s.spec as ShotSpec);
+  const missing = shots.filter((s) => !s.cameraId || !plan.data.cameras.some((c) => c.id === s.cameraId));
+  if (missing.length) throw new Error(`${missing.length} panel${missing.length === 1 ? " has" : "s have"} no camera yet. Let the app choose the cameras first.`);
+  setLocks(db, sceneId, { ...locks, cameras: plan.version });
+  return plan.version;
+}
+
+/** Unlock on purpose. Unlocking positions also unlocks cameras, since cameras depend on them. */
+export function unlockScene(db: DB, sceneId: string, what: "positions" | "cameras") {
+  const locks = sceneLocks(db, sceneId);
+  setLocks(db, sceneId, what === "positions" ? {} : { positions: locks.positions });
+}
+
+const same = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.abs(a.x - b.x) < 0.005 && Math.abs(a.y - b.y) < 0.005;
+
+/**
+ * Refuse a floor plan change that moves anything locked (D19): with cameras locked nothing
+ * may change; with positions locked, people and props may not move, be added or be removed.
+ */
+export function checkPlanChange(db: DB, sceneId: string, next: GeometryPlanData) {
+  const locks = sceneLocks(db, sceneId);
+  if (!locks.positions && !locks.cameras) return;
+  const cur = latestPlan(db, sceneId)?.data;
+  if (!cur) return;
+  if (locks.cameras) {
+    const camsChanged = JSON.stringify(cur.cameras) !== JSON.stringify(next.cameras);
+    if (camsChanged) throw new Error("The cameras are approved and locked. Unlock them on the storyboard to change them.");
+  }
+  const moved = cur.actors.length !== next.actors.length || cur.actors.some((a) => { const b = next.actors.find((x) => x.characterId === a.characterId); return !b || !same(a.position, b.position); })
+    || (cur.furniture ?? []).length !== (next.furniture ?? []).length || (cur.furniture ?? []).some((f) => { const g = (next.furniture ?? []).find((x) => x.id === f.id); return !g || !same(f.position, g.position) || f.radiusM !== g.radiusM || f.heightM !== g.heightM; });
+  if (moved) throw new Error("The positions are approved and locked. Unlock them on the storyboard to move people or props.");
+}
+
+export function shotIdForPanel(db: DB, panelId: string): string | undefined {
+  return db.select().from(t.shots).where(eq(t.shots.panelId, panelId)).get()?.id;
+}
+
+export function setPanelCheck(db: DB, panelId: string, check: { pass: boolean; problems: string[] }) {
+  db.update(t.panels).set({ check: { ...check, at: new Date().toISOString() } }).where(eq(t.panels.id, panelId)).run();
+  persist(db);
 }

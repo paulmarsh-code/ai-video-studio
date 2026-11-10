@@ -238,7 +238,7 @@ export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; 
 
         <div className="flex flex-wrap items-center gap-3">
           <ActionButton label="Save plan (new version)" busyLabel="Saving…" doneLabel={`Saved as v${savedVersion}`} disabled={!dirty} resetKey={plan}
-            onAction={async () => { const r = await savePlanAction(props.sceneId, plan); setSaved(plan); setSavedVersion(r.version); setStatus(`Saved as plan version ${r.version}. Earlier versions are kept.`); }} />
+            onAction={async () => { const r = await savePlanAction(props.sceneId, plan); if (r.error !== undefined) { setStatus(r.error); return false; } setSaved(plan); setSavedVersion(r.version); setStatus(`Saved as plan version ${r.version}. Earlier versions are kept.`); }} />
           <ActionButton variant="secondary" label="Save to library" busyLabel="Saving…" doneLabel="In your library" disabled={dirty} resetKey={plan}
             title={dirty ? "Save the plan first" : ""}
             onAction={async () => { await addPlanToLibraryAction(props.sceneId, "Venue and blocking plan"); setStatus("Plan saved to your library."); }} />

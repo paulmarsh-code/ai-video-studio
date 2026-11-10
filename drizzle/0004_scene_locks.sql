@@ -1,0 +1,1 @@
+ALTER TABLE `scenes` ADD `locks` text DEFAULT '{}' NOT NULL;

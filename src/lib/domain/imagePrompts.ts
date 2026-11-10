@@ -4,7 +4,7 @@
 // rejected); images made in GPT, not Kling (better and cheaper); no text or logos.
 
 import { mainSubjectId } from "./composer";
-import { describeFrame, PRESET_TEXT, readCamera } from "./geometry";
+import { describeFrame, PRESET_TEXT, readCamera, readProps } from "./geometry";
 import { GENRE_PROFILES, type Genre } from "./genre";
 import { gestureDetail } from "./gestures";
 import { joinNames, stripQuotes } from "./text";
@@ -163,7 +163,13 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   // An older approved picture may show an empty room: keep its spot and look, but add the crowd.
   if (i.continuity) lines.push(`Use the attached ${i.continuity.label} for continuity: the same spot, the same furniture at the same height and size, the same light and clothes${crowd ? ". If it shows fewer background guests than described below, add them" : ", and the same background guests"}. Change only the camera angle and the moment.`);
   if (spot) lines.push(`Where: ${sentence(spot)} Keep it in the picture wherever the camera would see it, always the same height and size. Everyone keeps their own place and posture around it${/\b(sit|sits|sitting|seated|sofa|couch|bench)\b/i.test(spot) ? "" : ", standing upright"}; no one leans on it or on the bar unless the moment says so.`);
-  if (crowd) lines.push(`Background: ${sentence(crowd)} Background guests are out of focus, smaller than the main characters and never look at the camera; none of them look like the main characters.`);
+  const props = shot?.props ?? [];
+  if (props.length) lines.push(`Key props, identical in every picture of this scene: ${props.map((p) => `${p.name}${p.detail ? ` (${stripQuotes(p.detail).replace(/[.]$/, "")})` : ""}`).join("; ")}.`);
+  if (cam && i.plan) {
+    const seen = readProps(i.plan, cam).filter((p) => p.inView);
+    if (seen.length) lines.push(`In this picture: ${joinNames(seen.map((p) => `the ${p.name} (${p.frame === "centre" ? "centre" : p.frame.replace("frame-", "")})`))}. ${seen.length === 1 ? "It must be" : "They must be"} clearly visible.`);
+  }
+  if (crowd) lines.push(`Background: ${sentence(crowd)}${layout ? " The grey figures in the layout sketch show where they stand." : ""} Background guests are out of focus, smaller than the main characters and never look at the camera; none of them look like the main characters.`);
   for (const c of visible) {
     const p = i.profiles[c.id];
     const parts = [p?.appearance, p?.wardrobe ? `wearing ${p.wardrobe}` : ""].filter(Boolean).map((x) => stripQuotes(x!).replace(/[.!?]+$/, ""));

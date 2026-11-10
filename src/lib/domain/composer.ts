@@ -82,6 +82,7 @@ export function composeKlingPrompt(
   // Scene setting (D18c): the same spot and background people in every clip of the scene.
   if (shot.spot?.trim()) s.scene += ` They are ${stripQuotes(shot.spot).trim().replace(/[.]$/, "")}.`;
   if (shot.crowd?.trim()) s.scene += ` In the background: ${stripQuotes(shot.crowd).trim().replace(/[.]$/, "")}, out of focus.`;
+  if (shot.props?.length) s.scene += ` Key props, unchanged in every clip: ${shot.props.map((p) => `${p.name}${p.detail ? ` (${stripQuotes(p.detail).replace(/[.]$/, "")})` : ""}`).join("; ")}.`;
 
   // 3 + 7. Positions, distance and background from the plan.
   const cam = plan?.cameras.find((c) => c.id === shot.cameraId);

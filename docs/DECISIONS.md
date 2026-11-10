@@ -313,3 +313,35 @@ Part 1 fixes the camera chooser, which the layout sketches showed was placing ca
 Result on Jades Entrance: the over-the-shoulder shots and close-ups are correct, and four group shots show all four around the table, unblocked. The two-shots at panels 2 and 9 and the opening wide still overlap slightly.
 
 **Part 2 (next):** key props in the scene build. Approve and lock positions, then cameras, with lock enforcement on the floor plan, Design shots and setting saves. Pictures only from approved geometry.
+
+## D19 (part 2) — Key props, other people, approve-and-lock, and the picture check (2026-11-10)
+
+Paul's expectations, for every project:
+- Characters are never out of position, because positions are approved.
+- Shots are never geometrically wrong, because cameras are approved.
+- An important prop is in the shot and the same as in earlier shots.
+- Other people expected at a busy event are always there.
+
+**Scene elements.** The scene setting now holds four things:
+- where the characters are, and whether they stand or sit;
+- **key props** (name, plus size, height and colour);
+- **other people** (none, a few or busy, plus a description).
+
+GPT returns them first in the story reply (SPOT, PROP and OTHER PEOPLE lines), and they can be edited at both the check step and on the storyboard. Key props go on the floor plan. The prop the group gathers around stands in the middle of the group, the others a few metres away. Each gets a height taken from its words: "chest-high" or "110 cm" gives 1.1 m, "coffee table" 0.45 m, a desk 0.75 m. Every shot carries the props and the other people. Picture prompts list the key props as "identical in every picture" and name which props this camera sees ("In this picture: the cocktail table (left). It must be clearly visible."). Kling prompts list them too. The layout sketch draws props at their height and draws the other people as grey figures in fixed places behind the cast, the same in every camera view.
+
+**Approve and lock.** The storyboard has four steps: Positions, Cameras, Pictures, Approve.
+- Positions show a top-down view of people and props. Approving locks that plan version.
+- The cameras can only be chosen once positions are approved. Approving them locks them, and every camera has to exist.
+- Pictures can only be drawn once cameras are approved.
+- The server enforces this:
+  - The floor plan editor refuses to move, add or remove people or props while positions are locked, and refuses any camera change while cameras are locked.
+  - Design shots and "choose cameras" refuse while cameras are locked.
+  - A setting change never rebuilds a locked plan.
+  - A new storyboard keeps the positions lock and drops the cameras lock.
+- Unlocking is deliberate, with a confirmation. Unlocking positions also unlocks cameras.
+
+**Close-ups follow the panel.** A close-up is only allowed when the panel shows one or two people, or for an emotional peak. A panel that lists the group gets a shot of the group.
+
+**Picture check.** After each GPT picture, the vision model receives the picture, the layout sketch and the characters' front pictures. It reports who it sees left to right, the props it sees and whether there are background people. Pass or fail is decided by rule against the approved layout: everyone present, in the right order, the key props visible, and background people if the scene has them. On a fail, the app redraws once with the problems spelled out; if it still fails, it keeps the picture and the panel shows why. Results are saved on the panel. A check costs well under 1p.
+
+Replay of Jades Entrance with the table and a busy crowd: every camera view shows the table and the guests behind the cast. The over-the-shoulder and close-up shots are correct, and most group shots show all four unblocked. Panels 1, 2 and 7 still have some overlap: approve-then-lock lets the user pick another option in Design shots before approving, and the picture check catches any picture that still comes out wrong.

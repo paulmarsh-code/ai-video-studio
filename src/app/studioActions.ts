@@ -110,7 +110,7 @@ export async function addSceneAction(projectId: string, s: studio.NewScene) {
 export async function saveSceneStoryAction(sceneId: string, story: string, targetSec: number) {
   return run((db) => studio.saveSceneStory(db, sceneId, story, targetSec));
 }
-export async function saveSceneStagingAction(sceneId: string, staging: SceneStaging) {
+export async function saveSceneStagingAction(sceneId: string, staging: Partial<SceneStaging>) {
   return run((db) => studio.saveSceneStaging(db, sceneId, staging));
 }
 export async function saveStoryboardAction(sceneId: string, s: { story: string; targetSec: number; panels: DraftPanel[]; staging?: SceneStaging }) {
@@ -128,6 +128,9 @@ export async function chooseCamerasAction(sceneId: string) {
     const { designScene, applyDesign } = await import("@/lib/domain/director");
     const s = repo.getScene(db, sceneId);
     if (!s?.plan) throw new Error("This scene has no floor plan yet. Save the storyboard first.");
+    const locks = studio.sceneLocks(db, sceneId);
+    if (!locks.positions) throw new Error("Approve the positions first: the cameras are chosen from them.");
+    if (locks.cameras) throw new Error("The cameras are approved and locked. Unlock them to choose again.");
     const cast = repo.getCast(db, s.scene.projectId);
     const name = (id: string) => cast.find((c) => c.id === id)?.name ?? id;
     const inputs = s.shots.map((sh) => ({ id: sh.id, code: sh.code, spec: sh.spec, description: s.panels.find((p) => p.id === sh.panelId)?.description }));
@@ -148,4 +151,14 @@ export async function chooseCamerasAction(sceneId: string) {
 
 export async function approvePanelsAction(panelIds: string[]) {
   return run((db) => { for (const id of panelIds) studio.approvePanel(db, id); return panelIds.length; });
+}
+
+export async function approvePositionsAction(sceneId: string) {
+  return run((db) => studio.approvePositions(db, sceneId));
+}
+export async function approveCamerasAction(sceneId: string) {
+  return run((db) => studio.approveCameras(db, sceneId));
+}
+export async function unlockSceneAction(sceneId: string, what: "positions" | "cameras") {
+  return run((db) => studio.unlockScene(db, sceneId, what));
 }

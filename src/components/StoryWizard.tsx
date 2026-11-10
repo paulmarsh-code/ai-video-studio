@@ -13,7 +13,7 @@ import { saveSceneStoryAction, saveStoryboardAction } from "@/app/studioActions"
 import { countWords } from "@/lib/domain/duration";
 import {
   checkStoryboard, estimateStory, MAX_CLIP_SEC, MAX_LINE_WORDS, MIN_CLIP_SEC, panelSeconds, parseStoryReply, SILENT_BEAT_SEC, storyPrompt,
-  type DraftPanel, type ProjectBrief, type SceneStaging, type StoryCharacter,
+  asStaging, type DraftPanel, type ProjectBrief, type SceneStaging, type StoryCharacter,
 } from "@/lib/domain/story";
 import { StagingFields } from "./SceneSettingCard";
 import { ActionButton } from "./ActionButton";
@@ -56,7 +56,7 @@ export function StoryWizard(p: StoryWizardProps) {
   const [reply, setReply] = useState("");
   const [panels, setPanels] = useState<DraftPanel[]>([]);
   const [unknown, setUnknown] = useState<string[]>([]);
-  const [staging, setStaging] = useState<SceneStaging>({ spot: "", crowd: "" });
+  const [staging, setStaging] = useState<SceneStaging>(asStaging({}));
   const [error, setError] = useState("");
   const [showExample, setShowExample] = useState(false);
 

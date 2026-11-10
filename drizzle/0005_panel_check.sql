@@ -1,0 +1,1 @@
+ALTER TABLE `panels` ADD `check` text DEFAULT '{}' NOT NULL;

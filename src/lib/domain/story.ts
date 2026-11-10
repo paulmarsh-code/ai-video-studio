@@ -24,17 +24,59 @@ export interface StoryCharacter {
 }
 
 /** The scene setting (D18c): kept the same in every picture and clip of the scene. */
+/** A key prop (D19): kept identical in every picture and clip, and placed on the floor plan. */
+export interface KeyProp {
+  name: string;
+  /** Size, height and colour in words. */
+  detail: string;
+}
+
+export type CrowdLevel = "none" | "few" | "busy";
+
+/** The scene setting (D18c, D19): kept the same in every picture and clip of the scene. */
 export interface SceneStaging {
-  /** Where the characters are and what they stand or sit around. */
+  /** Where the characters are, and whether they stand or sit. */
   spot: string;
   /** Who else is there and what they are doing; empty for no one. */
   crowd: string;
+  /** How many other people: none, a few, or a busy crowd. */
+  crowdLevel: CrowdLevel;
+  props: KeyProp[];
+}
+
+/** "busy" for crowds, parties and big numbers; "few" for a handful; "none" for no one. */
+export function crowdLevelOf(text: string, given?: unknown): CrowdLevel {
+  if (given === "none" || given === "few" || given === "busy") return given;
+  const t = text.trim();
+  if (!t || NONE.test(t)) return "none";
+  const n = Number(t.match(/\b(\d{1,4})\b/)?.[1] ?? 0);
+  return n >= 12 || /\b(busy|crowd(ed)?|packed|bustling|party|full|throng|dozens|hundreds|lots of)\b/i.test(t) ? "busy" : "few";
 }
 
 export function asStaging(v: unknown): SceneStaging {
   const o = (v ?? {}) as Record<string, unknown>;
   const clean = (x: unknown) => (typeof x === "string" && !NONE.test(x.trim()) ? stripQuotes(x).trim() : "");
-  return { spot: clean(o.spot), crowd: clean(o.crowd) };
+  const crowd = clean(o.crowd);
+  const props = (Array.isArray(o.props) ? o.props : [])
+    .map((p) => ({ name: clean((p as KeyProp)?.name), detail: clean((p as KeyProp)?.detail) }))
+    .filter((p) => p.name);
+  const level = crowdLevelOf(crowd, o.crowdLevel);
+  return { spot: clean(o.spot), crowd: level === "none" ? "" : crowd, crowdLevel: level, props };
+}
+
+/**
+ * Height in metres from words like "chest-high", "110 cm tall" or "coffee table" (D19), so a
+ * prop is drawn at the same height in every camera view.
+ */
+export function propHeight(text: string): number {
+  const cm = text.match(/(\d{2,3})\s?cm\s*(tall|high|height)/i) ?? text.match(/(?:height|tall|high)[^\d]{0,12}(\d{2,3})\s?cm/i);
+  if (cm) return Math.min(2.5, Number(cm[1]) / 100);
+  if (/\b(chest[- ]high|bar[- ]height|poseur|cocktail|high[- ]top|tall|high)\b/i.test(text)) return 1.1;
+  if (/\bwaist[- ]high|counter\b/i.test(text)) return 0.95;
+  if (/\b(coffee|low|side)\s+table\b|\bottoman\b/i.test(text)) return 0.45;
+  if (/\b(sofa|couch|bench|chair)\b/i.test(text)) return 0.45;
+  if (/\bbar\b/i.test(text)) return 1.1;
+  return 0.75; // a desk or dining table
 }
 
 export interface DraftPanel {
@@ -92,9 +134,7 @@ export function storyPrompt(i: { story: string; characters: StoryCharacter[]; ve
     "",
     "Reply with plain text only, with no drawings or code, in exactly this format. First the scene setting, which stays the same in every panel:",
     "",
-    "SCENE",
-    "SPOT: where the characters are, whether they stand or sit, and what they gather around, with its size, height and colour so it is drawn the same way every time (for example: standing around a chest-high round cocktail table, about 70 cm across, with a white floor-length cloth, near the bar)",
-    "BACKGROUND: who else is there and what they are doing (for example: about 30 well-dressed guests mingling with drinks), or none if the characters are alone",
+    ...SCENE_FORMAT,
     "",
     "Then every panel:",
     "",
@@ -126,8 +166,39 @@ export function shapeLine(b: ProjectBrief): string {
   return [b.format?.trim(), shape].filter(Boolean).join(", ");
 }
 
+const GATHER = /\b(table|bar|counter|desk|sofa|couch|bench|stall|stand|fire ?pit|island)\b/i;
+
+/**
+ * Key props on the floor plan (D19). The one the group gathers around (named in the spot, or
+ * the first gathering-type prop) stands in the middle of the group; the others stand a few
+ * metres away on the far side, as a first proposal to adjust on the floor plan.
+ */
+function planProps(staging: SceneStaging | undefined, group: boolean, C: { x: number; y: number }) {
+  if (!staging) return [];
+  const props = staging.props.length ? staging.props
+    : GATHER.test(staging.spot) ? [{ name: (staging.spot.match(/\b(?:[\w-]+\s+){0,3}(table|bar|counter|desk|sofa|couch|bench|stall|stand)\b/i)?.[0] ?? "table").replace(/^(?:(?:standing|sitting|around|at|by|near|on|in|beside|behind|next|to|a|an|the)\s+)+/i, ""), detail: staging.spot }] : [];
+  const spotText = staging.spot.toLowerCase();
+  const centre = props.find((p) => spotText.includes(p.name.toLowerCase().split(/\s+/).at(-1) ?? "~")) ?? props.find((p) => GATHER.test(p.name));
+  const far = [60, 120, 30, 150, 90];
+  let k = 0;
+  return props.map((p, i) => {
+    const centred = p === centre;
+    // With one person the prop stands beside them, not under their feet.
+    const pos = centred ? (group ? C : { x: 0.65, y: 5 }) : { x: +(C.x + 2.4 * Math.cos((far[k % far.length] * Math.PI) / 180)).toFixed(2), y: +(C.y + 2.4 * Math.sin((far[k++ % far.length] * Math.PI) / 180)).toFixed(2) };
+    return { id: i === 0 && centred ? "spot" : `prop-${i + 1}`, name: p.name, detail: p.detail, position: pos, radiusM: centred ? 0.35 : 0.3, heightM: propHeight(`${p.name} ${p.detail}`) };
+  });
+}
+
+/** The scene block GPT returns first (D19): the spot, the key props and the other people. */
+const SCENE_FORMAT = [
+  "SCENE",
+  "SPOT: where the characters are and whether they stand or sit (for example: standing around the cocktail table, near the bar)",
+  "PROP: name - size, height and colour, so it is drawn the same way every time (for example: cocktail table - round, about 70 cm across, chest-high at 110 cm, white floor-length cloth). One PROP line for each object that matters to the story or that the characters gather around; leave out ordinary furniture.",
+  "OTHER PEOPLE: none, few or busy - who they are and what they are doing (for example: busy - about 40 well-dressed industry guests mingling with drinks)",
+];
+
 /** Events, parties and busy places need people in the background, or every picture comes out empty. */
-const CROWD_RULE = "If the story is at an event, party, launch, bar, restaurant, street or any busy place, or mentions other people being there, BACKGROUND must describe them: roughly how many, how they are dressed and what they are doing.";
+const CROWD_RULE = "If the story is at an event, party, launch, bar, restaurant, street or any busy place, or mentions other people being there, OTHER PEOPLE must describe them: roughly how many, how they are dressed and what they are doing.";
 
 /** For a scene saved before the setting existed: ask GPT for the setting only (D18c). */
 export function stagingPrompt(i: { story: string; venue: string; characters: StoryCharacter[] }): string {
@@ -139,9 +210,7 @@ export function stagingPrompt(i: { story: string; venue: string; characters: Sto
     "",
     "Reply with plain text only, in exactly this format:",
     "",
-    "SCENE",
-    "SPOT: where the characters are, whether they stand or sit, and what they gather around, with its size, height and colour so it is drawn the same way every time",
-    "BACKGROUND: who else is there and what they are doing, or none",
+    ...SCENE_FORMAT,
     "",
     "Scene:",
     "<<<",
@@ -152,12 +221,24 @@ export function stagingPrompt(i: { story: string; venue: string; characters: Sto
 
 /** Read SPOT and BACKGROUND lines (from a story reply's preamble or a setting-only reply). */
 export function parseStaging(text: string): SceneStaging {
-  const scene: Record<string, string> = {};
+  const scene: Record<string, unknown> = {};
+  const props: KeyProp[] = [];
   for (const raw of cleanReply(text).split(/^\s*[#*_\s]*PANEL\s*\d+[^\n]*$/im)[0].split(/\r?\n/)) {
-    const m = raw.replace(/\*\*|__/g, "").replace(/^\s*[-*•]\s*/, "").trim().match(/^(SPOT|WHERE|BACKGROUND|CROWD|EXTRAS)\s*:\s*(.*)$/i);
-    if (m) scene[/^(SPOT|WHERE)$/i.test(m[1]) ? "spot" : "crowd"] = m[2];
+    const m = raw.replace(/\*\*|__/g, "").replace(/^\s*[-*•]\s*/, "").trim().match(/^(SPOT|WHERE|BACKGROUND|CROWD|EXTRAS|OTHER PEOPLE|PROP|KEY PROP)\s*:\s*(.*)$/i);
+    if (!m) continue;
+    const k = m[1].toUpperCase();
+    if (k === "SPOT" || k === "WHERE") scene.spot = m[2];
+    else if (k === "PROP" || k === "KEY PROP") {
+      const [name, ...rest] = m[2].split(/\s+[—–-]\s+|:\s+/);
+      if (name && !NONE.test(name.trim())) props.push({ name: name.trim(), detail: rest.join(" - ").trim() });
+    } else {
+      // "busy — about 40 guests", or just the description.
+      const lv = m[2].match(/^(none|few|a few|busy)\b\s*[—–:-]?\s*(.*)$/i);
+      if (lv) { scene.crowdLevel = /none/i.test(lv[1]) ? "none" : /few/i.test(lv[1]) ? "few" : "busy"; scene.crowd = lv[2] || (scene.crowdLevel === "none" ? "" : m[2]); }
+      else scene.crowd = m[2];
+    }
   }
-  return asStaging(scene);
+  return asStaging({ ...scene, props });
 }
 
 // ---------- Reading the reply ----------
@@ -281,10 +362,11 @@ export function estimateStory(story: string): StoryEstimate {
 // ---------- From panels to shots and a first floor plan ----------
 
 /** The draft shot for a panel: who is seen, who speaks, the locked line and its length. */
-export function shotSpecFor(p: DraftPanel, i: { code: string; venueName: string; castIds: string[]; staging?: SceneStaging }): ShotSpec {
+export function shotSpecFor(p: DraftPanel, i: { code: string; venueName: string; castIds: string[]; staging?: Partial<SceneStaging> }): ShotSpec {
   const visible = p.inFrame.filter((id) => i.castIds.includes(id));
+  const st = i.staging ? asStaging(i.staging) : undefined;
   return {
-    spot: i.staging?.spot || undefined, crowd: i.staging?.crowd || undefined,
+    spot: st?.spot || undefined, crowd: st?.crowd || undefined, props: st?.props.length ? st.props : undefined,
     code: i.code, venueName: i.venueName, sceneContext: p.action, presentIds: i.castIds,
     // In a group scene (a spot is set) the others are nearby, not banned: a camera that sees them
     // shows them at the edge of frame (D18d). Without a setting they are kept out.
@@ -301,7 +383,8 @@ export function shotSpecFor(p: DraftPanel, i: { code: string; venueName: string;
  * most lines faces the rest of the group across a small gap. People can be moved on the
  * floor plan later; the app then shows which shots a move affects.
  */
-export function defaultPlan(castIds: string[], panels: DraftPanel[], views: PlanView[], staging?: SceneStaging, aspect?: "9:16" | "16:9"): GeometryPlanData {
+export function defaultPlan(castIds: string[], panels: DraftPanel[], views: PlanView[], stagingIn?: Partial<SceneStaging>, aspect?: "9:16" | "16:9"): GeometryPlanData {
+  const staging = stagingIn ? asStaging(stagingIn) : undefined;
   const said = (id: string) => panels.filter((p) => p.speakerId === id).length + panels.filter((p) => p.inFrame.includes(id)).length / 100;
   const order = [...castIds].sort((a, b) => said(b) - said(a));
   const talkers = order.filter((id) => panels.some((p) => p.speakerId === id));
@@ -323,10 +406,7 @@ export function defaultPlan(castIds: string[], panels: DraftPanel[], views: Plan
   const line: [string, string] | undefined = partner ? [partner, main] : undefined;
   return {
     bounds: { minX: -4.5, maxX: 4.5, minY: 0, maxY: 10 },
-    // The thing the group stands around, between them, so the floor plan shows it.
-    furniture: staging?.spot && actors.length > 1 && /\b(table|bar|counter|desk|sofa|bench|stall|stand)\b/i.test(staging.spot)
-      ? [{ id: "spot", name: (staging.spot.match(/\b(?:[\w-]+\s+){0,3}(table|bar|counter|desk|sofa|bench|stall|stand)\b/i)?.[0] ?? "table").replace(/^(?:(?:around|at|by|near|on|in|beside|behind|next|to|a|an|the)\s+)+/i, ""), position: C, radiusM: 0.35 }]
-      : [],
+    furniture: planProps(staging, actors.length > 1, C),
     actors, cameras: [],
     views: views.map((v) => ({ name: v.name, directionDeg: v.directionDeg })),
     lineOfAction: line,

@@ -16,6 +16,8 @@ export interface PanelRow {
   dialogue: { characterId: string; text: string }[];
   durationSec: number;
   imageAssetId: string | null;
+  /** The automatic check against the approved layout (D19). */
+  check: { pass?: boolean; problems?: string[] };
   status: string;
   version: number;
 }
