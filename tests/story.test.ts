@@ -518,14 +518,19 @@ describe("Fixes from Paul's first locked run (D19a)", () => {
     studio.approvePanel(db, p1.id);
     studio.unapprovePanel(db, p1.id);
     expect(repo.getScene(db, sid)!.panels[0].status).toBe("draft");
+    // A new camera layout makes an unapproved picture stale: back to draft, marked to redraw.
+    // One the user approved is kept, with a note (D19e).
+    const p2 = repo.getScene(db, sid)!.panels[1];
+    studio.setPanelImage(db, p2.id, "asset-2");
     studio.approvePanel(db, p1.id);
-    // A new camera layout makes that picture stale: back to draft, marked to redraw.
     studio.unlockScene(db, sid, "cameras");
     repo.savePlan(db, sid, { ...repo.getScene(db, sid)!.plan!.data, cameras: [{ id: "c1", name: "c", preset: "wide", position: { x: 0.25, y: 1 }, lookAt: { x: 0.25, y: 5 } }] }, "Cameras chosen by the app");
     studio.approveCameras(db, sid);
-    const after = repo.getScene(db, sid)!.panels[0];
-    expect(after.status).toBe("draft");
-    expect(after.check).toMatchObject({ pass: false, stale: true });
+    const [kept, redraw] = repo.getScene(db, sid)!.panels;
+    expect(kept.status).toBe("approved");
+    expect(kept.check).toMatchObject({ keptApproved: true });
+    expect(redraw.status).toBe("draft");
+    expect(redraw.check).toMatchObject({ pass: false, stale: true });
   });
   it("picture prompts take the key props from the floor plan", async () => {
     const { panelPrompt } = await import("../src/lib/domain/imagePrompts");

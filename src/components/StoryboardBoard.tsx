@@ -32,7 +32,7 @@ export interface BoardPanel {
   /** Its shot, for the layout sketch (D18f). */
   shotId?: string;
   /** The automatic check against the approved layout (D19). */
-  check?: { pass: boolean; problems: string[] };
+  check?: { pass: boolean; problems: string[]; keptApproved?: boolean };
   /** The GPT picture request, built from the camera, characters and venue. */
   prompt: string;
   attach: { label: string; assetId: string; href?: string }[];
@@ -356,7 +356,8 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
             </div>
             <p className="mt-1 text-sm">{p.line ? <><span className="font-medium">{p.speaker}:</span> {p.line}</> : <span className="text-neutral-500">Silent</span>}</p>
             <p className="mt-1 text-xs text-neutral-600">{p.description}</p>
-            {p.imageAssetId && p.check && (p.check.pass
+            {p.imageAssetId && p.check?.keptApproved && p.status === "approved" ? <p className="mt-1 text-xs text-neutral-600" data-testid={`board-${p.code}-check`}>Approved by you on an earlier layout and kept. Redraw it only if it no longer fits.</p>
+              : p.imageAssetId && p.check && (p.check.pass
               ? <p className="mt-1 text-xs text-green-700" data-testid={`board-${p.code}-check`}>✓ Matches the approved layout</p>
               : <p className="mt-1 text-xs text-amber-700" data-testid={`board-${p.code}-check`}>⚠ Doesn&apos;t match the approved layout: {p.check.problems.join(" ")} Redraw it, or change it below.</p>)}
             {failed[p.id] && <p className="mt-1 text-xs text-red-700" role="alert" data-testid={`board-${p.code}-failed`}>GPT couldn&apos;t draw this one. {plainReason(failed[p.id])}</p>}

@@ -657,10 +657,16 @@ export function approveCameras(db: DB, sceneId: string) {
   setLocks(db, sceneId, { ...locks, cameras: plan.version });
   syncPropsFromPlan(db, sceneId);
   // Pictures drawn from an earlier layout no longer match: back to draft, marked to redraw.
+  // A picture the user approved stays approved (D19e): their judgement that it works beats the
+  // app's bookkeeping. It's only noted, so they can redraw it if they change their mind.
   for (const p of panelsOf(db, sceneId)) {
     const drawn = (p.check as { drawnOnPlan?: number } | null)?.drawnOnPlan;
     if (p.imageAssetId && (drawn === undefined || drawn < plan.version)) {
-      db.update(t.panels).set({ status: "draft", check: { drawnOnPlan: drawn, pass: false, stale: true, problems: ["Drawn from an earlier layout. Redraw it to match the approved positions and cameras."] } }).where(eq(t.panels.id, p.id)).run();
+      if (p.status === "approved") {
+        db.update(t.panels).set({ check: { ...(p.check as object ?? {}), drawnOnPlan: drawn, keptApproved: true, problems: ["Approved by you on an earlier layout and kept. Redraw it only if it no longer fits."] } }).where(eq(t.panels.id, p.id)).run();
+      } else {
+        db.update(t.panels).set({ status: "draft", check: { drawnOnPlan: drawn, pass: false, stale: true, problems: ["Drawn from an earlier layout. Redraw it to match the approved positions and cameras."] } }).where(eq(t.panels.id, p.id)).run();
+      }
     }
   }
   persist(db);

@@ -100,7 +100,7 @@ export default async function StoryboardPage({ params, searchParams }: { params:
               id: p.id, code: p.code, description: p.description, seconds: p.durationSec, status: p.status, imageAssetId: p.imageAssetId ?? undefined,
               speaker: d ? cast.find((c) => c.id === d.characterId)?.name : undefined, line: d?.text,
               hasCamera: !!shot?.spec.cameraId, shotId: shot?.id,
-              check: p.check?.pass === undefined ? undefined : { pass: p.check.pass, problems: p.check.problems ?? [] }, prompt: prompt.text, attach: prompt.attach,
+              check: p.check?.keptApproved ? { pass: p.check.pass ?? true, problems: [], keptApproved: true } : p.check?.pass === undefined ? undefined : { pass: p.check.pass, problems: p.check.problems ?? [] }, prompt: prompt.text, attach: prompt.attach,
             };
           })} />
       </div>
