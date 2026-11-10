@@ -325,11 +325,12 @@ export function updatePanel(db: DB, panelId: string, input: PanelInput): PanelCh
 }
 
 /** A new picture always needs approving again. */
-export function setPanelImage(db: DB, panelId: string, assetId: string) {
-  // Remember which floor plan version the picture was drawn from (D19a), to spot stale ones.
+export function setPanelImage(db: DB, panelId: string, assetId: string, drawnFrom?: string) {
+  // Remember which floor plan version the picture was drawn from (D19a), to spot stale ones, and
+  // a fingerprint of what it was drawn from (D24), so a redraw is offered only after a change.
   const panel = db.select().from(t.panels).where(eq(t.panels.id, panelId)).get();
   const plan = panel ? latestPlan(db, panel.sceneId) : undefined;
-  db.update(t.panels).set({ imageAssetId: assetId, status: "draft", check: { drawnOnPlan: plan?.version } }).where(eq(t.panels.id, panelId)).run();
+  db.update(t.panels).set({ imageAssetId: assetId, status: "draft", check: { drawnOnPlan: plan?.version, ...(drawnFrom ? { drawnFrom } : {}) } }).where(eq(t.panels.id, panelId)).run();
   persist(db);
 }
 
@@ -705,7 +706,7 @@ export function shotIdForPanel(db: DB, panelId: string): string | undefined {
 
 export function setPanelCheck(db: DB, panelId: string, check: { pass: boolean; problems: string[] }) {
   const old = (db.select().from(t.panels).where(eq(t.panels.id, panelId)).get()?.check ?? {}) as Record<string, unknown>;
-  db.update(t.panels).set({ check: { drawnOnPlan: old.drawnOnPlan, ...check, at: new Date().toISOString() } }).where(eq(t.panels.id, panelId)).run();
+  db.update(t.panels).set({ check: { drawnOnPlan: old.drawnOnPlan, ...(old.drawnFrom ? { drawnFrom: old.drawnFrom } : {}), ...check, at: new Date().toISOString() } }).where(eq(t.panels.id, panelId)).run();
   persist(db);
 }
 

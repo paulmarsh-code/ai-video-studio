@@ -33,6 +33,8 @@ export interface BoardPanel {
   shotId?: string;
   /** The automatic check against the approved layout (D19). */
   check?: { pass: boolean; problems: string[]; keptApproved?: boolean };
+  /** Fingerprint of what the picture was drawn from (D24). */
+  drawnFrom?: string;
   /** The GPT picture request, built from the camera, characters and venue. */
   prompt: string;
   attach: { label: string; assetId: string; href?: string }[];
@@ -69,6 +71,14 @@ export function plainReason(error: string): string {
   if (/\b(timeout|timed out|ETIMEDOUT|ECONNRESET|fetch failed|socket)/i.test(error)) return "The request to OpenAI timed out. Try again.";
   if (/\b(400)\b/.test(error)) return `OpenAI didn't accept the request: ${error.replace(/^.*?\(400\):\s*/, "").slice(0, 160)}`;
   return `GPT said: ${error.slice(0, 200)}`;
+}
+
+/** A fingerprint of everything a panel's picture is drawn from: its prompt and attachments (D24). */
+export function fingerprint(p: { prompt: string; attach: { assetId: string; href?: string }[] }): string {
+  const text = `${p.prompt}|${p.attach.map((a) => a.href ?? a.assetId).join(",")}`;
+  let h = 5381;
+  for (let i = 0; i < text.length; i++) h = ((h * 33) ^ text.charCodeAt(i)) >>> 0;
+  return h.toString(36);
 }
 
 const assetIds = (attach: BoardPanel["attach"]) => attach.filter((a) => !a.href && a.assetId).map((a) => a.assetId);
@@ -137,7 +147,7 @@ function ByHand({ p, prompt, attach, projectId, baseCode, onUploaded }: { p: Boa
             setError(""); setBusy(true);
             try {
               const id = await uploadBlob(projectId, `${baseCode}_${p.code}_PANEL`, "panel", f, f.name);
-              const r = await setPanelImageAction(p.id, id);
+              const r = await setPanelImageAction(p.id, id, fingerprint(p));
               if (!r.ok) throw new Error(r.error);
               onUploaded();
             } catch (err) { setError(err instanceof Error ? err.message : String(err)); } finally { setBusy(false); }
@@ -160,6 +170,10 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
   const missing = b.panels.filter((p) => !p.imageAssetId);
   const withPictures = b.panels.filter((p) => p.imageAssetId);
   const toApprove = withPictures.filter((p) => p.status !== "approved");
+  // A redraw is offered only for pictures whose inputs changed since they were drawn (D24): the
+  // setting, the words, the layout, a prop picture or the approved pictures they follow.
+  const changed = (p: BoardPanel) => !p.drawnFrom || p.drawnFrom !== fingerprint(p);
+  const toRedraw = toApprove.filter(changed);
   const allApproved = b.panels.length > 0 && b.panels.every((p) => p.status === "approved");
   const codeOf = (p: BoardPanel) => `${b.baseCode}_${p.code}_PANEL`;
 
@@ -181,7 +195,7 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
     const layoutShotId = p.hasCamera ? p.shotId : undefined;
     const backgroundShotId = p.attach.some((a) => a.href?.startsWith("/api/background/")) ? p.shotId : undefined;
     let id = await drawPicture({ projectId: b.projectId, baseCode: codeOf(p), prompt, refs, size: b.size, layoutShotId, backgroundShotId });
-    let r = await setPanelImageAction(p.id, id);
+    let r = await setPanelImageAction(p.id, id, fingerprint(p));
     if (!r.ok) throw new Error(r.error);
     if (!b.canCheck || !layoutShotId) return;
     setDrawing((x) => ({ ...x, [p.id]: "Checking against the layout…" }));
@@ -189,7 +203,7 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
     if (!first || first.pass) return;
     setDrawing((x) => ({ ...x, [p.id]: "Didn't match the layout: redrawing…" }));
     id = await drawPicture({ projectId: b.projectId, baseCode: codeOf(p), prompt: prompt + fixLine(first.problems), refs, size: b.size, layoutShotId, backgroundShotId });
-    r = await setPanelImageAction(p.id, id);
+    r = await setPanelImageAction(p.id, id, fingerprint(p));
     if (!r.ok) throw new Error(r.error);
     setDrawing((x) => ({ ...x, [p.id]: "Checking again…" }));
     await checkPicture(p.id, id);
@@ -263,7 +277,7 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
           </div>
         </div>
       )}
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-2">
         {step(1, "Positions", b.locks.positions, (
           <>
             {b.plan && <div className="mb-2"><PlanThumb plan={b.plan} names={b.names} /></div>}
@@ -295,43 +309,35 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
             </div>
           </>
         ), "step-cameras")}
-        {step(3, "Pictures", missing.length === 0, missing.length === 0 ? (
+
+      </div>
+      {/* Pictures (D24): one button, once positions and cameras are approved; approval is on each
+          picture, with a running count. */}
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-neutral-200 bg-white p-4 text-sm" data-testid="step-pictures">
+        {!b.locks.cameras ? (
+          <p className="text-neutral-600">Approve the positions and the cameras, then the pictures can be drawn: every one follows them.</p>
+        ) : missing.length > 0 ? (
+          b.canGenerate ? (
+            <>
+              <ActionButton label={withPictures.length ? `Draw the other ${missing.length}` : `Draw pictures (${missing.length})`} busyLabel={progress || "Drawing…"} doneLabel="Drawn" onAction={() => drawAll()} testId="draw-all" />
+              <span className="text-neutral-600">About 5p each with GPT. Each is checked against the layout and redrawn once if it doesn&apos;t match.</span>
+            </>
+          ) : <p className="text-neutral-700">{withPictures.length} of {b.panels.length} pictures in. Make each one in ChatGPT with the steps on its panel below.</p>
+        ) : b.canGenerate && toApprove.length > 0 ? (
           <>
-            <p>Every panel has a picture.</p>
-            {b.canGenerate && b.locks.cameras && toApprove.length > 0 && (
-              <div className="mt-2">
-                <ActionButton label={`Redraw the ${toApprove.length} unapproved`} busyLabel={progress || "Redrawing…"} doneLabel="Redrawn" variant="secondary"
-                  onAction={() => drawAll(toApprove, "Redrawing")} testId="redraw-unapproved" />
-                <p className="mt-1 text-xs text-neutral-600">Uses the scene setting{b.panels.some((p) => p.status === "approved") ? " and your approved pictures for continuity" : ""}. About 5p each.</p>
-              </div>
-            )}
+            <ActionButton label={toRedraw.length ? `Redraw pictures (${toRedraw.length})` : "Redraw pictures"} busyLabel={progress || "Redrawing…"} doneLabel="Redrawn" variant="secondary"
+              disabled={!toRedraw.length} onAction={() => drawAll(toRedraw, "Redrawing")} testId="redraw-unapproved" />
+            <span className="text-neutral-600" data-testid="redraw-hint">{toRedraw.length
+              ? `Redraws the ${toRedraw.length === 1 ? "one" : toRedraw.length} not approved that ${toRedraw.length === 1 ? "has" : "have"} changed since ${toRedraw.length === 1 ? "it was" : "they were"} drawn. Approved pictures stay as they are.`
+              : "Nothing has changed since these were drawn, so a redraw would give much the same. Change the scene setting, the words or the layout, or use \u201cNeed to change something?\u201d on a picture."}</span>
           </>
-        ) : (
-          <>
-            <p className="mb-2 text-neutral-700">{withPictures.length} of {b.panels.length} done.{b.canGenerate ? ` About 4p each with GPT.` : " Make each one in ChatGPT using the steps on the panel."}</p>
-            {b.canGenerate && (
-              <ActionButton label={`Create ${missing.length} picture${missing.length === 1 ? "" : "s"} with GPT`} busyLabel={progress || "Drawing…"} doneLabel="Drawn"
-                disabled={!b.locks.cameras} title={b.locks.cameras ? "" : "Approve the cameras first"} onAction={() => drawAll()} testId="draw-all" />
-            )}
-            {!b.locks.cameras && <p className="mt-1 text-xs text-amber-700">Approve the positions and cameras first, so every picture follows them.</p>}
-            {b.settingEmpty && <p className="mt-1 text-xs text-amber-700" data-testid="setting-empty">The scene setting above is empty, so pictures won&apos;t show where they are or who else is there. Fill it in first.</p>}
-            {b.canGenerate && b.locks.cameras && toApprove.length > 0 && (
-              <div className="mt-2">
-                <ActionButton label={`Redraw the ${toApprove.length} unapproved`} busyLabel={progress || "Redrawing…"} doneLabel="Redrawn" variant="secondary"
-                  onAction={() => drawAll(toApprove, "Redrawing")} testId="redraw-unapproved" />
-              </div>
-            )}
-          </>
-        ), "step-pictures")}
-        {step(4, "Approve", allApproved, allApproved ? <p>All pictures approved. <Link className="text-blue-700 underline" href={b.designHref.replace(/design$/, "animatic")}>Next: the animatic</Link></p> : (
-          <>
-            <p className="mb-2 text-neutral-700">{b.panels.filter((p) => p.status === "approved").length} of {b.panels.length} approved. Check each picture; change any that are wrong.</p>
-            {toApprove.length > 0 && (
-              <ActionButton variant="approve" label={`Approve ${toApprove.length === withPictures.length && missing.length === 0 ? "all" : toApprove.length} picture${toApprove.length === 1 ? "" : "s"}`} busyLabel="Approving…" doneLabel="Approved"
-                onAction={async () => { const r = await approvePanelsAction(toApprove.map((p) => p.id)); router.refresh(); return r; }} testId="approve-all" />
-            )}
-          </>
-        ), "step-approve")}
+        ) : null}
+        {b.settingEmpty && <p className="w-full text-xs text-amber-700" data-testid="setting-empty">The scene setting is empty, so pictures won&apos;t show where they are or who else is there. Fill it in first.</p>}
+        <p className="ml-auto font-medium" data-testid="approved-count">
+          {allApproved
+            ? <>All {b.panels.length} approved. <Link className="text-blue-700 underline" href={b.designHref.replace(/design$/, "animatic")}>Next: the animatic</Link></>
+            : `${b.panels.filter((p) => p.status === "approved").length} of ${b.panels.length} approved`}
+        </p>
       </div>
       {msg && <p className={`text-sm ${msg.ok ? "text-green-700" : "text-red-700"}`} role="status">{msg.text}</p>}
 

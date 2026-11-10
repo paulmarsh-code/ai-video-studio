@@ -6,7 +6,7 @@
 // you open or close is remembered in this browser.
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 export interface NavProject {
@@ -24,6 +24,7 @@ function load(): Record<string, boolean> {
 
 export function SideNav({ projects }: { projects: NavProject[] }) {
   const path = usePathname() ?? "/";
+  const query = useSearchParams();
   const [open, setOpen] = useState<Record<string, boolean>>({});
   useEffect(() => { setOpen(load()); }, []);
   const toggle = (k: string, now: boolean) => setOpen((o) => {
@@ -36,7 +37,9 @@ export function SideNav({ projects }: { projects: NavProject[] }) {
   const projectsOpen = isOpen("projects", path === "/" || path.startsWith("/projects"), true);
 
   const item = (href: string, label: string, testId?: string, exact = false) => {
-    const active = exact ? path === href : path === href || path.startsWith(href + "/");
+    const [hp, hq] = href.split("?");
+    const partOk = !hq || (query?.get("part") ?? "") === new URLSearchParams(hq).get("part");
+    const active = partOk && (exact || hq ? path === hp : path === hp || path.startsWith(hp + "/"));
     return (
       <Link href={href} data-testid={testId}
         className={`block truncate rounded px-2 py-1 ${active ? "bg-neutral-700 text-white" : "text-neutral-300 hover:bg-neutral-800 hover:text-white"}`}>
@@ -96,8 +99,9 @@ export function SideNav({ projects }: { projects: NavProject[] }) {
                                 {sOpen && (
                                   <ul className="ml-2 border-l border-neutral-700 pl-2">
                                     <li>{item(sb, "Scene set-up", undefined, true)}</li>
+                                    <li>{item(`${sb}/storyboard?part=setting`, "Scene setting", `nav-setting-${s.id}`)}</li>
+                                    <li>{item(`${sb}/storyboard?part=board`, "Layout & pictures", `nav-storyboard-${s.id}`)}</li>
                                     <li>{item(`${sb}/plan`, "Floor plan & cameras", `nav-plan-${s.id}`)}</li>
-                                    <li>{item(`${sb}/storyboard`, "Storyboard", `nav-storyboard-${s.id}`)}</li>
                                     <li>{item(`${sb}/design`, "Shot design")}</li>
                                     <li>{item(`${sb}/animatic`, "Animatic")}</li>
                                   </ul>

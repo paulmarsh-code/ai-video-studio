@@ -83,8 +83,10 @@ export function StagingFields({ value, onChange, propsLocked, projectId }: {
   );
 }
 
-export function SceneSettingCard({ sceneId, projectId, staging, hasPictures, suggestPrompt, canAuto, propsLocked }: {
+export function SceneSettingCard({ sceneId, projectId, staging, hasPictures, suggestPrompt, canAuto, propsLocked, nextHref }: {
   sceneId: string; projectId?: string; staging: SceneStaging; hasPictures: boolean;
+  /** Where "Save scene" goes next (D24): the layout and pictures. */
+  nextHref?: string;
   /** Positions are approved: the key props come from the floor plan and can't be edited here. */
   propsLocked?: boolean;
   /** The setting-only request built from the saved story; absent when there is no story. */
@@ -163,8 +165,18 @@ export function SceneSettingCard({ sceneId, projectId, staging, hasPictures, sug
         </div>
       )}
       <div className="mt-2 flex flex-wrap items-center gap-3">
-        <ActionButton label="Save changes" busyLabel="Saving…" doneLabel="Saved" disabled={!dirty || filling} resetKey={v} testId="staging-save"
-          onAction={() => save(v, "Saved.")} />
+        {nextHref ? (
+          <ActionButton label="Save scene" busyLabel="Saving…" doneLabel="Saved" disabled={filling} resetKey={v} testId="staging-save"
+            onAction={async () => {
+              if (dirty) { const r = await save(v, "Saved."); if (!r.ok) return r; }
+              router.push(nextHref);
+              return { ok: true };
+            }} />
+        ) : (
+          <ActionButton label="Save changes" busyLabel="Saving…" doneLabel="Saved" disabled={!dirty || filling} resetKey={v} testId="staging-save"
+            onAction={() => save(v, "Saved.")} />
+        )}
+        {nextHref && <span className="text-xs text-neutral-500">Next: check the positions and cameras, then draw the pictures.</span>}
         {msg && <span className="text-sm text-neutral-700" role="status">{msg}</span>}
       </div>
     </section>

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 import { eq } from "drizzle-orm";
 import "./globals.css";
 import { getDb } from "@/db/client";
@@ -37,7 +38,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           <aside className="border-b border-neutral-200 bg-neutral-900 px-4 py-3 text-neutral-100 md:w-64 md:shrink-0 md:border-b-0 md:border-r md:py-6">
             <Link href="/" className="block text-lg font-semibold">Video Studio</Link>
             <p className="text-xs text-neutral-400">Mind First</p>
-            <SideNav projects={projects} />
+            <Suspense><SideNav projects={projects} /></Suspense>
           </aside>
           <main className="min-w-0 flex-1 px-4 py-6 md:px-8">{children}</main>
         </div>

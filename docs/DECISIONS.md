@@ -471,3 +471,12 @@ Paul asked for easier navigation: the left-hand panel should list the projects b
 ## D23 — The scene setting fills itself in (2026-11-10)
 
 Paul found the scene setting's "Suggest from the story", "Or ask ChatGPT" and "Save setting" controls confusing. Now, when a scene opens on the storyboard with any empty box (where they are, key props, other people) and GPT is connected, the app fills the gaps from the story by itself, once, and says so. Nothing typed or attached is ever replaced. The user then corrects anything, adds prop pictures and clicks **Save changes**. "Fill the empty boxes from the story" shows only while a box is still empty. The ChatGPT copy-and-paste route shows only when GPT isn't connected.
+
+## D24 — The storyboard in two parts, one button each (2026-11-10)
+
+Paul found the storyboard confusing. If he did, others will. It's now two parts, with a switcher at the top and both listed under each scene in the side panel:
+
+1. **Scene setting.** Filled in from the story (D23). The user corrects it, adds prop pictures and clicks **Save scene**, which saves and moves on to part 2. A scene opens on part 1 until its positions are approved.
+2. **Layout and pictures.** Check and approve the character and prop positions, then the cameras. Once both are approved, **Draw pictures** appears. There's no separate approve card: each picture is approved on its own, with a running count ("7 of 11 approved"); when all are approved it leads on to the animatic. Warnings and comments sit under each picture.
+
+**Redraw pictures** shows while any picture isn't approved. It is only enabled for pictures whose inputs have changed since they were drawn: the scene setting, the words, the layout, a prop picture, or the approved pictures they follow. Each picture stores a fingerprint of its prompt and attachments (`check.drawnFrom`) to tell. With nothing changed it says what to change, since the same inputs give much the same picture. "Need to change something?" on a picture is the way to fix one picture.

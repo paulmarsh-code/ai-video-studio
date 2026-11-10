@@ -17,7 +17,7 @@ import { hasRing } from "@/lib/backgroundImage";
 
 export const dynamic = "force-dynamic";
 
-export default async function StoryboardPage({ params, searchParams }: { params: Promise<{ id: string; sceneId: string }>; searchParams: Promise<{ story?: string }> }) {
+export default async function StoryboardPage({ params, searchParams }: { params: Promise<{ id: string; sceneId: string }>; searchParams: Promise<{ story?: string; part?: string }> }) {
   const { id, sceneId } = await params;
   const sp = await searchParams;
   const db = await getDb();
@@ -37,6 +37,7 @@ export default async function StoryboardPage({ params, searchParams }: { params:
   const portrait = (brief.aspect ?? "9:16").startsWith("9");
   const castIds = studio.sceneCastIds(db, s.scene);
   const locks = studio.sceneLocks(db, sceneId);
+  const part: "setting" | "board" = sp.part === "setting" || sp.part === "board" ? sp.part : locks.positions ? "board" : "setting";
   const anyApproved = s.panels.some((p) => p.status === "approved");
   const telling = !anyApproved && (s.panels.length === 0 || sp.story === "1");
   const total = s.panels.reduce((sum, p) => sum + p.durationSec, 0);
@@ -79,12 +80,21 @@ export default async function StoryboardPage({ params, searchParams }: { params:
       {pending.length > 0 && <p className="mt-2 text-sm text-amber-700">Unapproved character changes: {pending.map((c) => c.name).join(", ")}. Pictures use the last approved version. <Link className="underline" href={`/projects/${id}/characters`}>Review characters</Link></p>}
       {missingRefs.length > 0 && <p className="mt-2 text-sm text-amber-700">No approved pictures yet for {missingRefs.map((c) => c.name).join(", ")}. Create them in <Link className="underline" href={`/projects/${id}/characters`}>Characters</Link> so every panel keeps them consistent.</p>}
 
-      <div className="mt-5">
-        <SceneSettingCard propsLocked={!!locks.positions} sceneId={sceneId} projectId={id} staging={locks.positions && s.plan?.data.furniture?.length ? { ...asStaging(s.scene.staging), props: propsFromFurniture(s.plan.data.furniture) } : asStaging(s.scene.staging)} hasPictures={s.panels.some((p) => p.imageAssetId)} canAuto={!!getTextProvider()}
-          suggestPrompt={s.scene.story.trim() ? stagingPrompt({ story: s.scene.story, venue: s.venue?.name ?? "the venue", characters: chars.filter((c) => castIds.includes(c.slug)).map((c) => ({ id: c.slug, name: c.name, role: c.role })) }) : undefined} />
+      {/* Two parts (D24): 1, the scene setting; 2, layout and pictures. A scene starts on part 1
+          until its positions are approved. */}
+      <div className="mt-4 flex gap-1 border-b border-neutral-200 text-sm" role="tablist" data-testid="storyboard-parts">
+        {([["setting", "1. Scene setting"], ["board", "2. Layout and pictures"]] as const).map(([k, label]) => (
+          <Link key={k} href={`?part=${k}`} role="tab" aria-selected={part === k} data-testid={`part-${k}`}
+            className={`-mb-px rounded-t-md border px-4 py-2 ${part === k ? "border-neutral-200 border-b-white bg-white font-semibold" : "border-transparent text-neutral-600 hover:text-neutral-900"}`}>{label}</Link>
+        ))}
       </div>
 
-      <div className="mt-5">
+      {part === "setting" && <div className="mt-5">
+        <SceneSettingCard nextHref="?part=board" propsLocked={!!locks.positions} sceneId={sceneId} projectId={id} staging={locks.positions && s.plan?.data.furniture?.length ? { ...asStaging(s.scene.staging), props: propsFromFurniture(s.plan.data.furniture) } : asStaging(s.scene.staging)} hasPictures={s.panels.some((p) => p.imageAssetId)} canAuto={!!getTextProvider()}
+          suggestPrompt={s.scene.story.trim() ? stagingPrompt({ story: s.scene.story, venue: s.venue?.name ?? "the venue", characters: chars.filter((c) => castIds.includes(c.slug)).map((c) => ({ id: c.slug, name: c.name, role: c.role })) }) : undefined} />
+      </div>}
+
+      {part === "board" && <div className="mt-5">
         <StoryboardBoard canCheck={!!getTextProvider()} locks={{ positions: !!locks.positions, cameras: !!locks.cameras }}
           propMoves={s.panels.flatMap((p) => { const m = propMoves(p.description, (s.plan?.data.furniture ?? []).map((f) => f.name)); return m.length ? [`${p.code} moves the ${m.join(" and the ")}`] : []; })}
           outdated={!!s.plan && (!!locks.positions || s.plan.data.cameras.length > 0) && (s.plan.data.rules ?? 0) < LAYOUT_RULES} plan={s.plan?.data} planHref={`/projects/${id}/scenes/${sceneId}/plan`}
@@ -103,12 +113,13 @@ export default async function StoryboardPage({ params, searchParams }: { params:
               id: p.id, code: p.code, description: p.description, seconds: p.durationSec, status: p.status, imageAssetId: p.imageAssetId ?? undefined,
               speaker: d ? cast.find((c) => c.id === d.characterId)?.name : undefined, line: d?.text,
               hasCamera: !!shot?.spec.cameraId, shotId: shot?.id,
+              drawnFrom: p.check?.drawnFrom,
               check: p.check?.keptApproved ? { pass: p.check.pass ?? true, problems: [], keptApproved: true } : p.check?.pass === undefined ? undefined : { pass: p.check.pass, problems: p.check.problems ?? [] }, prompt: prompt.text, attach: prompt.attach,
             };
           })} />
-      </div>
+      </div>}
 
-      <details className="mt-8 rounded-xl border border-neutral-200 bg-white p-4" data-testid="edit-words">
+      {part === "board" && <details className="mt-8 rounded-xl border border-neutral-200 bg-white p-4" data-testid="edit-words">
         <summary className="cursor-pointer font-semibold">Edit the words on a panel</summary>
         <p className="mt-1 text-sm text-neutral-600">Changing a line updates its shot and clip length, and flags the animatic for a re-check.</p>
         <ol className="mt-4 space-y-4">
@@ -132,7 +143,7 @@ export default async function StoryboardPage({ params, searchParams }: { params:
           <h3 className="mb-2 text-sm font-semibold">Add a panel</h3>
           <PanelEditor key="new" sceneId={sceneId} cast={cast.map((c) => ({ id: c.id, name: c.name }))} suggestedCode={`P${n}`} />
         </div>
-      </details>
+      </details>}
     </div>
   );
 }

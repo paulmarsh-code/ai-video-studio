@@ -84,8 +84,8 @@ export async function addPanelAction(sceneId: string, input: studio.PanelInput) 
 export async function updatePanelAction(panelId: string, input: studio.PanelInput) {
   return run((db) => studio.updatePanel(db, panelId, input));
 }
-export async function setPanelImageAction(panelId: string, assetId: string) {
-  return run((db) => studio.setPanelImage(db, panelId, assetId));
+export async function setPanelImageAction(panelId: string, assetId: string, drawnFrom?: string) {
+  return run((db) => studio.setPanelImage(db, panelId, assetId, drawnFrom));
 }
 export async function approvePanelAction(panelId: string) {
   return run((db) => studio.approvePanel(db, panelId));
