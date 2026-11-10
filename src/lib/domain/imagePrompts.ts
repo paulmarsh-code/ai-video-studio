@@ -8,6 +8,7 @@ import { describeFrame, facingOf, planForShot, PRESET_TEXT, readCamera, readProp
 import { GENRE_PROFILES, type Genre } from "./genre";
 import { gestureDetail } from "./gestures";
 import { propMoves } from "./story";
+import { gazeFor, gazeLine } from "./gaze";
 import { joinNames, stripQuotes } from "./text";
 import type { CastMember, GeometryPlanData, ShotSpec } from "./types";
 
@@ -269,6 +270,12 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   if (i.emotion) lines.push(`Emotion: ${sentence(i.emotion)}`);
   if (shot?.actions) lines.push(sentence(shot.actions));
   lines.push(...gestureDetail(i.description, shot?.actions));
+  // Who looks at whom (D21b), for everyone in the picture.
+  if (shot) {
+    const inPic = reading ? reading.actors.filter((a) => a.inView && [...shownIds, ...edgeIds].includes(a.characterId) && a.characterId !== fgId).map((a) => a.characterId) : [...shownIds];
+    const gl = gazeLine(gazeFor({ shot, description: i.description, people: i.cast.map((c) => ({ id: c.id, name: c.name })), line: (shotPlan ?? i.plan)?.lineOfAction }), name, inPic);
+    if (gl) lines.push(gl);
+  }
 
   if (cam && reading && shot) {
     lines.push(PRESET_TEXT[cam.preset].replace(", static camera", "").replace(" static camera,", ""));

@@ -736,3 +736,16 @@ describe("The automatic check enforces characters, props and the room (D21)", ()
     expect(bad.problems.join(" ")).toContain("The room is the wrong way round");
   });
 });
+
+describe("Who looks at whom (D21b)", () => {
+  const people = [{ id: "j", name: "Jade" }, { id: "c", name: "Chase Whitmore" }, { id: "m", name: "Marcus" }, { id: "n", name: "Nina" }];
+  const base = { code: "P", venueName: "v", sceneContext: "", presentIds: ["j", "c", "m", "n"], visibleIds: ["j", "c", "m", "n"], excludedIds: [], actions: "", durationSec: 3, audioMode: "off" } as never as import("../src/lib/domain/types").ShotSpec;
+  it("listeners look at the speaker; the speaker at their partner; the panel text wins; arrivals go unnoticed", async () => {
+    const { gazeFor } = await import("../src/lib/domain/gaze");
+    const at = (g: { id: string; at: string }[]) => Object.fromEntries(g.map((x) => [x.id, x.at]));
+    expect(at(gazeFor({ shot: { ...base, speakerId: "c" }, description: "Chase waves her off.", people, line: ["j", "c"] }))).toEqual({ c: "Jade", j: "Chase", m: "Chase", n: "Chase" });
+    expect(at(gazeFor({ shot: { ...base, subjectId: "j" }, description: "Jade clenches her jaw; the group watches.", people, line: ["j", "c"] }))).toEqual({ j: "Chase", c: "Jade", m: "Jade", n: "Jade" });
+    expect(at(gazeFor({ shot: { ...base, subjectId: "m" }, description: "Marcus and Nina exchange shocked glances.", people, line: ["j", "c"] })).m).toBe("Nina");
+    expect(at(gazeFor({ shot: { ...base, subjectId: "j", at: { j: "arriving" } }, description: "She walks through the crowd and spots Chase with Marcus and Nina.", people, line: ["j", "c"] }))).toEqual({ j: "Chase", c: "each other", m: "each other", n: "each other" });
+  });
+});

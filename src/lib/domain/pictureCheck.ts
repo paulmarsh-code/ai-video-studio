@@ -43,7 +43,7 @@ export function checkPrompt(e: PictureExpectation, refNames: string[]): string {
     "",
     "Ignore style, lighting and small differences in pose or expression. Do check clothes, accessories, carried items and props against their reference pictures: a missing stripe or panel, a different colour, a bag in the other hand, or a table without its cloth is a real difference.",
     "Reply with JSON only, no other text:",
-    '{"left_to_right": ["the main characters you see, left to right, by name; use \\"unknown\\" for anyone you cannot match"], "clothes": [{"name": "character", "matches_reference": true, "difference": "what differs, or empty"}], "props": [{"name": "key prop", "side": "left | centre | right", "depth": "among the people | behind everyone | in front of everyone", "matches_picture": true, "difference": "what differs from its reference picture, or empty"}], "props_seen": ["key props you can see"], "background_left": "which venue area is at the left of the background, or none", "background_right": "which venue area is at the right of the background, or none", "background_people": "none | few | busy", "notes": "one short sentence on anything clearly wrong, or empty"}',
+    '{"left_to_right": ["the main characters you see, left to right, by name; use \\"unknown\\" for anyone you cannot match"], "clothes": [{"name": "character", "matches_reference": true, "difference": "what differs, or empty"}], "props": [{"name": "key prop", "side": "left | centre | right", "depth": "among the people | behind everyone | in front of everyone", "matches_picture": true, "difference": "what differs from its reference picture, or empty"}], "props_seen": ["key props you can see"], "background_left": "which venue area is at the left of the background, or none", "background_right": "which venue area is at the right of the background, or none", "background_people": "none | few | busy", "looking_at_camera": ["main characters looking straight into the camera, or empty"], "notes": "one short sentence on anything clearly wrong, or empty"}',
   ].join("\n");
 }
 
@@ -51,7 +51,7 @@ export function checkPrompt(e: PictureExpectation, refNames: string[]): string {
 export function judgePicture(e: PictureExpectation, reply: string): PictureCheck {
   // The answer is JSON, possibly inside a code fence: take the object itself.
   const json = reply.match(/\{[\s\S]*\}/)?.[0];
-  let seen: { left_to_right?: unknown; props_seen?: unknown; background_people?: unknown; notes?: unknown; clothes?: unknown; props?: unknown; background_left?: unknown; background_right?: unknown };
+  let seen: { left_to_right?: unknown; props_seen?: unknown; background_people?: unknown; notes?: unknown; clothes?: unknown; props?: unknown; background_left?: unknown; background_right?: unknown; looking_at_camera?: unknown };
   try {
     seen = JSON.parse(json ?? "");
   } catch {
@@ -104,6 +104,9 @@ export function judgePicture(e: PictureExpectation, reply: string): PictureCheck
     const l = area(seen.background_left), r = area(seen.background_right);
     if (l && r && l.includes(norm(sides.right).slice(0, 5)) && r.includes(norm(sides.left).slice(0, 5))) problems.push(`The room is the wrong way round: the ${sides.left} belongs on the left and the ${sides.right} on the right.`);
   }
+  // Nobody looks into the lens (D21b).
+  const lookers = list(seen.looking_at_camera).filter((n) => expected.includes(first(n)));
+  if (lookers.length) problems.push(`${lookers.join(" and ")} ${lookers.length === 1 ? "is" : "are"} looking at the camera; they should look at each other as the moment says.`);
   const bg = String(seen.background_people ?? "").toLowerCase();
   if (e.crowd !== "none" && /none/.test(bg)) problems.push("No background people, but the scene has them.");
   return { pass: problems.length === 0, problems };

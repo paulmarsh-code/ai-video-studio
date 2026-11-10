@@ -1,6 +1,7 @@
 // Prompt Composer (Stage 7) — the proven Kling web-app template, built from structured data.
 // It never rewrites approved dialogue and never names characters excluded from the shot.
 
+import { gazeFor, gazeLine } from "./gaze";
 import { describeFrame, planForShot, PRESET_TEXT, readCamera } from "./geometry";
 import { gestureDetail } from "./gestures";
 import { GENRE_PROFILES, type Genre } from "./genre";
@@ -82,6 +83,11 @@ export function composeKlingPrompt(
   // Scene setting (D18c): the same spot and background people in every clip of the scene.
   if (shot.spot?.trim()) s.scene += ` They are ${stripQuotes(shot.spot).trim().replace(/[.]$/, "")}.`;
   if (shot.crowd?.trim()) s.scene += ` In the background: ${stripQuotes(shot.crowd).trim().replace(/[.]$/, "")}, out of focus.`;
+  {
+    // Who looks at whom (D21b).
+    const gl = gazeLine(gazeFor({ shot, description: shot.actions ?? "", people: cast.map((c) => ({ id: c.id, name: c.name })), line: plan?.lineOfAction }), (id) => byId(id)?.name ?? id, shot.visibleIds);
+    if (gl) s.scene += ` ${gl}`;
+  }
   if (shot.props?.length) s.scene += ` Key props, unchanged in every clip: ${shot.props.map((p) => `${p.name}${p.detail ? ` (${stripQuotes(p.detail).replace(/[.]$/, "")})` : ""}`).join("; ")}.`;
 
   // Movement in this clip (D20): from where they start to where they end.

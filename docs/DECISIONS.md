@@ -442,3 +442,19 @@ Where each stands:
 3. **Props.** Places come from the floor plan; looks come from the description and picture (D19c, D19d); props move only if a panel says so (D20). New: the check gets each prop's picture and reports each prop's side of the frame, its depth (among the people, behind everyone, in front of everyone) and whether it matches its picture. A prop on the wrong side, drawn beside the people when it belongs behind them, or not matching its picture fails the check.
 
 Known limits: the 360° ring is joined from separate pictures, so its joins aren't seamless. Camera height and tilt aren't modelled yet (the camera is always at eye level, looking level). The check relies on a vision model, which can miss small differences.
+
+## D21b — Who looks at whom; arrivals worked out afresh; props seen across their real extent (2026-11-10)
+
+From Paul's next redraw (much better: geometry and positions right in shots 1–3, 5–8 and 10–11):
+
+1. **Jade was nearer in shot 1 than in shot 2.** His floor plan still had the arrival spot from an earlier version, only 1.2 m from the wall. So no camera could stand behind her, and shots 1 and 2 got two different cameras, one of which saw only Jade (GPT added a table beside her). Arrival and approach spots are the app's own and are now worked out afresh from the story every time positions are approved, never kept from an older layout. Shots 1 and 2 now share one spot and one kind of shot: Jade in the foreground with the group across the room.
+2. **Shot 4: a display next to Marcus, and Jade missing.** The 3 m logo backdrop was treated as a 1.5 m circle round its centre. A camera that only grazed its end counted it as "in front of everyone, 1 m from the camera". Props are now seen through points across their real extent: a long thing is a line facing the group, anything else a ring. Shot 4 is now a group shot with all four.
+3. **Nobody looking at anyone** (shots 9–11). Bodies had a facing direction, but eyes had no instruction. Every picture and video prompt now has a "Who looks at whom" line, by general rules:
+   - The panel text wins ("looks at", "turns to", "spots", "exchange glances").
+   - The speaker looks at their partner on the line of action (or the group).
+   - Everyone else looks at the speaker, or at the panel's main person when nobody speaks.
+   - Someone still arriving goes unnoticed: the others keep talking among themselves.
+   - Nobody looks at the camera.
+
+   The check now fails a picture where a main character looks into the lens.
+4. Layout rules are now version 6, so existing scenes show "Update the layout".

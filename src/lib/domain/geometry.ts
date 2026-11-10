@@ -264,13 +264,32 @@ export function readProps(plan: GeometryPlanData, cam: PlanCamera): { id: string
   const half = horizontalFov(plan, cam) / 2;
   const f = norm(sub(cam.lookAt, cam.position));
   const r = { x: f.y, y: -f.x };
+  // A prop is seen through points across its real extent (D21b): a long thing (a backdrop, a
+  // counter) is a line facing the group, anything else a ring round its centre. Treating a 3 m
+  // backdrop as a 1.5 m circle put it "in front of everyone" in a camera that only grazes it.
+  const people = plan.actors.map((a) => a.position);
+  const G = people.length ? { x: people.reduce((t, q) => t + q.x, 0) / people.length, y: people.reduce((t, q) => t + q.y, 0) / people.length } : undefined;
   return (plan.furniture ?? [])
     .map((fu) => {
+      const pts: Point[] = [fu.position];
+      if (fu.radiusM > 0.6 && G) {
+        const toward = norm(sub(G, fu.position));
+        const along = { x: -toward.y, y: toward.x };
+        for (const t of [-1, -0.5, 0.5, 1]) pts.push({ x: fu.position.x + along.x * fu.radiusM * t, y: fu.position.y + along.y * fu.radiusM * t });
+      } else {
+        for (let k = 0; k < 8; k++) pts.push({ x: fu.position.x + Math.cos((k * Math.PI) / 4) * fu.radiusM, y: fu.position.y + Math.sin((k * Math.PI) / 4) * fu.radiusM });
+      }
+      const seenPts = pts.map((q) => {
+        const rel = sub(q, cam.position);
+        const depth = rel.x * f.x + rel.y * f.y;
+        return { depth, angle: deg(Math.atan2(rel.x * r.x + rel.y * r.y, depth)) };
+      }).filter((q) => q.depth > 0.3 && Math.abs(q.angle) <= half);
       const rel = sub(fu.position, cam.position);
-      const depth = rel.x * f.x + rel.y * f.y;
-      const angle = deg(Math.atan2(rel.x * r.x + rel.y * r.y, depth));
-      const reach = deg(Math.atan2(fu.radiusM, Math.max(depth, 0.01)));
-      const inView = depth > 0 && Math.abs(angle) - reach <= half;
+      const cDepth = rel.x * f.x + rel.y * f.y;
+      const cAngle = deg(Math.atan2(rel.x * r.x + rel.y * r.y, cDepth));
+      const inView = seenPts.length > 0;
+      const angle = inView ? seenPts.reduce((t, q) => t + q.angle, 0) / seenPts.length : cAngle;
+      const depth = inView ? (seenPts[0] === undefined ? cDepth : seenPts.reduce((t, q) => t + q.depth, 0) / seenPts.length) : cDepth;
       const frame: FramePosition | "out" = !inView ? "out" : Math.abs(angle) <= CENTRE_BAND_DEG ? "centre" : angle < 0 ? "frame-left" : "frame-right";
       return { angle, seen: { id: fu.id, name: fu.name, inView, frame, depthM: +depth.toFixed(2) } };
     })

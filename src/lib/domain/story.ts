@@ -513,7 +513,9 @@ const REACHED = /\b(reach(es|ing)? (them|the (group|table|others))|joins? (them|
  * already standing with the group. Anything the user has placed is kept.
  */
 export function addMovementMarks(plan: GeometryPlanData, panels: { action: string; subjectId?: string }[]): { plan: GeometryPlanData; at: (Record<string, string> | undefined)[]; from: (Record<string, string> | undefined)[] } {
-  const actors = plan.actors.map((a) => ({ ...a, marks: [...(a.marks ?? [])] }));
+  // Marks are the app's, worked out from the story each time (D21b): old ones made under older
+  // rules (too near a wall for a camera to stand behind, say) are not kept.
+  const actors = plan.actors.map((a) => ({ ...a, marks: [] as NonNullable<typeof a.marks> }));
   const centre = actors.length
     ? { x: actors.reduce((s, a) => s + a.position.x, 0) / actors.length, y: actors.reduce((s, a) => s + a.position.y, 0) / actors.length }
     : { x: 0, y: 5 };
