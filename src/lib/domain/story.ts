@@ -268,6 +268,29 @@ export function stagingPrompt(i: { story: string; venue: string; characters: Sto
 }
 
 /** Read SPOT and BACKGROUND lines (from a story reply's preamble or a setting-only reply). */
+/**
+ * A suggestion fills gaps; it never replaces what the user wrote or attached (D19c). Spot and
+ * other people are taken only where empty; a prop already listed keeps its description and
+ * picture (an empty description is filled from a same-named suggestion); suggested props not
+ * yet listed are added unless the props are locked with the positions.
+ */
+export function mergeSuggestion(current: SceneStaging, suggested: SceneStaging, propsLocked = false): SceneStaging {
+  const key = (s: string) => s.trim().toLowerCase();
+  const props = current.props.map((p) => {
+    if (p.detail.trim()) return p;
+    const s = suggested.props.find((x) => key(x.name) === key(p.name));
+    return s ? { ...p, detail: s.detail } : p;
+  });
+  if (!propsLocked) for (const s of suggested.props) if (!props.some((p) => key(p.name) === key(s.name))) props.push(s);
+  const crowdEmpty = !current.crowd.trim();
+  return {
+    spot: current.spot.trim() ? current.spot : suggested.spot,
+    crowd: crowdEmpty ? suggested.crowd : current.crowd,
+    crowdLevel: crowdEmpty ? suggested.crowdLevel : current.crowdLevel,
+    props,
+  };
+}
+
 export function parseStaging(text: string): SceneStaging {
   const scene: Record<string, unknown> = {};
   const props: KeyProp[] = [];

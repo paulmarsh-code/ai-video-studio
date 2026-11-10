@@ -11,6 +11,8 @@ export interface PictureExpectation {
   props: string[];
   /** Background people expected. */
   crowd: "none" | "few" | "busy";
+  /** Seen from behind at the edge of frame (an over-the-shoulder shot): allowed, not required (D19c). */
+  shoulder?: string[];
 }
 
 export interface PictureCheck {
@@ -25,7 +27,7 @@ export function checkPrompt(e: PictureExpectation, refNames: string[]): string {
     "Image 1 is the picture to check. Image 2 is the layout sketch: simple labelled shapes showing who stands where and what the camera sees.",
     ...(refNames.length ? [`The next images are reference pictures of the characters, in this order: ${refNames.join(", ")}. Use them to tell who is who.`] : []),
     "",
-    `Expected main characters, left to right: ${e.order.length ? e.order.join(", ") : "none"}.`,
+    `Expected main characters, left to right: ${e.order.length ? e.order.join(", ") : "none"}.${e.shoulder?.length ? ` ${e.shoulder.join(" and ")} may also be seen from behind in the foreground; don't list them.` : ""}`,
     `Key props that should be visible: ${e.props.length ? e.props.join(", ") : "none"}.`,
     `Background people expected: ${e.crowd === "none" ? "no one else" : e.crowd === "few" ? "a few other people" : "a busy crowd"}.`,
     "",
@@ -55,7 +57,8 @@ export function judgePicture(e: PictureExpectation, reply: string): PictureCheck
   const found = people.map(first).filter((n) => expected.includes(n));
   const missing = e.order.filter((n) => !found.includes(first(n)));
   if (missing.length) problems.push(`${missing.join(" and ")} ${missing.length === 1 ? "is" : "are"} missing.`);
-  const unknown = people.filter((p) => !expected.includes(first(p)));
+  const shoulder = (e.shoulder ?? []).map(first);
+  const unknown = people.filter((p) => !expected.includes(first(p)) && !shoulder.includes(first(p)));
   if (unknown.length > 0 && e.order.length > 0) problems.push(`${unknown.length} extra main ${unknown.length === 1 ? "person" : "people"} who shouldn't be there.`);
   if (!missing.length) {
     const wrong = expected.some((n, i) => found[i] !== n);

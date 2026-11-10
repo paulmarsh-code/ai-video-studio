@@ -7,7 +7,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { saveSceneStagingAction } from "@/app/studioActions";
-import { parseStaging, type CrowdLevel, type KeyProp, type SceneStaging } from "@/lib/domain/story";
+import { mergeSuggestion, parseStaging, type CrowdLevel, type KeyProp, type SceneStaging } from "@/lib/domain/story";
 import { uploadBlob } from "@/lib/clientUpload";
 import { ActionButton } from "./ActionButton";
 
@@ -105,11 +105,14 @@ export function SceneSettingCard({ sceneId, projectId, staging, hasPictures, sug
     router.refresh();
     return r;
   }
-  // Suggesting saves straight away: one click, nothing left half done.
+  // Suggesting saves straight away: one click, nothing left half done. It only fills gaps:
+  // anything already written or attached here, saved or not, is kept (D19c).
   const use = async (text: string) => {
     const s = parseStaging(text);
     if (!s.spot && !s.crowd && !s.props.length) { setMsg("Couldn't find SPOT, PROP or OTHER PEOPLE lines in that reply."); return false; }
-    const r = await save(s, "Suggested from the story and saved.");
+    const merged = mergeSuggestion(v, s, propsLocked);
+    const changed = JSON.stringify(merged) !== JSON.stringify(v);
+    const r = await save(merged, changed ? "Suggestions added where the setting was empty; everything you wrote was kept. Saved." : "Nothing to add: everything was already filled in, and your words were kept. Saved.");
     return r.ok;
   };
   return (

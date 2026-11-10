@@ -516,8 +516,9 @@ export function saveSceneStaging(db: DB, sceneId: string, staging: Partial<Scene
   const locked = !!sceneLocks(db, sceneId).positions;
   const current = latestPlan(db, sceneId);
   if (locked && current) {
-    const furniture = (current.data.furniture ?? []).map((f, k) => {
-      const edit = st.props[k];
+    // Matched by name, never by list position, so one prop's look can't land on another (D19c).
+    const furniture = (current.data.furniture ?? []).map((f) => {
+      const edit = st.props.find((p) => p.name.trim().toLowerCase() === f.name.trim().toLowerCase());
       if (!edit) return f;
       const { imageAssetId: _old, ...rest } = f;
       return { ...rest, detail: edit.detail.trim(), heightM: propHeight(`${f.name} ${edit.detail}`), ...(edit.imageAssetId ? { imageAssetId: edit.imageAssetId } : {}) };

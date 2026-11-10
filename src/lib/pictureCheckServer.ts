@@ -36,7 +36,10 @@ export function expectationFor(db: DB, shotId: string): { expect: PictureExpecta
     .map((a) => a.characterId);
   return {
     ids, projectId: scene.scene.projectId,
-    expect: { order: ids.map(name), props: readProps(plan, cam).filter((p) => p.inView).map((p) => p.name), crowd: crowdLevelOf(shot.spec.crowd ?? "") },
+    expect: {
+      order: ids.map(name), props: readProps(plan, cam).filter((p) => p.inView).map((p) => p.name), crowd: crowdLevelOf(shot.spec.crowd ?? ""),
+      shoulder: reading.actors.filter((a) => a.inView && a.foreground && (cam.preset === "main-ots" || cam.preset === "reverse-ots") && a.characterId !== subject).map((a) => name(a.characterId)),
+    },
   };
 }
 

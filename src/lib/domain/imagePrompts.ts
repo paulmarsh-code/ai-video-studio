@@ -4,7 +4,7 @@
 // rejected); images made in GPT, not Kling (better and cheaper); no text or logos.
 
 import { mainSubjectId } from "./composer";
-import { describeFrame, planForShot, PRESET_TEXT, readCamera, readProps } from "./geometry";
+import { describeFrame, facingOf, planForShot, PRESET_TEXT, readCamera, readProps } from "./geometry";
 import { GENRE_PROFILES, type Genre } from "./genre";
 import { gestureDetail } from "./gestures";
 import { joinNames, stripQuotes } from "./text";
@@ -176,8 +176,15 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   if (props.length) lines.push(`Key props, identical in every picture of this scene: ${props.map((p) => `${p.name}${p.detail ? ` (${stripQuotes(p.detail).replace(/[.]$/, "")})` : ""}`).join("; ")}. Show each exactly as described, every time, with nothing extra on or around it.`);
   if (propPics.length) lines.push(`Use the attached ${joinNames(propPics.map((f) => `${f.name} picture`))} for exactly how ${propPics.length === 1 ? "it looks" : "they look"}: same shape, colours, materials and everything on ${propPics.length === 1 ? "it" : "them"}. Only its place and size in the frame come from the layout.`);
   if (cam && i.plan) {
-    const seen = readProps(i.plan, cam).filter((p) => p.inView);
-    if (seen.length) lines.push(`In this picture: ${joinNames(seen.map((p) => `the ${p.name} (${p.frame === "centre" ? "centre" : p.frame.replace("frame-", "")})`))}. ${seen.length === 1 ? "It must be" : "They must be"} clearly visible.`);
+    // Where each prop is, including how far away (D19c): without a distance, a display stand
+    // several metres behind the group got drawn right beside someone.
+    const sp = shotPlan ?? i.plan;
+    const seen = readProps(sp, cam).filter((p) => p.inView);
+    const castDepths = cam ? readCamera(sp, cam).actors.filter((a) => a.inView && !a.foreground).map((a) => a.depthM) : [];
+    const groupFar = castDepths.length ? Math.max(...castDepths) : undefined;
+    const groupNear = castDepths.length ? Math.min(...castDepths) : undefined;
+    const where = (p: { depthM: number }) => groupFar === undefined ? "" : p.depthM > groupFar + 1 ? `, behind everyone, about ${Math.round(p.depthM - groupFar)} m further back than the furthest person` : groupNear !== undefined && p.depthM < groupNear - 0.5 ? ", in front of everyone, nearer the camera" : ", among the people";
+    if (seen.length) lines.push(`In this picture: ${joinNames(seen.map((p) => `the ${p.name} (${p.frame === "centre" ? "centre" : p.frame.replace("frame-", "")}, about ${Math.max(1, Math.round(p.depthM))} m from the camera${where(p)})`))}. ${seen.length === 1 ? "It must be" : "They must be"} clearly visible, at exactly that distance; nothing else like ${seen.length === 1 ? "it" : "them"} anywhere else in the picture.`);
   }
   // Someone on a mark (D19b): say where they are, so the picture doesn't put them with the group.
   for (const [id, markId] of Object.entries(shot?.at ?? {})) {
@@ -211,6 +218,26 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
       const frame = describeFrame(reading, i.cast, [...shownIds, ...edgeIds], subjectId);
       if (frame) lines.push(`Positions: ${frame}.`);
       if (fgId) lines.push(`${name(fgId)} in the soft foreground, seen from behind over the shoulder.`);
+    }
+    // Depth and facing (D19c): a left-to-right list alone let GPT line everyone up side by side
+    // like a group photo. Each person's distance from the camera and which way they face come
+    // from the floor plan.
+    const placed = order.filter((a) => a.characterId !== fgId);
+    if (placed.length && shotPlan) {
+      const parts = placed.map((a) => {
+        const pos = shotPlan.actors.find((x) => x.characterId === a.characterId)?.position;
+        const fwd = facingOf(shotPlan, a.characterId, shotPlan.lineOfAction);
+        let face = "";
+        if (pos && fwd) {
+          const vx = cam.position.x - pos.x, vy = cam.position.y - pos.y, l = Math.hypot(vx, vy) || 1;
+          const c = (fwd.x * vx + fwd.y * vy) / l;
+          face = c > 0.5 ? ", facing the camera" : c > -0.35 ? ", seen side-on" : ", seen from behind";
+        }
+        const d = Math.max(0.5, Math.round(a.depthM * 2) / 2);
+        return { id: a.characterId, d, text: `${name(a.characterId)} about ${d} m from the camera${face}` };
+      });
+      const near = Math.min(...parts.map((p) => p.d)), far = Math.max(...parts.map((p) => p.d));
+      lines.push(`Distance and direction: ${parts.map((p) => p.text).join("; ")}.${far >= near * 1.6 && parts.length > 1 ? ` Keep these distances: whoever is further away is smaller and further back in the room, not lined up beside ${parts.find((p) => p.d === near) ? name(parts.find((p) => p.d === near)!.id) : "the nearer people"}.` : ""}`);
     }
     if (layout) lines.push("Use the attached layout sketch, drawn from the floor plan through this camera, for where each person stands in the frame, how big they appear, the camera angle and the table's height and place. It is only a guide made of labelled shapes: draw real people in the real room and copy nothing of its style, shapes, colours or text.");
     if (edge.length) lines.push(`${joinNames(edge.map((c) => c.name))} ${edge.length === 1 ? "is" : "are"} clearly in the picture, standing in ${edge.length === 1 ? "their place" : "their places"} with the others and listening, less prominent than ${subjectId ? name(subjectId) : "the main characters"} but never left out.`);

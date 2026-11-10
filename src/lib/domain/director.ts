@@ -4,7 +4,7 @@
 
 import { deriveDuration } from "./duration";
 import { mainSubjectId } from "./composer";
-import { cameraPlacementProblem, horizontalFov, PRESET_FOV, occlusions, planForShot, propsBlocking, readCamera, type CameraReading } from "./geometry";
+import { cameraPlacementProblem, facingOf, horizontalFov, PRESET_FOV, occlusions, planForShot, propsBlocking, readCamera, type CameraReading } from "./geometry";
 import { GENRE_PROFILES, genreBonus, type Genre } from "./genre";
 import type { CameraPreset, GeometryPlanData, PlanCamera, Point, ShotSpec } from "./types";
 
@@ -67,25 +67,6 @@ function sideOf(a: Point, b: Point, p: Point): number {
   const ab = sub(b, a);
   const ap = sub(p, a);
   return Math.sign(ab.x * ap.y - ab.y * ap.x);
-}
-
-/**
- * Which way someone faces (D19c). The two people on the line of action face each other; others
- * gathered round a spot face it; someone apart from the group (arriving) faces the group.
- * Undefined for someone alone.
- */
-export function facingOf(plan: GeometryPlanData, id: string, line?: Iterable<string>): Point | undefined {
-  const a = plan.actors.find((x) => x.characterId === id);
-  const others = plan.actors.filter((x) => x.characterId !== id).map((x) => x.position);
-  if (!a || !others.length) return undefined;
-  const group = centroid(others);
-  const pair = line ? [...line] : [];
-  const partner = pair.includes(id) ? plan.actors.find((x) => x.characterId !== id && pair.includes(x.characterId))?.position : undefined;
-  if (partner && Math.hypot(partner.x - a.position.x, partner.y - a.position.y) < 3) return norm(sub(partner, a.position));
-  const spot = plan.furniture?.find((f) => f.id === "spot")?.position;
-  const target = spot && Math.hypot(a.position.x - spot.x, a.position.y - spot.y) < 1.8 ? spot : group;
-  const v = sub(target, a.position);
-  return Math.hypot(v.x, v.y) < 0.05 ? undefined : norm(v);
 }
 
 // ---------- classification ----------
@@ -204,7 +185,7 @@ function candidates(plan: GeometryPlanData, shot: ShotSpec, moment: MomentKind, 
   // Someone apart from the group (arriving, leaving): a wide from behind and to the side of
   // them, looking past them to the group, so they are near the lens and the group is across the
   // room behind (D19b). A circle round everyone would need a camera outside the room.
-  if (moment === "establishing" || moment === "exit" || moment === "reaction") {
+  if (moment === "establishing" || moment === "exit" || moment === "reaction" || (subjectId && shot.at?.[subjectId])) {
     const others = (shot.presentIds.length ? shot.presentIds : plan.actors.map((a) => a.characterId)).filter((id) => id !== subjectId).map(pos).filter((p): p is Point => !!p);
     const G = others.length ? centroid(others) : undefined;
     if (G && Math.hypot(S.x - G.x, S.y - G.y) > 1.8) {
@@ -292,8 +273,8 @@ function score(
     const toCam = norm(sub(cam.position, pos));
     const cos = fwd.x * toCam.x + fwd.y * toCam.y; // 1 = looking straight at the camera
     if (cos < -0.35) {
-      // Only someone still arriving may be seen from behind, walking in towards the group.
-      if (id === subjectId && !(cand.follow && shot.at?.[id] === "arriving")) return { ok: false, score: 0, reasons: [] };
+      // Only someone still walking in (arriving or approaching) may be seen from behind.
+      if (id === subjectId && !(cand.follow && (shot.at?.[id] === "arriving" || shot.at?.[id] === "approaching"))) return { ok: false, score: 0, reasons: [] };
       facingCost += id === subjectId ? 0.5 : 4;
     } else if (cos < -0.05) facingCost += 0.5;
   }
@@ -544,6 +525,8 @@ export function groupMultiShot(shots: ShotInput[], maxSec = 15, maxCuts = 6): Mu
   return groups;
 }
 
+export { facingOf };
+
 export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (id: string) => string, genre: Genre = "neutral"): SceneDesign {
   const line = chooseLine(plan, shots);
   // Anchor screen sides from the dialogue (R-SCREEN): run the dialogue shots first, take the
@@ -574,9 +557,10 @@ export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (i
  */
 /**
  * The version of the app's layout rules (D19c). A plan made under older rules is flagged so the
- * user can update it in one step: 2 = arrival spots, prop sizes, lens fitting (D19b).
+ * user can update it in one step: 2 = arrival spots, prop sizes, lens fitting (D19b);
+ * 3 = faces, approach shots from behind the walker (D19c/D19d).
  */
-export const LAYOUT_RULES = 2;
+export const LAYOUT_RULES = 3;
 
 export function applyDesign(plan: GeometryPlanData, choices: { shotId: string; shotCode: string; option: CameraOption }[], line?: [string, string]) {
   const cameras: PlanCamera[] = [];

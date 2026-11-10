@@ -501,7 +501,7 @@ describe("Fixes from Paul's first locked run (D19a)", () => {
     studio.approvePositions(db, sid);
     // Once positions are approved the plan fixes which props there are and what each one is
     // (D19c); only their look can be corrected (D19b).
-    studio.saveSceneStaging(db, sid, { ...parsed.staging, props: [{ name: "neon sign", detail: "pink" }] });
+    studio.saveSceneStaging(db, sid, { ...parsed.staging, props: [{ name: "neon sign", detail: "pink" }, { name: "Cocktail Table", detail: "pink" }] });
     const sc = repo.getScene(db, sid)!;
     expect((sc.scene.staging as { props: { name: string }[] }).props.map((p) => p.name)).toEqual(["cocktail table", "backdrop"]);
     expect(sc.shots[0].spec.props!.map((p) => p.name)).toEqual(["cocktail table", "backdrop"]);
@@ -595,6 +595,18 @@ describe("Arrivals, exits and how props look (D19b)", () => {
       expect(cameraPlacementProblem(plan, s.options[0].camera), s.shotCode).toBeFalsy();
     }
     expect(d.shots[1].options[0].kind).toBe("Wide (master)"); // her arrival: wide, the group across the room behind her
+  });
+  it("a suggestion fills gaps and never replaces what the user wrote or attached (D19c)", async () => {
+    const { mergeSuggestion } = await import("../src/lib/domain/story");
+    const mine = { spot: "", crowd: "busy launch", crowdLevel: "busy" as const, props: [{ name: "cocktail table", detail: "white floor-length cloth", imageAssetId: "pic" }, { name: "logo wall", detail: "" }] };
+    const gpt = { spot: "around the table", crowd: "a few people", crowdLevel: "few" as const, props: [{ name: "cocktail table", detail: "matte black top" }, { name: "Logo wall", detail: "3 m wide" }, { name: "plinth", detail: "white" }] };
+    const m = mergeSuggestion(mine, gpt);
+    expect(m.props[0]).toEqual({ name: "cocktail table", detail: "white floor-length cloth", imageAssetId: "pic" });
+    expect(m.props[1].detail).toBe("3 m wide");
+    expect(m.props.map((p) => p.name)).toEqual(["cocktail table", "logo wall", "plinth"]);
+    expect(m.spot).toBe("around the table");
+    expect(m.crowd).toBe("busy launch");
+    expect(mergeSuggestion(mine, gpt, true).props.map((p) => p.name)).toEqual(["cocktail table", "logo wall"]);
   });
   it("a prop's height is its own, not the height of what stands on it (D19c)", async () => {
     const { propHeight } = await import("../src/lib/domain/story");

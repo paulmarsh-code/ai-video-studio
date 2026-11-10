@@ -248,7 +248,7 @@ export function cameraPlacementProblem(plan: GeometryPlanData, cam: PlanCamera):
 }
 
 /** Which key props (furniture) a camera sees, left to right (D19). */
-export function readProps(plan: GeometryPlanData, cam: PlanCamera): { id: string; name: string; inView: boolean; frame: FramePosition | "out" }[] {
+export function readProps(plan: GeometryPlanData, cam: PlanCamera): { id: string; name: string; inView: boolean; frame: FramePosition | "out"; depthM: number }[] {
   const half = horizontalFov(plan, cam) / 2;
   const f = norm(sub(cam.lookAt, cam.position));
   const r = { x: f.y, y: -f.x };
@@ -260,7 +260,7 @@ export function readProps(plan: GeometryPlanData, cam: PlanCamera): { id: string
       const reach = deg(Math.atan2(fu.radiusM, Math.max(depth, 0.01)));
       const inView = depth > 0 && Math.abs(angle) - reach <= half;
       const frame: FramePosition | "out" = !inView ? "out" : Math.abs(angle) <= CENTRE_BAND_DEG ? "centre" : angle < 0 ? "frame-left" : "frame-right";
-      return { angle, seen: { id: fu.id, name: fu.name, inView, frame } };
+      return { angle, seen: { id: fu.id, name: fu.name, inView, frame, depthM: +depth.toFixed(2) } };
     })
     .sort((a, b) => a.angle - b.angle)
     .map((x) => x.seen);
@@ -307,3 +307,23 @@ export function propsBlocking(plan: GeometryPlanData, cam: PlanCamera, targetIds
   }
   return out;
 }
+
+/**
+ * Which way someone faces (D19c). The two people on the line of action face each other; others
+ * gathered round a spot face it; someone apart from the group (arriving) faces the group.
+ * Undefined for someone alone.
+ */
+export function facingOf(plan: GeometryPlanData, id: string, line?: Iterable<string>): Point | undefined {
+  const a = plan.actors.find((x) => x.characterId === id);
+  const others = plan.actors.filter((x) => x.characterId !== id).map((x) => x.position);
+  if (!a || !others.length) return undefined;
+  const group = { x: others.reduce((s, p) => s + p.x, 0) / others.length, y: others.reduce((s, p) => s + p.y, 0) / others.length };
+  const pair = line ? [...line] : [];
+  const partner = pair.includes(id) ? plan.actors.find((x) => x.characterId !== id && pair.includes(x.characterId))?.position : undefined;
+  if (partner && Math.hypot(partner.x - a.position.x, partner.y - a.position.y) < 3) return norm(sub(partner, a.position));
+  const spot = plan.furniture?.find((f) => f.id === "spot")?.position;
+  const target = spot && Math.hypot(a.position.x - spot.x, a.position.y - spot.y) < 1.8 ? spot : group;
+  const v = sub(target, a.position);
+  return Math.hypot(v.x, v.y) < 0.05 ? undefined : norm(v);
+}
+
