@@ -395,3 +395,17 @@ From Paul's next redraw:
 5. Layout rules are now version 3, so existing scenes show "Update the layout".
 
 On background changes: the background behind the group follows the camera direction. Shots 1–3 look towards the bar, the over-the-shoulder shot towards the lounge, and the group shots towards the screen wall, where the logo backdrop stands. That's correct for the floor plan. If a scene should keep one background, the floor plan is where to change it.
+
+## D19e — Nobody drops out of the picture (2026-11-10)
+
+Paul's next redraw: in shots 4 and 8 (over-the-shoulder) Marcus and Nina were missing; Nina was missing in 5; Jade was missing in 6. Shot 3 had Jade still short of the table though the panel says "as she reaches them". Shot 1 had her too close to the lens. Her bag changed hands, and the skirt's orange panel was lost from behind.
+
+The picture check passed these shots because, by the plan, those people really were out of frame: the over-the-shoulder and two-shot framings had cropped them. Paul expects everyone standing together to stay in the picture. That's the general rule now:
+
+1. **Everyone standing with the group stays in frame.** Each cast member present (not excluded) whom a camera leaves out, or sees only as a shoulder, costs 2.5. Close-ups are the exception, being chosen for a moment on purpose. In a small standing group, group shots now win over over-the-shoulder shots that crop people.
+2. **"Reaches them" means at the table.** Wording like "as she reaches them", "joins the group" or "arrives at the table" means the person is in their place by the end of the panel, so no "approaching" mark is used.
+3. **Arrivals are filmed from further back.** The camera stands 2–3 m behind the person walking in, not 1.5 m. The arrival mark leaves room behind it for that.
+4. **Clothes and carried items.** The reference line now says every pattern, stripe and colour block is kept, and bags stay in the same hand or on the same shoulder.
+5. Layout rules are now version 4, so existing scenes show "Update the layout".
+
+Known trade-off: with everyone kept in frame, a scene of a small group gets similar-looking group shots. Variety comes from the moment and the close-ups.

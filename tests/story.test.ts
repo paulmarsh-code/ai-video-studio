@@ -547,10 +547,11 @@ describe("Arrivals, exits and how props look (D19b)", () => {
     const plan = defaultPlan(ids, panels, [], { spot: "around the table" });
     const { plan: marked, at } = addMovementMarks(plan, [
       { action: "Jade enters the busy launch, scanning the room", subjectId: "jade" },
-      { action: "Jade approaches the group as she reaches them", subjectId: "jade" },
+      { action: "Jade approaches the group", subjectId: "jade" },
       { action: "Chase shrugs", subjectId: "chase" },
+      { action: "Jade approaches the group, smiling as she reaches them", subjectId: "jade" }, // there by the end (D19e)
     ]);
-    expect(at).toEqual([{ jade: "arriving" }, { jade: "approaching" }, undefined]);
+    expect(at).toEqual([{ jade: "arriving" }, { jade: "approaching" }, undefined, undefined]);
     const jade = marked.actors.find((a) => a.characterId === "jade")!;
     const arriving = jade.marks!.find((m) => m.id === "arriving")!.position;
     expect(Math.hypot(arriving.x - jade.position.x, arriving.y - jade.position.y)).toBeGreaterThan(2.5); // a few metres out, kept inside the room

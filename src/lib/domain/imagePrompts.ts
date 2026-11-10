@@ -163,7 +163,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   const lines: string[] = [];
   lines.push(`${(i.style ?? "photorealistic").replace(/^./, (m) => m.toUpperCase())} storyboard frame for a ${i.aspect ?? "9:16"} video, set in the ${i.venueName}.`);
   const people = attach.slice(0, peopleCount);
-  if (people.length) lines.push(`Use the attached reference images for ${joinNames(people.map((a) => a.label.replace(/ (reference|back)$/, "")))}; keep their faces, hair and clothes identical.`);
+  if (people.length) lines.push(`Use the attached reference images for ${joinNames(people.map((a) => a.label.replace(/ (reference|back)$/, "")))}; keep their faces, hair and clothes identical, every pattern, stripe and colour block included. Bags and anything carried stay exactly as in the reference, in the same hand or on the same shoulder.`);
   if (bgImage) lines.push(`Use the attached ${bgView} image as the background, seen across the room several metres behind the characters: same place, layout and light.${shot?.crowd?.trim() ? " It shows the room empty; fill it with the background guests described below." : ""}`);
   const spot = shot?.spot?.trim();
   const crowd = shot?.crowd?.trim();

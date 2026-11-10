@@ -489,6 +489,8 @@ export function defaultPlan(castIds: string[], panels: DraftPanel[], views: Plan
 
 const ARRIVING = /\b(enters?|entering|walks? (in|into|through)|walking (in|into|through)|arriv(es?|ing)|comes? in|makes? (her|his|their) way (in|through))\b/i;
 const APPROACHING = /\b(approach(es|ing)?|walks? (up|over) to|heads? (over|towards?))\b/i;
+/** Already there by the end of the panel (D19e): "as she reaches them", "joins the group". */
+const REACHED = /\b(reach(es|ing)? (them|the (group|table|others))|joins? (them|the (group|table|others))|arriv(es|ing) at (the )?(table|group))\b/i;
 
 /**
  * Give people a second spot for panels where they arrive (D19b): "arriving" a few metres out
@@ -520,7 +522,7 @@ export function addMovementMarks(plan: GeometryPlanData, panels: { action: strin
     if (Math.abs(side) > 0.01) openDir = side > 0 ? { x: -nrm.x, y: -nrm.y } : nrm;
   }
   const at = panels.map((p) => {
-    const kind = ARRIVING.test(p.action) ? "arriving" : APPROACHING.test(p.action) ? "approaching" : undefined;
+    const kind = REACHED.test(p.action) ? undefined : ARRIVING.test(p.action) ? "arriving" : APPROACHING.test(p.action) ? "approaching" : undefined;
     const a = kind && p.subjectId ? actors.find((x) => x.characterId === p.subjectId) : undefined;
     if (!kind || !a) return undefined;
     if (!a.marks.some((m) => m.id === kind)) {
@@ -530,7 +532,7 @@ export function addMovementMarks(plan: GeometryPlanData, panels: { action: strin
       let ox = a.position.x - centre.x, oy = a.position.y - centre.y;
       const l = Math.hypot(ox, oy) || 1;
       ox /= l; oy /= l;
-      const room = 1.2;
+      const room = 2.2; // space behind them for a camera a couple of metres back (D19e)
       const reach = (ux: number, uy: number) => {
         for (let d = 5; d >= 2.5; d -= 0.25) {
           const x = a.position.x + ux * d, y = a.position.y + uy * d;

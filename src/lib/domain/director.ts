@@ -190,7 +190,7 @@ function candidates(plan: GeometryPlanData, shot: ShotSpec, moment: MomentKind, 
     const G = others.length ? centroid(others) : undefined;
     if (G && Math.hypot(S.x - G.x, S.y - G.y) > 1.8) {
       const u = norm(sub(S, G));
-      for (const ang of [-50, -35, -20, 20, 35, 50]) for (const back of [1.6, 2.2, 3.0]) {
+      for (const ang of [-50, -35, -20, 20, 35, 50]) for (const back of [2.0, 2.6, 3.2]) {
         const camPos = add(S, mul(rot(u, ang), back));
         const look = add(S, mul(sub(G, S), 0.4));
         out.push({ camera: makeCam("wide", "Wide", "wide", camPos, look), kind: "Wide (master)", role: "wide", follow: true });
@@ -333,7 +333,7 @@ function score(
   let ideal = (cand.role === "cu" ? 1.6 : cand.role === "ots" ? 2.2 : cand.role === "group" ? 2.6 : 4.5) * GENRE_PROFILES[genre].distanceFactor;
   // A group shot is as close as it can be while everyone still fits across the frame (D19).
   if (cand.role === "group" || cand.role === "wide") ideal = Math.max(ideal, groupFitDistance(plan, shot, cam.preset, cam.fovDeg) * (cand.role === "wide" ? 1.3 : 1));
-  if (cand.follow) ideal = 2.2;
+  if (cand.follow) ideal = 2.6; // far enough back that the walker isn't filling the frame (D19e)
   s += 1 - Math.min(1, Math.abs(subj.depthM - ideal) / ideal);
 
   // R-SCREEN: characters keep their side of the screen.
@@ -389,6 +389,17 @@ function score(
     // An opening shot shows where we are and who is already there (D19c): someone arriving is
     // seen with the people they are heading for.
     if (moment === "establishing") s += 0.75 * Math.min(4, reading.actors.filter((a) => others.includes(a.characterId) && a.inView && !a.foreground).length);
+  }
+  // Nobody standing with the group drops out of the picture (D19e): when the cast stand
+  // together, a framing that leaves some of them out reads as them having vanished. Each one the
+  // camera can't see (or sees only as a shoulder) costs, except in a close-up, which is chosen
+  // for a moment on purpose.
+  if (cand.role !== "cu") {
+    for (const id of standing) {
+      if (required.includes(id)) continue;
+      const a = reading.actors.find((x) => x.characterId === id);
+      if (!a || !a.inView || a.foreground) s -= 2.5;
+    }
   }
   // Anyone else half in, half out of the frame edge looks like a mistake: a small cost each.
   for (const a of reading.actors) {
@@ -558,9 +569,10 @@ export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (i
 /**
  * The version of the app's layout rules (D19c). A plan made under older rules is flagged so the
  * user can update it in one step: 2 = arrival spots, prop sizes, lens fitting (D19b);
- * 3 = faces, approach shots from behind the walker (D19c/D19d).
+ * 3 = faces, approach shots from behind the walker (D19c/D19d); 4 = nobody standing with the
+ * group drops out of frame, arrivals filmed from further back (D19e).
  */
-export const LAYOUT_RULES = 3;
+export const LAYOUT_RULES = 4;
 
 export function applyDesign(plan: GeometryPlanData, choices: { shotId: string; shotCode: string; option: CameraOption }[], line?: [string, string]) {
   const cameras: PlanCamera[] = [];
