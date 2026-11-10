@@ -2,6 +2,7 @@
 // It never rewrites approved dialogue and never names characters excluded from the shot.
 
 import { gazeFor, gazeLine, shotEffect } from "./gaze";
+import { bodyEffect } from "./vertical";
 import { describeFrame, planForShot, presetText, readCamera } from "./geometry";
 import { gestureDetail } from "./gestures";
 import { GENRE_PROFILES, type Genre } from "./genre";
@@ -90,6 +91,9 @@ export function composeKlingPrompt(
     if (gl) s.scene += ` ${gl}`;
     const fx = shotEffect(gz, subjectId);
     if (fx) s.scene += ` Shot effect: ${fx}.`;
+    // Lying down, falling, free fall (D26).
+    const bx = bodyEffect(shot.actions ?? "", subjectId ? byId(subjectId)?.name ?? "they" : "they");
+    if (bx) s.scene += ` Body and angle: ${bx}.`;
   }
   if (shot.props?.length) s.scene += ` Key props, unchanged in every clip: ${shot.props.map((p) => `${p.name}${p.detail ? ` (${stripQuotes(p.detail).replace(/[.]$/, "")})` : ""}`).join("; ")}.`;
 

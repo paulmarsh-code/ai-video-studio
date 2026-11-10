@@ -548,9 +548,12 @@ export function verticalCamera(cam: PlanCamera, v: { kind: string; heightM: numb
   if (!subject) return { ...cam, heightM: v.heightM, tiltDeg: v.tiltDeg };
   if (v.kind === "overhead") {
     const away = norm(sub(cam.position, subject));
-    const position = add(subject, mul(away, 1.0));
+    // A top shot sits right above them (D26); otherwise just behind and above.
+    const position = add(subject, mul(away, v.tiltDeg <= -85 ? 0.1 : 1.0));
     return { ...cam, position: { x: +position.x.toFixed(2), y: +position.y.toFixed(2) }, lookAt: subject, heightM: v.heightM, tiltDeg: v.tiltDeg };
   }
+  // Level at their height (D26): lying down, on the floor, falling alongside them.
+  if (v.tiltDeg === 0) return { ...cam, heightM: v.heightM, tiltDeg: 0 };
   const dist = Math.max(0.5, Math.hypot(subject.x - cam.position.x, subject.y - cam.position.y));
   const aimAt = v.kind === "high" ? 1.2 : 1.6; // chest when looking down on them, head when looking up
   const deg = (Math.atan((aimAt - v.heightM) / dist) * 180) / Math.PI;
@@ -605,7 +608,7 @@ export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (i
  * positions for anyone moving (D20); 6 = movement marks worked out afresh, props seen across
  * their real extent (D21b); 7 = high and low cameras for looking down or up (D25).
  */
-export const LAYOUT_RULES = 7;
+export const LAYOUT_RULES = 8;
 
 export function applyDesign(plan: GeometryPlanData, choices: { shotId: string; shotCode: string; option: CameraOption }[], line?: [string, string]) {
   const cameras: PlanCamera[] = [];

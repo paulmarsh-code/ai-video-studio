@@ -123,3 +123,20 @@ describe("Reflections (D25)", () => {
     expect(verticalFor("Ben stares at his reflection in the water")?.kind).toBe("high");
   });
 });
+
+describe("Looking out of vehicles (D25)", () => {
+  it.each([
+    ["Ava looks out of the car window", "a", "through:out of:car window", "side window"],
+    ["Ben stares out the plane window", "b", "through:out of:plane window", "small oval window"],
+    ["Cleo gazes out of the train", "c", "through:out of:train", "scenery outside slightly blurred"],
+    ["Dev looks out of the window of the plane", "d", "through:out of:plane window", "oval window"],
+    ["Ava looks out through the windscreen", "a", "through:out through:windscreen", "windscreen"],
+    ["Ben peers out of the ship's porthole", "b", "through:out of:ship porthole", "porthole"],
+    ["Cleo looks out of the airplane", "c", "through:out of:airplane", "oval window"],
+    ["Dev looks out of the taxi window", "d", "through:out of:taxi window", "side window"],
+  ])("%s", async (text, who, at, effect) => {
+    const { shotEffect: fx } = await import("../src/lib/domain/gaze");
+    expect(g(text, { subjectId: who })[who]).toBe(at);
+    expect(fx(gazeFor({ shot: shot({ subjectId: who }), description: text, people, line: ["a", "b"] }), who)).toContain(effect);
+  });
+});

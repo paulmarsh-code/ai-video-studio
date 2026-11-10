@@ -27,8 +27,11 @@ const SHOULDER = new RegExp(String.raw`\b${LOOK_VERB}\s+(?:back\s+)?over\s+(?:he
 const SIDEWAYS = new RegExp(String.raw`\b${LOOK_VERB}\s+(?:(?:to|towards)\s+)?(?:(?:the|her|his|their)\s+)?(left|right)\b|\b${LOOK_VERB}\s+(behind)\s+(?:her|him|them|herself|himself|themselves)\b|\b${LOOK_VERB}\s+(back)\b(?!\s+(?:at|to|over))`, "i");
 // Mirrors and things looked through (D25): "looks in his rear-view mirror", "checks her mirrors",
 // "peers through the keyhole", "looks out of the window". The object is kept in its own words.
-const THROUGH_OBJ = String.raw`(?:(?:rear[\s-]?view|rear|wing|side|door|bathroom|hand|compact|vanity)\s+)?mirrors?|(?:rear|back|side|car|front|shop|kitchen|bedroom)?\s*windows?|windscreen|windshield|binoculars|field\s+glasses|opera\s+glasses|telescope|spyglass|eye\s?glass|monocle|magnifying\s+glass|periscope|viewfinder|lens|scope|sights|peephole|keyhole|spyhole|letterbox|porthole|hatch|blinds|curtains|crack\s+in\s+the\s+door|gap\s+in\s+the\s+\w+|(?:open\s+|half-open\s+|front\s+|back\s+)?doorway|(?:open\s+|half-open\s+|front\s+|back\s+)?door|archway|gate|fence|bars|glass|screen|camera|phone`;
-const THROUGH = new RegExp(String.raw`\b(?:${LOOK_VERB}|check(?:s|ed|ing)?|squint(?:s|ed|ing)?)\s+(?:back\s+|out\s+)?(in|into|at|through|out\s+of|out\s+through)\s+(?:the|his|her|their|a|an)\s+(${THROUGH_OBJ})\b|\bcheck(?:s|ed|ing)?\s+(?:his|her|their|the)\s+(mirrors?)\b`, "i");
+// Vehicles looked out of (D25): "looks out of the car window", "stares out the plane window",
+// "gazes out of the train", "looks out of the window of the plane".
+const VEHICLE = String.raw`(?:car|taxi|cab|bus|coach|train|tram|carriage|plane|aeroplane|airplane|aircraft|jet|helicopter|boat|ship|ferry|yacht|cockpit|cabin|van|lorry|truck|limo|limousine)`;
+const THROUGH_OBJ = String.raw`${VEHICLE}(?:['’]s)?(?:\s+(?:window|windscreen|windshield|porthole))?|(?:(?:rear[\s-]?view|rear|wing|side|door|bathroom|hand|compact|vanity)\s+)?mirrors?|(?:rear|back|side|car|front|shop|kitchen|bedroom)?\s*windows?|windscreen|windshield|binoculars|field\s+glasses|opera\s+glasses|telescope|spyglass|eye\s?glass|monocle|magnifying\s+glass|periscope|viewfinder|lens|scope|sights|peephole|keyhole|spyhole|letterbox|porthole|hatch|blinds|curtains|crack\s+in\s+the\s+door|gap\s+in\s+the\s+\w+|(?:open\s+|half-open\s+|front\s+|back\s+)?doorway|(?:open\s+|half-open\s+|front\s+|back\s+)?door|archway|gate|fence|bars|glass|screen|camera|phone`;
+const THROUGH = new RegExp(String.raw`\b(?:${LOOK_VERB}|check(?:s|ed|ing)?|squint(?:s|ed|ing)?)\s+(?:back\s+)?(in|into|at|through|out\s+of|out\s+through|out)\s+(?:the|his|her|their|a|an)\s+(${THROUGH_OBJ})(?:\s+of\s+(?:the|his|her|their|a|an)\s+(${VEHICLE}))?\b|\bcheck(?:s|ed|ing)?\s+(?:his|her|their|the)\s+(mirrors?)\b`, "i");
 // Reflections (D25): "looks at her reflection in the mirror", "stares at himself in the water",
 // "checks her reflection in the shop window".
 const REFLECTION = new RegExp(String.raw`\b(?:${LOOK_VERB}|check(?:s|ed|ing)?|catch(?:es|ing)?|caught|admir(?:e|es|ed|ing)|stud(?:y|ies|ied|ying))\s+(?:at\s+)?(?:(?:her|his|their|its)\s+(?:own\s+)?reflection|(?:herself|himself|themselves))(?:\s+(?:in|on)\s+(?:the|a|an|her|his|their)\s+([a-z][a-z\s-]{1,25}?))?(?=[,.;!?]|\s+(?:and|as|while|before|then)\b|$)`, "i");
@@ -93,8 +96,10 @@ export function gazeFor(i: {
     }
     if ((m = clause.match(THROUGH))) {
       const looker = lookerIn(clause.slice(0, m.index ?? 0));
-      const how = (m[1] ?? "in").toLowerCase().replace(/\s+/g, " ");
-      const obj = (m[2] ?? m[3]).toLowerCase().replace(/\s+/g, " ").trim();
+      let how = (m[1] ?? "in").toLowerCase().replace(/\s+/g, " ");
+      if (how === "out") how = "out of";
+      // "the window of the plane" reads as "plane window".
+      const obj = (m[3] ? `${m[3]} ${m[2]}` : (m[2] ?? m[4])).toLowerCase().replace(/['’]s\b/, "").replace(/\s+/g, " ").trim();
       apply(looker, `through:${/mirror/.test(obj) ? "in" : how === "at" ? "through" : how}:${obj}`);
       if (looker && looker !== "group") lastLooker = looker;
       continue;
@@ -193,6 +198,16 @@ export function gazeLine(gaze: Gaze[], name: (id: string) => string, only?: stri
  */
 export function throughEffect(obj: string): string | undefined {
   const o = obj.toLowerCase();
+  // From inside a vehicle, looking out (D25).
+  if (/\b(plane|aeroplane|airplane|aircraft|jet)\b/.test(o)) return "from inside the plane, looking out through a small oval window with rounded corners, the cabin wall and seat edge around it, sky and clouds or the land far below outside";
+  if (/\bhelicopter\b/.test(o)) return "from inside the helicopter, looking out through its curved window, the frame and controls at the edges, the ground below";
+  if (/windscreen|windshield/.test(o) && !/\b(plane|aeroplane|airplane|aircraft|jet|helicopter|train|bus|coach)\b/.test(o)) return "from inside the vehicle, looking out through the windscreen, the dashboard along the bottom and the pillars at the sides";
+  if (/\bcockpit\b/.test(o)) return "from inside the cockpit, looking out through the front windows, the frame and instruments at the edges";
+  if (/\b(train|tram|carriage|coach|bus)\b/.test(o)) return "from inside, looking out of the window, its frame around the view, the scenery outside slightly blurred with movement, a faint reflection on the glass";
+  if (/\b(boat|ship|ferry|yacht|cabin)\b/.test(o)) return "from inside, looking out through a round porthole or cabin window, its frame around the view, water outside";
+  if (/\b(car|taxi|cab|van|lorry|truck|limo|limousine)\b/.test(o)) return /windscreen|windshield/.test(o)
+    ? "from inside the vehicle, looking out through the windscreen, the dashboard along the bottom and the pillars at the sides"
+    : "from inside the vehicle, looking out of the side window, the door frame and glass around the view, the world outside passing by";
   if (/binocular|field glasses|opera glasses/.test(o)) return "their point of view through binoculars: the view seen inside two overlapping circles with soft black edges all round, magnified, slightly unsteady";
   if (/telescope|spyglass|eye ?glass|monocle|periscope|scope|sights/.test(o)) return "their point of view through it: one round magnified view with a soft black vignette all round it";
   if (/magnifying/.test(o)) return "seen through a magnifying glass: a round, enlarged and slightly curved view inside the lens, the rest normal size and soft";

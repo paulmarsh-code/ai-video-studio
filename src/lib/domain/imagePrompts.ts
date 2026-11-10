@@ -9,6 +9,7 @@ import { GENRE_PROFILES, type Genre } from "./genre";
 import { gestureDetail } from "./gestures";
 import { propMoves } from "./story";
 import { gazeFor, gazeLine, shotEffect } from "./gaze";
+import { bodyEffect } from "./vertical";
 import { joinNames, stripQuotes } from "./text";
 import type { CastMember, GeometryPlanData, ShotSpec } from "./types";
 
@@ -279,6 +280,10 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     // Looking through something has its own look (D25): binoculars, keyhole, mirror, window…
     const fx = shotEffect(gz, shot.speakerId ?? shot.subjectId ?? shot.visibleIds[0]);
     if (fx) lines.push(`Shot effect: ${fx}.`);
+    // Lying down, falling, free fall (D26): how the body and the drop look.
+    const mainId = shot.speakerId ?? shot.subjectId ?? shot.visibleIds[0];
+    const bx = bodyEffect(`${i.description} ${shot.actions ?? ""}`, mainId ? name(mainId) : "they");
+    if (bx) lines.push(`Body and angle: ${bx}.`);
   }
 
   if (cam && reading && shot) {

@@ -493,6 +493,7 @@ Paul found the storyboard confusing. If he did, others will. It's now two parts,
    - Directions: down, up, away, around, back, left, right, behind, back over their shoulder (at someone).
    - Looking in or through things: mirrors (rear-view, wing, side, bathroom), windows, windscreens, doors and doorways, keyholes, peepholes, binoculars, telescopes, spyglasses, eyeglasses, periscopes, viewfinders, screens, blinds, gaps.
    - Their own reflection in a mirror, water or glass.
+   - Looking out of a vehicle: "looks out of the car/taxi/bus/train/plane/helicopter/boat window", "out through the windscreen", "out of the porthole", "the window of the train".
 2. **Shot effects.** Each thing looked through or into has its own look in the picture and video prompt:
    - binoculars: two overlapping circles;
    - a telescope or eyeglass: one round vignette;
@@ -503,7 +504,12 @@ Paul found the storyboard confusing. If he did, others will. It's now two parts,
    - blinds or gaps: strips between dark edges;
    - a reflection in a mirror: over the shoulder into the mirror;
    - a reflection in water: a high angle down at a rippling reflection;
-   - a reflection in glass: a faint see-through reflection.
+   - a reflection in glass: a faint see-through reflection;
+   - out of a car or taxi: the side window frame and door, or through the windscreen with the dashboard along the bottom;
+   - out of a plane: the small oval window, the wing or clouds outside;
+   - out of a train, tram or bus: scenery blurred by speed past the window;
+   - out of a ship or boat: a round porthole;
+   - from a helicopter or cockpit: the curved canopy and the ground far below.
 3. **Cameras that go up and down.** Cameras have a height and a tilt (`heightM`, `tiltDeg`; eye level and level by default).
    - Wording sets them automatically (`vertical.ts`). "Looks down", "over the edge", "the street below" or a reflection in water gives a high camera. "Looks into the hole/well/box" gives a steep overhead camera, moved to just behind and above the person. "Looks up", "up at the window", "overhead" or "towers over" gives a low camera.
    - The tilt is worked out from the camera's distance, so the person stays in frame.
@@ -513,3 +519,18 @@ Paul found the storyboard confusing. If he did, others will. It's now two parts,
 4. Layout rules are now version 7, so existing scenes show "Update the layout".
 
 Limit: the floor is flat in the floor plan. A cliff edge or a hole is described in words and shown by the camera's angle, but the ground below isn't modelled as lower.
+
+## D26 — Lying down, falling and jumping (2026-11-10)
+
+How a body is placed changes where the camera goes. Read from the panel's words, for any scene (`vertical.ts`, `bodyFor`, `bodyEffect`; tests in `tests/vertical.test.ts` with made-up names).
+
+1. **Lying down and looking up** ("lies on her back on the grass looking at the stars", "lying in bed staring at the ceiling", "on the sofa looking up at Ben"): a top shot from directly above, looking straight down onto their face (camera moved right above them, tilt about −88°). The prompt says what they lie on fills the frame, and that what they see (the sky outdoors, the ceiling indoors or on a bed or sofa) is a different shot.
+2. **Lying down otherwise** ("lay on the beach reading", "sprawls across the couch"): a low camera, level with them. Eyes are about 0.6 m up on a bed, sofa, bench or lounger, and about 0.3 m on grass, sand or a floor.
+3. **Falling or jumping from a height** (off a cliff, roof, building, bridge, balcony, ledge, over the edge, pushed off): the camera stays at the top and looks almost straight down as they drop away. Jumping reads as leaping out, arms forward; falling as flailing. Motion blur, clothes and hair streaming upward, the ground or water far below.
+4. **Free fall** (jumps out of a plane or helicopter, skydives, parachutes, base jumps): a camera falling alongside them at the same height, open sky and clouds, the ground spread far below, with no plane interior or floor in the picture.
+5. **Falling to the floor** (collapses to the floor, trips onto the pavement, knocked to the ground): a camera at floor level, level.
+6. Not triggered by "lies to him", "jumps for joy", "falls in love", "lay the table" or standing at an edge (that stays a looking-down high angle, D25).
+7. Picture and video prompts get a "Body and angle" line, and the camera line says "top shot from directly above" or "low camera, level" where it applies.
+8. Layout rules are now version 8, so existing scenes show "Update the layout".
+
+Limit: still a flat floor. The drop, the sky and the plane are described in words and shown by the camera angle; the plan does not model height differences.
