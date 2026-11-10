@@ -42,16 +42,16 @@ export function SideNav({ projects }: { projects: NavProject[] }) {
     const active = partOk && (exact || hq ? path === hp : path === hp || path.startsWith(hp + "/"));
     return (
       <Link href={href} data-testid={testId}
-        className={`block truncate rounded px-2 py-1 ${active ? "bg-neutral-700 text-white" : "text-neutral-300 hover:bg-neutral-800 hover:text-white"}`}>
+        className={`block rounded px-2 py-1 leading-snug ${active ? "bg-neutral-700 text-white" : "text-neutral-300 hover:bg-neutral-800 hover:text-white"}`}>
         {label}
       </Link>
     );
   };
   const twisty = (k: string, now: boolean, label: string, testId?: string) => (
     <button type="button" onClick={() => toggle(k, now)} aria-expanded={now} data-testid={testId}
-      className="flex w-full items-center gap-1 rounded px-1 py-1 text-left text-neutral-200 hover:bg-neutral-800">
-      <span className={`inline-block w-3 text-[10px] transition-transform ${now ? "rotate-90" : ""}`}>▶</span>
-      <span className="truncate">{label}</span>
+      className="flex w-full items-start gap-1 rounded px-1 py-1 text-left text-neutral-200 hover:bg-neutral-800">
+      <span className={`mt-1 inline-block w-3 shrink-0 text-[10px] transition-transform ${now ? "rotate-90" : ""}`}>▶</span>
+      <span className="leading-snug">{label}</span>
     </button>
   );
 
@@ -100,7 +100,7 @@ export function SideNav({ projects }: { projects: NavProject[] }) {
                                   <ul className="ml-2 border-l border-neutral-700 pl-2">
                                     <li>{item(sb, "Scene set-up", undefined, true)}</li>
                                     <li>{item(`${sb}/storyboard?part=setting`, "Scene setting", `nav-setting-${s.id}`)}</li>
-                                    <li>{item(`${sb}/storyboard?part=board`, "Layout & pictures", `nav-storyboard-${s.id}`)}</li>
+                                    <li>{item(`${sb}/storyboard?part=board`, "Storyboard", `nav-storyboard-${s.id}`)}</li>
                                     <li>{item(`${sb}/plan`, "Floor plan & cameras", `nav-plan-${s.id}`)}</li>
                                     <li>{item(`${sb}/design`, "Shot design")}</li>
                                     <li>{item(`${sb}/animatic`, "Animatic")}</li>

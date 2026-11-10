@@ -80,10 +80,10 @@ export default async function StoryboardPage({ params, searchParams }: { params:
       {pending.length > 0 && <p className="mt-2 text-sm text-amber-700">Unapproved character changes: {pending.map((c) => c.name).join(", ")}. Pictures use the last approved version. <Link className="underline" href={`/projects/${id}/characters`}>Review characters</Link></p>}
       {missingRefs.length > 0 && <p className="mt-2 text-sm text-amber-700">No approved pictures yet for {missingRefs.map((c) => c.name).join(", ")}. Create them in <Link className="underline" href={`/projects/${id}/characters`}>Characters</Link> so every panel keeps them consistent.</p>}
 
-      {/* Two parts (D24): 1, the scene setting; 2, layout and pictures. A scene starts on part 1
+      {/* Two parts (D24): 1, the scene setting; 2, the storyboard. A scene starts on part 1
           until its positions are approved. */}
       <div className="mt-4 flex gap-1 border-b border-neutral-200 text-sm" role="tablist" data-testid="storyboard-parts">
-        {([["setting", "1. Scene setting"], ["board", "2. Layout and pictures"]] as const).map(([k, label]) => (
+        {([["setting", "1. Scene setting"], ["board", "2. Storyboard"]] as const).map(([k, label]) => (
           <Link key={k} href={`?part=${k}`} role="tab" aria-selected={part === k} data-testid={`part-${k}`}
             className={`-mb-px rounded-t-md border px-4 py-2 ${part === k ? "border-neutral-200 border-b-white bg-white font-semibold" : "border-transparent text-neutral-600 hover:text-neutral-900"}`}>{label}</Link>
         ))}
