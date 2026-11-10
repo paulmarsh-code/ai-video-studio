@@ -4,6 +4,7 @@ import { getDb } from "@/db/client";
 import * as repo from "@/lib/repo";
 import { PlanEditorLoader } from "@/components/PlanEditorLoader";
 import { sceneLocks } from "@/lib/studioRepo";
+import { ringForScene } from "@/lib/backgroundImage";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,8 @@ export default async function PlanPage({ params }: { params: Promise<{ id: strin
   const cast = repo.getCast(db, id);
   const approved = repo.shotsWithApprovedTakes(db, sceneId);
   const locks = sceneLocks(db, sceneId);
+  const r = await ringForScene(db, sceneId);
+  const ring = r ? { url: `/api/venue-ring/${sceneId}`, startDeg: r.startDeg, width: r.width, height: r.height, pxPerDeg: r.pxPerDeg, previewHeight: 300 } : undefined;
   return (
     <div>
       <p className="text-sm text-neutral-500">
@@ -35,6 +38,7 @@ export default async function PlanPage({ params }: { params: Promise<{ id: strin
         version={s.plan.version}
         cast={cast}
         shots={s.shots.map((sh) => ({ id: sh.id, code: sh.code, spec: sh.spec, approved: approved.has(sh.id) }))}
+        ring={ring}
       />
     </div>
   );

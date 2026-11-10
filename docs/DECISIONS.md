@@ -426,3 +426,19 @@ Paul's direction: every camera should have a 360° reference of the room, and th
 3. **Start and finish.** Each person is where the previous panel left them. A panel that moves someone records where they start (`from`); the still picture shows where they end. "Reaches them" or "joins the group" starts from the last mark and ends at their place. The video prompt says "Jade walks from … to … during the shot". Positions are re-read from the panel text every time positions are approved, so editing the story changes them.
 4. **Props stay put** unless a panel says someone moves one ("pushes the table aside", "knocks over the plinth"). The positions step lists those panels; the picture for that panel says the prop starts in its usual place, and every other prop stays where it is.
 5. Layout rules are now version 5, so existing scenes show "Update the layout".
+
+## D21 — Three things that must always hold, and the check that enforces them (2026-11-10)
+
+Paul's three non-negotiables:
+
+1. Characters are always consistent.
+2. Moving the camera shows the venue in 360°, and a chosen shot (position, distance to the subject, lens) cuts its background from the 360° reference with the perspective kept.
+3. Props, like characters, stay consistent and in place unless the scene moves them.
+
+Where each stands:
+
+1. **Characters.** Front, back and face references are attached: the back one whenever someone is seen from behind (D19f). Each picture says to copy every pattern, stripe and colour block, and which hand holds what. New: the automatic check now gets each character's front and back references and reports, per person, whether the clothes match and what differs. A difference fails the check and triggers the one automatic redraw with the difference named ("Jade's clothes differ from the reference: skirt has no orange panel").
+2. **Venue in 360°.** The background is cut from the venue ring for each camera (D20). New: the floor plan's viewfinder shows the real venue ring behind the people and updates live as a camera is dragged, aimed or zoomed. A **Lens** slider (15°–90°) sets each camera's lens, and choosing a preset resets it. The ring is served small at `/api/venue-ring/[sceneId]`, with `?meta=1` giving where it starts, so the browser cuts the slice itself. The check now also asks which venue area is at the left and right of the background, and fails if they are the wrong way round. Backdrops and screens are drawn on the floor plan as panels facing the group, not as circles.
+3. **Props.** Places come from the floor plan; looks come from the description and picture (D19c, D19d); props move only if a panel says so (D20). New: the check gets each prop's picture and reports each prop's side of the frame, its depth (among the people, behind everyone, in front of everyone) and whether it matches its picture. A prop on the wrong side, drawn beside the people when it belongs behind them, or not matching its picture fails the check.
+
+Known limits: the 360° ring is joined from separate pictures, so its joins aren't seamless. Camera height and tilt aren't modelled yet (the camera is always at eye level, looking level). The check relies on a vision model, which can miss small differences.

@@ -38,14 +38,11 @@ async function ringFor(views: { name: string; directionDeg: number; path: string
   return out;
 }
 
-export async function renderBackgroundForShot(db: DB, shotId: string): Promise<Buffer | null> {
-  const shot = repo.getShot(db, shotId);
-  if (!shot?.spec.cameraId) return null;
-  const scene = repo.getScene(db, shot.sceneId);
-  const full = scene?.plan?.data;
-  const plan = full ? planForShot(full, shot.spec) : undefined;
-  const cam = plan?.cameras.find((c) => c.id === shot.spec.cameraId);
-  if (!scene || !plan || !cam || !scene.venue) return null;
+/** The scene's venue ring, or null when the venue has fewer than two view pictures. */
+export async function ringForScene(db: DB, sceneId: string) {
+  const scene = repo.getScene(db, sceneId);
+  const plan = scene?.plan?.data;
+  if (!scene || !plan || !scene.venue) return null;
   const pics = (scene.venue.views as { name: string; imageAssetId?: string }[])
     .map((v) => {
       const dir = plan.views.find((p) => p.name === v.name)?.directionDeg;
@@ -54,7 +51,26 @@ export async function renderBackgroundForShot(db: DB, shotId: string): Promise<B
     })
     .filter((v): v is { name: string; directionDeg: number; path: string } => !!v);
   if (pics.length < 2) return null; // one view: the plain view picture is used instead
-  const ring = await ringFor(pics);
+  return { ...(await ringFor(pics)), height: H, pxPerDeg: PX_PER_DEG };
+}
+
+/** A small copy of the ring (twice round) for the live camera preview (D21). */
+export async function ringPreview(db: DB, sceneId: string): Promise<Buffer | null> {
+  const ring = await ringForScene(db, sceneId);
+  if (!ring) return null;
+  return sharp(ring.data).resize({ height: 300 }).jpeg({ quality: 78 }).toBuffer();
+}
+
+export async function renderBackgroundForShot(db: DB, shotId: string): Promise<Buffer | null> {
+  const shot = repo.getShot(db, shotId);
+  if (!shot?.spec.cameraId) return null;
+  const scene = repo.getScene(db, shot.sceneId);
+  const full = scene?.plan?.data;
+  const plan = full ? planForShot(full, shot.spec) : undefined;
+  const cam = plan?.cameras.find((c) => c.id === shot.spec.cameraId);
+  if (!scene || !plan || !cam) return null;
+  const ring = await ringForScene(db, shot.sceneId);
+  if (!ring) return null;
   const slice = viewSlice(plan, cam);
   // Position of the left edge on the ring, moved into the first copy.
   let x0 = Math.round((ring.startDeg - slice.leftDeg) * PX_PER_DEG);

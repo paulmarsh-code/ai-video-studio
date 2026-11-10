@@ -11,7 +11,8 @@ import { savePlanAction, addPlanToLibraryAction } from "@/app/actions";
 import { checkLineOfAction, describeFrame, PRESET_FOV, readCamera } from "@/lib/domain/geometry";
 import { planImpact, type ShotRef } from "@/lib/domain/impact";
 import type { CameraPreset, CastMember, GeometryPlanData, Point } from "@/lib/domain/types";
-import { CameraView } from "./CameraView";
+import { CameraView, type RingInfo } from "./CameraView";
+import { propKind } from "@/lib/domain/story";
 import { FindingList } from "./FindingList";
 import { ActionButton } from "./ActionButton";
 
@@ -20,7 +21,7 @@ const PAD = 30;
 const CONE_M = 7;
 const COLOURS = ["#e11d48", "#2563eb", "#16a34a", "#9333ea", "#ea580c", "#0891b2"];
 
-export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; version: number; cast: CastMember[]; shots: ShotRef[] }) {
+export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; version: number; cast: CastMember[]; shots: ShotRef[]; ring?: RingInfo }) {
   const { cast } = props;
   const [plan, setPlan] = useState<GeometryPlanData>(props.initial);
   const [saved, setSaved] = useState<GeometryPlanData>(props.initial);
@@ -56,7 +57,7 @@ export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; 
     setPlan((pl) => ({ ...pl, actors: pl.actors.map((a) => (a.characterId === id ? { ...a, position: p } : a)) }));
   const moveFurniture = (id: string, p: Point) =>
     setPlan((pl) => ({ ...pl, furniture: (pl.furniture ?? []).map((f) => (f.id === id ? { ...f, position: p } : f)) }));
-  const moveCam = (id: string, patch: Partial<{ position: Point; lookAt: Point; preset: CameraPreset; overrideReason?: string }>) =>
+  const moveCam = (id: string, patch: Partial<{ position: Point; lookAt: Point; preset: CameraPreset; overrideReason?: string; fovDeg?: number }>) =>
     setPlan((pl) => ({ ...pl, cameras: pl.cameras.map((c) => (c.id === id ? { ...c, ...patch } : c)) }));
 
   // Line of action endpoints.
@@ -118,9 +119,18 @@ export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; 
 
             {(plan.furniture ?? []).map((f) => {
               const p = toPx(f.position);
+              // Drawn by kind (D21): a backdrop or screen is a long thin panel facing the group,
+              // a long counter a long block, a table or stand a circle.
+              const kind = propKind(`${f.name} ${f.detail ?? ""}`, f.name);
+              const long = kind === "flat" || f.radiusM > 0.8;
+              const people = plan.actors.map((a) => toPx(a.position));
+              const g = people.length ? { x: people.reduce((t, q) => t + q.x, 0) / people.length, y: people.reduce((t, q) => t + q.y, 0) / people.length } : { x: p.x, y: p.y + 1 };
+              const facingDeg = (Math.atan2(g.y - p.y, g.x - p.x) * 180) / Math.PI;
               return (
                 <Group key={f.id} x={p.x} y={p.y} draggable onDragStart={pushHistory} onDragMove={(e) => moveFurniture(f.id, toM(e.target.x(), e.target.y()))} onDragEnd={(e) => moveFurniture(f.id, toM(e.target.x(), e.target.y()))}>
-                  <Circle radius={f.radiusM * SCALE} fill="#e5e5e5" stroke="#737373" />
+                  {long
+                    ? <Rect rotation={facingDeg + 90} x={0} y={0} offsetX={f.radiusM * SCALE} offsetY={(kind === "flat" ? 0.12 : 0.5) * SCALE / 2} width={f.radiusM * 2 * SCALE} height={(kind === "flat" ? 0.12 : 0.5) * SCALE} fill={kind === "flat" ? "#ede9fe" : "#e5e5e5"} stroke="#737373" />
+                    : <Circle radius={f.radiusM * SCALE} fill="#e5e5e5" stroke="#737373" />}
                   <Text text={f.name} fontSize={10} fill="#525252" x={-40} y={-5} width={80} align="center" />
                 </Group>
               );
@@ -180,14 +190,19 @@ export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; 
             <div className="mt-4 space-y-3 text-sm">
               <label className="block">
                 Preset
-                <select value={cam.preset} onChange={(e) => { pushHistory(); moveCam(cam.id, { preset: e.target.value as CameraPreset }); }}
+                <select value={cam.preset} onChange={(e) => { pushHistory(); moveCam(cam.id, { preset: e.target.value as CameraPreset, fovDeg: undefined }); }}
                   className="ml-2 rounded-md border border-neutral-300 px-2 py-1">
                   {Object.keys(PRESET_FOV).map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
               </label>
               <div>
-                <p className="mb-1 font-medium">Viewfinder: updates as you drag</p>
-                <CameraView plan={plan} cameraId={cam.id} cast={cast} />
+                <p className="mb-1 font-medium">Viewfinder: updates as you drag{props.ring ? ", with the venue's 360° view behind" : ""}</p>
+                <CameraView plan={plan} cameraId={cam.id} cast={cast} ring={props.ring} />
+                <label className="mt-2 block text-xs">
+                  Lens: {Math.round(cam.fovDeg ?? PRESET_FOV[cam.preset])}° {(cam.fovDeg ?? PRESET_FOV[cam.preset]) > 60 ? "(wide)" : (cam.fovDeg ?? PRESET_FOV[cam.preset]) < 30 ? "(long)" : ""}
+                  <input type="range" min={15} max={90} step={1} value={Math.round(cam.fovDeg ?? PRESET_FOV[cam.preset])} className="ml-2 align-middle" aria-label="Lens angle"
+                    onChange={(e) => moveCam(cam.id, { fovDeg: Number(e.target.value) })} onMouseDown={pushHistory} />
+                </label>
               </div>
               <div>
                 <p className="font-medium">What this camera sees (written into prompts)</p>

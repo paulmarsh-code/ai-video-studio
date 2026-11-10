@@ -715,3 +715,24 @@ describe("Arrivals, exits and how props look (D19b)", () => {
     expect(s.shots[0].spec.props![0].detail).toContain("three champagne flutes");
   });
 });
+
+describe("The automatic check enforces characters, props and the room (D21)", () => {
+  it("fails on clothes that differ, props in the wrong place or look, and the room the wrong way round", async () => {
+    const { judgePicture, checkPrompt } = await import("../src/lib/domain/pictureCheck");
+    const e = {
+      order: ["Chase Whitmore", "Jade"], props: ["cocktail table", "display plinth"], crowd: "busy" as const,
+      propPlaces: [{ name: "cocktail table", side: "centre" as const, depth: "among the people" as const }, { name: "display plinth", side: "right" as const, depth: "behind everyone" as const }],
+      propPictures: ["cocktail table"], backgroundSides: { left: "bar", right: "lounge seating" }, venueAreas: ["screen wall", "bar", "lounge seating"],
+    };
+    expect(checkPrompt(e, ["Jade (front)", "Jade (back)", "the cocktail table (prop)"])).toContain("a bag in the other hand");
+    const good = judgePicture(e, JSON.stringify({ left_to_right: ["Chase", "Jade"], clothes: [{ name: "Jade", matches_reference: true }], props: [{ name: "cocktail table", side: "centre", depth: "among the people", matches_picture: true }, { name: "display plinth", side: "right", depth: "behind everyone" }], props_seen: ["cocktail table", "display plinth"], background_left: "bar", background_right: "lounge seating", background_people: "busy" }));
+    expect(good).toEqual({ pass: true, problems: [] });
+    const bad = judgePicture(e, JSON.stringify({ left_to_right: ["Chase", "Jade"], clothes: [{ name: "Jade", matches_reference: false, difference: "skirt has no orange panel" }], props: [{ name: "cocktail table", side: "centre", depth: "among the people", matches_picture: false, difference: "no white cloth" }, { name: "display plinth", side: "left", depth: "among the people" }], props_seen: ["cocktail table", "display plinth"], background_left: "lounge seating", background_right: "bar", background_people: "busy" }));
+    expect(bad.pass).toBe(false);
+    expect(bad.problems.join(" ")).toContain("Jade's clothes differ from the reference: skirt has no orange panel");
+    expect(bad.problems.join(" ")).toContain("The cocktail table doesn't look like its picture: no white cloth");
+    expect(bad.problems.join(" ")).toContain("The display plinth should be on the right, not the left");
+    expect(bad.problems.join(" ")).toContain("The display plinth should be behind everyone, several metres back");
+    expect(bad.problems.join(" ")).toContain("The room is the wrong way round");
+  });
+});

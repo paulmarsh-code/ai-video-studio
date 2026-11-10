@@ -5,6 +5,7 @@
 // placed by their angle in the lens, and the shoulder person is drawn soft from behind.
 
 import { PRESET_FOV, readCamera } from "@/lib/domain/geometry";
+import { viewSlice } from "@/lib/domain/panorama";
 import type { CastMember, GeometryPlanData, PlanCamera, Point } from "@/lib/domain/types";
 
 const W = 480;
@@ -46,6 +47,9 @@ function project(cam: PlanCamera, fovDeg: number, p: Point) {
   return { depth, x: W / 2 + (lateral / depth) * focal, scale: focal / depth };
 }
 
+/** The venue's 360° ring (D21): a small copy, twice round, and where it starts. */
+export interface RingInfo { url: string; startDeg: number; width: number; height: number; pxPerDeg: number; previewHeight: number }
+
 export function CameraView({
   plan,
   cameraId,
@@ -53,7 +57,10 @@ export function CameraView({
   onlyIds,
   subjectId,
   compact,
+  ring,
 }: {
+  /** With a ring, the background is the real venue slice this camera sees, from where it stands. */
+  ring?: RingInfo;
   plan: GeometryPlanData;
   cameraId: string;
   cast: CastMember[];
@@ -98,7 +105,19 @@ export function CameraView({
           {/* Background wall and floor */}
           <rect width={W} height={horizon + 25} fill={wall ? viewColour(wall).bg : "#cbd5e1"} />
           <rect y={horizon + 25} width={W} height={H} fill="#d6d3d1" />
-          {wall && (
+          {ring && (() => {
+            // The slice of the venue ring this camera sees, scaled to fill the frame's width (D21).
+            const sl = viewSlice({ ...plan, aspect: "16:9" }, { ...cam, fovDeg: fov });
+            const k = ring.previewHeight / ring.height; // ring pixels → preview pixels
+            let x0 = (ring.startDeg - sl.leftDeg) * ring.pxPerDeg;
+            x0 = ((x0 % ring.width) + ring.width) % ring.width;
+            const w = (sl.leftDeg - sl.rightDeg) * ring.pxPerDeg;
+            const s = W / (w * k);
+            const imgH = ring.previewHeight * s;
+            return <image href={ring.url} x={-x0 * k * s} y={horizon + 25 - imgH * 0.62} width={ring.width * 2 * k * s} height={imgH} preserveAspectRatio="none" data-testid="ring-background" />;
+          })()}
+          {ring && <rect y={horizon + 25} width={W} height={H} fill="#d6d3d1" opacity={0.35} />}
+          {wall && !ring && (
             <text x={10} y={22} textAnchor="start" fontSize={12} fill={viewColour(wall).fg} letterSpacing={2}>
               {wall.toUpperCase()}
             </text>
