@@ -184,3 +184,34 @@ export async function unlockSceneAction(sceneId: string, what: "positions" | "ca
 export async function unapprovePanelAction(panelId: string) {
   return run((db) => studio.unapprovePanel(db, panelId));
 }
+
+// Projects: library and delete (D22)
+
+export async function saveProjectToLibraryAction(projectId: string) {
+  const { saveProjectToLibrary } = await import("@/lib/repo");
+  return run((db) => saveProjectToLibrary(db, projectId));
+}
+
+export async function restoreProjectAction(projectId: string) {
+  const { restoreProject } = await import("@/lib/repo");
+  return run((db) => restoreProject(db, projectId));
+}
+
+export async function deleteProjectAction(projectId: string, confirmName: string) {
+  const repo = await import("@/lib/repo");
+  return runAsync(async (db) => {
+    const p = repo.getProject(db, projectId);
+    if (!p) throw new Error("Project not found.");
+    if (confirmName.trim().toLowerCase() !== p.name.trim().toLowerCase()) throw new Error(`Type the project's name, "${p.name}", to delete it.`);
+    const files = repo.deleteProject(db, projectId);
+    // Remove its pictures too, but only files inside the studio's own data folder.
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const root = path.resolve(process.cwd(), "data");
+    for (const f of files) {
+      const full = path.resolve(f);
+      if (full.startsWith(root + path.sep) && fs.existsSync(full)) fs.rmSync(full);
+    }
+    return { deleted: p.name };
+  });
+}

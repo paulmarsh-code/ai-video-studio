@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getDb } from "@/db/client";
 import * as repo from "@/lib/repo";
 import { LibraryButton } from "@/components/LibraryButton";
+import { ProjectActions } from "@/components/ProjectActions";
 import { GENRE_PROFILES } from "@/lib/domain/genre";
 import { shapeLine } from "@/lib/domain/story";
 import { addCharacterToLibraryAction } from "@/app/actions";
@@ -26,7 +27,11 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   return (
     <div className="max-w-5xl">
       <p className="text-sm text-neutral-500"><Link href="/">Projects</Link> /</p>
-      <h1 className="text-2xl font-semibold">{project.name}</h1>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h1 className="text-2xl font-semibold">{project.name}</h1>
+        <ProjectActions projectId={id} name={project.name} saved={!!project.archivedAt} />
+      </div>
+      {project.archivedAt && <p className="mt-1 text-sm text-neutral-600" data-testid="project-saved-note">Saved to the library on {new Date(project.archivedAt).toLocaleDateString("en-GB")}. It isn&apos;t on your live projects; bring it back to work on it there.</p>}
       {project.demo && <p className="mt-1 text-sm text-amber-700">Demo project. All data is illustrative and editable, not approved production assets.</p>}
 
       <section className="mt-5 rounded-xl border border-neutral-200 bg-white p-4" data-testid="brief">

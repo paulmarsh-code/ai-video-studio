@@ -22,8 +22,35 @@ export interface PanelRow {
   version: number;
 }
 
-export function listProjects(db: DB) {
-  return db.select().from(t.projects).orderBy(asc(t.projects.createdAt)).all();
+export function listProjects(db: DB, which: "live" | "saved" | "all" = "live") {
+  const all = db.select().from(t.projects).orderBy(asc(t.projects.createdAt)).all();
+  return which === "all" ? all : all.filter((p) => (which === "saved" ? !!p.archivedAt : !p.archivedAt));
+}
+
+/** Save a finished project to the library (D22): off the live list, kept whole, can come back. */
+export function saveProjectToLibrary(db: DB, id: string) {
+  db.update(t.projects).set({ archivedAt: new Date().toISOString() }).where(eq(t.projects.id, id)).run();
+  persist(db);
+}
+
+export function restoreProject(db: DB, id: string) {
+  db.update(t.projects).set({ archivedAt: null }).where(eq(t.projects.id, id)).run();
+  persist(db);
+}
+
+/** Delete a project and everything in it (D22). Returns its asset files so the caller can remove them. */
+export function deleteProject(db: DB, id: string): string[] {
+  const files = db.select().from(t.assets).where(eq(t.assets.projectId, id)).all().map((a) => a.path);
+  const sceneIds = db.select().from(t.scenes).where(eq(t.scenes.projectId, id)).all().map((x) => x.id);
+  // Children first, so no reference is ever left pointing at a deleted row.
+  if (sceneIds.length) {
+    db.delete(t.shots).where(inArray(t.shots.sceneId, sceneIds)).run();
+    db.delete(t.panels).where(inArray(t.panels.sceneId, sceneIds)).run();
+  }
+  db.delete(t.scenes).where(eq(t.scenes.projectId, id)).run();
+  db.delete(t.projects).where(eq(t.projects.id, id)).run();
+  persist(db);
+  return files;
 }
 
 export function getProject(db: DB, id: string) {

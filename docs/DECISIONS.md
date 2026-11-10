@@ -458,3 +458,12 @@ From Paul's next redraw (much better: geometry and positions right in shots 1–
 
    The check now fails a picture where a main character looks into the lens.
 4. Layout rules are now version 6, so existing scenes show "Update the layout".
+
+## D22 — Side navigation, finished projects in the library, deleting a project (2026-11-10)
+
+Paul asked for easier navigation: the left-hand panel should list the projects being worked on, each opening like a folder in the order the work flows.
+
+1. **Side panel tree** (`SideNav`). Projects → each live project → Overview, Brief, Characters, Venues (each venue), Scenes (each scene → Scene set-up, Floor plan & cameras, Storyboard, Shot design, Animatic, plus "+ New scene"), then "+ New project", and the Library. The project and scene you're in open by themselves. Anything opened or closed is remembered in the browser (per viewer, safe to lose).
+2. **Save project to library.** A finished project moves off the live list into the library's "Finished projects", whole (`projects.archived_at`, migration 0006). It can be opened from there and brought back to live projects at any time.
+3. **Delete project.** It deletes the project and all its characters, venues, scenes, shots and pictures (only picture files inside the studio's own `data` folder). You have to type the project's name to confirm, as it can't be undone.
+4. The positions thumbnail now draws long props (backdrops, counters) as panels facing the group, as the floor plan does.

@@ -17,6 +17,8 @@ export const projects = sqliteTable("projects", {
   briefApproved: integer("brief_approved", { mode: "boolean" }).notNull().default(false),
   generator: text("generator").notNull().default("kling-3.0-omni"),
   demo: integer("demo", { mode: "boolean" }).notNull().default(false),
+  /** Saved to the library as a finished project (D22): off the live list, kept whole. */
+  archivedAt: text("archived_at"),
   createdAt: created(),
 });
 
