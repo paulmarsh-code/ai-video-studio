@@ -4,9 +4,9 @@
 // rejected); images made in GPT, not Kling (better and cheaper); no text or logos.
 
 import { mainSubjectId } from "./composer";
-import { describeFrame, facingOf, horizontalFov, planForShot, presetText, readCamera, readProps } from "./geometry";
+import { describeFrame, facingOf, PRESET_FOV, planForShot, presetText, readCamera, readProps } from "./geometry";
 import { GENRE_PROFILES, type Genre } from "./genre";
-import { gestureDetail } from "./gestures";
+import { aimDetail, gestureDetail } from "./gestures";
 import { propMoves } from "./story";
 import { gazeFor, gazeLine, shotEffect } from "./gaze";
 import { bodyEffect, verticalOf } from "./vertical";
@@ -286,6 +286,12 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     // Looking through something has its own look (D25): binoculars, keyhole, mirror, window…
     const fx = shotEffect(gz, shot.speakerId ?? shot.subjectId ?? shot.visibleIds[0]);
     if (fx) lines.push(`Shot effect: ${fx}.`);
+    // Gestures aimed at the person they look at; walking away while looking back (D30).
+    const mainId0 = shot.speakerId ?? shot.subjectId ?? shot.visibleIds[0];
+    const tgt = gz.find((g) => g.id === mainId0)?.at;
+    // The gaze names people by first name.
+    const tgtPerson = tgt ? i.cast.find((c) => c.name === tgt || c.name.split(/\s+/)[0] === tgt) : undefined;
+    if (mainId0 && tgtPerson) lines.push(...aimDetail(`${i.description} ${shot.actions ?? ""}`, name(mainId0), tgtPerson.name.split(/\s+/)[0]));
     // Lying down, falling, free fall (D26): how the body and the drop look.
     const mainId = shot.speakerId ?? shot.subjectId ?? shot.visibleIds[0];
     const bx = bodyEffect(`${i.description} ${shot.actions ?? ""}`, mainId ? name(mainId) : "they");
@@ -296,7 +302,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     lines.push(presetText(cam).replace(", static camera", "").replace(" static camera,", ""));
     if (shot.shot?.trim()) lines.push(`Shot: ${shot.shot.trim()}.`);
     // Shot size, named framing, lens, point of view and what the angle means (D27).
-    lines.push(...shotLines({ cam, kind: verticalOf(cam).kind, fovDeg: horizontalFov(shotPlan ?? i.plan!, cam), text: `${i.description} ${shot.actions ?? ""} ${shot.shot ?? ""}`, name }));
+    lines.push(...shotLines({ cam, kind: verticalOf(cam).kind, fovDeg: cam.fovDeg ?? PRESET_FOV[cam.preset], text: `${i.description} ${shot.actions ?? ""} ${shot.shot ?? ""}`, name }));
     // Raised and lowered floors (D29): who is above or below the camera, and any drop in view.
     lines.push(...levelLines(shotPlan ?? i.plan!, cam, reading.actors.filter((a) => a.inView && [...shownIds, ...edgeIds].includes(a.characterId)).map((a) => a.characterId), name));
     // A strict left-to-right order and head count (D18e): looser wording let GPT swap people or drop them.

@@ -113,7 +113,7 @@ export function namedShot(text: string): NamedShot {
   return out;
 }
 
-/** Full-frame focal length that gives this horizontal angle of view. */
+/** Full-frame focal length for this long-side angle of view (36 mm across the long side). */
 export function lensMm(fovDeg: number): number {
   return Math.round(18 / Math.tan((fovDeg * Math.PI) / 360));
 }
@@ -131,8 +131,11 @@ export function lensText(fovDeg: number): string {
  * person fills the frame; the frame's width follows from the picture's shape.
  */
 export function fovForSize(size: ShotSize, distanceM: number, aspect = 16 / 9): number {
-  const width = SHOT_SIZES[size].frameHeightM * aspect;
-  const deg = (2 * Math.atan(width / 2 / Math.max(0.3, distanceM)) * 180) / Math.PI;
+  // The lens angle is for the frame's long side (D19): the width in landscape, but the HEIGHT
+  // in portrait (9:16). The size is how tall a slice of the person fills the frame, so in
+  // portrait that slice is the long side itself; in landscape the long side is wider.
+  const long = aspect >= 1 ? SHOT_SIZES[size].frameHeightM * aspect : SHOT_SIZES[size].frameHeightM;
+  const deg = (2 * Math.atan(long / 2 / Math.max(0.3, distanceM)) * 180) / Math.PI;
   return Math.round(Math.max(8, Math.min(100, deg)));
 }
 

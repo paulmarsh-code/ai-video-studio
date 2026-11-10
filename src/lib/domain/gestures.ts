@@ -28,6 +28,10 @@ const GESTURES: { match: RegExp; text: string }[] = [
     text: "Facepalm: one hand covers the forehead and eyes, head bowed slightly.",
   },
   {
+    match: /\b(middle[- ]finger|flips? (him|her|them) off|gives? (him|her|them|\w+) the finger)\b/i,
+    text: "Middle-finger gesture: one hand raised to about shoulder height, back of the hand towards the other person, only the middle finger extended.",
+  },
+  {
     match: /\b(raises? (a|his|her) glass|toast(s|ing)?)\b/i,
     text: "Toast: the glass is raised to about eye height, arm half extended towards the others.",
   },
@@ -37,4 +41,22 @@ const GESTURES: { match: RegExp; text: string }[] = [
 export function gestureDetail(...texts: (string | undefined)[]): string[] {
   const all = texts.filter(Boolean).join(" ");
   return GESTURES.filter((g) => g.match.test(all)).map((g) => g.text);
+}
+
+const GESTURE_WORDS = /\b(wave|waves|waving|gestur(?:e|es|ed|ing)|point(?:s|ing)?|middle[- ]finger|the finger|flips?\s+\w+\s+off|shoo(?:s|ing)?|beckon(?:s|ing)?|thumbs?[- ]up|toast(?:s|ing)?|raises?\s+(?:a|his|her|their)\s+glass|flicks?|brush(?:es|ing)?\s+\w+\s+off)\b/i;
+const WALK_OFF = /\b(turns?\s+(?:away|on\s+(?:her|his|their)\s+heel)|walks?\s+(?:off|away|out)|walking\s+(?:off|away)|storms?\s+(?:off|out)|leaves?|leaving|heads?\s+for\s+the\s+(?:door|exit)|strides?\s+(?:off|away))\b/i;
+
+/**
+ * Where a gesture and the head point (D30). A gesture is aimed at the person the subject is
+ * looking at; someone walking away from a person they are still reacting to has their body
+ * turned away and their head turned back over the shoulder to them.
+ */
+export function aimDetail(text: string, who: string, target: string | undefined): string[] {
+  if (!target) return [];
+  const out: string[] = [];
+  const walking = WALK_OFF.test(text);
+  if (GESTURE_WORDS.test(text)) out.push(`${who}'s gesture is aimed at ${target}: the hand and arm point towards ${target}, not at anyone else and not at the camera.`);
+  if (walking) out.push(`${who} has turned and is walking away from ${target}: body, hips and feet pointing away from ${target}, mid-stride, while the head turns back over the shoulder towards ${target}${GESTURE_WORDS.test(text) ? " and the gesture is thrown back towards them" : ""}.`);
+  else if (out.length) out.push(`${who} faces ${target} while doing it.`);
+  return out;
 }

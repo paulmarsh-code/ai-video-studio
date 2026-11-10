@@ -120,8 +120,10 @@ describe("The camera chooser follows named shots (D27)", () => {
     expect(first(1).size).toBe("cu");
     expect(first(1).fovDeg!).toBeLessThan(30);
   });
-  it("a two-shot sees two people", () => {
-    expect(readCamera(planForShot(plan, shots[2].spec), first(2)).actors.filter((a) => a.inView).length).toBe(2);
+  it("a two-shot sees both people, square-on (others may show at the edges, D30)", () => {
+    const seen = readCamera(planForShot(plan, shots[2].spec), first(2)).actors.filter((a) => a.inView).map((a) => a.characterId);
+    expect(seen).toEqual(expect.arrayContaining(["mia", "tom"]));
+    expect(first(2).preset).toBe("two-shot");
   });
   it("a point of view is Tom's eyes, looking at Mia, and Tom isn't in it", () => {
     const c = first(3);

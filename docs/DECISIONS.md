@@ -619,3 +619,18 @@ Two limits from D25–D28 are now fixed (`room.ts`, `levels.ts`; tests in `tests
 4. Layout rules are now version 10.
 
 Limits: areas are rectangles with flat tops (stairs are one step up to their top, not a slope); terrain that rises gradually isn't modelled.
+
+## D30 — Why pictures went backwards after D27–D29, and the fix (2026-11-10)
+
+Paul's run of Jade's Entrance (portrait, 9:16) lost people from shots: Chase was missing in 1, 2 and 11, and Marcus and Nina in 5. Jade was on the wrong side of the table in 3 and 9, Chase in the wrong place in 8, the screen changed in 7 and 10, and the background behind Marcus and Nina in 6 was wrong. Replaying his saved scene found these causes:
+
+1. **The lens for a named shot size was wrong in portrait** (D27). A size says how tall a slice of the person fills the frame. A portrait lens angle is for the frame's height (D19), but the size was converted across the width, which made every lens about three times too narrow. Group shots came out at 8–27°, so the app's own reading of each camera had Chase, Jade, Marcus and the backdrop out of frame. Because the reading dropped them, the prompts dropped them too: the left-to-right order had only one or two people, the backdrop wasn't named (so GPT invented a screen), and the picture check passed pictures with Chase missing. Fixed in `fovForSize`; the built two-shot camera's lens is converted the same way.
+2. **The app's suggested sizes (D28) narrowed the lens, and were applied to every option.** A suggested "medium close-up" landed on a group camera. Now only a size the user chose, in the panel's words or the shot list, may narrow the lens. A suggestion only widens it, and its words still go into the prompt.
+3. **Suggestions ignored who is in frame.** Group moments now get group-sized shots. With three or more in frame, a continuing conversation is a medium shot (not over-the-shoulder) and a big moment is a medium shot with a push-in. The "not the same size twice" rule only steps closer for one or two people.
+4. **The two-shot swung round to cut others out** (D27), which changed the background. It now stays square-on, with others nearby allowed at the edges ("some of Chase"); it swings only when that clearly helps.
+5. **Gestures and walking away.** A gesture is now aimed at the person the subject is looking at ("Chase's gesture is aimed at Jade"). Someone walking away from a person they're still reacting to has their body walking away and their head turned back over the shoulder, with any gesture thrown back. A middle-finger gesture is spelt out. These go in picture and video prompts (`gestures.ts`, `aimDetail`).
+6. **Lens millimetres** now come from the long-side angle in both orientations.
+7. **Room size**: Paul's venue name ("launch-party venue") was read as a hall (18 × 22 m), which made the venue look bigger. That is the guess, not his venue; he can set the real size on the venue page.
+8. Layout rules are now version 11. Tests: `tests/portraitShots.test.ts` (a portrait group scene keeps everyone in frame whatever the suggested size), plus updated two-shot tests.
+
+Lesson: the D27–D28 tests were all landscape. Tests now cover portrait, and a replay of the user's saved scene is part of checking a change to cameras.

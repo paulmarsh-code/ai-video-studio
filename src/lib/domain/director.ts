@@ -639,21 +639,25 @@ function namedShotDesign(d: ShotDesign, plan: GeometryPlanData, sh: ShotInput, l
       const u = norm(sub(B, A));
       const dist = Math.max(2, sep * 1.5);
       const sideOfBase = base ? Math.sign(-u.y * (base.position.x - M.x) + u.x * (base.position.y - M.y)) || 1 : 1;
-      // Square on to the pair first; if someone else would be in the picture, swing round
-      // (up to 70°) until they are out of it, as a crew would cheat the angle.
+      // Square on to the pair first; swing round (up to 70°) only when that clearly cuts out
+      // people who would otherwise crowd the picture, as a crew would cheat the angle.
       const make = (sign: number, offDeg: number): PlanCamera => {
         const t = (offDeg * Math.PI) / 180;
         const p0 = { x: -u.y * sign, y: u.x * sign };
         const dir = { x: p0.x * Math.cos(t) - p0.y * Math.sin(t), y: p0.x * Math.sin(t) + p0.y * Math.cos(t) };
         const right = { x: -dir.y, y: dir.x };
         const half = Math.abs((B.x - A.x) * right.x + (B.y - A.y) * right.y) / 2;
-        const fovDeg = Math.round(Math.min(80, (2 * Math.atan((half + 0.4) / dist) * 180) / Math.PI));
+        // Across the frame's width; a portrait lens angle is for its height (D19), so convert.
+        const wide = 2 * Math.atan((half + 0.45) / dist);
+        const fovDeg = Math.round(Math.min(90, ((plan.aspect === "9:16" ? 2 * Math.atan(Math.tan(wide / 2) * (16 / 9)) : wide) * 180) / Math.PI));
         return { id: `${sh.code}-two`, name: `Two-shot on ${name(pair[0])} and ${name(pair[1])}`, preset: "two-shot", fovDeg, lookAt: { x: +M.x.toFixed(2), y: +M.y.toFixed(2) }, position: { x: +(M.x + dir.x * dist).toFixed(2), y: +(M.y + dir.y * dist).toFixed(2) } };
       };
       const seen = (c: PlanCamera) => readCamera(sp, c).actors.filter((a) => a.inView);
       const tries = [sideOfBase, -sideOfBase].flatMap((sg) => [0, 15, -15, 30, -30, 45, -45, 60, -60, 70, -70].map((o) => ({ sg, o, c: make(sg, o) })))
         .filter((x) => pair.every((id) => seen(x.c).some((a) => a.characterId === id)))
-        .map((x) => ({ ...x, cost: seen(x.c).filter((a) => !pair.includes(a.characterId)).length * 10 + Math.abs(x.o) / 15 + (x.sg === sideOfBase ? 0 : 3) }))
+        // Others nearby may show at the edges (D30): keeping the angle square-on, and so the
+        // same background as the shots around it, matters more than cutting them out.
+        .map((x) => ({ ...x, cost: seen(x.c).filter((a) => !pair.includes(a.characterId)).length + (Math.abs(x.o) / 15) * 1.5 + (x.sg === sideOfBase ? 0 : 6) }))
         .sort((a, b) => a.cost - b.cost);
       const cams = tries.length ? [tries[0].c] : [make(sideOfBase, 0)];
       options = [{ camera: cams[0], kind: `Two-shot on ${name(pair[0])} and ${name(pair[1])}`, score: (options[0]?.score ?? 0) + 1, reasons: [`R-NAMED: two-shot, named in the panel: ${name(pair[0])} and ${name(pair[1])} side by side in the frame`] }, ...options];
@@ -672,13 +676,19 @@ function namedShotDesign(d: ShotDesign, plan: GeometryPlanData, sh: ShotInput, l
   }
   // A named size sets the lens so the subject fills the frame that much (the guide's longer
   // lens for a close-up, wider for a wide shot).
+  // Only a size the user chose (in the panel's words or the shot list) may narrow the lens; the
+  // app's own suggestion never cuts out anyone the panel has in the picture (D30). It only
+  // widens, and its words still go into the prompt.
+  const userSize = !!namedShot(`${sh.description ?? ""} ${sh.spec.actions ?? ""}`).size || sh.spec.shotBy === "you";
   if (n.size && S) {
     const aspect = plan.aspect === "9:16" ? 9 / 16 : 16 / 9;
     options = options.map((o) => {
       if (o.camera.povId) return o;
       const dist = Math.hypot(S.x - o.camera.position.x, S.y - o.camera.position.y);
-      const fovDeg = n.size === "ws" ? Math.max(o.camera.fovDeg ?? PRESET_FOV[o.camera.preset], 70) : fovForSize(n.size!, dist, aspect);
-      return { ...o, camera: { ...o.camera, size: n.size, fovDeg }, reasons: [...o.reasons, `R-NAMED: ${SHOT_SIZES[n.size!].label.toLowerCase()}, named in the panel: lens set to frame it from ${dist.toFixed(1)} m`] };
+      const own = o.camera.fovDeg ?? PRESET_FOV[o.camera.preset];
+      const sized = n.size === "ws" ? Math.max(own, 70) : fovForSize(n.size!, dist, aspect);
+      const fovDeg = userSize ? sized : Math.max(own, sized);
+      return { ...o, camera: { ...o.camera, size: n.size, fovDeg }, reasons: [...o.reasons, userSize ? `R-NAMED: ${SHOT_SIZES[n.size!].label.toLowerCase()}, chosen: lens set to frame it from ${dist.toFixed(1)} m` : `R-NAMED: ${SHOT_SIZES[n.size!].label.toLowerCase()}, suggested: the lens still keeps everyone in the panel in the picture`] };
     });
   }
   return { ...d, options };
@@ -764,7 +774,7 @@ export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (i
  * positions for anyone moving (D20); 6 = movement marks worked out afresh, props seen across
  * their real extent (D21b); 7 = high and low cameras for looking down or up (D25).
  */
-export const LAYOUT_RULES = 10;
+export const LAYOUT_RULES = 11;
 
 export function applyDesign(plan: GeometryPlanData, choices: { shotId: string; shotCode: string; option: CameraOption }[], line?: [string, string]) {
   const cameras: PlanCamera[] = [];

@@ -55,14 +55,21 @@ export function suggestShots(shots: ShotInput[], name: (id: string) => string = 
       size = "fs"; move = "tracking shot"; why = `an arrival: a full shot that follows ${subj ? name(subj) : "them"} in shows who arrives and where they go`;
     } else if (moment === "exit") {
       size = "ls"; why = "someone leaving: a long shot lets them walk away and grow smaller in the space";
+    } else if (moment === "peak" && nVis >= 3) {
+      // Everyone the panel has in the picture stays in it (D30): the big moment in a group is
+      // a medium shot on the speaker with the others around them, pushing in for strong feeling.
+      size = "ms"; move = STRONG.test(`${text} ${s.emotion ?? ""}`) ? "slow push-in" : ""; why = `the big line or feeling with the group watching: a medium shot on ${subj ? name(subj) : "them"} keeps the others in the picture`;
     } else if (moment === "peak") {
-      size = "cu"; move = STRONG.test(`${text} ${s.emotion ?? ""}`) ? "slow push-in" : ""; why = "the big line or feeling: a close-up, so nothing distracts from the face";
+      size = nVis === 2 ? "mcu" : "cu"; framing = nVis === 2 ? "over-the-shoulder shot" : ""; move = STRONG.test(`${text} ${s.emotion ?? ""}`) ? "slow push-in" : ""; why = nVis === 2 ? "the big line between the two of them: over the listener's shoulder, close on the speaker" : "the big line or feeling: a close-up, so nothing distracts from the face";
     } else if (moment === "dialogue") {
       const partner = s.visibleIds.find((id) => id !== s.speakerId);
       const key = [s.speakerId, partner].sort().join("|");
       if (!pairsSeen.has(key) && nVis >= 2) {
         pairsSeen.add(key);
         size = nVis >= 3 ? "mls" : "ms"; framing = nVis === 2 ? "two-shot" : ""; why = "the start of the conversation: a shot of both of them shows how they stand with each other";
+      } else if (nVis >= 3) {
+        // A conversation with the group watching (D30): over-the-shoulder would cut them out.
+        size = "ms"; why = `the conversation goes on with the group around them: a medium shot on ${s.speakerId ? name(s.speakerId) : "the speaker"} with the others in the picture`;
       } else {
         pairsSeen.add(key);
         size = "mcu"; framing = "over-the-shoulder shot"; why = `the conversation goes on: over ${partner ? `${name(partner)}'s` : "the other person's"} shoulder onto ${s.speakerId ? name(s.speakerId) : "the speaker"}, so we follow the back-and-forth`;
@@ -82,7 +89,8 @@ export function suggestShots(shots: ShotInput[], name: (id: string) => string = 
     // Variety (the guide's progression of shot sizes): not the same size twice in a row.
     if (prev === size && framing !== "over-the-shoulder shot") {
       const k = ORDER.indexOf(size);
-      const tighter = STRONG.test(`${text} ${s.emotion ?? ""}`) || k >= ORDER.length - 2;
+      // A group stays wide enough for everyone (D30): only one or two people step closer.
+      const tighter = (nVis <= 2 && STRONG.test(`${text} ${s.emotion ?? ""}`)) || k >= ORDER.length - 2;
       size = ORDER[Math.max(0, Math.min(ORDER.length - 1, k + (tighter ? -1 : 1)))];
       why += `; ${tighter ? "a step closer" : "a step wider"} than the shot before, for variety`;
     }

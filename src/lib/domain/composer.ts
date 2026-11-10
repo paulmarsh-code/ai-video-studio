@@ -5,8 +5,8 @@ import { gazeFor, gazeLine, shotEffect } from "./gaze";
 import { bodyEffect, verticalOf } from "./vertical";
 import { MOVE_TEXT, namedShot, shotLines } from "./shotLanguage";
 import { levelLines } from "./levels";
-import { describeFrame, horizontalFov, planForShot, presetText, readCamera } from "./geometry";
-import { gestureDetail } from "./gestures";
+import { describeFrame, PRESET_FOV, planForShot, presetText, readCamera } from "./geometry";
+import { aimDetail, gestureDetail } from "./gestures";
 import { GENRE_PROFILES, type Genre } from "./genre";
 import { capitalise, joinNames, stripQuotes } from "./text";
 import {
@@ -95,6 +95,10 @@ export function composeKlingPrompt(
     if (gl) s.scene += ` ${gl}`;
     const fx = shotEffect(gz, subjectId);
     if (fx) s.scene += ` Shot effect: ${fx}.`;
+    // Gestures aimed at the person they look at; walking away while looking back (D30).
+    const tgt = subjectId ? gz.find((g) => g.id === subjectId)?.at : undefined;
+    const tgtPerson = tgt ? cast.find((c) => c.name === tgt || c.name.split(/\s+/)[0] === tgt) : undefined;
+    if (subjectId && tgtPerson) { const ad = aimDetail(shot.actions ?? "", byId(subjectId)?.name ?? subjectId, tgtPerson.name.split(/\s+/)[0]); if (ad.length) s.scene += ` ${ad.join(" ")}`; }
     // Lying down, falling, free fall (D26).
     const bx = bodyEffect(shot.actions ?? "", subjectId ? byId(subjectId)?.name ?? "they" : "they");
     if (bx) s.scene += ` Body and angle: ${bx}.`;
@@ -149,7 +153,7 @@ export function composeKlingPrompt(
     // Raised and lowered floors (D29).
     const lv = levelLines(planForShot(plan, shot), cam, visible.map((c) => c.id), (id) => byId(id)?.name ?? id);
     if (lv.length) s.positions = `${s.positions ?? ""} ${lv.join(" ")}`.trim();
-    s.camera += ` ${shotLines({ cam, kind: verticalOf(cam).kind, fovDeg: horizontalFov(plan, cam), text: `${shot.actions ?? ""} ${shot.shot ?? ""}`, name: (id) => byId(id)?.name ?? id }).join(" ")}`;
+    s.camera += ` ${shotLines({ cam, kind: verticalOf(cam).kind, fovDeg: cam.fovDeg ?? PRESET_FOV[cam.preset], text: `${shot.actions ?? ""} ${shot.shot ?? ""}`, name: (id) => byId(id)?.name ?? id }).join(" ")}`;
   }
 
   // 4. Character and voice lock — word for word.
