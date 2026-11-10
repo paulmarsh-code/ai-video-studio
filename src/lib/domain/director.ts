@@ -570,9 +570,10 @@ export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (i
  * The version of the app's layout rules (D19c). A plan made under older rules is flagged so the
  * user can update it in one step: 2 = arrival spots, prop sizes, lens fitting (D19b);
  * 3 = faces, approach shots from behind the walker (D19c/D19d); 4 = nobody standing with the
- * group drops out of frame, arrivals filmed from further back (D19e).
+ * group drops out of frame, arrivals filmed from further back (D19e); 5 = start and finish
+ * positions for anyone moving (D20).
  */
-export const LAYOUT_RULES = 4;
+export const LAYOUT_RULES = 5;
 
 export function applyDesign(plan: GeometryPlanData, choices: { shotId: string; shotCode: string; option: CameraOption }[], line?: [string, string]) {
   const cameras: PlanCamera[] = [];

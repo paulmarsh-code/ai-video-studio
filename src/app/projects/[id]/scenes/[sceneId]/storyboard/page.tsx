@@ -10,9 +10,10 @@ import { StoryWizard } from "@/components/StoryWizard";
 import { exampleFor } from "@/lib/domain/storyExamples";
 import { StoryboardBoard } from "@/components/StoryboardBoard";
 import { SceneSettingCard } from "@/components/SceneSettingCard";
-import { asStaging, propsFromFurniture, stagingPrompt } from "@/lib/domain/story";
+import { asStaging, propMoves, propsFromFurniture, stagingPrompt } from "@/lib/domain/story";
 import { LAYOUT_RULES } from "@/lib/domain/director";
 import { PanelEditor } from "@/components/PanelEditor";
+import { hasRing } from "@/lib/backgroundImage";
 
 export const dynamic = "force-dynamic";
 
@@ -85,6 +86,7 @@ export default async function StoryboardPage({ params, searchParams }: { params:
 
       <div className="mt-5">
         <StoryboardBoard canCheck={!!getTextProvider()} locks={{ positions: !!locks.positions, cameras: !!locks.cameras }}
+          propMoves={s.panels.flatMap((p) => { const m = propMoves(p.description, (s.plan?.data.furniture ?? []).map((f) => f.name)); return m.length ? [`${p.code} moves the ${m.join(" and the ")}`] : []; })}
           outdated={!!s.plan && (!!locks.positions || s.plan.data.cameras.length > 0) && (s.plan.data.rules ?? 0) < LAYOUT_RULES} plan={s.plan?.data} planHref={`/projects/${id}/scenes/${sceneId}/plan`}
           names={Object.fromEntries(cast.map((c) => [c.id, c.name]))} settingEmpty={!asStaging(s.scene.staging).spot && !asStaging(s.scene.staging).crowd} projectId={id} sceneId={sceneId} designHref={`/projects/${id}/scenes/${sceneId}/design`} baseCode={base} size={portrait ? "portrait" : "landscape"} canGenerate={canGenerate}
           panels={s.panels.map((p) => {
@@ -94,6 +96,7 @@ export default async function StoryboardPage({ params, searchParams }: { params:
               description: p.description, emotion: p.emotion, shot: shot?.spec, cast, profiles, plan: s.plan?.data,
               venueName: s.venue?.name ?? "venue", venueViews: s.venue?.views as { name: string; imageAssetId?: string }[] | undefined, aspect: brief.aspect, genre, style: brief.style,
               layoutHref: shot?.spec.cameraId ? `/api/layout/${shot.id}` : undefined,
+              backgroundHref: shot?.spec.cameraId && hasRing(s.venue?.views as { imageAssetId?: string }[] | undefined) ? `/api/background/${shot.id}` : undefined,
               continuity: anchor && anchor.panel.id !== p.id ? { assetId: anchor.panel.imageAssetId!, label: `approved scene picture (panel ${anchor.n})` } : undefined,
             });
             return {

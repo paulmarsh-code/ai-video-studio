@@ -84,6 +84,15 @@ export function composeKlingPrompt(
   if (shot.crowd?.trim()) s.scene += ` In the background: ${stripQuotes(shot.crowd).trim().replace(/[.]$/, "")}, out of focus.`;
   if (shot.props?.length) s.scene += ` Key props, unchanged in every clip: ${shot.props.map((p) => `${p.name}${p.detail ? ` (${stripQuotes(p.detail).replace(/[.]$/, "")})` : ""}`).join("; ")}.`;
 
+  // Movement in this clip (D20): from where they start to where they end.
+  for (const [id, fromId] of Object.entries(shot.from ?? {})) {
+    const marks = plan?.actors.find((a) => a.characterId === id)?.marks ?? [];
+    const start = fromId === "place" ? "their own place at the group" : marks.find((m) => m.id === fromId)?.label.split(",")[0];
+    const endId = shot.at?.[id];
+    const end = endId ? marks.find((m) => m.id === endId)?.label.split(",")[0] : "their own place with the others";
+    if (start && end) s.scene += ` ${byId(id)?.name ?? id} walks from ${start} to ${end} during the shot.`;
+  }
+
   // 3 + 7. Positions, distance and background from the plan.
   const cam = plan?.cameras.find((c) => c.id === shot.cameraId);
   if (plan && cam) {

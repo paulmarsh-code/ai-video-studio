@@ -736,19 +736,26 @@ function syncPropsFromPlan(db: DB, sceneId: string) {
  * the plan, and before positions are approved, so older scenes get them too.
  */
 export function applyMovementMarks(db: DB, sceneId: string) {
+  // Re-read from the panels every time (D20): editing the story ("joins them" instead of
+  // "approaches") must change where people are. Marks already placed are kept and reused.
   const plan = latestPlan(db, sceneId);
-  if (!plan || plan.data.actors.some((a) => a.marks?.length)) return false;
+  if (!plan) return false;
   const panels = panelsOf(db, sceneId);
   const shots = panels.map((p) => shotForPanel(db, p.id));
-  const { plan: marked, at } = addMovementMarks(plan.data, panels.map((p, i) => {
+  const { plan: marked, at, from } = addMovementMarks(plan.data, panels.map((p, i) => {
     const sp = shots[i]?.spec;
     return { action: p.description, subjectId: sp ? sp.speakerId ?? sp.subjectId ?? sp.visibleIds[0] : undefined };
   }));
-  if (!at.some(Boolean)) return false;
-  db.insert(t.plans).values({ id: randomUUID(), sceneId, name: plan.name, version: plan.version + 1, data: marked }).run();
+  const marksChanged = JSON.stringify(marked.actors.map((a) => a.marks ?? [])) !== JSON.stringify(plan.data.actors.map((a) => a.marks ?? []));
+  if (marksChanged) db.insert(t.plans).values({ id: randomUUID(), sceneId, name: plan.name, version: plan.version + 1, data: marked }).run();
+  let changed = marksChanged;
   shots.forEach((sh, i) => {
-    if (sh) db.update(t.shots).set({ spec: { ...sh.spec, at: at[i], cameraId: undefined } }).where(eq(t.shots.id, sh.id)).run();
+    if (!sh) return;
+    const same = JSON.stringify(sh.spec.at ?? null) === JSON.stringify(at[i] ?? null) && JSON.stringify(sh.spec.from ?? null) === JSON.stringify(from[i] ?? null);
+    if (same) return;
+    changed = true;
+    db.update(t.shots).set({ spec: { ...sh.spec, at: at[i], from: from[i], cameraId: undefined } }).where(eq(t.shots.id, sh.id)).run();
   });
-  persist(db);
-  return true;
+  if (changed) persist(db);
+  return changed;
 }

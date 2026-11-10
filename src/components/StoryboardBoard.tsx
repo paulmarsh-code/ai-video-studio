@@ -54,6 +54,8 @@ export interface StoryboardBoardProps {
   locks: { positions: boolean; cameras: boolean };
   /** The positions or cameras were made under older layout rules (D19c). */
   outdated?: boolean;
+  /** Panels whose text moves a prop (D20), e.g. "P5 moves the cocktail table". */
+  propMoves?: string[];
   /** For the top-down view of positions. */
   plan?: GeometryPlanData;
   names: Record<string, string>;
@@ -71,10 +73,10 @@ export function plainReason(error: string): string {
 
 const assetIds = (attach: BoardPanel["attach"]) => attach.filter((a) => !a.href && a.assetId).map((a) => a.assetId);
 
-async function drawPicture(p: { projectId: string; baseCode: string; prompt: string; refs: string[]; size: "portrait" | "landscape"; layoutShotId?: string }) {
+async function drawPicture(p: { projectId: string; baseCode: string; prompt: string; refs: string[]; size: "portrait" | "landscape"; layoutShotId?: string; backgroundShotId?: string }) {
   const res = await fetch("/api/images/generate", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ projectId: p.projectId, baseCode: p.baseCode, kind: "panel", prompt: p.prompt, refAssetIds: p.refs, size: p.size, layoutShotId: p.layoutShotId }),
+    body: JSON.stringify({ projectId: p.projectId, baseCode: p.baseCode, kind: "panel", prompt: p.prompt, refAssetIds: p.refs, size: p.size, layoutShotId: p.layoutShotId, backgroundShotId: p.backgroundShotId }),
   });
   const body = (await res.json()) as { id?: string; error?: string };
   if (!res.ok || !body.id) throw new Error(body.error ?? "GPT didn't return a picture.");
@@ -177,7 +179,8 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
    */
   async function drawChecked(p: BoardPanel, prompt: string, refs: string[]) {
     const layoutShotId = p.hasCamera ? p.shotId : undefined;
-    let id = await drawPicture({ projectId: b.projectId, baseCode: codeOf(p), prompt, refs, size: b.size, layoutShotId });
+    const backgroundShotId = p.attach.some((a) => a.href?.startsWith("/api/background/")) ? p.shotId : undefined;
+    let id = await drawPicture({ projectId: b.projectId, baseCode: codeOf(p), prompt, refs, size: b.size, layoutShotId, backgroundShotId });
     let r = await setPanelImageAction(p.id, id);
     if (!r.ok) throw new Error(r.error);
     if (!b.canCheck || !layoutShotId) return;
@@ -185,7 +188,7 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
     const first = await checkPicture(p.id, id);
     if (!first || first.pass) return;
     setDrawing((x) => ({ ...x, [p.id]: "Didn't match the layout: redrawing…" }));
-    id = await drawPicture({ projectId: b.projectId, baseCode: codeOf(p), prompt: prompt + fixLine(first.problems), refs, size: b.size, layoutShotId });
+    id = await drawPicture({ projectId: b.projectId, baseCode: codeOf(p), prompt: prompt + fixLine(first.problems), refs, size: b.size, layoutShotId, backgroundShotId });
     r = await setPanelImageAction(p.id, id);
     if (!r.ok) throw new Error(r.error);
     setDrawing((x) => ({ ...x, [p.id]: "Checking again…" }));
@@ -269,6 +272,7 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
                 onClick={async () => { if (window.confirm("Unlock the positions? The cameras will be unlocked too and should be chosen again.")) { await unlockSceneAction(b.sceneId, "positions"); router.refresh(); } }}>Change positions</button></p>
             ) : (
               <>
+                {!!b.propMoves?.length && <p className="mb-2 text-xs text-amber-800" data-testid="prop-moves">Props stay where the floor plan puts them, except: {b.propMoves.join("; ")}. Each starts in its place on the plan; say in the panel text where it ends up.</p>}
                 <p className="mb-2 text-neutral-700">Who stands where, and the key props. Check them, <Link className="text-blue-700 underline" href={b.planHref}>adjust on the floor plan</Link> if needed, then approve.</p>
                 <ActionButton variant="approve" label="Approve positions" busyLabel="Approving…" doneLabel="Approved" testId="approve-positions"
                   onAction={async () => { const r = await approvePositionsAction(b.sceneId); if (!r.ok) setMsg({ ok: false, text: r.error }); router.refresh(); return r; }} />

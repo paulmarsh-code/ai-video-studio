@@ -489,6 +489,20 @@ export function defaultPlan(castIds: string[], panels: DraftPanel[], views: Plan
 
 const ARRIVING = /\b(enters?|entering|walks? (in|into|through)|walking (in|into|through)|arriv(es?|ing)|comes? in|makes? (her|his|their) way (in|through))\b/i;
 const APPROACHING = /\b(approach(es|ing)?|walks? (up|over) to|heads? (over|towards?))\b/i;
+/**
+ * Props stay where the floor plan puts them (D20) unless a panel says someone moves one:
+ * "picks up the glass", "pushes the table aside". Returns the prop names each panel moves.
+ */
+export function propMoves(action: string, propNames: string[]): string[] {
+  const verbs = "(pick(s|ing)? up|lift(s|ing)?|mov(es?|ing)|push(es|ing)?|pull(s|ing)?|drag(s|ging)?|carr(y|ies|ying)|knock(s|ing)? over|tip(s|ping)? over|grab(s|bing)?|shov(es?|ing)|slid(es?|ing)|turn(s|ing)? over)";
+  return propNames.filter((n) => {
+    const words = n.trim().toLowerCase().split(/\s+/);
+    const last = words[words.length - 1].replace(/[^a-z]/g, "");
+    if (!last) return false;
+    return new RegExp(`\\b${verbs}\\b[^.]{0,30}\\b${last}s?\\b`, "i").test(action);
+  });
+}
+
 /** Already there by the end of the panel (D19e): "as she reaches them", "joins the group". */
 const REACHED = /\b(reach(es|ing)? (them|the (group|table|others))|joins? (them|the (group|table|others))|arriv(es|ing) at (the )?(table|group))\b/i;
 
@@ -498,7 +512,7 @@ const REACHED = /\b(reach(es|ing)? (them|the (group|table|others))|joins? (them|
  * the camera, the sketch, the picture and the check all show them on their way in rather than
  * already standing with the group. Anything the user has placed is kept.
  */
-export function addMovementMarks(plan: GeometryPlanData, panels: { action: string; subjectId?: string }[]): { plan: GeometryPlanData; at: (Record<string, string> | undefined)[] } {
+export function addMovementMarks(plan: GeometryPlanData, panels: { action: string; subjectId?: string }[]): { plan: GeometryPlanData; at: (Record<string, string> | undefined)[]; from: (Record<string, string> | undefined)[] } {
   const actors = plan.actors.map((a) => ({ ...a, marks: [...(a.marks ?? [])] }));
   const centre = actors.length
     ? { x: actors.reduce((s, a) => s + a.position.x, 0) / actors.length, y: actors.reduce((s, a) => s + a.position.y, 0) / actors.length }
@@ -521,10 +535,7 @@ export function addMovementMarks(plan: GeometryPlanData, panels: { action: strin
     const side = off.reduce((s, x) => s + ((x.position.x - l0.x) * nrm.x + (x.position.y - l0.y) * nrm.y), 0);
     if (Math.abs(side) > 0.01) openDir = side > 0 ? { x: -nrm.x, y: -nrm.y } : nrm;
   }
-  const at = panels.map((p) => {
-    const kind = REACHED.test(p.action) ? undefined : ARRIVING.test(p.action) ? "arriving" : APPROACHING.test(p.action) ? "approaching" : undefined;
-    const a = kind && p.subjectId ? actors.find((x) => x.characterId === p.subjectId) : undefined;
-    if (!kind || !a) return undefined;
+  const ensure = (a: (typeof actors)[number], kind: "arriving" | "approaching") => {
     if (!a.marks.some((m) => m.id === kind)) {
       // Outwards from the group, through the person's own place, turned towards the open side:
       // the turn that lets them start furthest back (up to 5 m) while leaving room behind them
@@ -554,7 +565,33 @@ export function addMovementMarks(plan: GeometryPlanData, panels: { action: strin
         position: { x: +clampX(a.position.x + best.ux * dist).toFixed(2), y: +clampY(a.position.y + best.uy * dist).toFixed(2) },
       });
     }
-    return { [a.characterId]: kind };
+  };
+  // Start and finish (D20): each person is where the previous panel left them. A panel that moves
+  // someone records where they start (`from`); the still picture shows where they end (`at`, or
+  // their own place). "Reaches them" / "joins the group" ends at their place.
+  const last = new Map<string, string>(); // character id → mark id, or "place"
+  const from: (Record<string, string> | undefined)[] = [];
+  const at = panels.map((p) => {
+    const reached = REACHED.test(p.action);
+    const kind = reached ? undefined : ARRIVING.test(p.action) ? "arriving" : APPROACHING.test(p.action) ? "approaching" : undefined;
+    const a = p.subjectId ? actors.find((x) => x.characterId === p.subjectId) : undefined;
+    if (!a || (!kind && !reached)) {
+      if (a) last.set(a.characterId, "place");
+      from.push(undefined);
+      return undefined;
+    }
+    const prev = last.get(a.characterId);
+    if (reached) {
+      // Walked up to the group: from wherever they were, or from a step or two away.
+      const start = prev && prev !== "place" ? prev : (ensure(a, "approaching"), "approaching");
+      from.push({ [a.characterId]: start });
+      last.set(a.characterId, "place");
+      return undefined;
+    }
+    ensure(a, kind!);
+    from.push(prev && prev !== kind ? { [a.characterId]: prev } : undefined);
+    last.set(a.characterId, kind!);
+    return { [a.characterId]: kind! };
   });
-  return { plan: { ...plan, actors }, at };
+  return { plan: { ...plan, actors }, at, from };
 }

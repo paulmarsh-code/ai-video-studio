@@ -122,6 +122,11 @@ export interface ShotSpec {
   crowd?: string;
   /** Per-shot marks (D19b): character id → mark id, e.g. { jade: "arriving" }. */
   at?: Record<string, string>;
+  /**
+   * Where someone starts when the panel moves them (D20): mark id, or "place" for their own
+   * spot. The picture shows where they end (`at`, or their place); the clip moves them across.
+   */
+  from?: Record<string, string>;
   /** Key props of the scene (D19), identical in every picture and clip. */
   props?: { name: string; detail: string; imageAssetId?: string }[];
 }

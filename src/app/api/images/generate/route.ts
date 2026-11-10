@@ -7,16 +7,22 @@ import { getDb } from "@/db/client";
 import { cleanBaseCode, storeAsset } from "@/lib/assetStore";
 import { getImageProvider } from "@/lib/providers/images";
 import { renderLayoutForShot } from "@/lib/layoutImage";
+import { renderBackgroundForShot } from "@/lib/backgroundImage";
 import * as repo from "@/lib/repo";
 
 export async function POST(req: Request) {
   const provider = getImageProvider();
   if (!provider) return NextResponse.json({ error: "No image provider is connected. Copy the prompt into ChatGPT and upload the image." }, { status: 501 });
-  const body = (await req.json()) as { projectId?: string; baseCode?: string; kind?: string; prompt?: string; refAssetIds?: string[]; size?: "portrait" | "landscape" | "square"; layoutShotId?: string };
+  const body = (await req.json()) as { projectId?: string; baseCode?: string; kind?: string; prompt?: string; refAssetIds?: string[]; size?: "portrait" | "landscape" | "square"; layoutShotId?: string; backgroundShotId?: string };
   if (!body.projectId || !body.baseCode || !body.prompt) return NextResponse.json({ error: "projectId, baseCode and prompt are required" }, { status: 400 });
   const db = await getDb();
   const refs: { data: Buffer; mime: string; name: string }[] = (body.refAssetIds ?? []).map((id) => repo.getAsset(db, id)).filter((a) => a && fs.existsSync(a.path))
     .map((a) => ({ data: fs.readFileSync(a!.path), mime: a!.mime, name: a!.assetCode }));
+  // The background this camera sees, cut from the room's 360° ring (D20).
+  if (body.backgroundShotId) {
+    const png = await renderBackgroundForShot(db, body.backgroundShotId);
+    if (png) refs.push({ data: Buffer.from(png), mime: "image/png", name: "background.png" });
+  }
   // The layout sketch from the floor plan goes last (D18f).
   if (body.layoutShotId) {
     const png = await renderLayoutForShot(db, body.layoutShotId);

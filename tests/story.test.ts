@@ -602,6 +602,13 @@ describe("Arrivals, exits and how props look (D19b)", () => {
     }
     expect(d.shots[1].options[0].kind).toBe("Wide (master)"); // her arrival: wide, the group across the room behind her
   });
+  it("props stay put unless a panel says someone moves one (D20)", async () => {
+    const { propMoves } = await import("../src/lib/domain/story");
+  expect(propMoves("Chase picks up a champagne flute from the cocktail table", ["cocktail table"])).toEqual([]);
+  expect(propMoves("Jade pushes the cocktail table aside", ["cocktail table", "logo wall"])).toEqual(["cocktail table"]);
+  expect(propMoves("Marcus knocks over the display plinth", ["display plinth"])).toEqual(["display plinth"]);
+  expect(propMoves("Jade walks over to the table", ["cocktail table"])).toEqual([]);
+  });
   it("a suggestion fills gaps and never replaces what the user wrote or attached (D19c)", async () => {
     const { mergeSuggestion } = await import("../src/lib/domain/story");
     const mine = { spot: "", crowd: "busy launch", crowdLevel: "busy" as const, props: [{ name: "cocktail table", detail: "white floor-length cloth", imageAssetId: "pic" }, { name: "logo wall", detail: "" }] };

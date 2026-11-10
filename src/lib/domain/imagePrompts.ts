@@ -7,6 +7,7 @@ import { mainSubjectId } from "./composer";
 import { describeFrame, facingOf, planForShot, PRESET_TEXT, readCamera, readProps } from "./geometry";
 import { GENRE_PROFILES, type Genre } from "./genre";
 import { gestureDetail } from "./gestures";
+import { propMoves } from "./story";
 import { joinNames, stripQuotes } from "./text";
 import type { CastMember, GeometryPlanData, ShotSpec } from "./types";
 
@@ -100,6 +101,8 @@ export interface PanelPromptInput {
   style?: string;
   /** The layout sketch for this shot (D18f): the floor plan seen through its camera. */
   layoutHref?: string;
+  /** The background cut from the venue's 360° ring for this camera (D20), when the venue has one. */
+  backgroundHref?: string;
   /**
    * An approved picture of this scene (D18c), attached so later panels keep the same spot,
    * furniture, background guests, light and clothes. Not used for the panel's own picture.
@@ -169,7 +172,11 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   const propPics = (i.plan?.furniture ?? []).filter((f) => f.imageAssetId && (!seenProps || seenProps.includes(f.name)));
   for (const f of propPics) attach.push({ label: `${f.name} picture`, assetId: f.imageAssetId! });
   const bgView = reading?.backgroundView;
-  const bgImage = bgView ? i.venueViews?.find((v) => v.name === bgView)?.imageAssetId : undefined;
+  // The ring background (D20) replaces the single nearest view: it is exactly what this camera
+  // sees behind the people, from where it stands, at its angle and lens.
+  const ring = !!(i.backgroundHref && reading);
+  const bgImage = !ring && bgView ? i.venueViews?.find((v) => v.name === bgView)?.imageAssetId : undefined;
+  if (ring) attach.push({ label: "background", assetId: "", href: i.backgroundHref });
   if (bgImage) attach.push({ label: `${bgView} view`, assetId: bgImage });
   const layout = !!(i.layoutHref && reading);
   if (layout) attach.push({ label: "layout sketch", assetId: "", href: i.layoutHref });
@@ -180,6 +187,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   if (people.length) lines.push(`Use the attached reference images for ${joinNames([...new Set(people.map((a) => a.label.replace(/ (reference|back)$/, "")))])}; keep their faces, hair and clothes identical, every pattern, stripe and colour block included. Bags and anything carried stay exactly as in the reference, in the same hand or on the same shoulder.`);
   const backs = people.filter((a) => a.label.endsWith(" back")).map((a) => a.label.replace(/ back$/, ""));
   if (backs.length) lines.push(`${joinNames(backs)} ${backs.length === 1 ? "is" : "are"} seen from behind: copy the back of their clothes, hair and bag exactly from the attached back ${backs.length === 1 ? "image" : "images"}.`);
+  if (ring) lines.push(`Use the attached background picture as the room behind the characters: it is cut from the venue's 360° view for exactly this camera position, angle and lens, so what is on its left stays on the left and what is on its right stays on the right. Same place, layout and light, seen across the room several metres behind them.${shot?.crowd?.trim() ? " Fill it with the background guests described below." : ""}`);
   if (bgImage) lines.push(`Use the attached ${bgView} image as the background, seen across the room several metres behind the characters: same place, layout and light.${shot?.crowd?.trim() ? " It shows the room empty; fill it with the background guests described below." : ""}`);
   // The room keeps its order in every shot (D19f): what lies left and right of the background.
   const sides = reading?.sideViews;
@@ -209,6 +217,42 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   for (const [id, markId] of Object.entries(shot?.at ?? {})) {
     const m = i.plan?.actors.find((a) => a.characterId === id)?.marks?.find((x) => x.id === markId);
     if (m) lines.push(`${name(id)} is ${m.label}.`);
+  }
+  // A prop this moment moves (D20): it starts where the floor plan puts it; otherwise props never move.
+  const moved = propMoves(i.description, (i.plan?.furniture ?? []).map((f) => f.name));
+  if (moved.length) lines.push(`In this moment the ${joinNames(moved)} ${moved.length === 1 ? "is" : "are"} being moved: ${moved.length === 1 ? "it starts" : "they start"} in ${moved.length === 1 ? "its" : "their"} usual place shown in the layout. Every other prop stays exactly where it is.`);
+  // Moving in this panel (D20): where they started; the picture shows where they end up.
+  for (const [id, fromId] of Object.entries(shot?.from ?? {})) {
+    const m = i.plan?.actors.find((a) => a.characterId === id)?.marks?.find((x) => x.id === fromId);
+    const end = shot?.at?.[id];
+    if (m && !end) lines.push(`${name(id)} has just walked over from where they were (${m.label.split(",")[0]}) and is now in their own place with the others, not still on the way.`);
+  }
+  // Where everyone stands relative to the focal prop, and whom they face (D20): no one talking
+  // to the group from metres away unless the plan puts them there.
+  const focal = (shotPlan ?? i.plan)?.furniture?.find((f) => f.id === "spot") ?? (shotPlan ?? i.plan)?.furniture?.[0];
+  if (focal && cam && shotPlan && reading) {
+    const f = { x: cam.lookAt.x - cam.position.x, y: cam.lookAt.y - cam.position.y };
+    const fl = Math.hypot(f.x, f.y) || 1;
+    const fw = { x: f.x / fl, y: f.y / fl }, rt = { x: fw.y, y: -fw.x };
+    const inFrame = reading.actors.filter((a) => a.inView && [...shownIds, ...edgeIds].includes(a.characterId));
+    const parts = inFrame.map((a) => {
+      const pos = shotPlan.actors.find((x) => x.characterId === a.characterId)!.position;
+      const dx = pos.x - focal.position.x, dy = pos.y - focal.position.y;
+      const gap = Math.max(0, Math.hypot(dx, dy) - focal.radiusM);
+      const lat = dx * rt.x + dy * rt.y, dep = dx * fw.x + dy * fw.y;
+      const side = Math.abs(lat) >= Math.abs(dep) ? (lat < 0 ? "on its left" : "on its right") : dep > 0 ? "behind it" : "in front of it";
+      const where = gap <= 1.2 ? `at the ${focal.name}, ${side}` : `about ${Math.round(gap)} m from the ${focal.name}, not at it`;
+      const fwd = facingOf(shotPlan, a.characterId, shotPlan.lineOfAction);
+      let faces = "";
+      if (fwd) {
+        // Whom they face: the person or prop most nearly straight ahead of them.
+        const targets = [...shotPlan.actors.filter((x) => x.characterId !== a.characterId).map((x) => ({ n: name(x.characterId), p: x.position })), { n: `the ${focal.name}`, p: focal.position }];
+        const best = targets.map((t) => { const vx = t.p.x - pos.x, vy = t.p.y - pos.y, l = Math.hypot(vx, vy) || 1; return { n: t.n, c: (vx * fwd.x + vy * fwd.y) / l }; }).sort((x, y) => y.c - x.c)[0];
+        if (best && best.c > 0.8) faces = `, facing ${best.n}`;
+      }
+      return `${name(a.characterId)} ${where}${faces}`;
+    });
+    if (parts.length) lines.push(`Around the ${focal.name}: ${parts.join("; ")}. Nobody stands anywhere else.`);
   }
   if (crowd) lines.push(`Background: ${sentence(crowd)}${layout ? " The grey figures in the layout sketch show where they stand." : ""} Background guests are out of focus, smaller than the main characters and never look at the camera; none of them look like the main characters.`);
   for (const c of visible) {
