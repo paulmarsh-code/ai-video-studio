@@ -357,13 +357,14 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
       // Which side of the picture a carried bag is on (D33), when the character's description
       // says which hand: the left hand is on the right of the picture when they face us.
       const bags = parts.flatMap((p) => {
-        const hand = carriedHand(i.profiles[p.id]);
-        if (!hand || !/facing the camera|seen from behind/.test(p.face)) return [];
+        if (!/facing the camera|seen from behind/.test(p.face)) return [];
         const facing = /facing the camera/.test(p.face);
-        const side = facing ? (hand.side === "left" ? "right" : "left") : hand.side;
         const pr = byId(p.id)?.pronoun;
         const poss = pr === "she" ? "her" : pr === "he" ? "his" : "their";
-        return [`${name(p.id)}'s ${hand.what} is in ${poss} ${hand.side} hand, so it shows on the ${side} of the picture (${facing ? "facing us, mirror-wise" : "seen from behind"})`];
+        return carriedItems(i.profiles[p.id]).map((it) => {
+          const side = facing ? (it.side === "left" ? "right" : "left") : it.side;
+          return `${name(p.id)}'s ${it.what} is ${it.where === "hand" ? "in" : "on"} ${poss} ${it.side} ${it.where}, so it shows on the ${side} of the picture (${facing ? "facing us, mirror-wise" : "seen from behind"})`;
+        });
       });
       if (bags.length) lines.push(`Carried: ${bags.join("; ")}. Never swap hands between pictures.`);
       lines.push(`Distance and direction: ${parts.map((p) => p.text).join("; ")}.${far >= near * 1.6 && parts.length > 1 ? ` Keep these distances: whoever is further away is smaller and further back in the room, not lined up beside ${parts.find((p) => p.d === near) ? name(parts.find((p) => p.d === near)!.id) : "the nearer people"}.` : ""}`);
@@ -405,12 +406,26 @@ export function lightingOf(text: string): string {
   return out;
 }
 
-/** Which hand a character carries their bag in, if their description says (D33). */
-export function carriedHand(p: CharacterProfile | undefined): { side: "left" | "right"; what: string } | undefined {
-  const text = `${p?.wardrobe ?? ""} ${p?.appearance ?? ""} ${(p?.anchors ?? []).join(". ")}`;
-  const m = text.match(/\b((?:hand)?bag|satchel|clutch|briefcase|tote|purse|case|umbrella|phone|cane|folder|clipboard)\b[^.]{0,80}?\b(?:in|on)\s+(?:her|his|their|the)\s+(left|right)\s+(?:hand|arm|shoulder)\b/i)
-    ?? text.match(/\b(?:in|on)\s+(?:her|his|their|the)\s+(left|right)\s+(?:hand|arm|shoulder)\b[^.]{0,80}?\b((?:hand)?bag|satchel|clutch|briefcase|tote|purse|case|umbrella|phone|cane|folder|clipboard)\b/i);
-  if (!m) return undefined;
-  const [what, side] = /left|right/i.test(m[1]) ? [m[2], m[1]] : [m[1], m[2]];
-  return { side: side.toLowerCase() as "left" | "right", what: what.toLowerCase() };
+/**
+ * Anything a character holds, carries or wears on one side, when their description says which
+ * (D33): "a satchel in her left hand", "phone in his right hand", "a guitar over her left
+ * shoulder", "a watch on his left wrist". Any item, any character.
+ */
+export function carriedItems(p: CharacterProfile | undefined): { side: "left" | "right"; what: string; where: string }[] {
+  const text = `${p?.wardrobe ?? ""}. ${p?.appearance ?? ""}. ${(p?.anchors ?? []).join(". ")}`.replace(/\s+/g, " ");
+  const out: { side: "left" | "right"; what: string; where: string }[] = [];
+  const add = (what: string, side: string, where: string) => {
+    const w = what.trim().replace(/^(?:a|an|the|her|his|their|small|large)\s+/i, "").replace(/\s+(?:held|carried|worn|kept|hanging|slung)$/i, "").trim();
+    if (!w || w.split(/\s+/).length > 6 || out.some((o) => o.what === w.toLowerCase())) return;
+    out.push({ side: side.toLowerCase() as "left" | "right", what: w.toLowerCase(), where: where.toLowerCase() });
+  };
+  const SIDE = String.raw`(?:in|on|over|across|under)\s+(?:her|his|their|the)\s+(left|right)\s+(hand|arm|shoulder|wrist|hip|side)`;
+  // "<item> in her left hand"
+  for (const m of text.matchAll(new RegExp(String.raw`\b((?:[\w'-]+\s+){0,5}?[\w'-]+)\s+(?:held\s+|carried\s+|worn\s+|kept\s+|hanging\s+|slung\s+)?${SIDE}\b`, "gi"))) {
+    const head = m[1].replace(/^.*\b(?:carries|carrying|holds|holding|wears|wearing|grips|gripping|clutches|clutching)\s+/i, "");
+    add(head, m[2], m[3]);
+  }
+  // "in her left hand, a tan satchel"
+  for (const m of text.matchAll(new RegExp(String.raw`${SIDE}\s*,?\s+(?:she|he|they)?\s*(?:holds|carries|wears|has)?\s*((?:a|an|the)\s+(?:[\w'-]+\s+){0,4}[\w'-]+)`, "gi"))) add(m[3], m[1], m[2]);
+  return out.filter((o) => !/^(?:hand|arm|shoulder|wrist|hip|side|her|his|their)$/.test(o.what));
 }

@@ -84,11 +84,14 @@ describe("Renaming a prop (D32)", () => {
 });
 
 describe("Bag hand, way out, and two-shots in a group (D33)", () => {
-  it("reads which hand a bag is carried in from the description", async () => {
-    const { carriedHand } = await import("../src/lib/domain/imagePrompts");
-    expect(carriedHand({ wardrobe: "Carries a tan leather satchel in her left hand." })).toEqual({ side: "left", what: "satchel" });
-    expect(carriedHand({ wardrobe: "On his right shoulder, a black tote." })).toEqual({ side: "right", what: "tote" });
-    expect(carriedHand({ wardrobe: "Carries a tan satchel." })).toBeUndefined();
+  it("reads any item held or worn on one side from the description, for any character", async () => {
+    const { carriedItems } = await import("../src/lib/domain/imagePrompts");
+    expect(carriedItems({ wardrobe: "Carries a tan leather satchel in her left hand." })).toEqual([{ side: "left", what: "tan leather satchel", where: "hand" }]);
+    expect(carriedItems({ wardrobe: "On his right shoulder, a black canvas tote." })).toEqual([{ side: "right", what: "black canvas tote", where: "shoulder" }]);
+    expect(carriedItems({ wardrobe: "Holds a smartphone in his right hand and wears a silver watch on his left wrist." })).toEqual([
+      { side: "right", what: "smartphone", where: "hand" }, { side: "left", what: "silver watch", where: "wrist" }]);
+    expect(carriedItems({ wardrobe: "An acoustic guitar slung over her left shoulder." })).toEqual([{ side: "left", what: "acoustic guitar", where: "shoulder" }]);
+    expect(carriedItems({ wardrobe: "Carries a tan satchel." })).toEqual([]);
   });
   it("finds the way out and says where it is from the camera", async () => {
     const { exitFrom } = await import("../src/lib/domain/gestures");
