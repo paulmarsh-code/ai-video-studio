@@ -5,12 +5,14 @@
 // placed by their angle in the lens, and the shoulder person is drawn soft from behind.
 
 import { cameraZ, floorZ } from "@/lib/domain/levels";
-import { PRESET_FOV, readCamera } from "@/lib/domain/geometry";
+import { horizontalFov, readCamera } from "@/lib/domain/geometry";
 import { viewSlice } from "@/lib/domain/panorama";
 import type { CastMember, GeometryPlanData, PlanCamera, Point } from "@/lib/domain/types";
 
-const W = 480;
-const H = 270; // 16:9
+// The viewfinder has the video's shape (D31): 16:9, or 9:16 for a portrait project, so it shows
+// exactly the slice of the room (and of the 360° view) that the pictures get.
+const LW = 480, LH = 270;
+const PW = 300, PH = 533;
 const EYE_M = 1.6; // camera at eye level
 const HEAD_R_M = 0.11;
 const SHOULDER_M = 0.46;
@@ -34,7 +36,7 @@ function viewColour(name: string) {
   return VIEW_PALETTE[h % VIEW_PALETTE.length];
 }
 
-function project(cam: PlanCamera, fovDeg: number, p: Point) {
+function project(cam: PlanCamera, fovDeg: number, p: Point, W: number) {
   const fx = cam.lookAt.x - cam.position.x;
   const fy = cam.lookAt.y - cam.position.y;
   const l = Math.hypot(fx, fy) || 1;
@@ -73,7 +75,10 @@ export function CameraView({
 }) {
   const cam = plan.cameras.find((c) => c.id === cameraId);
   if (!cam) return null;
-  const fov = cam.fovDeg ?? PRESET_FOV[cam.preset];
+  const portrait = plan.aspect === "9:16";
+  const W = portrait ? PW : LW, H = portrait ? PH : LH;
+  // The angle across the frame's width: a portrait lens angle is for its height (D19).
+  const fov = horizontalFov(plan, cam);
   const reading = readCamera(plan, cam);
   // Up and down (D25): tilting down raises the horizon in the frame, tilting up lowers it.
   const focalPx = W / 2 / Math.tan(((fov / 2) * Math.PI) / 180);
@@ -88,18 +93,18 @@ export function CameraView({
     .filter((a) => a.depthM > 0.3 && (!onlyIds || onlyIds.includes(a.characterId)))
     .map((a) => {
       const pos = plan.actors.find((x) => x.characterId === a.characterId)!.position;
-      return { ...a, pr: project(cam, fov, pos) };
+      return { ...a, pr: project(cam, fov, pos, W) };
     })
     .filter((a) => a.pr.x > -W && a.pr.x < 2 * W)
     .sort((a, b) => b.depthM - a.depthM); // far first
 
   const tables = (plan.furniture ?? [])
-    .map((t) => ({ t, pr: project(cam, fov, t.position) }))
+    .map((t) => ({ t, pr: project(cam, fov, t.position, W) }))
     .filter((x) => x.pr.depth > 0.5);
 
   return (
     <figure className="overflow-hidden rounded-lg border border-neutral-300 bg-neutral-100">
-      <svg viewBox={`0 0 ${W} ${H}`} className="block w-full" role="img" aria-label={`Schematic view from ${cam.name}`}>
+      <svg viewBox={`0 0 ${W} ${H}`} className={portrait ? "mx-auto block w-full max-w-[300px]" : "block w-full"} role="img" aria-label={`Schematic view from ${cam.name}`}>
         <defs>
           <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
             <feGaussianBlur stdDeviation="5" />
@@ -112,7 +117,7 @@ export function CameraView({
           <rect y={horizon + 25} width={W} height={H} fill="#d6d3d1" />
           {ring && (() => {
             // The slice of the venue ring this camera sees, scaled to fill the frame's width (D21).
-            const sl = viewSlice({ ...plan, aspect: "16:9" }, { ...cam, fovDeg: fov });
+            const sl = viewSlice(plan, cam);
             const k = ring.previewHeight / ring.height; // ring pixels → preview pixels
             let x0 = (ring.startDeg - sl.leftDeg) * ring.pxPerDeg;
             x0 = ((x0 % ring.width) + ring.width) % ring.width;

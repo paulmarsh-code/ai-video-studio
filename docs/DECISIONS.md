@@ -634,3 +634,24 @@ Paul's run of Jade's Entrance (portrait, 9:16) lost people from shots: Chase was
 8. Layout rules are now version 11. Tests: `tests/portraitShots.test.ts` (a portrait group scene keeps everyone in frame whatever the suggested size), plus updated two-shot tests.
 
 Lesson: the D27–D28 tests were all landscape. Tests now cover portrait, and a replay of the user's saved scene is part of checking a change to cameras.
+
+## D31 — Edge people, walking in, eye lines, light, and a portrait viewfinder (2026-11-10)
+
+From Paul's second run of Jade's Entrance after D30 (replayed from his saved data).
+
+1. **People partly in the frame.** The camera reading used each person's middle only. Nina, one degree outside the edge in panel 4, counted as out of the picture, and the prompt then said "Nobody stands anywhere else". The same happened to Chase in the panel 6 two-shot. A body is about half a metre wide, so someone whose middle is just past the edge now counts as partly in the picture (`SeenActor.partial`).
+   - The prompt lists them in the left-to-right order "only partly in the picture, cut by the left/right edge", and adds "do not leave anyone out".
+   - The picture check allows them but doesn't require them (`PictureExpectation.edge`, on its own line).
+   - They are never chosen as the over-the-shoulder foreground.
+2. **Walking in over several panels.** Panels 1 ("enters") and 2 ("walks through the crowd") both put Jade on the same arrival spot, at the same distance. Someone still arriving in the next panel now moves on along their path: entering, then a new "crossing" mark halfway to their place, then approaching. Cameras and gaze treat "crossing" like the other arrival marks.
+3. **Eye lines.** "Looks at Jade" alone let GPT turn faces to the lens (the check caught this on 4 and 5). Prompts now add which side of the picture each look goes to, from the floor plan: "Chase looks to the right of the picture, at Jade". Panel 11's "Chase could look more to his right" is covered by the same line.
+4. **The same light in every picture.** Panel 3 came out much darker. The venue description's lighting sentences (festoon lights, uplighting, haze; not time-of-day words or the screen) now go into every picture prompt: "Lighting, identical in every picture of this scene … not darker, not brighter."
+5. **Bag hand.** The prompt now spells out the mirror: a bag in someone's left hand is on the right of the picture when they face the camera, and on the left when they are seen from behind.
+6. **The viewfinder was landscape in a portrait project.** On the floor plan it drew 16:9, using the portrait lens's long-side angle as if it were the width. It showed about 70° of the room and the 360° view (bar on the left, screen on the right), while the pictures correctly get the narrower portrait slice (about 42°, screen wall). The viewfinder now has the video's shape and the real angle across its width, so it shows exactly what the pictures get.
+7. Layout rules are now version 12. Tests: edge people, the crossing mark, lighting (`tests/portraitShots.test.ts`).
+
+Explained to Paul rather than changed:
+- In panels 9 and 10 the GLOWVANE banner behind Chase and Marcus is where the floor plan puts it (back-left from the front cameras); 3, 7 and 11 missed it, and the check flagged that.
+- Looking at the screen wall, the bar is on the left (his venue description says so too).
+- The prop named "champagne flutes" is described as a display plinth, which muddles the check's wording; renaming it fixes that.
+- The room is still the guessed 18 × 22 m hall until he sets the real size.

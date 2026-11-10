@@ -88,7 +88,7 @@ describe.each(SCENES)("General scene: $title", (sc) => {
       const sp = planForShot(plan, spec);
       const pos = sp.actors.find((a) => a.characterId === id)!.position;
       const fwd = facingOf(sp, id, d.lineOfAction);
-      if (!fwd || spec.at?.[id] === "arriving" || spec.at?.[id] === "approaching") continue;
+      if (!fwd || ["arriving", "crossing", "approaching"].includes(spec.at?.[id] ?? "")) continue;
       const cam = s.options[0].camera.position;
       const v = { x: cam.x - pos.x, y: cam.y - pos.y };
       const l = Math.hypot(v.x, v.y);

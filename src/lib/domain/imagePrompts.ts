@@ -98,6 +98,8 @@ export interface PanelPromptInput {
   profiles: Record<string, CharacterProfile>;
   plan?: GeometryPlanData;
   venueName: string;
+  /** The venue's description (D31): its lighting is held the same in every picture. */
+  venueDescription?: string;
   /** Venue views with their approved reference images, so the background can be attached. */
   venueViews?: { name: string; imageAssetId?: string }[];
   aspect?: string; // e.g. "9:16"
@@ -190,7 +192,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   const lines: string[] = [];
   lines.push(`${(i.style ?? "photorealistic").replace(/^./, (m) => m.toUpperCase())} storyboard frame for a ${i.aspect ?? "9:16"} video, set in the ${i.venueName}.`);
   const people = attach.slice(0, peopleCount);
-  if (people.length) lines.push(`Use the attached reference images for ${joinNames([...new Set(people.map((a) => a.label.replace(/ (reference|back)$/, "")))])}; keep their faces, hair and clothes identical, every pattern, stripe and colour block included. Bags and anything carried stay exactly as in the reference, in the same hand or on the same shoulder.`);
+  if (people.length) lines.push(`Use the attached reference images for ${joinNames([...new Set(people.map((a) => a.label.replace(/ (reference|back)$/, "")))])}; keep their faces, hair and clothes identical, every pattern, stripe and colour block included. Bags and anything carried stay exactly as in the reference, in the same hand or on the same shoulder. Mind the mirror (D31): a bag in someone's left hand is on the right of the picture when they face the camera, and on the left of the picture when they are seen from behind.`);
   const backs = people.filter((a) => a.label.endsWith(" back")).map((a) => a.label.replace(/ back$/, ""));
   if (backs.length) lines.push(`${joinNames(backs)} ${backs.length === 1 ? "is" : "are"} seen from behind: copy the back of their clothes, hair and bag exactly from the attached back ${backs.length === 1 ? "image" : "images"}.`);
   if (ring) lines.push(`Use the attached background picture as the room behind the characters: it is cut from the venue's 360° view for exactly this camera position, angle and lens, so what is on its left stays on the left and what is on its right stays on the right. Same place, layout and light, seen across the room several metres behind them.${shot?.crowd?.trim() ? " Fill it with the background guests described below." : ""}`);
@@ -202,6 +204,9 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   const crowd = shot?.crowd?.trim();
   // An older approved picture may show an empty room: keep its spot and look, but add the crowd.
   if (i.continuity) lines.push(`Use the attached ${i.continuity.label} for continuity: the same spot, the same furniture at the same height and size, the same light and clothes${crowd ? ". If it shows fewer background guests than described below, add them" : ", and the same background guests"}. Change only the camera angle and the moment.`);
+  // The same light in every picture (D31): one picture came out much darker than the rest.
+  const light = lightingOf(i.venueDescription ?? "");
+  if (light) lines.push(`Lighting, identical in every picture of this scene: ${light} Same brightness, colour and mood as the other pictures of the scene; not darker, not brighter.`);
   if (spot) lines.push(`Where: ${sentence(spot)} Keep it in the picture wherever the camera would see it, always the same height and size. Everyone keeps their own place and posture around it${/\b(sit|sits|sitting|seated|sofa|couch|bench)\b/i.test(spot) ? "" : ", standing upright"}; no one leans on it or on the bar unless the moment says so.`);
   // The floor plan's props are the approved list (D19a); the shot's copy is the fallback.
   const planProps = (i.plan?.furniture ?? []).map((f) => ({ name: f.name, detail: f.detail ?? "" }));
@@ -283,6 +288,20 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     const gz = gazeFor({ shot, description: i.description, people: i.cast.map((c) => ({ id: c.id, name: c.name })), line: (shotPlan ?? i.plan)?.lineOfAction });
     const gl = gazeLine(gz, name, inPic);
     if (gl) lines.push(gl);
+    // Eye lines in the frame (D31): "looks at Jade" alone let GPT turn faces to the lens. Which
+    // side of the picture each look goes to comes from the floor plan.
+    if (reading) {
+      const idOf = (n: string) => i.cast.find((c) => c.name === n || c.name.split(/\s+/)[0] === n)?.id;
+      const eyes = gz.filter((g) => inPic.includes(g.id)).flatMap((g) => {
+        const t = idOf(g.at);
+        const L = reading.actors.find((a) => a.characterId === g.id), T = t ? reading.actors.find((a) => a.characterId === t) : undefined;
+        if (!L || !T || T.depthM <= 0) return [];
+        const d = T.angleDeg - L.angleDeg;
+        const way = Math.abs(d) <= 3 ? (T.depthM < L.depthM ? "towards the camera's side but past the lens" : "straight ahead into the scene") : `to the ${d > 0 ? "right" : "left"} of the picture`;
+        return [`${name(g.id)} looks ${way}, at ${name(t!)}`];
+      });
+      if (eyes.length) lines.push(`Eye lines: ${eyes.join("; ")}. Eyes and head turned that way; no one looks into the lens.`);
+    }
     // Looking through something has its own look (D25): binoculars, keyhole, mirror, window…
     const fx = shotEffect(gz, shot.speakerId ?? shot.subjectId ?? shot.visibleIds[0]);
     if (fx) lines.push(`Shot effect: ${fx}.`);
@@ -308,7 +327,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     // A strict left-to-right order and head count (D18e): looser wording let GPT swap people or drop them.
     const order = reading.actors.filter((a) => a.inView && [...shownIds, ...edgeIds].includes(a.characterId)).sort((a, b) => a.angleDeg - b.angleDeg);
     if (order.length > 1) {
-      lines.push(`Exactly ${order.length} people in this picture, from left to right: ${joinNames(order.map((a) => `${name(a.characterId)}${a.characterId === fgId ? " (in the foreground, seen from behind over the shoulder)" : ""}`))}. Keep this left-to-right order; do not swap anyone.`);
+      lines.push(`Exactly ${order.length} people in this picture, from left to right: ${joinNames(order.map((a) => `${name(a.characterId)}${a.characterId === fgId ? " (in the foreground, seen from behind over the shoulder)" : a.partial ? ` (only partly in the picture, cut by the ${a.angleDeg < 0 ? "left" : "right"} edge: a shoulder, arm and part of the face or back)` : ""}`))}. Keep this left-to-right order; do not swap anyone, and do not leave anyone out.`);
       if (reading.backgroundView && subjectId) lines.push(`Behind ${name(subjectId)}, across the room several metres away: the ${reading.backgroundView}. Nothing stands right behind them.`);
     } else {
       const frame = describeFrame(reading, i.cast, [...shownIds, ...edgeIds], subjectId);
@@ -360,4 +379,14 @@ export function imageChangePrompt(change: string, originalPrompt: string): strin
     "For reference, the original brief for this image was:",
     originalPrompt,
   ].join("\n");
+}
+
+/** The lighting sentences of a venue description (D31), to hold the light the same in every picture. */
+export function lightingOf(text: string): string {
+  // Words about the light itself, not the time of day ("an evening launch party" is not lighting).
+  const LIGHT = /\b(light|lights|lighting|lit|glow|glowing|lamp|lamps|candle|candles|candlelight|neon|uplighting|uplit|spotlights?|haze|daylight|sunlight|moonlight|dimly|brightly|festoon|shadows?)\b/i;
+  const sentences = text.replace(/\s+/g, " ").split(/(?<=[.!?])\s+/).filter((x) => LIGHT.test(x) && !/screen|display|logo|banner/i.test(x));
+  let out = "";
+  for (const x of sentences) { if ((out + " " + x).length > 420) break; out = `${out} ${x}`.trim(); }
+  return out;
 }

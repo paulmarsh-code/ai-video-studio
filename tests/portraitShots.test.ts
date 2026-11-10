@@ -39,3 +39,38 @@ describe("Portrait shot sizes (D30)", () => {
     });
   });
 });
+
+describe("Edge people, arrivals, eye lines and light (D31)", () => {
+  it("someone whose middle is just outside the frame is partly in it, not gone", async () => {
+    const { readCamera } = await import("../src/lib/domain/geometry");
+    const plan = { aspect: "9:16" as const, actors: [{ characterId: "a", position: { x: 0, y: 3 } }, { characterId: "b", position: { x: -0.85, y: 3 } }], cameras: [], views: [] };
+    const cam = { id: "c", name: "c", preset: "main-ots" as const, position: { x: 0, y: 0 }, lookAt: { x: 0, y: 3 }, fovDeg: 45 };
+    const b = readCamera(plan as never, cam).actors.find((x) => x.characterId === "b")!;
+    expect(b.inView).toBe(true);
+    expect(b.partial).toBe(true);
+  });
+  it("someone still arriving in the next panel is further along their path, not on the same spot", () => {
+    const cast = ["ava", "ben"];
+    const ps = [{ action: "Ava, Ben talk.", inFrame: cast, line: "", emotion: "calm", seconds: 3 }];
+    const base = defaultPlan(cast, ps as never, [], { spot: "around a table", props: [], crowd: "", crowdLevel: "none" }, "9:16");
+    const { plan, at, from } = addMovementMarks(base, [
+      { action: "Ava enters the busy room.", subjectId: "ava" },
+      { action: "She walks through the crowd and spots Ben.", subjectId: "ava" },
+      { action: "Ava reaches them.", subjectId: "ava" },
+    ]);
+    expect(at[0]).toEqual({ ava: "arriving" });
+    expect(at[1]).toEqual({ ava: "crossing" });
+    expect(from[1]).toEqual({ ava: "arriving" });
+    const m = plan.actors.find((a) => a.characterId === "ava")!.marks!;
+    const place = plan.actors.find((a) => a.characterId === "ava")!.position;
+    const d = (id: string) => { const p = m.find((x) => x.id === id)!.position; return Math.hypot(p.x - place.x, p.y - place.y); };
+    expect(d("crossing")).toBeLessThan(d("arriving") - 1);
+  });
+  it("the venue's lighting is held in every picture, without time-of-day sentences", async () => {
+    const { lightingOf } = await import("../src/lib/domain/imagePrompts");
+    const t = lightingOf("An evening launch party in a warehouse. Warm festoon lights hang across the atrium, creating an amber glow. A large screen shows a gradient.");
+    expect(t).toContain("festoon lights");
+    expect(t).not.toContain("evening launch");
+    expect(t).not.toContain("screen");
+  });
+});

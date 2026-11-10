@@ -602,10 +602,23 @@ export function addMovementMarks(plan: GeometryPlanData, panels: { action: strin
       last.set(a.characterId, "place");
       return undefined;
     }
-    ensure(a, kind!);
-    from.push(prev && prev !== kind ? { [a.characterId]: prev } : undefined);
-    last.set(a.characterId, kind!);
-    return { [a.characterId]: kind! };
+    // Still on their way in, panel after panel (D31): each panel moves them further along their
+    // path, so they are never at the same distance twice. Entering, then halfway across the
+    // room, then a step or two from the group.
+    let k = kind!;
+    if (k === "arriving" && (prev === "arriving" || prev === "crossing")) {
+      if (prev === "arriving") {
+        if (!a.marks.some((m) => m.id === "crossing")) {
+          const start = a.marks.find((m) => m.id === "arriving")!.position;
+          a.marks.push({ id: "crossing", label: "crossing the room towards the group, about halfway there", position: { x: +((start.x + a.position.x) / 2).toFixed(2), y: +((start.y + a.position.y) / 2).toFixed(2) } });
+        }
+        k = "crossing";
+      } else k = "approaching";
+    }
+    if (k !== "crossing") ensure(a, k as "arriving" | "approaching");
+    from.push(prev && prev !== k ? { [a.characterId]: prev } : undefined);
+    last.set(a.characterId, k);
+    return { [a.characterId]: k };
   });
   return { plan: { ...plan, actors }, at, from };
 }

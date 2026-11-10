@@ -13,6 +13,8 @@ export interface PictureExpectation {
   crowd: "none" | "few" | "busy";
   /** Seen from behind at the edge of frame (an over-the-shoulder shot): allowed, not required (D19c). */
   shoulder?: string[];
+  /** Only partly in the frame, cut by its edge (D31): allowed, not required. */
+  edge?: string[];
   /** Where each key prop must be (D21): side of the frame and depth relative to the people. */
   propPlaces?: { name: string; side: "left" | "centre" | "right"; depth: "among the people" | "behind everyone" | "in front of everyone" }[];
   /** Props that have a reference picture, sent with the check. */
@@ -36,6 +38,7 @@ export function checkPrompt(e: PictureExpectation, refNames: string[]): string {
     ...(refNames.length ? [`The next images are reference pictures, in this order: ${refNames.join(", ")}. Use the character ones to tell who is who and to check their clothes; use the prop ones to check how each prop looks.`] : []),
     "",
     `Expected main characters, left to right: ${e.order.length ? e.order.join(", ") : "none"}.${e.shoulder?.length ? ` ${e.shoulder.join(" and ")} may also be seen from behind in the foreground; don't list them.` : ""}`,
+    ...(e.edge?.length ? [`${e.edge.join(" and ")} may also be partly visible, cut by the edge of the picture; list them too if you can see them.`] : []),
     `Key props that should be visible: ${e.props.length ? e.props.join(", ") : "none"}.`,
     `Background people expected: ${e.crowd === "none" ? "no one else" : e.crowd === "few" ? "a few other people" : "a busy crowd"}.`,
     "",
@@ -67,7 +70,7 @@ export function judgePicture(e: PictureExpectation, reply: string): PictureCheck
   const found = people.map(first).filter((n) => expected.includes(n));
   const missing = e.order.filter((n) => !found.includes(first(n)));
   if (missing.length) problems.push(`${missing.join(" and ")} ${missing.length === 1 ? "is" : "are"} missing.`);
-  const shoulder = (e.shoulder ?? []).map(first);
+  const shoulder = [...(e.shoulder ?? []), ...(e.edge ?? [])].map(first);
   const unknown = people.filter((p) => !expected.includes(first(p)) && !shoulder.includes(first(p)));
   if (unknown.length > 0 && e.order.length > 0) problems.push(`${unknown.length} extra main ${unknown.length === 1 ? "person" : "people"} who shouldn't be there.`);
   if (!missing.length) {

@@ -283,7 +283,7 @@ function score(
     const cos = fwd.x * toCam.x + fwd.y * toCam.y; // 1 = looking straight at the camera
     if (cos < -0.35) {
       // Only someone still walking in (arriving or approaching) may be seen from behind.
-      if (id === subjectId && !(cand.follow && (shot.at?.[id] === "arriving" || shot.at?.[id] === "approaching"))) return { ok: false, score: 0, reasons: [] };
+      if (id === subjectId && !(cand.follow && ["arriving", "crossing", "approaching"].includes(shot.at?.[id] ?? ""))) return { ok: false, score: 0, reasons: [] };
       facingCost += id === subjectId ? 0.5 : 4;
     } else if (cos < -0.05) facingCost += 0.5;
   }
@@ -774,7 +774,7 @@ export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (i
  * positions for anyone moving (D20); 6 = movement marks worked out afresh, props seen across
  * their real extent (D21b); 7 = high and low cameras for looking down or up (D25).
  */
-export const LAYOUT_RULES = 11;
+export const LAYOUT_RULES = 12;
 
 export function applyDesign(plan: GeometryPlanData, choices: { shotId: string; shotCode: string; option: CameraOption }[], line?: [string, string]) {
   const cameras: PlanCamera[] = [];

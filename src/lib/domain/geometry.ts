@@ -67,6 +67,8 @@ export interface SeenActor {
   inView: boolean;
   frame: FramePosition | "out-left" | "out-right" | "behind" | "out-above" | "out-below";
   foreground: boolean;
+  /** Their middle is just outside the frame but part of their body is in it (D31): at the edge. */
+  partial?: boolean;
 }
 
 export interface CameraReading {
@@ -108,9 +110,14 @@ export function readCamera(plan: GeometryPlanData, cam: PlanCamera): CameraReadi
     const angle = deg(Math.atan2(lateral, depth));
     let frame: SeenActor["frame"];
     let inView = false;
+    // A body is about half a metre wide (D31): someone whose middle is just past the frame edge
+    // still has a shoulder and arm in the picture.
+    const bodyHalf = depth > 0 ? deg(Math.atan(0.25 / depth)) : 0;
+    let partial = false;
     if (depth <= 0) frame = "behind";
-    else if (angle < -half) frame = "out-left";
-    else if (angle > half) frame = "out-right";
+    else if (angle < -half - bodyHalf) frame = "out-left";
+    else if (angle > half + bodyHalf) frame = "out-right";
+    else if (Math.abs(angle) > half) { partial = true; frame = angle < 0 ? "frame-left" : "frame-right"; }
     else if (deg(Math.atan2(floorZ(plan, a.position) - camZ, depth)) - tilt > vHalf) frame = "out-above"; // feet above the top edge
     else if (deg(Math.atan2(floorZ(plan, a.position) + 1.7 - camZ, depth)) - tilt < -vHalf) frame = "out-below"; // head below the bottom edge
     else {
@@ -118,6 +125,7 @@ export function readCamera(plan: GeometryPlanData, cam: PlanCamera): CameraReadi
       frame =
         Math.abs(angle) <= CENTRE_BAND_DEG ? "centre" : angle < 0 ? "frame-left" : "frame-right";
     }
+    if (partial && frame !== "out-above" && frame !== "out-below") inView = true;
     return {
       characterId: a.characterId,
       angleDeg: angle,
@@ -125,11 +133,13 @@ export function readCamera(plan: GeometryPlanData, cam: PlanCamera): CameraReadi
       inView,
       frame,
       foreground: false,
+      ...(partial && inView ? { partial: true } : {}),
     };
   });
 
   // Soft foreground = the over-the-shoulder person: nearest in view, and clearly nearer than the rest.
-  const inView = actors.filter((a) => a.inView).sort((a, b) => a.depthM - b.depthM);
+  // Only people fully in the frame count here: someone cut by the edge is never the shoulder (D31).
+  const inView = actors.filter((a) => a.inView && !a.partial).sort((a, b) => a.depthM - b.depthM);
   const nearest = inView[0];
   for (const a of actors) a.foreground = false;
   // Only when someone else is in view further back: a lone person is the subject, facing camera.

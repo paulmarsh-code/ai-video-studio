@@ -33,6 +33,8 @@ export function expectationFor(db: DB, shotId: string): { expect: PictureExpecta
     .filter((a) => a.inView && (shown.includes(a.characterId) || (!closeUp && shot.spec.presentIds.includes(a.characterId) && !shot.spec.excludedIds.includes(a.characterId))))
     // The over-the-shoulder foreground figure is seen from behind: hard to name, so not checked.
     .filter((a) => !(a.foreground && (cam.preset === "main-ots" || cam.preset === "reverse-ots") && a.characterId !== subject))
+    // Only partly in the frame (D31): may or may not show, so allowed but not required.
+    .filter((a) => !a.partial)
     .sort((a, b) => a.angleDeg - b.angleDeg)
     .map((a) => a.characterId);
   return {
@@ -40,6 +42,7 @@ export function expectationFor(db: DB, shotId: string): { expect: PictureExpecta
     expect: {
       order: ids.map(name), props: readProps(plan, cam).filter((p) => p.inView).map((p) => p.name), crowd: crowdLevelOf(shot.spec.crowd ?? ""),
       shoulder: reading.actors.filter((a) => a.inView && a.foreground && (cam.preset === "main-ots" || cam.preset === "reverse-ots") && a.characterId !== subject).map((a) => name(a.characterId)),
+      edge: reading.actors.filter((a) => a.inView && a.partial && !shot.spec.excludedIds.includes(a.characterId)).map((a) => name(a.characterId)),
       // Where each prop must be (D21): side of frame, and depth against the people in view.
       propPlaces: (() => {
         const depths = reading.actors.filter((a) => a.inView && !a.foreground).map((a) => a.depthM);

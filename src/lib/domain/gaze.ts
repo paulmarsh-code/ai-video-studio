@@ -151,14 +151,14 @@ export function gazeFor(i: {
   const main = main0;
   for (const p of present) {
     if (out.has(p.id)) continue;
-    if (shot.at?.[p.id] === "arriving") { out.set(p.id, "the group"); continue; }
+    if (shot.at?.[p.id] === "arriving" || shot.at?.[p.id] === "crossing") { out.set(p.id, "the group"); continue; }
     if (p.id === main) {
       const partner = partnerOf(p.id);
       out.set(p.id, partner && present.some((x) => x.id === partner) ? partner : present.length > 1 ? "the group" : "ahead");
       continue;
     }
     // Someone still arriving hasn't been noticed yet: the others carry on among themselves.
-    if (main && shot.at?.[main] === "arriving") { out.set(p.id, "each other"); continue; }
+    if (main && (shot.at?.[main] === "arriving" || shot.at?.[main] === "crossing")) { out.set(p.id, "each other"); continue; }
     if (main && present.some((x) => x.id === main)) out.set(p.id, main);
   }
   return [...out.entries()].map(([id, at]) => ({ id, at: i.people.some((p) => p.id === at) ? nameOf(at) : at }));
