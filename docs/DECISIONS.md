@@ -534,3 +534,38 @@ How a body is placed changes where the camera goes. Read from the panel's words,
 8. Layout rules are now version 8, so existing scenes show "Update the layout".
 
 Limit: still a flat floor. The drop, the sky and the plane are described in words and shown by the camera angle; the plan does not model height differences.
+
+## D27 — Shot language: sizes, framings, angles, heights, Dutch, point of view, moves and lenses (2026-11-10)
+
+Paul shared the standard shot vocabulary (camera angles, camera heights, and Adobe's guide to shot types). The app now reads these names from a panel's words, chooses the camera to match, and writes the shot and what it means into every picture and video prompt. All of it is general: wording and geometry only, nothing tied to one project (`shotLanguage.ts`, `vertical.ts`, `director.ts`; tests in `tests/shotLanguage.test.ts` with made-up names).
+
+1. **Shot sizes**: extreme close-up, close-up, medium close-up, medium shot, cowboy, medium long, full, long and wide. A named size sets the lens so the subject fills that much of the frame from where the camera stands. A close-up comes out on a long lens (about 85–135 mm), as the guide recommends, with a soft background. Naming a close-up makes the moment a "peak", so a close-up camera is offered; naming a wide or establishing shot makes it an establishing moment. The floor plan has a Shot size choice that sets the lens the same way.
+2. **Framings**:
+   - Over-the-shoulder and reverse shots: the matching cameras go first.
+   - Two-shot: a camera side-on to the pair, swung round up to 70° until no one else is in the picture.
+   - Three-shot: the option that sees three people goes first.
+   - Profile: a camera at right angles to the way the subject faces, on the side already chosen.
+   - Establishing and master shots: wide.
+   - Insert shots: the insert camera.
+   - Reaction and single shots: a close-up.
+   - "Looks back over her shoulder" is a look, not an over-the-shoulder shot.
+3. **Point of view** ("Ben's POV", "through Ava's eyes", "what she sees"): the camera is at that person's eyes, looking at whoever they look at, or else at whoever the panel has in the picture. That person is left out of the picture and the clip (at most their hands at the bottom edge). Lying down and looking up gives a POV straight up.
+4. **Angles and heights**:
+   - Named in the panel, they win over everything else: eye level, shoulder level (1.45 m), hip level (1.0 m), knee level (0.5 m), ground level (on the floor), high angle, low angle, bird's-eye view (directly overhead, straight down), and worm's-eye or nadir (on the ground near their feet, looking steeply up).
+   - Otherwise, the feeling of the moment sets a gentle angle, from strong words only, so ordinary conversation stays at eye level: vulnerable, helpless or begging gives a high angle; triumphant, menacing or standing tall gives a low angle; utterly alone or dwarfed gives a bird's-eye view.
+   - Body and looking up or down (D25, D26) still come before mood.
+5. **Dutch angle**: named ("Dutch angle", "canted", "tilted frame"), it gives a 20° roll; from the feeling (dizzy, drunk, panics, nightmare, chaos), a 15° roll. It combines with any height. Prompts say the frame is tilted and the horizon on a slant. The viewfinder and layout sketch draw the roll, and the floor plan has a Dutch angle slider.
+6. **Lens**: every picture and video prompt now says the lens in millimetres and what it does to the picture:
+   - wide: more of the space, people further apart, deep focus;
+   - normal: as the eye sees;
+   - long: background compressed and soft.
+7. **Why this angle**: prompts add the guide's meaning:
+   - high angle: smaller, more vulnerable;
+   - low angle: taller, more in charge;
+   - bird's-eye: small and isolated;
+   - worm's-eye: towering;
+   - Dutch: uneasy.
+8. **Camera moves** named in the panel go into the video prompt in place of the genre's usual move: tracking, pan, tilt, dolly in and out, dolly zoom (vertigo effect), push-in and push-out, zoom in and out, handheld, crane, orbit, whip pan and static.
+9. Layout rules are now version 9.
+
+Limits: English wording only; the room is still a flat floor; a bird's-eye or crane height is described rather than checked against a ceiling.

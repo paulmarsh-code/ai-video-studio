@@ -133,10 +133,13 @@ export function layoutSketchSvg(i: {
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`,
     `<rect width="${W}" height="${H}" fill="#fafafa"/>`,
+    cam.rollDeg ? `<g transform="translate(${W / 2} ${H / 2}) rotate(${cam.rollDeg}) scale(${(Math.cos(Math.abs(cam.rollDeg) * Math.PI / 180) + Math.sin(Math.abs(cam.rollDeg) * Math.PI / 180) * Math.max(W / H, H / W)).toFixed(3)}) translate(${-W / 2} ${-H / 2})">` : "<g>",
     `<rect y="${Math.max(0, horizon)}" width="${W}" height="${Math.max(0, H - Math.max(0, horizon))}" fill="#f0f0f0"/>`,
     `<line x1="0" y1="${horizon}" x2="${W}" y2="${horizon}" stroke="#d4d4d4" stroke-width="2" stroke-dasharray="12 10"/>`,
     i.backgroundView ? `<text x="${W / 2}" y="44" font-size="28" text-anchor="middle" fill="#737373" font-family="sans-serif">behind: ${esc(i.backgroundView)}</text>` : "",
     ...items.map((x) => x.svg),
+    "</g>",
+    (cam.rollDeg || cam.povId) ? `<text x="${W / 2}" y="${H - 52}" font-size="26" text-anchor="middle" fill="#404040" stroke="#fff" stroke-width="5" paint-order="stroke" font-family="sans-serif">${[cam.povId ? `point of view: ${esc(i.people.find((p) => p.id === cam.povId)?.name ?? cam.povId)}'s eyes` : "", cam.rollDeg ? `Dutch angle ${Math.round(cam.rollDeg)}°` : ""].filter(Boolean).join(" · ")}</text>` : "",
     (cam.tiltDeg || (cam.heightM && Math.abs(cam.heightM - EYE_HEIGHT) > 0.3)) ? `<text x="${W / 2}" y="${H - 20}" font-size="26" text-anchor="middle" fill="#404040" stroke="#fff" stroke-width="5" paint-order="stroke" font-family="sans-serif">camera ${(cam.heightM ?? EYE_HEIGHT).toFixed(1)} m up, ${Math.abs(cam.tiltDeg ?? 0).toFixed(0)}° ${(cam.tiltDeg ?? 0) < 0 ? "down" : "up"}</text>` : "",
     `<rect x="2" y="2" width="${W - 4}" height="${H - 4}" fill="none" stroke="#a3a3a3" stroke-width="4"/>`,
     "</svg>",

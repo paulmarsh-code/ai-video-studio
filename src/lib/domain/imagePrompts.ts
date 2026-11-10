@@ -4,12 +4,13 @@
 // rejected); images made in GPT, not Kling (better and cheaper); no text or logos.
 
 import { mainSubjectId } from "./composer";
-import { describeFrame, facingOf, planForShot, presetText, readCamera, readProps } from "./geometry";
+import { describeFrame, facingOf, horizontalFov, planForShot, presetText, readCamera, readProps } from "./geometry";
 import { GENRE_PROFILES, type Genre } from "./genre";
 import { gestureDetail } from "./gestures";
 import { propMoves } from "./story";
 import { gazeFor, gazeLine, shotEffect } from "./gaze";
-import { bodyEffect } from "./vertical";
+import { bodyEffect, verticalOf } from "./vertical";
+import { shotLines } from "./shotLanguage";
 import { joinNames, stripQuotes } from "./text";
 import type { CastMember, GeometryPlanData, ShotSpec } from "./types";
 
@@ -130,8 +131,10 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   const shotPlan = i.plan ? planForShot(i.plan, shot) : undefined; // anyone on a mark stands there (D19b)
   const reading = cam && shotPlan ? readCamera(shotPlan, cam) : undefined;
   // A close-up shows its subject only (D18d): anyone between the lens and the subject is out of frame.
-  const closeUp = !!cam && (cam.preset === "single-cu" || cam.preset === "insert") && !!subjectId;
-  const shownIds = closeUp ? [subjectId!] : (shot?.visibleIds ?? []);
+  // A point of view (D27) is someone's eyes: they are not in their own picture.
+  const povId = cam?.povId;
+  const closeUp = !!cam && !povId && (cam.preset === "single-cu" || cam.preset === "insert") && !!subjectId;
+  const shownIds = (closeUp ? [subjectId!] : (shot?.visibleIds ?? [])).filter((id) => id !== povId);
   const visible = shownIds.map(byId).filter((c): c is CastMember => !!c);
   // Over-the-shoulder foreground: only on an over-the-shoulder camera, a non-subject person,
   // and only when two or more are visible (same rule as the Kling prompt).
@@ -288,6 +291,8 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
 
   if (cam && reading && shot) {
     lines.push(presetText(cam).replace(", static camera", "").replace(" static camera,", ""));
+    // Shot size, named framing, lens, point of view and what the angle means (D27).
+    lines.push(...shotLines({ cam, kind: verticalOf(cam).kind, fovDeg: horizontalFov(shotPlan ?? i.plan!, cam), text: `${i.description} ${shot.actions ?? ""}`, name }));
     // A strict left-to-right order and head count (D18e): looser wording let GPT swap people or drop them.
     const order = reading.actors.filter((a) => a.inView && [...shownIds, ...edgeIds].includes(a.characterId)).sort((a, b) => a.angleDeg - b.angleDeg);
     if (order.length > 1) {

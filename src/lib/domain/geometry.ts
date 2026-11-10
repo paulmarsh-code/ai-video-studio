@@ -2,6 +2,7 @@
 // Deterministic — no AI. Coordinates are scene-local metres.
 
 import { verticalText } from "./vertical";
+import { SHOT_SIZES } from "./shotLanguage";
 import type {
   CameraPreset,
   CastMember,
@@ -32,7 +33,8 @@ export const PRESET_TEXT: Record<CameraPreset, string> = {
 /** The preset's words with the camera's real height and tilt (D25): "eye level" becomes "high angle…". */
 export function presetText(cam: PlanCamera): string {
   const v = verticalText(cam);
-  const base = PRESET_TEXT[cam.preset];
+  // A named size (D27) replaces the preset's own framing words, e.g. a close-up from a wide camera.
+  const base = cam.size ? `${SHOT_SIZES[cam.size].label}${cam.preset === "main-ots" || cam.preset === "reverse-ots" ? " over the shoulder" : ""}, eye level, static camera.` : PRESET_TEXT[cam.preset];
   if (v === "eye level") return base;
   return /eye level/.test(base) ? base.replace("eye level", v) : base.replace(/\.$/, `, ${v}.`);
 }

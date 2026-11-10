@@ -50,6 +50,12 @@ export interface PlanCamera {
   heightM?: number;
   /** Tilt in degrees (D25): negative looks down, positive looks up; level when absent. */
   tiltDeg?: number;
+  /** Dutch angle (D27): the frame rolled this many degrees, clockwise positive; straight when absent. */
+  rollDeg?: number;
+  /** Point of view (D27): this camera is this character's eyes; they are not in the picture. */
+  povId?: string;
+  /** Shot size named for this camera (D27), e.g. "cu" or "cowboy"; sets the lens to frame it. */
+  size?: import("./shotLanguage").ShotSize;
 }
 
 export interface PlanView {

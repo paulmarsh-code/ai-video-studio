@@ -103,7 +103,7 @@ export function CameraView({
           </filter>
           <clipPath id="frame"><rect width={W} height={H} /></clipPath>
         </defs>
-        <g clipPath="url(#frame)">
+        <g clipPath="url(#frame)"><g transform={rollTransform(cam.rollDeg, W, H)}>
           {/* Background wall and floor */}
           <rect width={W} height={horizon + 25} fill={wall ? viewColour(wall).bg : "#cbd5e1"} />
           <rect y={horizon + 25} width={W} height={H} fill="#d6d3d1" />
@@ -169,7 +169,9 @@ export function CameraView({
               {name(p.characterId)} (back)
             </text>
           ))}
-        </g>
+        </g></g>
+        {cam.povId && <text x={10} y={20} fontSize={13} fill="#fff" stroke="#0009" strokeWidth={3} paintOrder="stroke">{name(cam.povId)}&apos;s eyes</text>}
+        {cam.rollDeg ? <text x={W - 10} y={20} textAnchor="end" fontSize={13} fill="#fff" stroke="#0009" strokeWidth={3} paintOrder="stroke">Dutch {Math.round(cam.rollDeg)}°</text> : null}
         <rect width={W} height={H} fill="none" stroke="#0004" />
       </svg>
       {!compact && <figcaption className="px-3 py-1.5 text-xs text-neutral-600">
@@ -177,4 +179,12 @@ export function CameraView({
       </figcaption>}
     </figure>
   );
+}
+
+/** A Dutch angle (D27): the picture rolled about its centre, scaled so the corners stay filled. */
+export function rollTransform(rollDeg: number | undefined, w: number, h: number): string | undefined {
+  if (!rollDeg) return undefined;
+  const t = (Math.abs(rollDeg) * Math.PI) / 180;
+  const k = Math.cos(t) + Math.sin(t) * Math.max(w / h, h / w);
+  return `translate(${w / 2} ${h / 2}) rotate(${rollDeg}) scale(${k.toFixed(3)}) translate(${-w / 2} ${-h / 2})`;
 }

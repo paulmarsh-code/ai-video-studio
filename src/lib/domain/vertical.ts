@@ -6,9 +6,9 @@
 
 import type { PlanCamera } from "./types";
 
-export type VerticalKind = "level" | "high" | "low" | "overhead";
+export type VerticalKind = "level" | "high" | "low" | "overhead" | "birds-eye" | "worms-eye";
 
-export interface Vertical { kind: VerticalKind; heightM: number; tiltDeg: number; why: string }
+export interface Vertical { kind: VerticalKind; heightM: number; tiltDeg: number; why: string; rollDeg?: number }
 
 export const EYE_LEVEL_M = 1.6;
 
@@ -91,32 +91,105 @@ export function bodyEffect(text: string, who = "they"): string | undefined {
   }
 }
 
+// Named angles (D27). When the panel names the shot ("low angle", "bird's-eye view", "Dutch
+// angle", "from hip level"), that is what it gets, ahead of anything worked out from the action.
+const NAMED: { re: RegExp; v: Vertical }[] = [
+  { re: /\b(?:bird['’]?s?[-\s]eye|top[-\s](?:down\s+)?shot|overhead\s+shot|god['’]?s[-\s]eye|aerial\s+(?:shot|view)|from\s+directly\s+(?:above|overhead))\b/i, v: { kind: "birds-eye", heightM: 6, tiltDeg: -90, why: "bird's-eye view, named in the panel: straight down from directly overhead, map-like, showing scale and isolation" } },
+  { re: /\b(?:worm['’]?s?[-\s]eye|nadir\s+(?:angle|shot|view)|from\s+the\s+(?:ground|floor)\s+looking\s+(?:straight\s+|steeply\s+)?up)\b/i, v: { kind: "worms-eye", heightM: 0.1, tiltDeg: 55, why: "worm's-eye view, named in the panel: from the ground looking steeply up, for towering height and dominance" } },
+  { re: /\bhigh[-\s]angle\b/i, v: { kind: "high", heightM: 2.8, tiltDeg: -35, why: "high angle, named in the panel: looking down, making them smaller and more vulnerable" } },
+  { re: /\blow[-\s]angle\b/i, v: { kind: "low", heightM: 0.6, tiltDeg: 25, why: "low angle, named in the panel: looking up, making them taller and more powerful" } },
+  { re: /\b(?:ground|floor)[-\s](?:level|height)\s+(?:shot|camera|angle|view)|\bfrom\s+(?:ground|floor)\s+level\b|\bcamera\s+(?:on|at)\s+the\s+(?:floor|ground)\b/i, v: { kind: "low", heightM: 0.15, tiltDeg: 0, why: "ground level, named in the panel: the camera on the floor" } },
+  { re: /\bknee[-\s](?:level|height)\b/i, v: { kind: "low", heightM: 0.5, tiltDeg: 0, why: "knee level, named in the panel: low, following feet and things near the ground" } },
+  { re: /\b(?:hip|waist)[-\s](?:level|height)\b/i, v: { kind: "level", heightM: 1.0, tiltDeg: 0, why: "hip level, named in the panel: the camera at waist height" } },
+  { re: /\bshoulder[-\s](?:level|height)\b/i, v: { kind: "level", heightM: 1.45, tiltDeg: 0, why: "shoulder level, named in the panel: just below the eyes, conversational" } },
+  { re: /\beye[-\s]level\b/i, v: { kind: "level", heightM: EYE_LEVEL_M, tiltDeg: 0, why: "eye level, named in the panel: neutral and direct" } },
+];
+const DUTCH = /\b(?:dutch|canted|oblique)\s+(?:angle|tilt|shot|frame)|\btilted\s+(?:frame|horizon|camera\s+angle)|\b(?:frame|horizon)\s+(?:is\s+)?(?:tilted|on\s+a\s+slant|askew)\b/i;
+
+// The feeling of the moment (D27), used only when nothing above sets the angle. Strong words
+// only, so an ordinary conversation stays at eye level.
+const MOOD_HIGH = /\b(?:vulnerable|helpless|powerless|defeated|cower(?:s|ed|ing)?|crushed|humiliat(?:ed|ion)|overwhelmed|small\s+and\s+alone|belittled|submissive|beg(?:s|ged|ging)|plead(?:s|ed|ing)|grovel(?:s|led|ling)?|kneel(?:s|ing)?\s+before|knelt\s+before|at\s+(?:his|her|their)\s+mercy)\b/i;
+const MOOD_LOW = /\b(?:powerful|dominant|domineering|heroic|hero\s+shot|triumphant|victorious|menacing|intimidating|imposing|commanding|mighty|invincible|defiant|stands?\s+tall|towering)\b/i;
+const MOOD_DUTCH = /\b(?:disorient(?:ed|ing|ation)|dizzy|dizziness|drunk(?:enly)?|delirious|hallucinat(?:es|ing|ion)|nightmare|unhinged|paranoi(?:a|d)|chao(?:s|tic)|panic(?:s|ked|king)?|off[-\s]balance|madness|unease|uneasy|psychotic|concussed|woozy|reeling|spinning)\b/i;
+const MOOD_BIRDS = /\b(?:isolated|isolation|utterly\s+alone|all\s+alone|tiny\s+figure|dwarfed|lost\s+in\s+the\s+crowd|alone\s+in\s+the\s+(?:vast|empty|huge|middle))\b/i;
+
+/** A Dutch angle for this moment: named, or from the feeling (D27). Degrees, or undefined. */
+export function dutchFor(text: string): number | undefined {
+  if (DUTCH.test(text)) return 20;
+  if (MOOD_DUTCH.test(text)) return 15;
+  return undefined;
+}
+
+function moodAngle(text: string): Vertical | undefined {
+  if (MOOD_BIRDS.test(text)) return { kind: "birds-eye", heightM: 6, tiltDeg: -90, why: "isolation: a bird's-eye view from directly overhead makes them small in the space" };
+  if (MOOD_HIGH.test(text)) return { kind: "high", heightM: 2.4, tiltDeg: -20, why: "vulnerable moment: a gentle high angle makes them look smaller and weaker" };
+  if (MOOD_LOW.test(text)) return { kind: "low", heightM: 0.9, tiltDeg: 15, why: "powerful moment: a gentle low angle makes them look taller and stronger" };
+  return undefined;
+}
+
+// Point of view (D27): "Jade's POV", "through Ben's eyes", "what she sees", "from his point of view".
+const POV = /\b(?:pov|point[-\s]of[-\s]view|through\s+(?:[\w’'-]+['’]s|his|her|their)\s+eyes|what\s+(?:[\w’'-]+|he|she|they)\s+(?:sees?|saw|can\s+see)|as\s+(?:[\w’'-]+|he|she|they)\s+sees?\s+it)\b/i;
+
+/** Whose eyes this shot is, if the panel asks for a point of view: an id from people, or the subject. */
+export function povFor(text: string, people: { id: string; name: string }[], subjectId?: string): string | undefined {
+  if (!POV.test(text)) return undefined;
+  const esc = (p: { name: string }) => p.name.split(/\s+/)[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // "Ben's POV", "through Ben's eyes", "what Ben sees" first; "POV: Ben" only if none of those.
+  for (const p of people) {
+    const n = esc(p);
+    if (new RegExp(String.raw`\b${n}['’]s\s+(?:pov|point[-\s]of[-\s]view|eyes|view)\b|\bthrough\s+${n}['’]s\s+eyes\b|\bwhat\s+${n}\s+(?:sees?|saw|can\s+see)\b|\bas\s+${n}\s+sees?\b`, "i").test(text)) return p.id;
+  }
+  for (const p of people) if (new RegExp(String.raw`\b(?:pov|point[-\s]of[-\s]view)\s*(?:shot\s*)?[:,-]\s*${esc(p)}\b`, "i").test(text)) return p.id;
+  return subjectId;
+}
+
 /** Which way the moment looks, from its words. Undefined: keep the camera level. */
-export function verticalFor(text: string): Vertical | undefined {
+export function verticalFor(text: string, emotion = ""): Vertical | undefined {
+  const base = angleFor(text, emotion);
+  const roll = dutchFor(`${text} ${emotion}`);
+  if (!roll) return base;
+  const b = base ?? { kind: "level" as const, heightM: EYE_LEVEL_M, tiltDeg: 0, why: "" };
+  return { ...b, rollDeg: roll, why: [b.why, DUTCH.test(text) ? "Dutch angle, named in the panel: the frame tilted for unease" : "unsettled moment: a Dutch angle tilts the frame for unease and disorientation"].filter(Boolean).join("; ") };
+}
+
+function angleFor(text: string, emotion: string): Vertical | undefined {
+  for (const n of NAMED) if (n.re.test(text)) return n.v;
   const b = bodyFor(text);
   if (b) return bodyVertical(b);
   if (DOWN_INTO.test(text)) return { kind: "overhead", heightM: 2.6, tiltDeg: -60, why: "looking down into something: a steep high angle from above shows inside it" };
   if (DOWN.test(text)) return { kind: "high", heightM: 2.8, tiltDeg: -35, why: "looking down: a high angle from above and behind shows the drop below" };
   if (UP.test(text)) return { kind: "low", heightM: 0.6, tiltDeg: 25, why: "looking up: a low angle from below shows the height above" };
-  return undefined;
+  return moodAngle(`${text} ${emotion}`);
 }
 
 /** The camera's height and tilt, with eye level as the default. */
 export function verticalOf(cam: Pick<PlanCamera, "heightM" | "tiltDeg">): Vertical {
   const heightM = cam.heightM ?? EYE_LEVEL_M;
   const tiltDeg = cam.tiltDeg ?? 0;
-  const kind: VerticalKind = tiltDeg <= -50 ? "overhead" : tiltDeg <= -10 || heightM >= 2.4 ? "high" : tiltDeg >= 10 || heightM <= 0.9 ? "low" : "level";
+  const kind: VerticalKind = tiltDeg <= -85 ? "birds-eye" : tiltDeg <= -50 ? "overhead" : tiltDeg <= -10 || heightM >= 2.4 ? "high" : heightM <= 0.3 && tiltDeg >= 40 ? "worms-eye" : tiltDeg >= 10 || heightM <= 0.9 ? "low" : "level";
   return { kind, heightM, tiltDeg, why: "" };
 }
 
-/** Words for prompts: replaces "eye level" when the camera is high or low. */
-export function verticalText(cam: Pick<PlanCamera, "heightM" | "tiltDeg">): string {
+/** Words for prompts: replaces "eye level" when the camera is high, low, rolled or anyone's eyes. */
+export function verticalText(cam: Pick<PlanCamera, "heightM" | "tiltDeg" | "rollDeg">): string {
   const v = verticalOf(cam);
   const h = Math.round(v.heightM * 10) / 10, t = Math.round(Math.abs(v.tiltDeg));
-  if (v.kind === "overhead" && v.tiltDeg <= -85) return `top shot from directly above, about ${h} m up, looking straight down`;
+  const roll = cam.rollDeg ? `, Dutch angle: the whole frame tilted about ${Math.round(Math.abs(cam.rollDeg))}° ${cam.rollDeg > 0 ? "clockwise" : "anticlockwise"}, horizon on a slant` : "";
+  return angleWords(v, h, t) + roll;
+}
+
+function angleWords(v: Vertical, h: number, t: number): string {
+  if (v.kind === "birds-eye") return `bird's-eye view from directly above, about ${h} m up, looking straight down`;
   if (v.kind === "overhead") return `steep high angle from about ${h} m up, looking almost straight down (about ${t}° down)`;
   if (v.kind === "high") return `high angle from about ${h} m up, tilted down about ${t}°, looking down`;
-  if (v.kind === "low" && v.tiltDeg < 5) return `low camera about ${h} m off the ground, level`;
+  if (v.kind === "worms-eye") return `worm's-eye view from the ground, about ${h} m up, looking steeply up about ${t}°`;
+  if (v.kind === "low" && v.tiltDeg < 5) {
+    if (v.heightM <= 0.3) return `ground-level camera on the floor, about ${h} m up, level`;
+    if (v.heightM <= 0.7) return `knee-level camera, about ${h} m off the ground, level`;
+    return `low camera about ${h} m off the ground, level`;
+  }
   if (v.kind === "low") return `low angle from about ${h} m off the ground, tilted up about ${t}°, looking up`;
+  if (v.heightM <= 1.15) return `hip-level camera, about ${h} m up`;
+  if (v.heightM <= 1.5) return `shoulder-level camera, about ${h} m up`;
   return "eye level";
 }

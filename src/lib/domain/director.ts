@@ -6,7 +6,9 @@ import { deriveDuration } from "./duration";
 import { mainSubjectId } from "./composer";
 import { cameraPlacementProblem, facingOf, horizontalFov, PRESET_FOV, occlusions, planForShot, propsBlocking, readCamera, type CameraReading } from "./geometry";
 import { GENRE_PROFILES, genreBonus, type Genre } from "./genre";
-import { verticalFor } from "./vertical";
+import { povFor, verticalFor } from "./vertical";
+import { fovForSize, namedShot, presetsFor, SHOT_SIZES } from "./shotLanguage";
+import { gazeFor } from "./gaze";
 import type { CameraPreset, GeometryPlanData, PlanCamera, Point, ShotSpec } from "./types";
 
 export type MomentKind = "establishing" | "dialogue" | "peak" | "reaction" | "exit";
@@ -75,6 +77,11 @@ function sideOf(a: Point, b: Point, p: Point): number {
 export function classifyMoment(shot: ShotInput, index: number): MomentKind {
   const s = shot.spec;
   const text = `${shot.description ?? ""} ${s.actions} ${s.sceneContext}`;
+  // A shot the panel names (D27) sets the kind of moment: a close-up is a peak, a wide or
+  // establishing shot sets the scene.
+  const named = namedShot(`${shot.description ?? ""} ${s.actions}`);
+  if (named.size && ["ecu", "cu", "mcu"].includes(named.size) || named.framing === "reaction" || named.framing === "single" || named.framing === "insert") return "peak";
+  if (named.framing === "establishing" || named.framing === "master" || named.size === "ws" || named.size === "ls") return "establishing";
   // Walking off needs room to walk: an exit gets a wider shot even on an angry last line (D19b).
   if (EXIT_WORDS.test(text)) return "exit";
   if (s.speakerId) {
@@ -544,9 +551,19 @@ export { facingOf };
  * from its distance, so the person stays in frame: a high camera aims down at their chest, a low
  * one up at their head. An overhead camera moves to just behind and above them.
  */
-export function verticalCamera(cam: PlanCamera, v: { kind: string; heightM: number; tiltDeg: number }, subject?: Point): PlanCamera {
+export function verticalCamera(cam0: PlanCamera, v: { kind: string; heightM: number; tiltDeg: number; rollDeg?: number }, subject?: Point): PlanCamera {
+  // A Dutch angle (D27) rolls the frame whatever the height.
+  const cam = v.rollDeg ? { ...cam0, rollDeg: v.rollDeg } : cam0;
+  if (v.kind === "level" && v.heightM === 1.6 && v.tiltDeg === 0) return cam;
   if (!subject) return { ...cam, heightM: v.heightM, tiltDeg: v.tiltDeg };
-  if (v.kind === "overhead") {
+  // Worm's-eye: on the ground, near their feet, looking steeply up at them.
+  if (v.kind === "worms-eye") {
+    const away = norm(sub(cam.position, subject));
+    const position = add(subject, mul(away, 1.2));
+    const tiltDeg = Math.max(40, Math.round((Math.atan((1.6 - v.heightM) / 1.2) * 180) / Math.PI));
+    return { ...cam, position: { x: +position.x.toFixed(2), y: +position.y.toFixed(2) }, lookAt: subject, heightM: v.heightM, tiltDeg };
+  }
+  if (v.kind === "overhead" || v.kind === "birds-eye") {
     const away = norm(sub(cam.position, subject));
     // A top shot sits right above them (D26); otherwise just behind and above.
     const position = add(subject, mul(away, v.tiltDeg <= -85 ? 0.1 : 1.0));
@@ -559,6 +576,108 @@ export function verticalCamera(cam: PlanCamera, v: { kind: string; heightM: numb
   const deg = (Math.atan((aimAt - v.heightM) / dist) * 180) / Math.PI;
   const tiltDeg = Math.round(v.kind === "high" ? Math.min(-15, deg) : Math.max(10, deg));
   return { ...cam, heightM: v.heightM, tiltDeg };
+}
+
+/**
+ * The shot the panel names (D27): a point of view, a profile, a two-shot, a close-up, an
+ * establishing shot… Adds the camera it needs, puts the matching options first, and sets the
+ * lens so the named size frames the subject. Panels that name nothing are left as they are.
+ */
+function namedShotDesign(d: ShotDesign, plan: GeometryPlanData, sh: ShotInput, line: [string, string] | undefined, name: (id: string) => string): ShotDesign {
+  const text = `${sh.description ?? ""} ${sh.spec.actions ?? ""}`;
+  const n = namedShot(text);
+  const sp = planForShot(plan, sh.spec);
+  const subj = mainSubjectId(sh.spec);
+  const people = sp.actors.map((a) => ({ id: a.characterId, name: name(a.characterId) }));
+  const pov = n.framing === "pov" ? povFor(text, people, subj) : undefined;
+  if (!n.framing && !n.size && !pov) return d;
+  const S = subj ? sp.actors.find((a) => a.characterId === subj)?.position : undefined;
+  let options = [...d.options];
+  const base = options[0]?.camera;
+
+  // Point of view: the camera is their eyes, looking where they look.
+  if (pov) {
+    const P = sp.actors.find((a) => a.characterId === pov)?.position;
+    if (P) {
+      const gz = gazeFor({ shot: sh.spec, description: text, people, line }).find((g) => g.id === pov)?.at;
+      // What they see: whoever they look at, or else whoever the panel has in the picture.
+      const seen = (gz && sp.actors.some((a) => a.characterId === gz) ? gz : undefined) ?? sh.spec.visibleIds.find((id) => id !== pov && sp.actors.some((a) => a.characterId === id));
+      const target = seen ? sp.actors.find((a) => a.characterId === seen)?.position : undefined;
+      const f = target ? norm(sub(target, P)) : facingOf(sp, pov, line) ?? (base ? norm(sub(base.lookAt, base.position)) : { x: 0, y: 1 });
+      const look = target ?? add(P, mul(f, 3));
+      const v = verticalFor(text, sh.spec.emotion);
+      const lying = v && v.tiltDeg <= -85 && /\b(?:lie|lies|lying|lay|on\s+(?:his|her|their)\s+back)\b/i.test(text);
+      const camera: PlanCamera = {
+        id: `${sh.code}-pov`, name: `${name(pov)}'s view`, preset: target ? "single-cu" : "wide",
+        position: { x: +(P.x + f.x * 0.15).toFixed(2), y: +(P.y + f.y * 0.15).toFixed(2) }, lookAt: { x: +look.x.toFixed(2), y: +look.y.toFixed(2) },
+        povId: pov,
+        ...(lying ? { heightM: 0.6, tiltDeg: 85 } : v && v.tiltDeg !== 0 ? { tiltDeg: v.tiltDeg < 0 ? -35 : 25 } : {}),
+      };
+      options = [{ camera, kind: `${name(pov)}'s point of view`, score: (options[0]?.score ?? 0) + 1, reasons: [`R-NAMED: point of view, named in the panel: we see what ${name(pov)} sees, from their eyes; ${name(pov)} is not in the picture`] }, ...options];
+    }
+  }
+  // Profile: from the side, at right angles to the way they face, on the side already chosen.
+  if (n.framing === "profile" && S && subj) {
+    const f = facingOf(sp, subj, line) ?? (base ? norm(sub(S, base.position)) : { x: 0, y: 1 });
+    let side = { x: -f.y, y: f.x };
+    if (base && (side.x * (base.position.x - S.x) + side.y * (base.position.y - S.y)) < 0) side = { x: -side.x, y: -side.y };
+    const dist = n.size ? Math.min(4, 0.8 + SHOT_SIZES[n.size].frameHeightM * 1.4) : 2.2;
+    const camera: PlanCamera = { id: `${sh.code}-profile`, name: `Profile on ${name(subj)}`, preset: "single-cu", position: { x: +(S.x + side.x * dist).toFixed(2), y: +(S.y + side.y * dist).toFixed(2) }, lookAt: S };
+    options = [{ camera, kind: `Profile on ${name(subj)}`, score: (options[0]?.score ?? 0) + 1, reasons: [`R-NAMED: profile shot, named in the panel: from the side, at right angles to ${name(subj)}`] }, ...options];
+  }
+  // Two-shot: side-on to the two of them, both filling the frame, on the side already chosen.
+  if (n.framing === "two-shot") {
+    const pair = sh.spec.visibleIds.length === 2 ? sh.spec.visibleIds : subj ? [subj, ...sp.actors.filter((a) => a.characterId !== subj && S).sort((a, b) => Math.hypot(a.position.x - S!.x, a.position.y - S!.y) - Math.hypot(b.position.x - S!.x, b.position.y - S!.y)).map((a) => a.characterId).slice(0, 1)] : [];
+    const A = sp.actors.find((a) => a.characterId === pair[0])?.position, B = sp.actors.find((a) => a.characterId === pair[1])?.position;
+    if (A && B) {
+      const M = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
+      const sep = Math.hypot(B.x - A.x, B.y - A.y);
+      const u = norm(sub(B, A));
+      const dist = Math.max(2, sep * 1.5);
+      const sideOfBase = base ? Math.sign(-u.y * (base.position.x - M.x) + u.x * (base.position.y - M.y)) || 1 : 1;
+      // Square on to the pair first; if someone else would be in the picture, swing round
+      // (up to 70°) until they are out of it, as a crew would cheat the angle.
+      const make = (sign: number, offDeg: number): PlanCamera => {
+        const t = (offDeg * Math.PI) / 180;
+        const p0 = { x: -u.y * sign, y: u.x * sign };
+        const dir = { x: p0.x * Math.cos(t) - p0.y * Math.sin(t), y: p0.x * Math.sin(t) + p0.y * Math.cos(t) };
+        const right = { x: -dir.y, y: dir.x };
+        const half = Math.abs((B.x - A.x) * right.x + (B.y - A.y) * right.y) / 2;
+        const fovDeg = Math.round(Math.min(80, (2 * Math.atan((half + 0.4) / dist) * 180) / Math.PI));
+        return { id: `${sh.code}-two`, name: `Two-shot on ${name(pair[0])} and ${name(pair[1])}`, preset: "two-shot", fovDeg, lookAt: { x: +M.x.toFixed(2), y: +M.y.toFixed(2) }, position: { x: +(M.x + dir.x * dist).toFixed(2), y: +(M.y + dir.y * dist).toFixed(2) } };
+      };
+      const seen = (c: PlanCamera) => readCamera(sp, c).actors.filter((a) => a.inView);
+      const tries = [sideOfBase, -sideOfBase].flatMap((sg) => [0, 15, -15, 30, -30, 45, -45, 60, -60, 70, -70].map((o) => ({ sg, o, c: make(sg, o) })))
+        .filter((x) => pair.every((id) => seen(x.c).some((a) => a.characterId === id)))
+        .map((x) => ({ ...x, cost: seen(x.c).filter((a) => !pair.includes(a.characterId)).length * 10 + Math.abs(x.o) / 15 + (x.sg === sideOfBase ? 0 : 3) }))
+        .sort((a, b) => a.cost - b.cost);
+      const cams = tries.length ? [tries[0].c] : [make(sideOfBase, 0)];
+      options = [{ camera: cams[0], kind: `Two-shot on ${name(pair[0])} and ${name(pair[1])}`, score: (options[0]?.score ?? 0) + 1, reasons: [`R-NAMED: two-shot, named in the panel: ${name(pair[0])} and ${name(pair[1])} side by side in the frame`] }, ...options];
+    }
+  }
+  // Framings that match an existing option: those go first.
+  if (!pov && n.framing !== "profile" && n.framing !== "two-shot") {
+    const want = presetsFor(n);
+    const count = n.framing === "three-shot" ? 3 : 0;
+    const rank = (o: CameraOption) => {
+      if (count) return Math.abs(readCamera(sp, o.camera).actors.filter((a) => a.inView).length - count);
+      const k = want.indexOf(o.camera.preset);
+      return k < 0 ? want.length : k;
+    };
+    if (count || want.length) options = options.map((o, k) => ({ o, k, r: rank(o) })).sort((a, b) => a.r - b.r || a.k - b.k).map((x) => x.o);
+  }
+  // A named size sets the lens so the subject fills the frame that much (the guide's longer
+  // lens for a close-up, wider for a wide shot).
+  if (n.size && S) {
+    const aspect = plan.aspect === "9:16" ? 9 / 16 : 16 / 9;
+    options = options.map((o) => {
+      if (o.camera.povId) return o;
+      const dist = Math.hypot(S.x - o.camera.position.x, S.y - o.camera.position.y);
+      const fovDeg = n.size === "ws" ? Math.max(o.camera.fovDeg ?? PRESET_FOV[o.camera.preset], 70) : fovForSize(n.size!, dist, aspect);
+      return { ...o, camera: { ...o.camera, size: n.size, fovDeg }, reasons: [...o.reasons, `R-NAMED: ${SHOT_SIZES[n.size!].label.toLowerCase()}, named in the panel: lens set to frame it from ${dist.toFixed(1)} m`] };
+    });
+  }
+  return { ...d, options };
 }
 
 export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (id: string) => string, genre: Genre = "neutral"): SceneDesign {
@@ -584,14 +703,18 @@ export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (i
   const best = !line ? { side: 1, ...a } : a.total + 2 * open >= b.total ? { side: 1, ...a } : { side: -1, ...b };
   // Up and down (D25): a moment about looking down or up gets a high or low camera, on whichever
   // position and direction was chosen. Said in the reasons, so it shows on the camera.
-  const designs = best.designs.map((d) => {
-    const sh = shots.find((x) => x.id === d.shotId);
-    const v = verticalFor(`${sh?.description ?? ""} ${sh?.spec.actions ?? ""}`);
-    if (!v || !sh) return d;
+  const designs = best.designs.map((d0) => {
+    const sh = shots.find((x) => x.id === d0.shotId);
+    if (!sh) return d0;
+    // Named shots first (D27), then height, tilt and Dutch roll (D25-D27). A point of view
+    // keeps the eyes' own height.
+    const d = namedShotDesign(d0, plan, sh, line, name);
+    const v = verticalFor(`${sh.description ?? ""} ${sh.spec.actions ?? ""}`, sh.spec.emotion);
+    if (!v) return d;
     const sp = planForShot(plan, sh.spec);
     const subj = mainSubjectId(sh.spec);
     const S = sp.actors.find((a) => a.characterId === subj)?.position;
-    return { ...d, options: d.options.map((o) => ({ ...o, camera: verticalCamera(o.camera, v, S), reasons: [...o.reasons, `R-VERTICAL: ${v.why}`] })) };
+    return { ...d, options: d.options.map((o) => o.camera.povId ? o : ({ ...o, camera: verticalCamera(o.camera, v, S), reasons: [...o.reasons, `R-VERTICAL: ${v.why}`] })) };
   });
   return { side: best.side, lineOfAction: line, shots: designs, multiShot: groupMultiShot(shots) };
 }
@@ -608,14 +731,14 @@ export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (i
  * positions for anyone moving (D20); 6 = movement marks worked out afresh, props seen across
  * their real extent (D21b); 7 = high and low cameras for looking down or up (D25).
  */
-export const LAYOUT_RULES = 8;
+export const LAYOUT_RULES = 9;
 
 export function applyDesign(plan: GeometryPlanData, choices: { shotId: string; shotCode: string; option: CameraOption }[], line?: [string, string]) {
   const cameras: PlanCamera[] = [];
   const assign: Record<string, string> = {};
   for (const ch of choices) {
     const c = ch.option.camera;
-    const same = cameras.find((x) => x.preset === c.preset && x.fovDeg === c.fovDeg && x.heightM === c.heightM && x.tiltDeg === c.tiltDeg && Math.hypot(x.position.x - c.position.x, x.position.y - c.position.y) < 0.3 && Math.hypot(x.lookAt.x - c.lookAt.x, x.lookAt.y - c.lookAt.y) < 0.5);
+    const same = cameras.find((x) => x.preset === c.preset && x.fovDeg === c.fovDeg && x.heightM === c.heightM && x.tiltDeg === c.tiltDeg && x.rollDeg === c.rollDeg && x.povId === c.povId && x.size === c.size && Math.hypot(x.position.x - c.position.x, x.position.y - c.position.y) < 0.3 && Math.hypot(x.lookAt.x - c.lookAt.x, x.lookAt.y - c.lookAt.y) < 0.5);
     if (same) { assign[ch.shotId] = same.id; continue; }
     const id = `cam-${cameras.length + 1}`;
     cameras.push({ ...c, id, name: `${ch.option.kind.split(" (")[0]} (${ch.shotCode.split("_").pop()})` });

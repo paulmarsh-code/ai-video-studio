@@ -10,8 +10,9 @@ import { Arrow, Circle, Group, Layer, Line, Rect, Stage, Text, Wedge } from "rea
 import { savePlanAction, addPlanToLibraryAction } from "@/app/actions";
 import { checkLineOfAction, describeFrame, PRESET_FOV, readCamera } from "@/lib/domain/geometry";
 import { planImpact, type ShotRef } from "@/lib/domain/impact";
-import type { CameraPreset, CastMember, GeometryPlanData, Point } from "@/lib/domain/types";
+import type { CameraPreset, CastMember, GeometryPlanData, PlanCamera, Point } from "@/lib/domain/types";
 import { CameraView, type RingInfo } from "./CameraView";
+import { fovForSize, lensText, SHOT_SIZES, type ShotSize } from "@/lib/domain/shotLanguage";
 import { propKind } from "@/lib/domain/story";
 import { FindingList } from "./FindingList";
 import { ActionButton } from "./ActionButton";
@@ -57,7 +58,7 @@ export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; 
     setPlan((pl) => ({ ...pl, actors: pl.actors.map((a) => (a.characterId === id ? { ...a, position: p } : a)) }));
   const moveFurniture = (id: string, p: Point) =>
     setPlan((pl) => ({ ...pl, furniture: (pl.furniture ?? []).map((f) => (f.id === id ? { ...f, position: p } : f)) }));
-  const moveCam = (id: string, patch: Partial<{ position: Point; lookAt: Point; preset: CameraPreset; overrideReason?: string; fovDeg?: number; heightM?: number; tiltDeg?: number }>) =>
+  const moveCam = (id: string, patch: Partial<Omit<PlanCamera, "id" | "name">>) =>
     setPlan((pl) => ({ ...pl, cameras: pl.cameras.map((c) => (c.id === id ? { ...c, ...patch } : c)) }));
 
   // Line of action endpoints.
@@ -205,9 +206,10 @@ export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; 
                 </label>
                 {/* Up and down (D25): height and tilt, with quick choices. */}
                 <div className="mt-2 text-xs" data-testid="camera-vertical">
-                  <p className="mb-1">Height and angle: {(cam.heightM ?? 1.6).toFixed(1)} m up, {cam.tiltDeg ? `${Math.abs(cam.tiltDeg)}° ${cam.tiltDeg < 0 ? "down" : "up"}` : "level"}</p>
+                  <p className="mb-1">Height and angle: {(cam.heightM ?? 1.6).toFixed(1)} m up, {cam.tiltDeg ? `${Math.abs(cam.tiltDeg)}° ${cam.tiltDeg < 0 ? "down" : "up"}` : "level"}{cam.rollDeg ? `, Dutch ${cam.rollDeg}°` : ""}{cam.povId ? ` · ${name(cam.povId)}'s point of view` : ""}</p>
                   <div className="mb-1 flex flex-wrap gap-1">
-                    {([["Eye level", 1.6, 0], ["High, looking down", 2.8, -35], ["Low, looking up", 0.6, 25], ["Overhead", 4, -80], ["Ground level", 0.2, 10]] as const).map(([label, h, t]) => (
+                    {/* The standard angles and camera heights (D27). */}
+                    {([["Eye level", 1.6, 0], ["Shoulder level", 1.45, 0], ["Hip level", 1.0, 0], ["Knee level", 0.5, 0], ["Ground level", 0.15, 0], ["High, looking down", 2.8, -35], ["Low, looking up", 0.6, 25], ["Bird's-eye", 6, -90], ["Worm's-eye", 0.1, 55]] as const).map(([label, h, t]) => (
                       <button key={label} type="button" className={`rounded border px-2 py-0.5 ${(cam.heightM ?? 1.6) === h && (cam.tiltDeg ?? 0) === t ? "border-blue-700 bg-blue-50" : "border-neutral-300"}`}
                         onClick={() => { pushHistory(); moveCam(cam.id, { heightM: h === 1.6 ? undefined : h, tiltDeg: t === 0 ? undefined : t }); }} data-testid={`cam-vert-${label.split(",")[0].toLowerCase().replace(/\s+/g, "-")}`}>{label}</button>
                     ))}
@@ -216,6 +218,20 @@ export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; 
                     onMouseDown={pushHistory} onChange={(e) => moveCam(cam.id, { heightM: Number(e.target.value) })} /></label>
                   <label className="block">Tilt <input type="range" min={-90} max={60} step={1} value={cam.tiltDeg ?? 0} aria-label="Camera tilt" className="ml-2 align-middle"
                     onMouseDown={pushHistory} onChange={(e) => moveCam(cam.id, { tiltDeg: Number(e.target.value) })} /></label>
+                  <label className="block">Dutch angle <input type="range" min={-45} max={45} step={1} value={cam.rollDeg ?? 0} aria-label="Dutch angle" className="ml-2 align-middle" data-testid="cam-roll"
+                    onMouseDown={pushHistory} onChange={(e) => moveCam(cam.id, { rollDeg: Number(e.target.value) || undefined })} /> <span className="text-neutral-500">tilts the frame for unease, usually 15–45°</span></label>
+                  <label className="block">Shot size <select className="ml-2 rounded border border-neutral-300 px-1 py-0.5" value={cam.size ?? ""} aria-label="Shot size" data-testid="cam-size"
+                    onChange={(e) => {
+                      pushHistory();
+                      // Choosing a size sets the lens to frame it from where the camera stands (D27).
+                      const size = (e.target.value || undefined) as ShotSize | undefined;
+                      const d = Math.hypot(cam.lookAt.x - cam.position.x, cam.lookAt.y - cam.position.y);
+                      moveCam(cam.id, size ? { size, fovDeg: fovForSize(size, d, plan.aspect === "9:16" ? 9 / 16 : 16 / 9) } : { size: undefined });
+                    }}>
+                    <option value="">From the camera type</option>
+                    {(Object.keys(SHOT_SIZES) as ShotSize[]).map((k) => <option key={k} value={k}>{SHOT_SIZES[k].label}</option>)}
+                  </select></label>
+                  <p className="text-neutral-500">Lens: {lensText(cam.fovDeg ?? PRESET_FOV[cam.preset])}.</p>
                 </div>
               </div>
               <div>

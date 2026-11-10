@@ -2,8 +2,9 @@
 // It never rewrites approved dialogue and never names characters excluded from the shot.
 
 import { gazeFor, gazeLine, shotEffect } from "./gaze";
-import { bodyEffect } from "./vertical";
-import { describeFrame, planForShot, presetText, readCamera } from "./geometry";
+import { bodyEffect, verticalOf } from "./vertical";
+import { MOVE_TEXT, namedShot, shotLines } from "./shotLanguage";
+import { describeFrame, horizontalFov, planForShot, presetText, readCamera } from "./geometry";
 import { gestureDetail } from "./gestures";
 import { GENRE_PROFILES, type Genre } from "./genre";
 import { capitalise, joinNames, stripQuotes } from "./text";
@@ -67,7 +68,9 @@ export function composeKlingPrompt(
   genre: Genre = "neutral",
 ): ComposedPrompt {
   const byId = (id: string) => cast.find((c) => c.id === id);
-  const visible = shot.visibleIds.map(byId).filter((c): c is CastMember => !!c);
+  const povCam = plan?.cameras.find((c) => c.id === shot.cameraId);
+  // A point of view (D27) is someone's eyes: they are not in their own clip.
+  const visible = shot.visibleIds.filter((id) => id !== povCam?.povId).map(byId).filter((c): c is CastMember => !!c);
   const speaker = shot.speakerId ? byId(shot.speakerId) : undefined;
   const s: Record<string, string> = {};
   const subjectId = mainSubjectId(shot);
@@ -137,7 +140,11 @@ export function composeKlingPrompt(
       const subj = subject?.name ?? "the subject";
       s.background = `Background behind ${subj}: the ${reading.backgroundView}.`;
     }
-    s.camera = presetText(cam).replace("static camera", GENRE_PROFILES[genre].movement);
+    // A camera move named in the panel (D27) replaces the genre's usual move.
+    const named = namedShot(shot.actions ?? "");
+    const move = named.move ? MOVE_TEXT[named.move] : GENRE_PROFILES[genre].movement;
+    s.camera = presetText(cam).includes("static camera") ? presetText(cam).replace("static camera", move) : `${presetText(cam).replace(/\.$/, "")}, ${move}.`;
+    s.camera += ` ${shotLines({ cam, kind: verticalOf(cam).kind, fovDeg: horizontalFov(plan, cam), text: shot.actions ?? "", name: (id) => byId(id)?.name ?? id }).join(" ")}`;
   }
 
   // 4. Character and voice lock — word for word.
