@@ -3,7 +3,7 @@
 
 import sharp from "sharp";
 import type { DB } from "@/db/client";
-import { readCamera } from "./domain/geometry";
+import { planForShot, readCamera } from "./domain/geometry";
 import { layoutSketchSvg } from "./domain/layoutSketch";
 import { mainSubjectId } from "./domain/composer";
 import { crowdLevelOf } from "./domain/story";
@@ -13,7 +13,8 @@ export async function renderLayoutForShot(db: DB, shotId: string): Promise<Buffe
   const shot = repo.getShot(db, shotId);
   if (!shot?.spec.cameraId) return null;
   const scene = repo.getScene(db, shot.sceneId);
-  const plan = scene?.plan?.data;
+  const fullPlan = scene?.plan?.data;
+  const plan = fullPlan ? planForShot(fullPlan, shot.spec) : undefined; // on a mark, they stand there (D19b)
   const cam = plan?.cameras.find((c) => c.id === shot.spec.cameraId);
   if (!scene || !plan || !cam) return null;
   const project = repo.getProject(db, scene.scene.projectId);

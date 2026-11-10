@@ -1,7 +1,7 @@
 // Prompt Composer (Stage 7) — the proven Kling web-app template, built from structured data.
 // It never rewrites approved dialogue and never names characters excluded from the shot.
 
-import { describeFrame, PRESET_TEXT, readCamera } from "./geometry";
+import { describeFrame, planForShot, PRESET_TEXT, readCamera } from "./geometry";
 import { gestureDetail } from "./gestures";
 import { GENRE_PROFILES, type Genre } from "./genre";
 import { capitalise, joinNames, stripQuotes } from "./text";
@@ -87,7 +87,7 @@ export function composeKlingPrompt(
   // 3 + 7. Positions, distance and background from the plan.
   const cam = plan?.cameras.find((c) => c.id === shot.cameraId);
   if (plan && cam) {
-    const reading = readCamera(plan, cam);
+    const reading = readCamera(planForShot(plan, shot), cam);
     // Others at the same spot whom this camera would see (D18d): partly in frame, silent.
     const closeUp = cam.preset === "single-cu" || cam.preset === "insert";
     const edgeIds = closeUp ? [] : reading.actors

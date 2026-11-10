@@ -29,6 +29,11 @@ export type CameraPreset =
 export interface PlanActor {
   characterId: string;
   position: Point;
+  /**
+   * Other places this person stands in some panels (D19b), e.g. where they arrive from.
+   * A shot picks one with ShotSpec.at; otherwise the person is at `position`.
+   */
+  marks?: { id: string; label: string; position: Point }[];
 }
 
 export interface PlanCamera {
@@ -111,6 +116,8 @@ export interface ShotSpec {
   spot?: string;
   /** Background people, e.g. "about 30 guests mingling"; empty means no one else. */
   crowd?: string;
+  /** Per-shot marks (D19b): character id → mark id, e.g. { jade: "arriving" }. */
+  at?: Record<string, string>;
   /** Key props of the scene (D19), identical in every picture and clip. */
   props?: { name: string; detail: string }[];
 }

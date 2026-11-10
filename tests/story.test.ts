@@ -223,7 +223,7 @@ describe("Projects, scenes and saving the storyboard", () => {
     // Saving again replaces the draft panels (no approvals yet) but keeps the floor plan.
     studio.saveStoryboard(db, sceneId, { story: "shorter", targetSec: 30, panels: panels.slice(0, 2) });
     expect(repo.getScene(db, sceneId)!.panels).toHaveLength(2);
-    expect(repo.getScene(db, sceneId)!.plan!.version).toBe(1);
+    expect(repo.getScene(db, sceneId)!.plan!.version).toBe(2); // first plan, then its arrival marks (D19b)
     // A storyboard that breaks a guide rail is refused.
     expect(() => studio.saveStoryboard(db, sceneId, { story: "x", targetSec: 30, panels: [{ ...panels[1], speakerId: undefined }] })).toThrow(/Panel 1: Choose who says this line/);
   });
@@ -374,7 +374,7 @@ describe("Group scenes (D18d): blocking, close-ups and people at the edge of fra
     const r = studio.saveSceneStaging(db, sid, { spot: "around a tall table", crowd: "about 30 guests" });
     expect(r.replanned).toBe(true);
     const s = repo.getScene(db, sid)!;
-    expect(s.plan!.version).toBe(2);
+    expect(s.plan!.version).toBe(4); // story plan + marks, then rebuilt + marks (D19b)
     expect(s.plan!.data.furniture![0].name).toBe("tall table");
     expect(s.shots.every((x) => x.spec.excludedIds.length === 0 && !x.spec.cameraId && x.spec.crowd === "about 30 guests")).toBe(true);
     // A plan the user edited is kept.
@@ -499,11 +499,12 @@ describe("Fixes from Paul's first locked run (D19a)", () => {
     const parsed = parseStoryReply(`SCENE\nSPOT: standing around the cocktail table\nPROP: cocktail table - round, chest-high\nPROP: backdrop - purple banner, 3 m wide\nOTHER PEOPLE: busy - 40 guests\n${REPLY}`, CAST);
     studio.saveStoryboard(db, sid, { story: "x", targetSec: 30, panels: parsed.panels, staging: parsed.staging });
     studio.approvePositions(db, sid);
-    // Props can't drift from the plan once positions are approved.
+    // Once positions are approved the plan fixes how many props there are; their look can be corrected (D19b).
     studio.saveSceneStaging(db, sid, { ...parsed.staging, props: [{ name: "neon sign", detail: "pink" }] });
     const sc = repo.getScene(db, sid)!;
-    expect((sc.scene.staging as { props: { name: string }[] }).props.map((p) => p.name)).toEqual(["cocktail table", "backdrop"]);
-    expect(sc.shots[0].spec.props!.map((p) => p.name)).toEqual(["cocktail table", "backdrop"]);
+    expect((sc.scene.staging as { props: { name: string }[] }).props.map((p) => p.name)).toEqual(["neon sign", "backdrop"]);
+    expect(sc.shots[0].spec.props!.map((p) => p.name)).toEqual(["neon sign", "backdrop"]);
+    expect(sc.plan!.data.furniture).toHaveLength(2);
     // Cameras v(n), a picture drawn on it, approved, then undone.
     const plan = sc.plan!.data;
     repo.savePlan(db, sid, { ...plan, cameras: [{ id: "c1", name: "c", preset: "wide", position: { x: 0.25, y: 0.5 }, lookAt: { x: 0.25, y: 5 } }] }, "Cameras chosen by the app");
@@ -532,5 +533,88 @@ describe("Fixes from Paul's first locked run (D19a)", () => {
     const t = panelPrompt({ description: "x", shot, cast, profiles: {}, plan, venueName: "v" }).text;
     expect(t).toContain("Key props, identical in every picture of this scene: cocktail table (chest-high).");
     expect(t).not.toContain("neon sign");
+  });
+});
+
+describe("Arrivals, exits and how props look (D19b)", () => {
+  const ids = CAST.map((c) => c.id);
+  const panels = parseStoryReply(REPLY, CAST).panels;
+  it("gives an arriving person a mark a few metres out, used only for that panel", async () => {
+    const { addMovementMarks } = await import("../src/lib/domain/story");
+    const { planForShot } = await import("../src/lib/domain/geometry");
+    const plan = defaultPlan(ids, panels, [], { spot: "around the table" });
+    const { plan: marked, at } = addMovementMarks(plan, [
+      { action: "Jade enters the busy launch, scanning the room", subjectId: "jade" },
+      { action: "Jade approaches the group as she reaches them", subjectId: "jade" },
+      { action: "Chase shrugs", subjectId: "chase" },
+    ]);
+    expect(at).toEqual([{ jade: "arriving" }, { jade: "approaching" }, undefined]);
+    const jade = marked.actors.find((a) => a.characterId === "jade")!;
+    const arriving = jade.marks!.find((m) => m.id === "arriving")!.position;
+    expect(Math.hypot(arriving.x - jade.position.x, arriving.y - jade.position.y)).toBeGreaterThan(2.5); // a few metres out, kept inside the room
+    expect(planForShot(marked, { at: { jade: "arriving" } }).actors.find((a) => a.characterId === "jade")!.position).toEqual(arriving);
+    expect(planForShot(marked, {}).actors.find((a) => a.characterId === "jade")!.position).toEqual(jade.position);
+  });
+  it("tells the picture where the arriving person is, and puts the background across the room", async () => {
+    const { addMovementMarks } = await import("../src/lib/domain/story");
+    const { panelPrompt } = await import("../src/lib/domain/imagePrompts");
+    const cast = CAST.map((c) => ({ id: c.id, name: c.name, pronoun: "she" as const, voiceLock: "" }));
+    const { plan } = addMovementMarks(defaultPlan(ids, panels, [{ name: "bar", directionDeg: 0 }], { spot: "around the table" }), [{ action: "Jade enters", subjectId: "jade" }]);
+    plan.cameras = [{ id: "w", name: "w", preset: "wide", position: { x: 0.25, y: 0.5 }, lookAt: { x: 0.25, y: 5 } }];
+    const shot = { ...shotSpecFor(panels[0], { code: "P1", venueName: "v", castIds: ids, staging: { spot: "around the table" } }), cameraId: "w", at: { jade: "arriving" } };
+    const t = panelPrompt({ description: "Jade enters", shot, cast, profiles: {}, plan, venueName: "v" }).text;
+    expect(t).toContain("Jade is arriving, a few metres from the group, not yet with them.");
+    expect(t).toMatch(/across the room several metres away: the bar\. Nothing stands right behind them\./);
+    expect(t).toContain("with nothing extra on or around it");
+  });
+  it("someone arriving comes in from the camera's side, and every panel of the arrival gets a camera in the room", async () => {
+    const { addMovementMarks } = await import("../src/lib/domain/story");
+    const { designScene } = await import("../src/lib/domain/director");
+    const { cameraPlacementProblem } = await import("../src/lib/domain/geometry");
+    // Paul's layout: Jade and Chase either side of the table, Marcus and Nina beyond it.
+    const base = { bounds: { minX: -4.5, maxX: 4.5, minY: 0, maxY: 10 }, aspect: "9:16" as const, views: [], cameras: [],
+      furniture: [{ id: "spot", name: "cocktail table", position: { x: 0.25, y: 4.85 }, radiusM: 0.35, heightM: 1.1 }],
+      actors: [{ characterId: "jade", position: { x: 1.25, y: 4.85 } }, { characterId: "chase", position: { x: -0.75, y: 4.85 } }, { characterId: "marcus", position: { x: -0.33, y: 5.21 } }, { characterId: "nina", position: { x: 0.17, y: 5.43 } }] };
+    const story = [
+      { action: "Jade enters the busy launch party, scanning the room", subjectId: "jade" },
+      { action: "She walks through the crowd and spots Chase with Marcus and Nina", subjectId: "jade" },
+      { action: "Jade asks Chase what he thinks", subjectId: "jade" },
+      { action: "Chase shrugs it off", subjectId: "chase" },
+    ];
+    const { plan, at } = addMovementMarks(base, story);
+    const arriving = plan.actors.find((a) => a.characterId === "jade")!.marks!.find((m) => m.id === "arriving")!.position;
+    expect(arriving.y).toBeLessThan(4.85 - 1); // Marcus and Nina are beyond the line, so she arrives from the near side
+    expect(arriving.x).toBeLessThan(4.5 - 1); // with room behind her for a camera
+    const all = ["jade", "chase", "marcus", "nina"];
+    const S = (i: number, o: object) => ({ id: `s${i}`, code: `P${i}`, description: story[i].action, spec: { code: `P${i}`, venueName: "v", sceneContext: "", presentIds: all, visibleIds: all, excludedIds: [], actions: story[i].action, durationSec: 4, audioMode: "off", at: at[i], ...o } as never });
+    const d = designScene(plan, [S(0, { subjectId: "jade", visibleIds: ["jade"] }), S(1, { subjectId: "jade" }), S(2, { speakerId: "jade", dialogue: "So, what do you think of my promotion?", visibleIds: ["jade", "chase"] }), S(3, { speakerId: "chase", dialogue: "Bit of luck, wasn't it?" })], (id) => id);
+    for (const s of d.shots) {
+      expect(s.options.length, s.shotCode).toBeGreaterThan(0);
+      expect(cameraPlacementProblem(plan, s.options[0].camera), s.shotCode).toBeFalsy();
+    }
+    expect(d.shots[1].options[0].kind).toBe("Wide (master)"); // her arrival: wide, the group across the room behind her
+  });
+  it("an exit gets a wider shot even on a short angry line", async () => {
+    const { classifyMoment } = await import("../src/lib/domain/director");
+    const spec = { ...shotSpecFor({ action: "Jade, fuming, turns away to walk off", inFrame: ["jade"], speakerId: "jade", line: "Unbelievable.", emotion: "fuming", seconds: 3 }, { code: "P11", venueName: "v", castIds: ids }) };
+    expect(classifyMoment({ id: "s", code: "P11", spec, description: "Jade, fuming, turns away to walk off" }, 10)).toBe("exit");
+  });
+  it("with positions locked, a prop's look can still be corrected; its place can't", async () => {
+    const { openDb } = await import("../src/db/client");
+    const studio = await import("../src/lib/studioRepo");
+    const repo = await import("../src/lib/repo");
+    const db = await openDb(":memory:");
+    const pid = studio.createProject(db, { name: "Look", format: "Advert", audience: "", outline: "", parts: 1, partSec: 30, aspect: "9:16", style: "", genre: "comedy" });
+    for (const c of CAST) studio.addCharacter(db, pid, { name: c.name, pronoun: "they", role: c.role });
+    const sid = studio.addScene(db, pid, { title: "S", venueId: studio.addVenue(db, pid, "Bar"), castIds: ids });
+    const parsed = parseStoryReply(`SCENE\nSPOT: standing around the cocktail table\nPROP: cocktail table - round, chest-high, matte black top\n${REPLY}`, CAST);
+    studio.saveStoryboard(db, sid, { story: "x", targetSec: 30, panels: parsed.panels, staging: parsed.staging });
+    const v = studio.approvePositions(db, sid);
+    studio.saveSceneStaging(db, sid, { ...parsed.staging, props: [{ name: "cocktail table", detail: "round, chest-high, white floor-length cloth, three champagne flutes on top" }, { name: "extra", detail: "ignored" }] });
+    const s = repo.getScene(db, sid)!;
+    expect(s.plan!.version).toBe(v);
+    expect(s.plan!.data.furniture).toHaveLength(1);
+    expect(s.plan!.data.furniture![0].detail).toContain("white floor-length cloth");
+    expect(s.shots[0].spec.props![0].detail).toContain("three champagne flutes");
   });
 });

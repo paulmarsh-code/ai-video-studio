@@ -68,9 +68,36 @@ export function asStaging(v: unknown): SceneStaging {
  * Height in metres from words like "chest-high", "110 cm tall" or "coffee table" (D19), so a
  * prop is drawn at the same height in every camera view.
  */
+/** What shape a prop is (D19b): drawn and placed by kind. */
+export type PropKind = "table" | "flat" | "column";
+export function propKind(text: string, name?: string): PropKind {
+  // The name decides first: a "cocktail table with a pedestal base" is still a table.
+  if (name !== undefined) {
+    const byName = /\b(table|counter|bar|desk|island|bench|sofa|couch)\b/i.test(name) ? "table" : undefined;
+    if (byName) return byName;
+    const fromName = propKind(name);
+    if (fromName !== "table") return fromName;
+  }
+  if (/\b(backdrop|banner|sign|signage|screen|wall|poster|neon|logo|billboard|curtain|board)\b/i.test(text)) return "flat";
+  if (/\b(pedestal|plinth|podium|lectern|column|display stand|display case|statue|sculpture|lamp|tree|plant)\b/i.test(text)) return "column";
+  return "table";
+}
+
+/** Width in metres from words like "3 m wide" or "180 cm wide". */
+export function propWidth(text: string, kind: PropKind): number {
+  const m = text.match(/(\d+(?:\.\d+)?)\s?m\s*(?:wide|across|long)/i) ?? text.match(/(?:width|wide)[^\d]{0,12}(\d+(?:\.\d+)?)\s?m\b/i);
+  if (m) return Math.min(8, Number(m[1]));
+  const cm = text.match(/(\d{2,3})\s?cm\s*(?:wide|across|long)/i);
+  if (cm) return Number(cm[1]) / 100;
+  return kind === "flat" ? 2 : kind === "column" ? 0.5 : 0.7;
+}
+
 export function propHeight(text: string): number {
   const cm = text.match(/(\d{2,3})\s?cm\s*(tall|high|height)/i) ?? text.match(/(?:height|tall|high)[^\d]{0,12}(\d{2,3})\s?cm/i);
   if (cm) return Math.min(2.5, Number(cm[1]) / 100);
+  const m = text.match(/(\d(?:\.\d+)?)\s?m\s*(?:tall|high)/i) ?? text.match(/\d+(?:\.\d+)?\s?m\s*(?:wide|across)?\s*[x×]\s*(\d(?:\.\d+)?)\s?m\s*(?:tall|high)/i);
+  if (m) return Math.min(4, Number(m[1]));
+  if (propKind(text) === "flat") return 2.2;
   if (/\b(chest[- ]high|bar[- ]height|poseur|cocktail|high[- ]top|tall|high)\b/i.test(text)) return 1.1;
   if (/\bwaist[- ]high|counter\b/i.test(text)) return 0.95;
   if (/\b(coffee|low|side)\s+table\b|\bottoman\b/i.test(text)) return 0.45;
@@ -183,9 +210,15 @@ function planProps(staging: SceneStaging | undefined, group: boolean, C: { x: nu
   let k = 0;
   return props.map((p, i) => {
     const centred = p === centre;
+    const text = `${p.name} ${p.detail}`;
+    const kind = propKind(text, p.name);
+    // Flat things (backdrops, signs, screens) stand back towards the room's edge; others nearer.
+    const dist = kind === "flat" ? 4.2 : 2.4;
+    const ang = far[k % far.length];
     // With one person the prop stands beside them, not under their feet.
-    const pos = centred ? (group ? C : { x: 0.65, y: 5 }) : { x: +(C.x + 2.4 * Math.cos((far[k % far.length] * Math.PI) / 180)).toFixed(2), y: +(C.y + 2.4 * Math.sin((far[k++ % far.length] * Math.PI) / 180)).toFixed(2) };
-    return { id: i === 0 && centred ? "spot" : `prop-${i + 1}`, name: p.name, detail: p.detail, position: pos, radiusM: centred ? 0.35 : 0.3, heightM: propHeight(`${p.name} ${p.detail}`) };
+    const pos = centred ? (group ? C : { x: 0.65, y: 5 }) : { x: +(C.x + dist * Math.cos((ang * Math.PI) / 180)).toFixed(2), y: +(C.y + dist * Math.sin((far[k++ % far.length] * Math.PI) / 180)).toFixed(2) };
+    const width = propWidth(text, kind);
+    return { id: i === 0 && centred ? "spot" : `prop-${i + 1}`, name: p.name, detail: p.detail, position: pos, radiusM: centred ? 0.35 : +(width / 2).toFixed(2), heightM: propHeight(text) };
   });
 }
 
@@ -412,4 +445,61 @@ export function defaultPlan(castIds: string[], panels: DraftPanel[], views: Plan
     lineOfAction: line,
     aspect,
   };
+}
+
+// ---------- Movement marks (D19b) ----------
+
+const ARRIVING = /\b(enters?|entering|walks? (in|into|through)|walking (in|into|through)|arriv(es?|ing)|comes? in|makes? (her|his|their) way (in|through))\b/i;
+const APPROACHING = /\b(approach(es|ing)?|walks? (up|over) to|heads? (over|towards?))\b/i;
+
+/**
+ * Give people a second spot for panels where they arrive (D19b): "arriving" a few metres out
+ * from the group, or "approaching" just short of it. The panel's shot is put on that mark, so
+ * the camera, the sketch, the picture and the check all show them on their way in rather than
+ * already standing with the group. Anything the user has placed is kept.
+ */
+export function addMovementMarks(plan: GeometryPlanData, panels: { action: string; subjectId?: string }[]): { plan: GeometryPlanData; at: (Record<string, string> | undefined)[] } {
+  const actors = plan.actors.map((a) => ({ ...a, marks: [...(a.marks ?? [])] }));
+  const centre = actors.length
+    ? { x: actors.reduce((s, a) => s + a.position.x, 0) / actors.length, y: actors.reduce((s, a) => s + a.position.y, 0) / actors.length }
+    : { x: 0, y: 5 };
+  const b = plan.bounds ?? { minX: -4.5, maxX: 4.5, minY: 0, maxY: 10 };
+  const clampX = (x: number) => Math.min(b.maxX - 0.3, Math.max(b.minX + 0.3, x));
+  const clampY = (y: number) => Math.min(b.maxY - 0.3, Math.max(b.minY + 0.3, y));
+  // The open side (D19b): people off the line of action stand beyond it, facing the camera, so
+  // someone arriving comes in from the camera's side of the group, where the camera can stand
+  // behind them and still be in the room.
+  const count = new Map<string, number>();
+  for (const p of panels) if (p.subjectId) count.set(p.subjectId, (count.get(p.subjectId) ?? 0) + 1);
+  const line = plan.lineOfAction ?? ([...count.entries()].sort((x, y) => y[1] - x[1]).slice(0, 2).map((e) => e[0]) as [string, string]);
+  let openDir: { x: number; y: number } | undefined;
+  const l0 = actors.find((x) => x.characterId === line?.[0])?.position, l1 = actors.find((x) => x.characterId === line?.[1])?.position;
+  const off = actors.filter((x) => !line?.includes(x.characterId));
+  if (l0 && l1 && off.length) {
+    const lx = l1.x - l0.x, ly = l1.y - l0.y, ll = Math.hypot(lx, ly) || 1;
+    const nrm = { x: -ly / ll, y: lx / ll };
+    const side = off.reduce((s, x) => s + ((x.position.x - l0.x) * nrm.x + (x.position.y - l0.y) * nrm.y), 0);
+    if (Math.abs(side) > 0.01) openDir = side > 0 ? { x: -nrm.x, y: -nrm.y } : nrm;
+  }
+  const at = panels.map((p) => {
+    const kind = ARRIVING.test(p.action) ? "arriving" : APPROACHING.test(p.action) ? "approaching" : undefined;
+    const a = kind && p.subjectId ? actors.find((x) => x.characterId === p.subjectId) : undefined;
+    if (!kind || !a) return undefined;
+    if (!a.marks.some((m) => m.id === kind)) {
+      // Outwards from the group, through the person's own place, turned towards the open side.
+      let dx = a.position.x - centre.x, dy = a.position.y - centre.y;
+      const l = Math.hypot(dx, dy) || 1;
+      dx /= l; dy /= l;
+      if (openDir) { dx += openDir.x; dy += openDir.y; }
+      const len = Math.hypot(dx, dy) || 1;
+      const dist = kind === "arriving" ? 3.2 : 1.4;
+      a.marks.push({
+        id: kind,
+        label: kind === "arriving" ? "arriving, a few metres from the group, not yet with them" : "approaching, a step or two from the group",
+        position: { x: +clampX(a.position.x + (dx / len) * dist).toFixed(2), y: +clampY(a.position.y + (dy / len) * dist).toFixed(2) },
+      });
+    }
+    return { [a.characterId]: kind };
+  });
+  return { plan: { ...plan, actors }, at };
 }

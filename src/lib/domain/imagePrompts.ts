@@ -4,7 +4,7 @@
 // rejected); images made in GPT, not Kling (better and cheaper); no text or logos.
 
 import { mainSubjectId } from "./composer";
-import { describeFrame, PRESET_TEXT, readCamera, readProps } from "./geometry";
+import { describeFrame, planForShot, PRESET_TEXT, readCamera, readProps } from "./geometry";
 import { GENRE_PROFILES, type Genre } from "./genre";
 import { gestureDetail } from "./gestures";
 import { joinNames, stripQuotes } from "./text";
@@ -122,7 +122,8 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
 
   // Read the shot's camera first: it decides who is seen from behind and which view is the background.
   const cam = shot && i.plan?.cameras.find((c) => c.id === shot.cameraId);
-  const reading = cam && i.plan ? readCamera(i.plan, cam) : undefined;
+  const shotPlan = i.plan ? planForShot(i.plan, shot) : undefined; // anyone on a mark stands there (D19b)
+  const reading = cam && shotPlan ? readCamera(shotPlan, cam) : undefined;
   // A close-up shows its subject only (D18d): anyone between the lens and the subject is out of frame.
   const closeUp = !!cam && (cam.preset === "single-cu" || cam.preset === "insert") && !!subjectId;
   const shownIds = closeUp ? [subjectId!] : (shot?.visibleIds ?? []);
@@ -157,7 +158,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   lines.push(`${(i.style ?? "photorealistic").replace(/^./, (m) => m.toUpperCase())} storyboard frame for a ${i.aspect ?? "9:16"} video, set in the ${i.venueName}.`);
   const people = attach.filter((a) => !a.label.endsWith(" view") && !a.href && a.assetId !== i.continuity?.assetId);
   if (people.length) lines.push(`Use the attached reference images for ${joinNames(people.map((a) => a.label.replace(/ (reference|back)$/, "")))}; keep their faces, hair and clothes identical.`);
-  if (bgImage) lines.push(`Use the attached ${bgView} image as the background: same place, layout and light.${shot?.crowd?.trim() ? " It shows the room empty; fill it with the background guests described below." : ""}`);
+  if (bgImage) lines.push(`Use the attached ${bgView} image as the background, seen across the room several metres behind the characters: same place, layout and light.${shot?.crowd?.trim() ? " It shows the room empty; fill it with the background guests described below." : ""}`);
   const spot = shot?.spot?.trim();
   const crowd = shot?.crowd?.trim();
   // An older approved picture may show an empty room: keep its spot and look, but add the crowd.
@@ -166,10 +167,15 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   // The floor plan's props are the approved list (D19a); the shot's copy is the fallback.
   const planProps = (i.plan?.furniture ?? []).map((f) => ({ name: f.name, detail: f.detail ?? "" }));
   const props = planProps.length ? planProps : shot?.props ?? [];
-  if (props.length) lines.push(`Key props, identical in every picture of this scene: ${props.map((p) => `${p.name}${p.detail ? ` (${stripQuotes(p.detail).replace(/[.]$/, "")})` : ""}`).join("; ")}.`);
+  if (props.length) lines.push(`Key props, identical in every picture of this scene: ${props.map((p) => `${p.name}${p.detail ? ` (${stripQuotes(p.detail).replace(/[.]$/, "")})` : ""}`).join("; ")}. Show each exactly as described, every time, with nothing extra on or around it.`);
   if (cam && i.plan) {
     const seen = readProps(i.plan, cam).filter((p) => p.inView);
     if (seen.length) lines.push(`In this picture: ${joinNames(seen.map((p) => `the ${p.name} (${p.frame === "centre" ? "centre" : p.frame.replace("frame-", "")})`))}. ${seen.length === 1 ? "It must be" : "They must be"} clearly visible.`);
+  }
+  // Someone on a mark (D19b): say where they are, so the picture doesn't put them with the group.
+  for (const [id, markId] of Object.entries(shot?.at ?? {})) {
+    const m = i.plan?.actors.find((a) => a.characterId === id)?.marks?.find((x) => x.id === markId);
+    if (m) lines.push(`${name(id)} is ${m.label}.`);
   }
   if (crowd) lines.push(`Background: ${sentence(crowd)}${layout ? " The grey figures in the layout sketch show where they stand." : ""} Background guests are out of focus, smaller than the main characters and never look at the camera; none of them look like the main characters.`);
   for (const c of visible) {
@@ -193,7 +199,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     const order = reading.actors.filter((a) => a.inView && [...shownIds, ...edgeIds].includes(a.characterId)).sort((a, b) => a.angleDeg - b.angleDeg);
     if (order.length > 1) {
       lines.push(`Exactly ${order.length} people in this picture, from left to right: ${joinNames(order.map((a) => `${name(a.characterId)}${a.characterId === fgId ? " (in the foreground, seen from behind over the shoulder)" : ""}`))}. Keep this left-to-right order; do not swap anyone.`);
-      if (reading.backgroundView && subjectId) lines.push(`Behind ${name(subjectId)}: the ${reading.backgroundView}.`);
+      if (reading.backgroundView && subjectId) lines.push(`Behind ${name(subjectId)}, across the room several metres away: the ${reading.backgroundView}. Nothing stands right behind them.`);
     } else {
       const frame = describeFrame(reading, i.cast, [...shownIds, ...edgeIds], subjectId);
       if (frame) lines.push(`Positions: ${frame}.`);

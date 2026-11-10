@@ -22,11 +22,11 @@ export function StagingFields({ value, onChange, propsLocked }: { value: SceneSt
           placeholder="e.g. standing around the cocktail table, near the bar" />
       </label>
       <div className="text-sm">
-        <p>Key props <span className="text-neutral-500">· {propsLocked ? "locked with the approved positions; unlock the positions to change them" : "objects that matter, drawn the same in every shot"}</span></p>
+        <p>Key props <span className="text-neutral-500">· {propsLocked ? "where they stand is locked with the positions; you can still correct how they look, including what's on them" : "objects that matter, drawn the same in every shot, including what's on them"}</span></p>
         {value.props.map((p, k) => (
           <div key={k} className="mt-1 grid gap-2 sm:grid-cols-[12rem_1fr_auto]" data-testid={`staging-prop-${k}`}>
-            <input className={field} value={p.name} disabled={propsLocked} onChange={(e) => setProp(k, { name: e.target.value })} placeholder="e.g. cocktail table" aria-label="Prop name" />
-            <input className={field} value={p.detail} disabled={propsLocked} onChange={(e) => setProp(k, { detail: e.target.value })} placeholder="size, height and colour, e.g. round, 70 cm across, chest-high, white cloth" aria-label="Prop detail" />
+            <input className={field} value={p.name} onChange={(e) => setProp(k, { name: e.target.value })} placeholder="e.g. cocktail table" aria-label="Prop name" />
+            <input className={field} value={p.detail} onChange={(e) => setProp(k, { detail: e.target.value })} placeholder="size, height, colour and what's on it, e.g. round, chest-high, white floor-length cloth, three champagne flutes on top" aria-label="Prop detail" data-testid={`staging-prop-${k}-detail`} />
             {!propsLocked && <button type="button" className="mt-1 text-xs text-red-700 underline" onClick={() => onChange({ ...value, props: value.props.filter((_, i) => i !== k) })}>Remove</button>}
           </div>
         ))}

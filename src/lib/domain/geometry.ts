@@ -265,3 +265,45 @@ export function readProps(plan: GeometryPlanData, cam: PlanCamera): { id: string
     .sort((a, b) => a.angle - b.angle)
     .map((x) => x.seen);
 }
+
+/**
+ * The floor plan as it stands for one shot (D19b): anyone the shot puts on a mark (arriving,
+ * say) stands there instead of their usual place. Everything that reads a camera for a shot
+ * uses this, so the sketch, the prompts, the check and the camera choice all agree.
+ */
+export function planForShot(plan: GeometryPlanData, shot?: { at?: Record<string, string> }): GeometryPlanData {
+  const at = shot?.at;
+  if (!at || !Object.keys(at).length) return plan;
+  return {
+    ...plan,
+    actors: plan.actors.map((a) => {
+      const m = at[a.characterId] && a.marks?.find((x) => x.id === at[a.characterId]);
+      return m ? { ...a, position: m.position } : a;
+    }),
+  };
+}
+
+/**
+ * Props standing between the camera and the people it must show (D19b). Anything taller than
+ * eye level hides the face; lower things (a table) only hide part of the body.
+ */
+export function propsBlocking(plan: GeometryPlanData, cam: PlanCamera, targetIds: string[]): { prop: string; characterId: string; face: boolean }[] {
+  const f = norm(sub(cam.lookAt, cam.position));
+  const r = { x: f.y, y: -f.x };
+  const view = (p: Point) => { const rel = sub(p, cam.position); return { depth: rel.x * f.x + rel.y * f.y, lateral: rel.x * r.x + rel.y * r.y }; };
+  const out: { prop: string; characterId: string; face: boolean }[] = [];
+  for (const fu of plan.furniture ?? []) {
+    const pv = view(fu.position);
+    if (pv.depth <= 0.2) continue;
+    for (const id of targetIds) {
+      const a = plan.actors.find((x) => x.characterId === id);
+      if (!a) continue;
+      const av = view(a.position);
+      if (av.depth <= pv.depth + 0.1) continue; // the prop is not in front of them
+      // Lateral distance between the prop and the person, measured at the prop's depth.
+      const atProp = (av.lateral / av.depth) * pv.depth;
+      if (Math.abs(atProp - pv.lateral) < fu.radiusM + 0.15) out.push({ prop: fu.name, characterId: id, face: (fu.heightM ?? 1.1) >= 1.45 });
+    }
+  }
+  return out;
+}

@@ -5,7 +5,7 @@
 import fs from "node:fs";
 import type { DB } from "@/db/client";
 import { mainSubjectId } from "./domain/composer";
-import { readCamera, readProps } from "./domain/geometry";
+import { planForShot, readCamera, readProps } from "./domain/geometry";
 import { checkPrompt, judgePicture, type PictureCheck, type PictureExpectation } from "./domain/pictureCheck";
 import { crowdLevelOf } from "./domain/story";
 import { renderLayoutForShot } from "./layoutImage";
@@ -18,7 +18,8 @@ export function expectationFor(db: DB, shotId: string): { expect: PictureExpecta
   const shot = repo.getShot(db, shotId);
   if (!shot?.spec.cameraId) return null;
   const scene = repo.getScene(db, shot.sceneId);
-  const plan = scene?.plan?.data;
+  const fullPlan = scene?.plan?.data;
+  const plan = fullPlan ? planForShot(fullPlan, shot.spec) : undefined;
   const cam = plan?.cameras.find((c) => c.id === shot.spec.cameraId);
   if (!scene || !plan || !cam) return null;
   const cast = repo.getCast(db, scene.scene.projectId);

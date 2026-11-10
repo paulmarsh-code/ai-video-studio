@@ -4,6 +4,7 @@
 // Pure: returns an SVG string; the server turns it into a PNG.
 
 import { horizontalFov } from "./geometry";
+import { propKind } from "./story";
 import type { GeometryPlanData, PlanCamera } from "./types";
 
 export interface SketchPerson { id: string; name: string; heightM?: number; }
@@ -71,17 +72,29 @@ export function layoutSketchSvg(i: {
   }
 
   for (const fu of i.plan.furniture ?? []) {
-    const c = toScreen(fu.position, fu.heightM ?? TABLE_HEIGHT);
+    const text = `${fu.name} ${fu.detail ?? ""}`;
+    const kind = propKind(text, fu.name);
+    const h = fu.heightM ?? TABLE_HEIGHT;
+    const c = toScreen(fu.position, h);
     if (c.depth < near) continue;
-    const rx = (fu.radiusM / c.depth) * focal;
     const floor = toScreen(fu.position, 0);
-    const ry = Math.max(4, rx * Math.min(0.5, Math.abs(EYE_HEIGHT - (fu.heightM ?? TABLE_HEIGHT)) / c.depth));
-    items.push({
-      depth: c.depth,
-      svg: `<g><rect x="${(c.x - rx * 0.12).toFixed(1)}" y="${c.y.toFixed(1)}" width="${(rx * 0.24).toFixed(1)}" height="${Math.max(0, floor.y - c.y).toFixed(1)}" fill="#a3a3a3"/>`
-        + `<ellipse cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" rx="${rx.toFixed(1)}" ry="${ry.toFixed(1)}" fill="#e5e5e5" stroke="#525252" stroke-width="3"/>`
-        + `<text x="${c.x.toFixed(1)}" y="${(c.y + ry + 26).toFixed(1)}" font-size="22" text-anchor="middle" fill="#404040" font-family="sans-serif">${esc(fu.name)}</text></g>`,
-    });
+    const label = `<text x="${c.x.toFixed(1)}" y="${(floor.y + 26).toFixed(1)}" font-size="22" text-anchor="middle" fill="#404040" font-family="sans-serif">${esc(fu.name)}</text>`;
+    if (kind === "table") {
+      const rx = (fu.radiusM / c.depth) * focal;
+      const ry = Math.max(4, rx * Math.min(0.5, Math.abs(EYE_HEIGHT - h) / c.depth));
+      items.push({
+        depth: c.depth,
+        svg: `<g><rect x="${(c.x - rx * 0.12).toFixed(1)}" y="${c.y.toFixed(1)}" width="${(rx * 0.24).toFixed(1)}" height="${Math.max(0, floor.y - c.y).toFixed(1)}" fill="#a3a3a3"/>`
+          + `<ellipse cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" rx="${rx.toFixed(1)}" ry="${ry.toFixed(1)}" fill="#e5e5e5" stroke="#525252" stroke-width="3"/>${label}</g>`,
+      });
+    } else {
+      // Flat things and columns: an upright block at their real width and height.
+      const w = ((kind === "flat" ? fu.radiusM * 2 : Math.max(0.3, fu.radiusM * 2)) / c.depth) * focal;
+      items.push({
+        depth: c.depth,
+        svg: `<g><rect x="${(c.x - w / 2).toFixed(1)}" y="${c.y.toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(0, floor.y - c.y).toFixed(1)}" fill="${kind === "flat" ? "#ede9fe" : "#e5e5e5"}" stroke="#525252" stroke-width="3"/>${label}</g>`,
+      });
+    }
   }
 
   i.people.forEach((p, k) => {

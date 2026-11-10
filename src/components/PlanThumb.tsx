@@ -6,7 +6,7 @@ import type { GeometryPlanData } from "@/lib/domain/types";
 const COLOURS = ["#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c", "#0891b2", "#be185d", "#4d7c0f"];
 
 export function PlanThumb({ plan, names }: { plan: GeometryPlanData; names: Record<string, string> }) {
-  const pts = [...plan.actors.map((a) => a.position), ...(plan.furniture ?? []).map((f) => f.position)];
+  const pts = [...plan.actors.flatMap((a) => [a.position, ...(a.marks ?? []).map((m) => m.position)]), ...(plan.furniture ?? []).map((f) => f.position)];
   if (!pts.length) return <p className="text-xs text-neutral-500">No positions yet.</p>;
   const pad = 1.4;
   const minX = Math.min(...pts.map((p) => p.x)) - pad, maxX = Math.max(...pts.map((p) => p.x)) + pad;
@@ -26,6 +26,13 @@ export function PlanThumb({ plan, names }: { plan: GeometryPlanData; names: Reco
       {plan.cameras.map((c) => (
         <line key={c.id} x1={sx(c.position.x)} y1={sy(c.position.y)} x2={sx(c.position.x + (c.lookAt.x - c.position.x) * 0.25)} y2={sy(c.position.y + (c.lookAt.y - c.position.y) * 0.25)} stroke="#a3a3a3" strokeWidth="2" />
       ))}
+      {plan.actors.flatMap((a, k) => (a.marks ?? []).map((m) => (
+        <g key={`${a.characterId}-${m.id}`}>
+          <line x1={sx(m.position.x)} y1={sy(m.position.y)} x2={sx(a.position.x)} y2={sy(a.position.y)} stroke={COLOURS[k % COLOURS.length]} strokeDasharray="3 3" />
+          <circle cx={sx(m.position.x)} cy={sy(m.position.y)} r="6" fill="#fff" stroke={COLOURS[k % COLOURS.length]} strokeWidth="2" />
+          <text x={sx(m.position.x)} y={sy(m.position.y) + 16} fontSize="9" textAnchor="middle" fill="#525252">{names[a.characterId] ?? a.characterId} {m.id}</text>
+        </g>
+      )))}
       {plan.actors.map((a, k) => (
         <g key={a.characterId}>
           <circle cx={sx(a.position.x)} cy={sy(a.position.y)} r="7" fill={COLOURS[k % COLOURS.length]} />

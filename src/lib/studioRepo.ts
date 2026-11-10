@@ -15,7 +15,7 @@ import { deriveDuration } from "./domain/duration";
 import { hasQuotes } from "./domain/text";
 import type { GeometryPlanData, PlanView, Pronoun, ShotSpec } from "./domain/types";
 import { asGenre, type Genre } from "./domain/genre";
-import { asStaging, checkStoryboard, defaultPlan, panelSeconds, shotSpecFor, type DraftPanel, type SceneStaging } from "./domain/story";
+import { addMovementMarks, asStaging, propHeight, propKind, propWidth, checkStoryboard, defaultPlan, panelSeconds, shotSpecFor, type DraftPanel, type SceneStaging } from "./domain/story";
 import { getAnimatic, getCast, saveAnimatic, type AnimaticTimeline } from "./repo";
 
 // ---------- Characters ----------
@@ -498,6 +498,7 @@ export function saveStoryboard(db: DB, sceneId: string, s: { story: string; targ
   const locks = (scene.locks ?? {}) as SceneLocks;
   db.update(t.scenes).set({ story: s.story, targetSec: s.targetSec, staging, locks: { positions: locks.positions } }).where(eq(t.scenes.id, sceneId)).run();
   persist(db);
+  if (!locks.positions) applyMovementMarks(db, sceneId);
   return { panels: s.panels.length, totalSec: check.totalSec };
 }
 
@@ -508,9 +509,19 @@ export function saveStoryboard(db: DB, sceneId: string, s: { story: string; targ
  */
 export function saveSceneStaging(db: DB, sceneId: string, staging: Partial<SceneStaging>) {
   const st = asStaging(staging);
-  // With positions approved, the key props are fixed by the floor plan (D19a).
+  // With positions approved, the floor plan fixes which props there are and where they stand
+  // (D19a). How they look can still be corrected (D19b): names and descriptions are written
+  // into the plan in place, so the lock still holds.
   const lockedPlan = sceneLocks(db, sceneId).positions ? latestPlan(db, sceneId) : undefined;
-  if (lockedPlan) st.props = (lockedPlan.data.furniture ?? []).map((f) => ({ name: f.name, detail: f.detail ?? "" }));
+  if (lockedPlan) {
+    const furniture = (lockedPlan.data.furniture ?? []).map((f, k) => {
+      const edit = st.props[k];
+      if (!edit?.name.trim()) return f;
+      return { ...f, name: edit.name.trim(), detail: edit.detail.trim(), heightM: propHeight(`${edit.name} ${edit.detail}`) };
+    });
+    db.update(t.plans).set({ data: { ...lockedPlan.data, furniture } }).where(eq(t.plans.id, lockedPlan.id)).run();
+    st.props = furniture.map((f) => ({ name: f.name, detail: f.detail ?? "" }));
+  }
   const scene = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();
   if (!scene) throw new Error("Scene not found");
   db.update(t.scenes).set({ staging: st }).where(eq(t.scenes.id, sceneId)).run();
@@ -540,6 +551,7 @@ export function saveSceneStaging(db: DB, sceneId: string, staging: Partial<Scene
     db.update(t.shots).set({ spec }).where(eq(t.shots.id, sh.id)).run();
   }
   persist(db);
+  if (replan) applyMovementMarks(db, sceneId);
   return { staging: st, replanned: replan };
 }
 
@@ -578,6 +590,31 @@ function latestPlan(db: DB, sceneId: string) {
 }
 
 export function approvePositions(db: DB, sceneId: string) {
+  applyMovementMarks(db, sceneId); // older scenes: arrival marks before the lock (D19b)
+  // Heights and widths follow the props' descriptions (D19b), in place. A big flat thing (a
+  // backdrop, a screen) standing within a few steps of where the group gathers is moved back
+  // across the room, as a new plan would place it; nothing else moves.
+  const before = latestPlan(db, sceneId);
+  if (before?.data.furniture?.length) {
+    const spot = before.data.furniture.find((f) => f.id === "spot") ?? before.data.furniture.find((f) => propKind(`${f.name} ${f.detail ?? ""}`, f.name) === "table");
+    const bounds = before.data.bounds;
+    const furniture = before.data.furniture.map((f) => {
+      const text = `${f.name} ${f.detail ?? ""}`;
+      const kind = propKind(text, f.name);
+      let position = f.position;
+      if (kind === "flat" && spot && f !== spot) {
+        const dx = f.position.x - spot.position.x, dy = f.position.y - spot.position.y;
+        const d = Math.hypot(dx, dy);
+        if (d > 0.01 && d < 3.5) {
+          const k = 4.2 / d;
+          position = { x: +(spot.position.x + dx * k).toFixed(2), y: +(spot.position.y + dy * k).toFixed(2) };
+          if (bounds) position = { x: Math.min(bounds.maxX - 0.3, Math.max(bounds.minX + 0.3, position.x)), y: Math.min(bounds.maxY - 0.3, Math.max(bounds.minY + 0.3, position.y)) };
+        }
+      }
+      return { ...f, position, heightM: propHeight(text), radiusM: kind === "table" ? f.radiusM : +(propWidth(text, kind) / 2).toFixed(2) };
+    });
+    db.update(t.plans).set({ data: { ...before.data, furniture } }).where(eq(t.plans.id, before.id)).run();
+  }
   const plan = latestPlan(db, sceneId);
   if (!plan || !plan.data.actors.length) throw new Error("There is no floor plan to approve yet.");
   syncPropsFromPlan(db, sceneId);
@@ -626,8 +663,8 @@ export function checkPlanChange(db: DB, sceneId: string, next: GeometryPlanData)
     const camsChanged = JSON.stringify(cur.cameras) !== JSON.stringify(next.cameras);
     if (camsChanged) throw new Error("The cameras are approved and locked. Unlock them on the storyboard to change them.");
   }
-  const moved = cur.actors.length !== next.actors.length || cur.actors.some((a) => { const b = next.actors.find((x) => x.characterId === a.characterId); return !b || !same(a.position, b.position); })
-    || (cur.furniture ?? []).length !== (next.furniture ?? []).length || (cur.furniture ?? []).some((f) => { const g = (next.furniture ?? []).find((x) => x.id === f.id); return !g || !same(f.position, g.position) || f.radiusM !== g.radiusM || f.heightM !== g.heightM; });
+  const moved = cur.actors.length !== next.actors.length || cur.actors.some((a) => { const b = next.actors.find((x) => x.characterId === a.characterId); return !b || !same(a.position, b.position) || JSON.stringify(a.marks ?? []) !== JSON.stringify(b.marks ?? []); })
+    || (cur.furniture ?? []).length !== (next.furniture ?? []).length || (cur.furniture ?? []).some((f) => { const g = (next.furniture ?? []).find((x) => x.id === f.id); return !g || !same(f.position, g.position) || f.radiusM !== g.radiusM; });
   if (moved) throw new Error("The positions are approved and locked. Unlock them on the storyboard to move people or props.");
 }
 
@@ -660,4 +697,27 @@ function syncPropsFromPlan(db: DB, sceneId: string) {
   for (const sh of db.select().from(t.shots).where(eq(t.shots.sceneId, sceneId)).all()) {
     db.update(t.shots).set({ spec: { ...(sh.spec as ShotSpec), props: props.length ? props : undefined } }).where(eq(t.shots.id, sh.id)).run();
   }
+}
+
+/**
+ * Add arrival marks to the scene's floor plan when it has none yet (D19b), and put each
+ * arriving panel's shot on its mark. Runs when the storyboard is saved, when the app rebuilds
+ * the plan, and before positions are approved, so older scenes get them too.
+ */
+export function applyMovementMarks(db: DB, sceneId: string) {
+  const plan = latestPlan(db, sceneId);
+  if (!plan || plan.data.actors.some((a) => a.marks?.length)) return false;
+  const panels = panelsOf(db, sceneId);
+  const shots = panels.map((p) => shotForPanel(db, p.id));
+  const { plan: marked, at } = addMovementMarks(plan.data, panels.map((p, i) => {
+    const sp = shots[i]?.spec;
+    return { action: p.description, subjectId: sp ? sp.speakerId ?? sp.subjectId ?? sp.visibleIds[0] : undefined };
+  }));
+  if (!at.some(Boolean)) return false;
+  db.insert(t.plans).values({ id: randomUUID(), sceneId, name: plan.name, version: plan.version + 1, data: marked }).run();
+  shots.forEach((sh, i) => {
+    if (sh) db.update(t.shots).set({ spec: { ...sh.spec, at: at[i], cameraId: undefined } }).where(eq(t.shots.id, sh.id)).run();
+  });
+  persist(db);
+  return true;
 }

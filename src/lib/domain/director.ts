@@ -3,7 +3,8 @@
 // the same plan and storyboard always give the same proposals.
 
 import { deriveDuration } from "./duration";
-import { cameraPlacementProblem, horizontalFov, occlusions, readCamera, type CameraReading } from "./geometry";
+import { mainSubjectId } from "./composer";
+import { cameraPlacementProblem, horizontalFov, PRESET_FOV, occlusions, planForShot, propsBlocking, readCamera, type CameraReading } from "./geometry";
 import { GENRE_PROFILES, genreBonus, type Genre } from "./genre";
 import type { CameraPreset, GeometryPlanData, PlanCamera, Point, ShotSpec } from "./types";
 
@@ -73,6 +74,8 @@ function sideOf(a: Point, b: Point, p: Point): number {
 export function classifyMoment(shot: ShotInput, index: number): MomentKind {
   const s = shot.spec;
   const text = `${shot.description ?? ""} ${s.actions} ${s.sceneContext}`;
+  // Walking off needs room to walk: an exit gets a wider shot even on an angry last line (D19b).
+  if (EXIT_WORDS.test(text)) return "exit";
   if (s.speakerId) {
     const words = (s.dialogue ?? "").trim().split(/\s+/).filter(Boolean).length;
     if (STRONG_EMOTION.test(s.emotion ?? "") && words <= 4) return "peak";
@@ -90,18 +93,32 @@ interface Candidate {
   kind: string;
   role: "ots" | "cu" | "group" | "wide";
   partnerId?: string;
+  /** Looks past someone near the lens to the group behind them (arriving or leaving). */
+  follow?: boolean;
 }
 
 function makeCam(id: string, name: string, preset: CameraPreset, position: Point, lookAt: Point): PlanCamera {
   return { id, name, preset, position: round(position), lookAt: round(lookAt) };
 }
 
-/** How far back a camera must stand for everyone visible to fit across the frame (D19). */
-export function groupFitDistance(plan: GeometryPlanData, shot: ShotSpec, preset: CameraPreset): number {
+function groupSpread(plan: GeometryPlanData, shot: ShotSpec): number {
   const pts = shot.visibleIds.map((id) => plan.actors.find((a) => a.characterId === id)?.position).filter((p): p is Point => !!p);
-  const spread = pts.reduce((m, p) => Math.max(m, ...pts.map((q) => Math.hypot(p.x - q.x, p.y - q.y))), 0);
-  const hfov = horizontalFov(plan, { id: "", name: "", preset, position: { x: 0, y: 0 }, lookAt: { x: 1, y: 0 } });
-  return spread / 2 / Math.tan((hfov * Math.PI) / 360) + 0.6;
+  return pts.reduce((m, p) => Math.max(m, ...pts.map((q) => Math.hypot(p.x - q.x, p.y - q.y))), 0);
+}
+
+/** The lens (long-side angle) a group shot needs to fit everyone at this distance (D19b). */
+function groupLens(plan: GeometryPlanData, shot: ShotSpec, distance: number): number {
+  const half = Math.atan((groupSpread(plan, shot) + 0.5) / 2 / Math.max(0.5, distance - 0.6));
+  const long = plan.aspect === "9:16" ? 2 * Math.atan(Math.tan(half) / (9 / 16)) : 2 * half;
+  return (long * 180) / Math.PI;
+}
+
+/** How far back a camera must stand for everyone visible to fit across the frame (D19). */
+export function groupFitDistance(plan: GeometryPlanData, shot: ShotSpec, preset: CameraPreset, fovDeg?: number): number {
+  const spread = groupSpread(plan, shot);
+  const hfov = horizontalFov(plan, { id: "", name: "", preset, fovDeg, position: { x: 0, y: 0 }, lookAt: { x: 1, y: 0 } });
+  // Plus a body's width each side, so the people at the ends aren't cut by the frame edge.
+  return (spread + 0.5) / 2 / Math.tan((hfov * Math.PI) / 360) + 0.6;
 }
 
 function candidates(plan: GeometryPlanData, shot: ShotSpec, moment: MomentKind, partnerId: string | undefined, name: (id: string) => string): Candidate[] {
@@ -145,12 +162,38 @@ function candidates(plan: GeometryPlanData, shot: ShotSpec, moment: MomentKind, 
   // Group / reaction shot (R-REACTION). The camera stands far enough back for everyone to fit
   // side by side across the frame's width (D19): a portrait frame needs more distance.
   const visiblePts = shot.visibleIds.map(pos).filter((p): p is Point => !!p);
-  const radii = (base: number[], preset: CameraPreset) => { const fit = groupFitDistance(plan, shot, preset); return [...new Set([...base, fit, fit * 1.2, fit * 1.45].map((r) => +r.toFixed(2)))]; };
+  const radii = (base: number[], preset: CameraPreset) => { const fit = groupFitDistance(plan, shot, preset); return [...new Set([...base, fit, fit * 1.2, fit * 1.45].filter((r) => r >= base[0]).map((r) => +r.toFixed(2)))]; };
   if (visiblePts.length >= 2 && (moment === "reaction" || moment === "dialogue" || moment === "exit" || moment === "peak")) {
     const c = centroid(visiblePts);
-    for (const radius of radii([2.0, 2.6, 3.2], "two-shot")) for (let a = 0; a < 360; a += 15) {
-      const camPos = add(c, mul({ x: Math.cos((a * Math.PI) / 180), y: Math.sin((a * Math.PI) / 180) }, radius));
-      out.push({ camera: makeCam("group", "Group shot", "two-shot", camPos, c), kind: "Group shot", role: "group" });
+    // A group that doesn't fit the normal lens at a distance the room allows gets a wider lens
+    // (up to a wide angle), so the camera can stay in the room and face the group (D19b).
+    const base = PRESET_FOV["two-shot"];
+    for (const radius of [...new Set([...radii([2.0, 2.6, 3.2], "two-shot"), 3.8, 4.5])]) {
+      const need = groupLens(plan, shot, radius);
+      if (need > PRESET_FOV.wide) continue;
+      const fovDeg = need > base ? Math.ceil(need) : undefined;
+      for (let a = 0; a < 360; a += 15) {
+        const camPos = add(c, mul({ x: Math.cos((a * Math.PI) / 180), y: Math.sin((a * Math.PI) / 180) }, radius));
+        const camera = makeCam("group", "Group shot", "two-shot", camPos, c);
+        if (fovDeg) camera.fovDeg = fovDeg;
+        out.push({ camera, kind: "Group shot", role: "group" });
+      }
+    }
+  }
+
+  // Someone apart from the group (arriving, leaving): a wide from behind and to the side of
+  // them, looking past them to the group, so they are near the lens and the group is across the
+  // room behind (D19b). A circle round everyone would need a camera outside the room.
+  if (moment === "establishing" || moment === "exit" || moment === "reaction") {
+    const others = (shot.presentIds.length ? shot.presentIds : plan.actors.map((a) => a.characterId)).filter((id) => id !== subjectId).map(pos).filter((p): p is Point => !!p);
+    const G = others.length ? centroid(others) : undefined;
+    if (G && Math.hypot(S.x - G.x, S.y - G.y) > 1.8) {
+      const u = norm(sub(S, G));
+      for (const ang of [-50, -35, -20, 20, 35, 50]) for (const back of [1.6, 2.2, 3.0]) {
+        const camPos = add(S, mul(rot(u, ang), back));
+        const look = add(S, mul(sub(G, S), 0.4));
+        out.push({ camera: makeCam("wide", "Wide", "wide", camPos, look), kind: "Wide (master)", role: "wide", follow: true });
+      }
     }
   }
 
@@ -196,15 +239,21 @@ function score(
   // panel of one or two people, or an emotional peak.
   if (cand.role === "cu" && shot.visibleIds.length > 2 && moment !== "peak") return { ok: false, score: 0, reasons: [] };
   const required = cand.role === "cu" ? [subjectId] : shot.visibleIds;
+  // Framing (D19b): everyone the panel needs is wholly inside the frame, not cut by its edge.
+  const halfFov = horizontalFov(plan, cam) / 2;
+  const bodyDeg = (a: { depthM: number }) => (Math.atan(0.25 / Math.max(0.3, a.depthM)) * 180) / Math.PI;
   for (const id of required) {
     const a = reading.actors.find((x) => x.characterId === id);
     if (!a || !a.inView) return { ok: false, score: 0, reasons: [] };
+    if (!a.foreground && Math.abs(a.angleDeg) > halfFov - bodyDeg(a)) return { ok: false, score: 0, reasons: [] };
   }
   // Everyone not framed out is physically there and can stand in the way (D19).
   const standing = shot.presentIds.length ? shot.presentIds.filter((id) => !shot.excludedIds.includes(id)) : shot.visibleIds;
   const occ = occlusions(reading, cand.role === "cu" ? [subjectId] : shot.visibleIds, [...new Set([...standing, ...shot.visibleIds])]);
-  // A hidden face is unusable, whoever is in the way.
+  // A hidden face is unusable, whoever or whatever is in the way (D19b: props too).
   if (occ.some((o) => o.level === "face")) return { ok: false, score: 0, reasons: [] };
+  const propBlocks = propsBlocking(plan, cam, cand.role === "cu" ? [subjectId] : shot.visibleIds);
+  if (propBlocks.some((b) => b.face)) return { ok: false, score: 0, reasons: [] };
 
   let s = 0;
   const reasons: string[] = ["R-180: on the scene's side of the line of action"];
@@ -246,7 +295,8 @@ function score(
   // Subject size suited to the shot (closer for emotion).
   let ideal = (cand.role === "cu" ? 1.6 : cand.role === "ots" ? 2.2 : cand.role === "group" ? 2.6 : 4.5) * GENRE_PROFILES[genre].distanceFactor;
   // A group shot is as close as it can be while everyone still fits across the frame (D19).
-  if (cand.role === "group" || cand.role === "wide") ideal = Math.max(ideal, groupFitDistance(plan, shot, cam.preset) * (cand.role === "wide" ? 1.3 : 1));
+  if (cand.role === "group" || cand.role === "wide") ideal = Math.max(ideal, groupFitDistance(plan, shot, cam.preset, cam.fovDeg) * (cand.role === "wide" ? 1.3 : 1));
+  if (cand.follow) ideal = 2.2;
   s += 1 - Math.min(1, Math.abs(subj.depthM - ideal) / ideal);
 
   // R-SCREEN: characters keep their side of the screen.
@@ -276,6 +326,8 @@ function score(
     else { s -= 2; }
   }
 
+  // A low prop (a table) in front of someone hides part of them: a small cost (D19b).
+  s -= 0.5 * propBlocks.length;
   // Body overlap: on the subject, and on anyone else who should be seen (D19). In an
   // over-the-shoulder shot the partner's shoulder is meant to overlap, so it is free.
   for (const o of occ) {
@@ -286,9 +338,23 @@ function score(
   }
   // Someone much nearer the lens than the rest, in a shot that isn't over-the-shoulder,
   // fills the frame and hides the scene (D19).
-  if (cand.role === "group" || cand.role === "wide") {
+  if ((cand.role === "group" || cand.role === "wide") && !cand.follow) {
     const depths = reading.actors.filter((a) => a.inView && standing.includes(a.characterId)).map((a) => a.depthM).sort((a, b) => a - b);
     if (depths.length >= 2 && depths[0] < 0.6 * depths[Math.floor(depths.length / 2)]) s -= 2.5;
+  }
+  // Anyone else in shot whose face is hidden behind someone (D19b): the picture then tends to
+  // drop or move them. Not a refusal, since they aren't the point of the panel, but a real cost.
+  const others = reading.actors.filter((a) => a.inView && !a.foreground && !required.includes(a.characterId) && standing.includes(a.characterId)).map((a) => a.characterId);
+  if (others.length) {
+    for (const o of occlusions(reading, others, standing)) {
+      if (cand.role === "ots" && o.blockerId === cand.partnerId) continue;
+      s -= o.level === "face" ? 3 : 0.5;
+    }
+  }
+  // Anyone else half in, half out of the frame edge looks like a mistake: a small cost each.
+  for (const a of reading.actors) {
+    if (required.includes(a.characterId) || a.foreground || a.depthM <= 0) continue;
+    if (Math.abs(Math.abs(a.angleDeg) - halfFov) < bodyDeg(a)) s -= 1;
   }
   const excludedInView = shot.excludedIds.filter((id) => reading.actors.find((a) => a.characterId === id)?.inView).length;
   s -= 0.4 * excludedInView;
@@ -344,11 +410,25 @@ function designForSide(plan: GeometryPlanData, shots: ShotInput[], side: number,
   const designs: ShotDesign[] = [];
   shots.forEach((sh, i) => {
     const moment = classifyMoment(sh, i);
-    const partner = partnerFor(plan, sh.spec, line);
-    const scored = candidates(plan, sh.spec, moment, partner, name)
-      .map((c) => ({ c, r: score(plan, c, sh.spec, moment, side, linePts, mem, name, genre) }))
+    const shotPlan = planForShot(plan, sh.spec); // someone on a mark (arriving) stands there (D19b)
+    const partner = partnerFor(shotPlan, sh.spec, line);
+    const rank = (m: MomentKind) => candidates(shotPlan, sh.spec, m, partner, name)
+      .map((c) => ({ c, r: score(shotPlan, c, sh.spec, m, side, linePts, mem, name, genre) }))
       .filter((x) => x.r.ok)
       .sort((a, b) => b.r.score - a.r.score);
+    let scored = rank(moment);
+    // Never leave a panel without a camera (D19b): if nothing fits this kind of moment,
+    // fall back to the shots that show the whole situation; failing that, follow the panel's
+    // main person, with anyone else the camera sees at the edge of frame.
+    if (!scored.length && moment !== "establishing") scored = rank("establishing");
+    if (!scored.length) {
+      const subject = mainSubjectId(sh.spec);
+      const reduced: ShotSpec = { ...sh.spec, visibleIds: subject ? [subject] : sh.spec.visibleIds.slice(0, 1) };
+      scored = candidates(shotPlan, reduced, "establishing", partner, name)
+        .map((c) => ({ c, r: score(shotPlan, c, reduced, "establishing", side, linePts, mem, name, genre) }))
+        .filter((x) => x.r.ok)
+        .sort((a, b) => b.r.score - a.r.score);
+    }
     // Keep the best few distinct options (different type, or clearly different position).
     // Offer different kinds of shot first (best of each type), then fill with variations.
     const picked: typeof scored = [];
@@ -413,7 +493,16 @@ export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (i
   };
   const a = designForSide(plan, shots, 1, line, name, seedFor(1), genre);
   const b = designForSide(plan, shots, -1, line, name, seedFor(-1), genre);
-  const best = line ? (a.total >= b.total ? { side: 1, ...a } : { side: -1, ...b }) : { side: 1, ...a };
+  // The open side (D19b): people standing off the line of action are usually placed facing the
+  // camera, beyond the line, like a stage cheated out to the audience. The side that sees them
+  // from the front gets a small head start; the shot scores still decide.
+  let open = 0;
+  if (line) {
+    const p0 = plan.actors.find((x) => x.characterId === line[0])?.position;
+    const p1 = plan.actors.find((x) => x.characterId === line[1])?.position;
+    if (p0 && p1) for (const x of plan.actors) if (!line.includes(x.characterId)) open -= sideOf(p0, p1, x.position);
+  }
+  const best = !line ? { side: 1, ...a } : a.total + 2 * open >= b.total ? { side: 1, ...a } : { side: -1, ...b };
   return { side: best.side, lineOfAction: line, shots: best.designs, multiShot: groupMultiShot(shots) };
 }
 
@@ -426,7 +515,7 @@ export function applyDesign(plan: GeometryPlanData, choices: { shotId: string; s
   const assign: Record<string, string> = {};
   for (const ch of choices) {
     const c = ch.option.camera;
-    const same = cameras.find((x) => x.preset === c.preset && Math.hypot(x.position.x - c.position.x, x.position.y - c.position.y) < 0.3 && Math.hypot(x.lookAt.x - c.lookAt.x, x.lookAt.y - c.lookAt.y) < 0.5);
+    const same = cameras.find((x) => x.preset === c.preset && x.fovDeg === c.fovDeg && Math.hypot(x.position.x - c.position.x, x.position.y - c.position.y) < 0.3 && Math.hypot(x.lookAt.x - c.lookAt.x, x.lookAt.y - c.lookAt.y) < 0.5);
     if (same) { assign[ch.shotId] = same.id; continue; }
     const id = `cam-${cameras.length + 1}`;
     cameras.push({ ...c, id, name: `${ch.option.kind.split(" (")[0]} (${ch.shotCode.split("_").pop()})` });
