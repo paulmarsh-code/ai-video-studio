@@ -10,7 +10,8 @@ import { StoryWizard } from "@/components/StoryWizard";
 import { exampleFor } from "@/lib/domain/storyExamples";
 import { StoryboardBoard } from "@/components/StoryboardBoard";
 import { SceneSettingCard } from "@/components/SceneSettingCard";
-import { asStaging, stagingPrompt } from "@/lib/domain/story";
+import { asStaging, propsFromFurniture, stagingPrompt } from "@/lib/domain/story";
+import { LAYOUT_RULES } from "@/lib/domain/director";
 import { PanelEditor } from "@/components/PanelEditor";
 
 export const dynamic = "force-dynamic";
@@ -78,12 +79,13 @@ export default async function StoryboardPage({ params, searchParams }: { params:
       {missingRefs.length > 0 && <p className="mt-2 text-sm text-amber-700">No approved pictures yet for {missingRefs.map((c) => c.name).join(", ")}. Create them in <Link className="underline" href={`/projects/${id}/characters`}>Characters</Link> so every panel keeps them consistent.</p>}
 
       <div className="mt-5">
-        <SceneSettingCard propsLocked={!!locks.positions} sceneId={sceneId} staging={locks.positions && s.plan?.data.furniture?.length ? { ...asStaging(s.scene.staging), props: s.plan.data.furniture.map((f) => ({ name: f.name, detail: f.detail ?? "" })) } : asStaging(s.scene.staging)} hasPictures={s.panels.some((p) => p.imageAssetId)} canAuto={!!getTextProvider()}
+        <SceneSettingCard propsLocked={!!locks.positions} sceneId={sceneId} projectId={id} staging={locks.positions && s.plan?.data.furniture?.length ? { ...asStaging(s.scene.staging), props: propsFromFurniture(s.plan.data.furniture) } : asStaging(s.scene.staging)} hasPictures={s.panels.some((p) => p.imageAssetId)} canAuto={!!getTextProvider()}
           suggestPrompt={s.scene.story.trim() ? stagingPrompt({ story: s.scene.story, venue: s.venue?.name ?? "the venue", characters: chars.filter((c) => castIds.includes(c.slug)).map((c) => ({ id: c.slug, name: c.name, role: c.role })) }) : undefined} />
       </div>
 
       <div className="mt-5">
-        <StoryboardBoard canCheck={!!getTextProvider()} locks={{ positions: !!locks.positions, cameras: !!locks.cameras }} plan={s.plan?.data} planHref={`/projects/${id}/scenes/${sceneId}/plan`}
+        <StoryboardBoard canCheck={!!getTextProvider()} locks={{ positions: !!locks.positions, cameras: !!locks.cameras }}
+          outdated={!!s.plan && (!!locks.positions || s.plan.data.cameras.length > 0) && (s.plan.data.rules ?? 0) < LAYOUT_RULES} plan={s.plan?.data} planHref={`/projects/${id}/scenes/${sceneId}/plan`}
           names={Object.fromEntries(cast.map((c) => [c.id, c.name]))} settingEmpty={!asStaging(s.scene.staging).spot && !asStaging(s.scene.staging).crowd} projectId={id} sceneId={sceneId} designHref={`/projects/${id}/scenes/${sceneId}/design`} baseCode={base} size={portrait ? "portrait" : "landscape"} canGenerate={canGenerate}
           panels={s.panels.map((p) => {
             const shot = s.shots.find((x) => x.panelId === p.id);

@@ -62,12 +62,16 @@ export interface PlanFurniture {
   heightM?: number;
   /** Size, height and colour in words, kept identical in every picture and clip. */
   detail?: string;
+  /** A reference picture of the prop (D19c): sent with every panel picture it appears in. */
+  imageAssetId?: string;
 }
 
 export interface GeometryPlanData {
   /** Room extent in metres (scene-local). */
   bounds?: { minX: number; maxX: number; minY: number; maxY: number };
   furniture?: PlanFurniture[];
+  /** Which version of the app's layout rules made this plan (D19c); older plans can be updated. */
+  rules?: number;
   actors: PlanActor[];
   cameras: PlanCamera[];
   views: PlanView[];
@@ -119,7 +123,7 @@ export interface ShotSpec {
   /** Per-shot marks (D19b): character id → mark id, e.g. { jade: "arriving" }. */
   at?: Record<string, string>;
   /** Key props of the scene (D19), identical in every picture and clip. */
-  props?: { name: string; detail: string }[];
+  props?: { name: string; detail: string; imageAssetId?: string }[];
 }
 
 export type Severity = "error" | "warning" | "info";

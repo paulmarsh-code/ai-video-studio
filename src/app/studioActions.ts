@@ -123,7 +123,24 @@ export async function saveStoryboardAction(sceneId: string, s: { story: string; 
  * lets the user pick other options.
  */
 export async function chooseCamerasAction(sceneId: string) {
+  return runAsync((db) => chooseCameras(db, sceneId));
+}
+
+/**
+ * Bring a layout made under older rules up to date in one step (D19c): positions are approved
+ * again where they are (adding arrival spots and refreshing prop sizes), then the app chooses
+ * the cameras. Cameras are left unlocked for the user to check and approve.
+ */
+export async function updateLayoutAction(sceneId: string) {
   return runAsync(async (db) => {
+    studio.unlockScene(db, sceneId, "positions");
+    studio.approvePositions(db, sceneId);
+    return chooseCameras(db, sceneId);
+  });
+}
+
+async function chooseCameras(db: Awaited<ReturnType<typeof getDb>>, sceneId: string) {
+  {
     const repo = await import("@/lib/repo");
     const { designScene, applyDesign } = await import("@/lib/domain/director");
     const s = repo.getScene(db, sceneId);
@@ -140,13 +157,14 @@ export async function chooseCamerasAction(sceneId: string) {
     const choices = design.shots.filter((d) => d.options.length).map((d) => ({ shotId: d.shotId, shotCode: d.shotCode, option: d.options[0] }));
     if (!choices.length) throw new Error("The app couldn't find a camera for any panel. Check who is in frame on each panel.");
     const { plan, assign } = applyDesign(base, choices, design.lineOfAction);
-    repo.savePlan(db, sceneId, plan, "Cameras chosen by the app");
+    // A floor plan the user edited keeps that name, so a later setting change never rebuilds it.
+    repo.savePlan(db, sceneId, plan, s.plan.name === "Floor plan edited by you" ? s.plan.name : "Cameras chosen by the app");
     for (const ch of choices) {
       const shot = repo.getShot(db, ch.shotId);
       if (shot) repo.saveShotSpec(db, ch.shotId, { ...shot.spec, cameraId: assign[ch.shotId] });
     }
     return { chosen: choices.length, missing: design.shots.filter((d) => !d.options.length).map((d) => d.shotCode.split("_").pop()) };
-  });
+  }
 }
 
 export async function approvePanelsAction(panelIds: string[]) {

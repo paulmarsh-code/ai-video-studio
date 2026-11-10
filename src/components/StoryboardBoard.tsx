@@ -10,7 +10,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { approveCamerasAction, approvePanelAction, unapprovePanelAction, approvePanelsAction, approvePositionsAction, chooseCamerasAction, setPanelImageAction, unlockSceneAction } from "@/app/studioActions";
+import { approveCamerasAction, approvePanelAction, unapprovePanelAction, approvePanelsAction, approvePositionsAction, chooseCamerasAction, updateLayoutAction, setPanelImageAction, unlockSceneAction } from "@/app/studioActions";
 import type { GeometryPlanData } from "@/lib/domain/types";
 import { PlanThumb } from "./PlanThumb";
 import { uploadBlob } from "@/lib/clientUpload";
@@ -52,6 +52,8 @@ export interface StoryboardBoardProps {
   settingEmpty?: boolean;
   /** Approved and locked (D19). */
   locks: { positions: boolean; cameras: boolean };
+  /** The positions or cameras were made under older layout rules (D19c). */
+  outdated?: boolean;
   /** For the top-down view of positions. */
   plan?: GeometryPlanData;
   names: Record<string, string>;
@@ -241,6 +243,23 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
 
   return (
     <div className="space-y-5">
+      {b.outdated && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm" data-testid="layout-outdated">
+          <p className="font-semibold">The app&apos;s layout rules have improved since this layout was made</p>
+          <p className="mt-1 text-neutral-700">Update it to get them: everyone keeps their approved place, arrival spots are added where the story has someone arriving, prop sizes are read again from their descriptions, and the app chooses the cameras again for you to check and approve. Pictures already drawn will be marked to redraw.</p>
+          <div className="mt-2">
+            <ActionButton label="Update the layout" busyLabel="Updating…" doneLabel="Updated" testId="update-layout"
+              onAction={async () => {
+                setMsg(null);
+                const r = await updateLayoutAction(b.sceneId);
+                if (!r.ok) setMsg({ ok: false, text: r.error });
+                else setMsg({ ok: true, text: `Layout updated and cameras chosen for ${r.value!.chosen} panel${r.value!.chosen === 1 ? "" : "s"}. Check the camera views, then approve the cameras.` });
+                router.refresh();
+                return r;
+              }} />
+          </div>
+        </div>
+      )}
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {step(1, "Positions", b.locks.positions, (
           <>

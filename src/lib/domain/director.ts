@@ -69,6 +69,25 @@ function sideOf(a: Point, b: Point, p: Point): number {
   return Math.sign(ab.x * ap.y - ab.y * ap.x);
 }
 
+/**
+ * Which way someone faces (D19c). The two people on the line of action face each other; others
+ * gathered round a spot face it; someone apart from the group (arriving) faces the group.
+ * Undefined for someone alone.
+ */
+export function facingOf(plan: GeometryPlanData, id: string, line?: Iterable<string>): Point | undefined {
+  const a = plan.actors.find((x) => x.characterId === id);
+  const others = plan.actors.filter((x) => x.characterId !== id).map((x) => x.position);
+  if (!a || !others.length) return undefined;
+  const group = centroid(others);
+  const pair = line ? [...line] : [];
+  const partner = pair.includes(id) ? plan.actors.find((x) => x.characterId !== id && pair.includes(x.characterId))?.position : undefined;
+  if (partner && Math.hypot(partner.x - a.position.x, partner.y - a.position.y) < 3) return norm(sub(partner, a.position));
+  const spot = plan.furniture?.find((f) => f.id === "spot")?.position;
+  const target = spot && Math.hypot(a.position.x - spot.x, a.position.y - spot.y) < 1.8 ? spot : group;
+  const v = sub(target, a.position);
+  return Math.hypot(v.x, v.y) < 0.05 ? undefined : norm(v);
+}
+
 // ---------- classification ----------
 
 export function classifyMoment(shot: ShotInput, index: number): MomentKind {
@@ -121,7 +140,7 @@ export function groupFitDistance(plan: GeometryPlanData, shot: ShotSpec, preset:
   return (spread + 0.5) / 2 / Math.tan((hfov * Math.PI) / 360) + 0.6;
 }
 
-function candidates(plan: GeometryPlanData, shot: ShotSpec, moment: MomentKind, partnerId: string | undefined, name: (id: string) => string): Candidate[] {
+function candidates(plan: GeometryPlanData, shot: ShotSpec, moment: MomentKind, partnerId: string | undefined, name: (id: string) => string, faceDir?: Point): Candidate[] {
   const pos = (id: string) => plan.actors.find((a) => a.characterId === id)?.position;
   const subjectId = shot.subjectId ?? shot.speakerId ?? shot.visibleIds[0];
   const S = subjectId ? pos(subjectId) : undefined;
@@ -148,8 +167,9 @@ function candidates(plan: GeometryPlanData, shot: ShotSpec, moment: MomentKind, 
 
   // Close-up on the subject (R-CU-EMOTION).
   if (moment === "peak" || moment === "dialogue") {
-    const base = P ? norm(sub(S, P)) : { x: 0, y: 1 };
-    for (const dist of [1.4, 1.7, 2.0]) for (const off of [-40, -25, -10, 10, 25, 40]) {
+    // In front of the subject: across from their partner, else where they are looking (D19c).
+    const base = P ? norm(sub(S, P)) : faceDir ? mul(faceDir, -1) : { x: 0, y: 1 };
+    for (const dist of [1.4, 1.7, 2.0]) for (const off of [-55, -40, -25, -10, 10, 25, 40, 55]) {
       const dir = rot(base, off);
       out.push({
         camera: makeCam("cu", `Close-up on ${name(subjectId!)}`, "single-cu", sub(S, mul(dir, dist)), S),
@@ -213,6 +233,11 @@ function candidates(plan: GeometryPlanData, shot: ShotSpec, moment: MomentKind, 
 
 interface Memory {
   screenSide: Map<string, number>; // -1 left, +1 right
+  /**
+   * Whose screen side is kept (D19c): the two people on the line of action. Bystanders swap sides
+   * in a reverse angle, as they would in any film, so they aren't tracked.
+   */
+  track?: Set<string>;
   background: Map<string, string>; // subject → background
   lastBySubject: Map<string, { forwardDeg: number; preset: CameraPreset }>;
 }
@@ -255,7 +280,38 @@ function score(
   const propBlocks = propsBlocking(plan, cam, cand.role === "cu" ? [subjectId] : shot.visibleIds);
   if (propBlocks.some((b) => b.face)) return { ok: false, score: 0, reasons: [] };
 
-  let s = 0;
+  // Faces (D19c): a camera behind someone sees the back of their head. The panel's main person
+  // must be seen from the front or side (unless the shot follows them in); anyone else the
+  // panel needs costs a lot when their back is to the camera.
+  let facingCost = 0;
+  for (const id of required) {
+    if (cand.role === "ots" && id === cand.partnerId) continue;
+    const pos = plan.actors.find((x) => x.characterId === id)?.position;
+    const fwd = facingOf(plan, id, mem.track);
+    if (!pos || !fwd) continue;
+    const toCam = norm(sub(cam.position, pos));
+    const cos = fwd.x * toCam.x + fwd.y * toCam.y; // 1 = looking straight at the camera
+    if (cos < -0.35) {
+      // Only someone still arriving may be seen from behind, walking in towards the group.
+      if (id === subjectId && !(cand.follow && shot.at?.[id] === "arriving")) return { ok: false, score: 0, reasons: [] };
+      facingCost += id === subjectId ? 0.5 : 4;
+    } else if (cos < -0.05) facingCost += 0.5;
+  }
+  // A prop right in front of the lens fills the frame and hides the scene.
+  let clutter = 0;
+  {
+    const f = norm(sub(cam.lookAt, cam.position));
+    const nearest = Math.min(...required.map((id) => reading.actors.find((x) => x.characterId === id)?.depthM ?? 99));
+    for (const fu of plan.furniture ?? []) {
+      const rel = sub(fu.position, cam.position);
+      const depth = rel.x * f.x + rel.y * f.y;
+      const dist = Math.hypot(rel.x, rel.y);
+      if (dist < fu.radiusM + 0.3) return { ok: false, score: 0, reasons: [] }; // camera inside the prop
+      if (depth > 0 && depth < Math.min(1.8, nearest - 0.3) && Math.abs(rel.x * f.y - rel.y * f.x) < fu.radiusM + depth * 0.6) clutter += 3;
+    }
+  }
+
+  let s = -facingCost - clutter;
   const reasons: string[] = ["R-180: on the scene's side of the line of action"];
   const fov = horizontalFov(plan, cam);
   const subj = reading.actors.find((a) => a.characterId === subjectId)!;
@@ -302,6 +358,7 @@ function score(
   // R-SCREEN: characters keep their side of the screen.
   let screenOk = true;
   for (const id of shot.visibleIds) {
+    if (mem.track && !mem.track.has(id)) continue;
     const a = reading.actors.find((x) => x.characterId === id);
     if (!a || !a.inView || a.foreground) continue;
     const before = mem.screenSide.get(id);
@@ -346,10 +403,11 @@ function score(
   // drop or move them. Not a refusal, since they aren't the point of the panel, but a real cost.
   const others = reading.actors.filter((a) => a.inView && !a.foreground && !required.includes(a.characterId) && standing.includes(a.characterId)).map((a) => a.characterId);
   if (others.length) {
-    for (const o of occlusions(reading, others, standing)) {
-      if (cand.role === "ots" && o.blockerId === cand.partnerId) continue;
-      s -= o.level === "face" ? 3 : 0.5;
-    }
+    // The over-the-shoulder partner counts too: a bystander lost behind that shoulder is lost.
+    for (const o of occlusions(reading, others, standing)) s -= o.level === "face" ? 3 : 0.5;
+    // An opening shot shows where we are and who is already there (D19c): someone arriving is
+    // seen with the people they are heading for.
+    if (moment === "establishing") s += 0.75 * Math.min(4, reading.actors.filter((a) => others.includes(a.characterId) && a.inView && !a.foreground).length);
   }
   // Anyone else half in, half out of the frame edge looks like a mistake: a small cost each.
   for (const a of reading.actors) {
@@ -365,6 +423,7 @@ function score(
 function remember(mem: Memory, shot: ShotSpec, reading: CameraReading, preset: CameraPreset) {
   const subjectId = shot.subjectId ?? shot.speakerId ?? shot.visibleIds[0];
   for (const id of shot.visibleIds) {
+    if (mem.track && !mem.track.has(id)) continue;
     const a = reading.actors.find((x) => x.characterId === id);
     if (a && a.inView && !a.foreground && sideNum(a.frame) !== 0 && !mem.screenSide.has(id)) mem.screenSide.set(id, sideNum(a.frame));
   }
@@ -405,14 +464,16 @@ function chooseLine(plan: GeometryPlanData, shots: ShotInput[]): [string, string
 function designForSide(plan: GeometryPlanData, shots: ShotInput[], side: number, line: [string, string] | undefined, name: (id: string) => string, seed?: Map<string, number>, genre: Genre = "neutral") {
   const pos = (id: string) => plan.actors.find((a) => a.characterId === id)?.position;
   const linePts = line && pos(line[0]) && pos(line[1]) ? ([pos(line[0])!, pos(line[1])!] as [Point, Point]) : undefined;
-  const mem: Memory = { screenSide: new Map(seed ?? []), background: new Map(), lastBySubject: new Map() };
+  const mem: Memory = { screenSide: new Map(seed ?? []), background: new Map(), lastBySubject: new Map(), track: line ? new Set(line) : undefined };
   let total = 0;
   const designs: ShotDesign[] = [];
   shots.forEach((sh, i) => {
     const moment = classifyMoment(sh, i);
     const shotPlan = planForShot(plan, sh.spec); // someone on a mark (arriving) stands there (D19b)
     const partner = partnerFor(shotPlan, sh.spec, line);
-    const rank = (m: MomentKind) => candidates(shotPlan, sh.spec, m, partner, name)
+    const subjectId = sh.spec.subjectId ?? sh.spec.speakerId ?? sh.spec.visibleIds[0];
+    const faceDir = subjectId ? facingOf(shotPlan, subjectId, line) : undefined;
+    const rank = (m: MomentKind) => candidates(shotPlan, sh.spec, m, partner, name, faceDir)
       .map((c) => ({ c, r: score(shotPlan, c, sh.spec, m, side, linePts, mem, name, genre) }))
       .filter((x) => x.r.ok)
       .sort((a, b) => b.r.score - a.r.score);
@@ -424,7 +485,7 @@ function designForSide(plan: GeometryPlanData, shots: ShotInput[], side: number,
     if (!scored.length) {
       const subject = mainSubjectId(sh.spec);
       const reduced: ShotSpec = { ...sh.spec, visibleIds: subject ? [subject] : sh.spec.visibleIds.slice(0, 1) };
-      scored = candidates(shotPlan, reduced, "establishing", partner, name)
+      scored = candidates(shotPlan, reduced, "establishing", partner, name, faceDir)
         .map((c) => ({ c, r: score(shotPlan, c, reduced, "establishing", side, linePts, mem, name, genre) }))
         .filter((x) => x.r.ok)
         .sort((a, b) => b.r.score - a.r.score);
@@ -502,6 +563,7 @@ export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (i
     const p1 = plan.actors.find((x) => x.characterId === line[1])?.position;
     if (p0 && p1) for (const x of plan.actors) if (!line.includes(x.characterId)) open -= sideOf(p0, p1, x.position);
   }
+  
   const best = !line ? { side: 1, ...a } : a.total + 2 * open >= b.total ? { side: 1, ...a } : { side: -1, ...b };
   return { side: best.side, lineOfAction: line, shots: best.designs, multiShot: groupMultiShot(shots) };
 }
@@ -510,6 +572,12 @@ export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (i
  * Turn chosen options into plan cameras (shared when two shots pick the same position)
  * and a camera id per shot.
  */
+/**
+ * The version of the app's layout rules (D19c). A plan made under older rules is flagged so the
+ * user can update it in one step: 2 = arrival spots, prop sizes, lens fitting (D19b).
+ */
+export const LAYOUT_RULES = 2;
+
 export function applyDesign(plan: GeometryPlanData, choices: { shotId: string; shotCode: string; option: CameraOption }[], line?: [string, string]) {
   const cameras: PlanCamera[] = [];
   const assign: Record<string, string> = {};
@@ -521,5 +589,5 @@ export function applyDesign(plan: GeometryPlanData, choices: { shotId: string; s
     cameras.push({ ...c, id, name: `${ch.option.kind.split(" (")[0]} (${ch.shotCode.split("_").pop()})` });
     assign[ch.shotId] = id;
   }
-  return { plan: { ...plan, cameras, lineOfAction: line ?? plan.lineOfAction, referenceCameraId: cameras[0]?.id }, assign };
+  return { plan: { ...plan, cameras, lineOfAction: line ?? plan.lineOfAction, referenceCameraId: cameras[0]?.id, rules: LAYOUT_RULES }, assign };
 }

@@ -8,12 +8,29 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { saveSceneStagingAction } from "@/app/studioActions";
 import { parseStaging, type CrowdLevel, type KeyProp, type SceneStaging } from "@/lib/domain/story";
+import { uploadBlob } from "@/lib/clientUpload";
 import { ActionButton } from "./ActionButton";
 
 const field = "mt-1 w-full rounded border border-neutral-300 px-2 py-1.5 text-sm";
 
-export function StagingFields({ value, onChange, propsLocked }: { value: SceneStaging; onChange: (v: SceneStaging) => void; propsLocked?: boolean }) {
+export function StagingFields({ value, onChange, propsLocked, projectId }: {
+  value: SceneStaging; onChange: (v: SceneStaging) => void; propsLocked?: boolean;
+  /** With a project, each prop can have a reference picture (D19c). */
+  projectId?: string;
+}) {
   const setProp = (k: number, patch: Partial<KeyProp>) => onChange({ ...value, props: value.props.map((p, i) => (i === k ? { ...p, ...patch } : p)) });
+  const [uploading, setUploading] = useState<number | null>(null);
+  const [upErr, setUpErr] = useState("");
+  async function addPicture(k: number, file: File) {
+    if (!projectId) return;
+    setUploading(k); setUpErr("");
+    try {
+      const name = (value.props[k]?.name || `prop ${k + 1}`).replace(/[^\w]+/g, "_").toUpperCase();
+      const id = await uploadBlob(projectId, `PROP_${name}`, "prop-reference", file, file.name);
+      setProp(k, { imageAssetId: id });
+    } catch (e) { setUpErr(e instanceof Error ? e.message : "Upload failed"); }
+    finally { setUploading(null); }
+  }
   const levels: { v: CrowdLevel; label: string }[] = [{ v: "none", label: "No one else" }, { v: "few", label: "A few" }, { v: "busy", label: "Busy" }];
   return (
     <div className="space-y-3">
@@ -22,14 +39,31 @@ export function StagingFields({ value, onChange, propsLocked }: { value: SceneSt
           placeholder="e.g. standing around the cocktail table, near the bar" />
       </label>
       <div className="text-sm">
-        <p>Key props <span className="text-neutral-500">· {propsLocked ? "where they stand is locked with the positions; you can still correct how they look, including what's on them" : "objects that matter, drawn the same in every shot, including what's on them"}</span></p>
+        <p>Key props <span className="text-neutral-500">· {propsLocked ? "what they are and where they stand are locked with the positions; you can still correct how they look, including what's on them" : "objects that matter, drawn the same in every shot, including what's on them"}</span></p>
         {value.props.map((p, k) => (
-          <div key={k} className="mt-1 grid gap-2 sm:grid-cols-[12rem_1fr_auto]" data-testid={`staging-prop-${k}`}>
-            <input className={field} value={p.name} onChange={(e) => setProp(k, { name: e.target.value })} placeholder="e.g. cocktail table" aria-label="Prop name" />
+          <div key={k} className="mt-1 grid items-start gap-2 sm:grid-cols-[12rem_1fr_auto]" data-testid={`staging-prop-${k}`}>
+            <input className={`${field} ${propsLocked ? "bg-neutral-100 text-neutral-600" : ""}`} value={p.name} readOnly={propsLocked} title={propsLocked ? "To change what this prop is, change the positions first" : undefined}
+              onChange={(e) => setProp(k, { name: e.target.value })} placeholder="e.g. cocktail table" aria-label="Prop name" />
             <input className={field} value={p.detail} onChange={(e) => setProp(k, { detail: e.target.value })} placeholder="size, height, colour and what's on it, e.g. round, chest-high, white floor-length cloth, three champagne flutes on top" aria-label="Prop detail" data-testid={`staging-prop-${k}-detail`} />
-            {!propsLocked && <button type="button" className="mt-1 text-xs text-red-700 underline" onClick={() => onChange({ ...value, props: value.props.filter((_, i) => i !== k) })}>Remove</button>}
+            <div className="mt-1 flex items-center gap-2 text-xs">
+              {projectId && (p.imageAssetId ? (
+                <>
+                  <img src={`/api/assets/${p.imageAssetId}`} alt={`Picture of the ${p.name}`} className="h-10 w-10 rounded object-cover" data-testid={`staging-prop-${k}-thumb`} />
+                  <button type="button" className="text-red-700 underline" onClick={() => setProp(k, { imageAssetId: undefined })}>Remove picture</button>
+                </>
+              ) : (
+                <label className="cursor-pointer text-blue-700 underline">
+                  {uploading === k ? "Uploading…" : "Add a picture"}
+                  <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" disabled={uploading !== null} data-testid={`staging-prop-${k}-pic`}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) void addPicture(k, f); e.target.value = ""; }} />
+                </label>
+              ))}
+              {!propsLocked && <button type="button" className="text-red-700 underline" onClick={() => onChange({ ...value, props: value.props.filter((_, i) => i !== k) })}>Remove</button>}
+            </div>
           </div>
         ))}
+        {projectId && value.props.length > 0 && <p className="mt-1 text-xs text-neutral-500">A picture keeps a prop looking the same in every shot better than words alone. It is sent with every panel picture the prop is in.</p>}
+        {upErr && <p className="mt-1 text-xs text-red-700">{upErr}</p>}
         {!propsLocked && <button type="button" className="mt-1 text-xs text-blue-700 underline" data-testid="staging-add-prop" onClick={() => onChange({ ...value, props: [...value.props, { name: "", detail: "" }] })}>+ Add a key prop</button>}
       </div>
       <div className="text-sm">
@@ -49,8 +83,8 @@ export function StagingFields({ value, onChange, propsLocked }: { value: SceneSt
   );
 }
 
-export function SceneSettingCard({ sceneId, staging, hasPictures, suggestPrompt, canAuto, propsLocked }: {
-  sceneId: string; staging: SceneStaging; hasPictures: boolean;
+export function SceneSettingCard({ sceneId, projectId, staging, hasPictures, suggestPrompt, canAuto, propsLocked }: {
+  sceneId: string; projectId?: string; staging: SceneStaging; hasPictures: boolean;
   /** Positions are approved: the key props come from the floor plan and can't be edited here. */
   propsLocked?: boolean;
   /** The setting-only request built from the saved story; absent when there is no story. */
@@ -82,7 +116,7 @@ export function SceneSettingCard({ sceneId, staging, hasPictures, suggestPrompt,
     <section className="rounded-xl border border-neutral-200 bg-white p-4" data-testid="scene-setting">
       <p className="font-semibold">Scene setting</p>
       <p className="mb-2 text-sm text-neutral-600">Kept the same in every picture and every clip of this scene.</p>
-      <StagingFields value={v} onChange={setV} propsLocked={propsLocked} />
+      <StagingFields value={v} onChange={setV} propsLocked={propsLocked} projectId={projectId} />
       {suggestPrompt && (
         <div className="mt-2 flex flex-wrap items-start gap-3 text-sm">
           {canAuto && (

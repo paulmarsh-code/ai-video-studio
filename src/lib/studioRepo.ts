@@ -15,7 +15,8 @@ import { deriveDuration } from "./domain/duration";
 import { hasQuotes } from "./domain/text";
 import type { GeometryPlanData, PlanView, Pronoun, ShotSpec } from "./domain/types";
 import { asGenre, type Genre } from "./domain/genre";
-import { addMovementMarks, asStaging, propHeight, propKind, propWidth, checkStoryboard, defaultPlan, panelSeconds, shotSpecFor, type DraftPanel, type SceneStaging } from "./domain/story";
+import { addMovementMarks, asStaging, planProps, propHeight, propsFromFurniture, propKind, propWidth, checkStoryboard, defaultPlan, panelSeconds, shotSpecFor, type DraftPanel, type SceneStaging } from "./domain/story";
+import { LAYOUT_RULES } from "./domain/director";
 import { getAnimatic, getCast, saveAnimatic, type AnimaticTimeline } from "./repo";
 
 // ---------- Characters ----------
@@ -509,18 +510,39 @@ export function saveStoryboard(db: DB, sceneId: string, s: { story: string; targ
  */
 export function saveSceneStaging(db: DB, sceneId: string, staging: Partial<SceneStaging>) {
   const st = asStaging(staging);
-  // With positions approved, the floor plan fixes which props there are and where they stand
-  // (D19a). How they look can still be corrected (D19b): names and descriptions are written
-  // into the plan in place, so the lock still holds.
-  const lockedPlan = sceneLocks(db, sceneId).positions ? latestPlan(db, sceneId) : undefined;
-  if (lockedPlan) {
-    const furniture = (lockedPlan.data.furniture ?? []).map((f, k) => {
+  // With positions approved, the floor plan fixes which props there are, what each one is and
+  // where it stands (D19a, D19c). How they look can still be corrected (D19b): descriptions and
+  // pictures are written into the plan in place, so the lock still holds.
+  const locked = !!sceneLocks(db, sceneId).positions;
+  const current = latestPlan(db, sceneId);
+  if (locked && current) {
+    const furniture = (current.data.furniture ?? []).map((f, k) => {
       const edit = st.props[k];
-      if (!edit?.name.trim()) return f;
-      return { ...f, name: edit.name.trim(), detail: edit.detail.trim(), heightM: propHeight(`${edit.name} ${edit.detail}`) };
+      if (!edit) return f;
+      const { imageAssetId: _old, ...rest } = f;
+      return { ...rest, detail: edit.detail.trim(), heightM: propHeight(`${f.name} ${edit.detail}`), ...(edit.imageAssetId ? { imageAssetId: edit.imageAssetId } : {}) };
     });
-    db.update(t.plans).set({ data: { ...lockedPlan.data, furniture } }).where(eq(t.plans.id, lockedPlan.id)).run();
-    st.props = furniture.map((f) => ({ name: f.name, detail: f.detail ?? "" }));
+    db.update(t.plans).set({ data: { ...current.data, furniture } }).where(eq(t.plans.id, current.id)).run();
+    st.props = propsFromFurniture(furniture);
+  } else if (current && !AUTO_PLANS.includes(current.name) && st.props.length) {
+    // A floor plan the user edited (not locked): the setting's props are merged in by name, so
+    // nothing typed here is lost when the positions are approved (D19c). New props get a first
+    // place; props taken off the list leave the plan.
+    const C = current.data.actors.length
+      ? { x: current.data.actors.reduce((s, a) => s + a.position.x, 0) / current.data.actors.length, y: current.data.actors.reduce((s, a) => s + a.position.y, 0) / current.data.actors.length }
+      : { x: 0.25, y: 4.85 };
+    const placed = planProps(st, current.data.actors.length > 1, C);
+    const key = (s: string) => s.trim().toLowerCase();
+    const furniture = st.props.map((p, i) => {
+      const old = (current.data.furniture ?? []).find((f) => key(f.name) === key(p.name));
+      const text = `${p.name} ${p.detail}`;
+      if (!old) return placed[i];
+      const { imageAssetId: _old, ...rest } = old;
+      return { ...rest, detail: p.detail, heightM: propHeight(text), ...(p.imageAssetId ? { imageAssetId: p.imageAssetId } : {}) };
+    }).filter(Boolean);
+    const ids = new Set<string>();
+    for (const f of furniture) { while (ids.has(f.id)) f.id = `${f.id}-b`; ids.add(f.id); }
+    db.update(t.plans).set({ data: { ...current.data, furniture } }).where(eq(t.plans.id, current.id)).run();
   }
   const scene = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();
   if (!scene) throw new Error("Scene not found");
@@ -611,9 +633,11 @@ export function approvePositions(db: DB, sceneId: string) {
           if (bounds) position = { x: Math.min(bounds.maxX - 0.3, Math.max(bounds.minX + 0.3, position.x)), y: Math.min(bounds.maxY - 0.3, Math.max(bounds.minY + 0.3, position.y)) };
         }
       }
-      return { ...f, position, heightM: propHeight(text), radiusM: kind === "table" ? f.radiusM : +(propWidth(text, kind) / 2).toFixed(2) };
+      return { ...f, position, heightM: propHeight(text), radiusM: kind === "table" && !/\d\s?c?m\s*(?:wide|across|long)|(?:width|wide)[^\d]{0,12}\d/i.test(text) ? f.radiusM : +(propWidth(text, kind) / 2).toFixed(2) };
     });
-    db.update(t.plans).set({ data: { ...before.data, furniture } }).where(eq(t.plans.id, before.id)).run();
+    db.update(t.plans).set({ data: { ...before.data, furniture, rules: LAYOUT_RULES } }).where(eq(t.plans.id, before.id)).run();
+  } else if (before) {
+    db.update(t.plans).set({ data: { ...before.data, rules: LAYOUT_RULES } }).where(eq(t.plans.id, before.id)).run();
   }
   const plan = latestPlan(db, sceneId);
   if (!plan || !plan.data.actors.length) throw new Error("There is no floor plan to approve yet.");
@@ -692,7 +716,7 @@ function syncPropsFromPlan(db: DB, sceneId: string) {
   const plan = latestPlan(db, sceneId);
   const scene = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();
   if (!plan || !scene) return;
-  const props = (plan.data.furniture ?? []).map((f) => ({ name: f.name, detail: f.detail ?? "" }));
+  const props = propsFromFurniture(plan.data.furniture);
   db.update(t.scenes).set({ staging: { ...asStaging(scene.staging), props } }).where(eq(t.scenes.id, sceneId)).run();
   for (const sh of db.select().from(t.shots).where(eq(t.shots.sceneId, sceneId)).all()) {
     db.update(t.shots).set({ spec: { ...(sh.spec as ShotSpec), props: props.length ? props : undefined } }).where(eq(t.shots.id, sh.id)).run();

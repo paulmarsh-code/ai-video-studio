@@ -499,11 +499,13 @@ describe("Fixes from Paul's first locked run (D19a)", () => {
     const parsed = parseStoryReply(`SCENE\nSPOT: standing around the cocktail table\nPROP: cocktail table - round, chest-high\nPROP: backdrop - purple banner, 3 m wide\nOTHER PEOPLE: busy - 40 guests\n${REPLY}`, CAST);
     studio.saveStoryboard(db, sid, { story: "x", targetSec: 30, panels: parsed.panels, staging: parsed.staging });
     studio.approvePositions(db, sid);
-    // Once positions are approved the plan fixes how many props there are; their look can be corrected (D19b).
+    // Once positions are approved the plan fixes which props there are and what each one is
+    // (D19c); only their look can be corrected (D19b).
     studio.saveSceneStaging(db, sid, { ...parsed.staging, props: [{ name: "neon sign", detail: "pink" }] });
     const sc = repo.getScene(db, sid)!;
-    expect((sc.scene.staging as { props: { name: string }[] }).props.map((p) => p.name)).toEqual(["neon sign", "backdrop"]);
-    expect(sc.shots[0].spec.props!.map((p) => p.name)).toEqual(["neon sign", "backdrop"]);
+    expect((sc.scene.staging as { props: { name: string }[] }).props.map((p) => p.name)).toEqual(["cocktail table", "backdrop"]);
+    expect(sc.shots[0].spec.props!.map((p) => p.name)).toEqual(["cocktail table", "backdrop"]);
+    expect(sc.shots[0].spec.props![0].detail).toBe("pink");
     expect(sc.plan!.data.furniture).toHaveLength(2);
     // Cameras v(n), a picture drawn on it, approved, then undone.
     const plan = sc.plan!.data;
@@ -563,7 +565,7 @@ describe("Arrivals, exits and how props look (D19b)", () => {
     plan.cameras = [{ id: "w", name: "w", preset: "wide", position: { x: 0.25, y: 0.5 }, lookAt: { x: 0.25, y: 5 } }];
     const shot = { ...shotSpecFor(panels[0], { code: "P1", venueName: "v", castIds: ids, staging: { spot: "around the table" } }), cameraId: "w", at: { jade: "arriving" } };
     const t = panelPrompt({ description: "Jade enters", shot, cast, profiles: {}, plan, venueName: "v" }).text;
-    expect(t).toContain("Jade is arriving, a few metres from the group, not yet with them.");
+    expect(t).toContain("Jade is arriving, still well back across the room from the group, not yet with them.");
     expect(t).toMatch(/across the room several metres away: the bar\. Nothing stands right behind them\./);
     expect(t).toContain("with nothing extra on or around it");
   });
@@ -593,6 +595,76 @@ describe("Arrivals, exits and how props look (D19b)", () => {
       expect(cameraPlacementProblem(plan, s.options[0].camera), s.shotCode).toBeFalsy();
     }
     expect(d.shots[1].options[0].kind).toBe("Wide (master)"); // her arrival: wide, the group across the room behind her
+  });
+  it("a prop's height is its own, not the height of what stands on it (D19c)", async () => {
+    const { propHeight } = await import("../src/lib/domain/story");
+    expect(propHeight("round, about 70 cm across, chest-high at 110 cm, matte black, with a clear highball glass (about 15 cm tall)")).toBe(1.1);
+    expect(propHeight("long, about 3 m wide, waist-high at 95 cm, dark wood front")).toBe(0.95);
+    expect(propHeight("step-and-repeat backdrop, about 3 m wide x 2.5 m tall")).toBe(2.5);
+  });
+  it("a prop picture is kept with the locked plan and sent with every panel picture the prop is in (D19c)", async () => {
+    const { openDb } = await import("../src/db/client");
+    const studio = await import("../src/lib/studioRepo");
+    const repo = await import("../src/lib/repo");
+    const { panelPrompt } = await import("../src/lib/domain/imagePrompts");
+    const db = await openDb(":memory:");
+    const pid = studio.createProject(db, { name: "Pic", format: "Advert", audience: "", outline: "", parts: 1, partSec: 30, aspect: "9:16", style: "", genre: "comedy" });
+    for (const c of CAST) studio.addCharacter(db, pid, { name: c.name, pronoun: "they", role: c.role });
+    const sid = studio.addScene(db, pid, { title: "S", venueId: studio.addVenue(db, pid, "Bar"), castIds: ids });
+    const parsed = parseStoryReply(`SCENE\nSPOT: standing around the cocktail table\nPROP: cocktail table - round, chest-high\n${REPLY}`, CAST);
+    studio.saveStoryboard(db, sid, { story: "x", targetSec: 30, panels: parsed.panels, staging: parsed.staging });
+    studio.approvePositions(db, sid);
+    studio.saveSceneStaging(db, sid, { ...parsed.staging, props: [{ name: "cocktail table", detail: "round, chest-high, white cloth", imageAssetId: "img-table" }] });
+    const s = repo.getScene(db, sid)!;
+    expect(s.plan!.data.furniture![0].imageAssetId).toBe("img-table");
+    expect(s.shots[0].spec.props![0].imageAssetId).toBe("img-table");
+    const plan = { ...s.plan!.data, cameras: [{ id: "w", name: "w", preset: "wide" as const, position: { x: 0.25, y: 0.5 }, lookAt: { x: 0.25, y: 4.85 } }] };
+    const cast = CAST.map((c) => ({ id: c.id, name: c.name, pronoun: "she" as const, voiceLock: "" }));
+    const p = panelPrompt({ description: "x", shot: { ...s.shots[0].spec, cameraId: "w" }, cast, profiles: {}, plan, venueName: "v" });
+    expect(p.attach.map((a) => a.assetId)).toContain("img-table");
+    expect(p.text).toContain("Use the attached cocktail table picture for exactly how it looks");
+    // Pointing away from the table: no table picture.
+    const away = { ...plan, cameras: [{ id: "w", name: "w", preset: "wide" as const, position: { x: 0.25, y: 9.5 }, lookAt: { x: 0.25, y: 12 } }] };
+    expect(panelPrompt({ description: "x", shot: { ...s.shots[0].spec, cameraId: "w" }, cast, profiles: {}, plan: away, venueName: "v" }).attach.map((a) => a.assetId)).not.toContain("img-table");
+  });
+  it("props edited in the setting reach a floor plan the user edited, keeping its places (D19c)", async () => {
+    const { openDb } = await import("../src/db/client");
+    const studio = await import("../src/lib/studioRepo");
+    const repo = await import("../src/lib/repo");
+    const db = await openDb(":memory:");
+    const pid = studio.createProject(db, { name: "Mine", format: "Advert", audience: "", outline: "", parts: 1, partSec: 30, aspect: "9:16", style: "", genre: "comedy" });
+    for (const c of CAST) studio.addCharacter(db, pid, { name: c.name, pronoun: "they", role: c.role });
+    const sid = studio.addScene(db, pid, { title: "S", venueId: studio.addVenue(db, pid, "Bar"), castIds: ids });
+    const parsed = parseStoryReply(`SCENE\nSPOT: standing around the cocktail table\nPROP: cocktail table - round, chest-high\n${REPLY}`, CAST);
+    studio.saveStoryboard(db, sid, { story: "x", targetSec: 30, panels: parsed.panels, staging: parsed.staging });
+    const p0 = repo.getScene(db, sid)!.plan!;
+    const moved = { ...p0.data, furniture: p0.data.furniture!.map((f) => ({ ...f, position: { x: 1, y: 6 } })) };
+    repo.savePlan(db, sid, moved, "Floor plan edited by you");
+    studio.saveSceneStaging(db, sid, { ...parsed.staging, props: [{ name: "cocktail table", detail: "round, chest-high, white cloth", imageAssetId: "pic" }, { name: "neon sign", detail: "pink, 1 m wide" }] });
+    const f = repo.getScene(db, sid)!.plan!.data.furniture!;
+    expect(f.map((x) => x.name)).toEqual(["cocktail table", "neon sign"]);
+    expect(f[0].position).toEqual({ x: 1, y: 6 }); // the user's place is kept
+    expect(f[0].detail).toContain("white cloth");
+    expect(f[0].imageAssetId).toBe("pic");
+    studio.approvePositions(db, sid);
+    expect((repo.getScene(db, sid)!.scene.staging as { props: { name: string }[] }).props.map((x) => x.name)).toEqual(["cocktail table", "neon sign"]);
+  });
+  it("a layout made under older rules can be brought up to date (D19c)", async () => {
+    const { LAYOUT_RULES } = await import("../src/lib/domain/director");
+    const { openDb } = await import("../src/db/client");
+    const studio = await import("../src/lib/studioRepo");
+    const repo = await import("../src/lib/repo");
+    const db = await openDb(":memory:");
+    const pid = studio.createProject(db, { name: "Old", format: "Advert", audience: "", outline: "", parts: 1, partSec: 30, aspect: "9:16", style: "", genre: "comedy" });
+    for (const c of CAST) studio.addCharacter(db, pid, { name: c.name, pronoun: "they", role: c.role });
+    const sid = studio.addScene(db, pid, { title: "S", venueId: studio.addVenue(db, pid, "Bar"), castIds: ids });
+    const parsed = parseStoryReply(`SCENE\nSPOT: standing around the cocktail table\nPROP: cocktail table - round, chest-high\n${REPLY}`, CAST);
+    studio.saveStoryboard(db, sid, { story: "x", targetSec: 30, panels: parsed.panels, staging: parsed.staging });
+    const old = repo.getScene(db, sid)!.plan!;
+    repo.savePlan(db, sid, { ...old.data, rules: undefined }, "Floor plan edited by you");
+    expect(repo.getScene(db, sid)!.plan!.data.rules ?? 0).toBeLessThan(LAYOUT_RULES);
+    studio.approvePositions(db, sid);
+    expect(repo.getScene(db, sid)!.plan!.data.rules).toBe(LAYOUT_RULES);
   });
   it("an exit gets a wider shot even on a short angry line", async () => {
     const { classifyMoment } = await import("../src/lib/domain/director");

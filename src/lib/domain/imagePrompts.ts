@@ -147,7 +147,13 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     const pick = c.id === fgId ? (refs.back ?? refs.front) : (refs.front ?? refs.face);
     if (pick) attach.push({ label: `${c.name} ${c.id === fgId && refs.back ? "back" : "reference"}`, assetId: pick });
   }
+  const peopleCount = attach.length;
   if (i.continuity) attach.push({ label: i.continuity.label, assetId: i.continuity.assetId });
+  // Key props with a reference picture (D19c): the ones this camera sees, or all of them
+  // without a camera, so the prop looks the same in every shot.
+  const seenProps = cam && i.plan ? readProps(i.plan, cam).filter((p) => p.inView).map((p) => p.name) : undefined;
+  const propPics = (i.plan?.furniture ?? []).filter((f) => f.imageAssetId && (!seenProps || seenProps.includes(f.name)));
+  for (const f of propPics) attach.push({ label: `${f.name} picture`, assetId: f.imageAssetId! });
   const bgView = reading?.backgroundView;
   const bgImage = bgView ? i.venueViews?.find((v) => v.name === bgView)?.imageAssetId : undefined;
   if (bgImage) attach.push({ label: `${bgView} view`, assetId: bgImage });
@@ -156,7 +162,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
 
   const lines: string[] = [];
   lines.push(`${(i.style ?? "photorealistic").replace(/^./, (m) => m.toUpperCase())} storyboard frame for a ${i.aspect ?? "9:16"} video, set in the ${i.venueName}.`);
-  const people = attach.filter((a) => !a.label.endsWith(" view") && !a.href && a.assetId !== i.continuity?.assetId);
+  const people = attach.slice(0, peopleCount);
   if (people.length) lines.push(`Use the attached reference images for ${joinNames(people.map((a) => a.label.replace(/ (reference|back)$/, "")))}; keep their faces, hair and clothes identical.`);
   if (bgImage) lines.push(`Use the attached ${bgView} image as the background, seen across the room several metres behind the characters: same place, layout and light.${shot?.crowd?.trim() ? " It shows the room empty; fill it with the background guests described below." : ""}`);
   const spot = shot?.spot?.trim();
@@ -168,6 +174,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   const planProps = (i.plan?.furniture ?? []).map((f) => ({ name: f.name, detail: f.detail ?? "" }));
   const props = planProps.length ? planProps : shot?.props ?? [];
   if (props.length) lines.push(`Key props, identical in every picture of this scene: ${props.map((p) => `${p.name}${p.detail ? ` (${stripQuotes(p.detail).replace(/[.]$/, "")})` : ""}`).join("; ")}. Show each exactly as described, every time, with nothing extra on or around it.`);
+  if (propPics.length) lines.push(`Use the attached ${joinNames(propPics.map((f) => `${f.name} picture`))} for exactly how ${propPics.length === 1 ? "it looks" : "they look"}: same shape, colours, materials and everything on ${propPics.length === 1 ? "it" : "them"}. Only its place and size in the frame come from the layout.`);
   if (cam && i.plan) {
     const seen = readProps(i.plan, cam).filter((p) => p.inView);
     if (seen.length) lines.push(`In this picture: ${joinNames(seen.map((p) => `the ${p.name} (${p.frame === "centre" ? "centre" : p.frame.replace("frame-", "")})`))}. ${seen.length === 1 ? "It must be" : "They must be"} clearly visible.`);

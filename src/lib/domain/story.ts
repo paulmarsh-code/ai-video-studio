@@ -29,6 +29,8 @@ export interface KeyProp {
   name: string;
   /** Size, height and colour in words. */
   detail: string;
+  /** A reference picture of the prop (D19c). */
+  imageAssetId?: string;
 }
 
 export type CrowdLevel = "none" | "few" | "busy";
@@ -58,7 +60,10 @@ export function asStaging(v: unknown): SceneStaging {
   const clean = (x: unknown) => (typeof x === "string" && !NONE.test(x.trim()) ? stripQuotes(x).trim() : "");
   const crowd = clean(o.crowd);
   const props = (Array.isArray(o.props) ? o.props : [])
-    .map((p) => ({ name: clean((p as KeyProp)?.name), detail: clean((p as KeyProp)?.detail) }))
+    .map((p) => {
+      const img = (p as KeyProp)?.imageAssetId;
+      return { name: clean((p as KeyProp)?.name), detail: clean((p as KeyProp)?.detail), ...(typeof img === "string" && img ? { imageAssetId: img } : {}) };
+    })
     .filter((p) => p.name);
   const level = crowdLevelOf(crowd, o.crowdLevel);
   return { spot: clean(o.spot), crowd: level === "none" ? "" : crowd, crowdLevel: level, props };
@@ -93,10 +98,15 @@ export function propWidth(text: string, kind: PropKind): number {
 }
 
 export function propHeight(text: string): number {
-  const cm = text.match(/(\d{2,3})\s?cm\s*(tall|high|height)/i) ?? text.match(/(?:height|tall|high)[^\d]{0,12}(\d{2,3})\s?cm/i);
-  if (cm) return Math.min(2.5, Number(cm[1]) / 100);
-  const m = text.match(/(\d(?:\.\d+)?)\s?m\s*(?:tall|high)/i) ?? text.match(/\d+(?:\.\d+)?\s?m\s*(?:wide|across)?\s*[x×]\s*(\d(?:\.\d+)?)\s?m\s*(?:tall|high)/i);
-  if (m) return Math.min(4, Number(m[1]));
+  // The prop is described before the things on it ("chest-high at 110 cm, … a glass 15 cm
+  // tall"), so the first height mentioned is the prop's own (D19c).
+  const found: { at: number; m: number }[] = [];
+  const scan = (re: RegExp, toM: (x: RegExpExecArray) => number) => { for (const x of text.matchAll(new RegExp(re, "gi"))) found.push({ at: x.index ?? 0, m: toM(x as RegExpExecArray) }); };
+  scan(/(\d{2,3})\s?cm\s*(?:tall|high|height)/, (x) => Math.min(2.5, Number(x[1]) / 100));
+  scan(/(?:height|tall|high)[^\d]{0,12}(\d{2,3})\s?cm/, (x) => Math.min(2.5, Number(x[1]) / 100));
+  scan(/(\d(?:\.\d+)?)\s?m\s*(?:tall|high)/, (x) => Math.min(4, Number(x[1])));
+  scan(/\d+(?:\.\d+)?\s?m\s*(?:wide|across)?\s*[x×]\s*(\d(?:\.\d+)?)\s?m\s*(?:tall|high)/, (x) => Math.min(4, Number(x[1])));
+  if (found.length) return found.sort((a, b) => a.at - b.at)[0].m;
   if (propKind(text) === "flat") return 2.2;
   if (/\b(chest[- ]high|bar[- ]height|poseur|cocktail|high[- ]top|tall|high)\b/i.test(text)) return 1.1;
   if (/\bwaist[- ]high|counter\b/i.test(text)) return 0.95;
@@ -200,7 +210,12 @@ const GATHER = /\b(table|bar|counter|desk|sofa|couch|bench|stall|stand|fire ?pit
  * the first gathering-type prop) stands in the middle of the group; the others stand a few
  * metres away on the far side, as a first proposal to adjust on the floor plan.
  */
-function planProps(staging: SceneStaging | undefined, group: boolean, C: { x: number; y: number }) {
+/** The key props as the scene setting lists them, from the floor plan's furniture. */
+export function propsFromFurniture(furniture: { name: string; detail?: string; imageAssetId?: string }[] | undefined): KeyProp[] {
+  return (furniture ?? []).map((f) => ({ name: f.name, detail: f.detail ?? "", ...(f.imageAssetId ? { imageAssetId: f.imageAssetId } : {}) }));
+}
+
+export function planProps(staging: SceneStaging | undefined, group: boolean, C: { x: number; y: number }) {
   if (!staging) return [];
   const props = staging.props.length ? staging.props
     : GATHER.test(staging.spot) ? [{ name: (staging.spot.match(/\b(?:[\w-]+\s+){0,3}(table|bar|counter|desk|sofa|couch|bench|stall|stand)\b/i)?.[0] ?? "table").replace(/^(?:(?:standing|sitting|around|at|by|near|on|in|beside|behind|next|to|a|an|the)\s+)+/i, ""), detail: staging.spot }] : [];
@@ -218,7 +233,7 @@ function planProps(staging: SceneStaging | undefined, group: boolean, C: { x: nu
     // With one person the prop stands beside them, not under their feet.
     const pos = centred ? (group ? C : { x: 0.65, y: 5 }) : { x: +(C.x + dist * Math.cos((ang * Math.PI) / 180)).toFixed(2), y: +(C.y + dist * Math.sin((far[k++ % far.length] * Math.PI) / 180)).toFixed(2) };
     const width = propWidth(text, kind);
-    return { id: i === 0 && centred ? "spot" : `prop-${i + 1}`, name: p.name, detail: p.detail, position: pos, radiusM: centred ? 0.35 : +(width / 2).toFixed(2), heightM: propHeight(text) };
+    return { id: i === 0 && centred ? "spot" : `prop-${i + 1}`, name: p.name, detail: p.detail, position: pos, radiusM: centred ? 0.35 : +(width / 2).toFixed(2), heightM: propHeight(text), ...(p.imageAssetId ? { imageAssetId: p.imageAssetId } : {}) };
   });
 }
 
@@ -486,17 +501,32 @@ export function addMovementMarks(plan: GeometryPlanData, panels: { action: strin
     const a = kind && p.subjectId ? actors.find((x) => x.characterId === p.subjectId) : undefined;
     if (!kind || !a) return undefined;
     if (!a.marks.some((m) => m.id === kind)) {
-      // Outwards from the group, through the person's own place, turned towards the open side.
-      let dx = a.position.x - centre.x, dy = a.position.y - centre.y;
-      const l = Math.hypot(dx, dy) || 1;
-      dx /= l; dy /= l;
-      if (openDir) { dx += openDir.x; dy += openDir.y; }
-      const len = Math.hypot(dx, dy) || 1;
-      const dist = kind === "arriving" ? 3.2 : 1.4;
+      // Outwards from the group, through the person's own place, turned towards the open side:
+      // the turn that lets them start furthest back (up to 5 m) while leaving room behind them
+      // for a camera. The approach follows the same path.
+      let ox = a.position.x - centre.x, oy = a.position.y - centre.y;
+      const l = Math.hypot(ox, oy) || 1;
+      ox /= l; oy /= l;
+      const room = 1.2;
+      const reach = (ux: number, uy: number) => {
+        for (let d = 5; d >= 2.5; d -= 0.25) {
+          const x = a.position.x + ux * d, y = a.position.y + uy * d;
+          if (x > b.minX + room && x < b.maxX - room && y > b.minY + room && y < b.maxY - room) return d;
+        }
+        return 0;
+      };
+      let best = { ux: ox, uy: oy, d: reach(ox, oy) };
+      for (const t of openDir ? [0.5, 0.65, 0.8, 1] : []) {
+        const vx = ox * (1 - t) + openDir!.x * t, vy = oy * (1 - t) + openDir!.y * t;
+        const vl = Math.hypot(vx, vy) || 1;
+        const d = reach(vx / vl, vy / vl);
+        if (t === 0.5 || d > best.d + 0.4) best = { ux: vx / vl, uy: vy / vl, d };
+      }
+      const dist = kind === "arriving" ? best.d || 2.5 : 1.4;
       a.marks.push({
         id: kind,
-        label: kind === "arriving" ? "arriving, a few metres from the group, not yet with them" : "approaching, a step or two from the group",
-        position: { x: +clampX(a.position.x + (dx / len) * dist).toFixed(2), y: +clampY(a.position.y + (dy / len) * dist).toFixed(2) },
+        label: kind === "arriving" ? "arriving, still well back across the room from the group, not yet with them" : "approaching, a step or two from the group",
+        position: { x: +clampX(a.position.x + best.ux * dist).toFixed(2), y: +clampY(a.position.y + best.uy * dist).toFixed(2) },
       });
     }
     return { [a.characterId]: kind };
