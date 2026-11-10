@@ -19,8 +19,8 @@ const QUESTIONS = {
     { key: "other", label: "Anything else?", short: "Also", hint: "e.g. a warmer smile; standing straighter" },
   ],
   panel: [
-    { key: "place", label: "Is anyone or anything not where the layout sketch shows, or the wrong size?", short: "Place and size", hint: "e.g. Marcus is on the wrong side; the table is too small" },
-    { key: "picture", label: "What else should change in this picture?", short: "Change", hint: "e.g. Chase holds a champagne glass; Jade looks angrier" },
+    { key: "place", label: "Is anyone or anything not where the layout sketch shows, or the wrong size?", short: "Place and size", hint: "e.g. the man on the left should be on the right; the table is too small" },
+    { key: "picture", label: "What else should change in this picture?", short: "Change", hint: "e.g. he holds a glass; she looks angrier" },
     { key: "other", label: "Anything else?", short: "Also", hint: "e.g. warmer light; more guests in the background" },
   ],
   place: [
