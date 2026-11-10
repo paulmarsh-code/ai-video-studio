@@ -1,6 +1,7 @@
 // Scene geometry (Stage 5): derive what each camera sees from the top-down plan.
 // Deterministic — no AI. Coordinates are scene-local metres.
 
+import { verticalText } from "./vertical";
 import type {
   CameraPreset,
   CastMember,
@@ -27,6 +28,14 @@ export const PRESET_TEXT: Record<CameraPreset, string> = {
   "two-shot": "Two-shot at eye level, static camera.",
   insert: "Insert close-up of the detail, static camera.",
 };
+
+/** The preset's words with the camera's real height and tilt (D25): "eye level" becomes "high angle…". */
+export function presetText(cam: PlanCamera): string {
+  const v = verticalText(cam);
+  const base = PRESET_TEXT[cam.preset];
+  if (v === "eye level") return base;
+  return /eye level/.test(base) ? base.replace("eye level", v) : base.replace(/\.$/, `, ${v}.`);
+}
 
 /** Within this angle of centre, a person reads as "centre" of frame. */
 export const CENTRE_BAND_DEG = 2;

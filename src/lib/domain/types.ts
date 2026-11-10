@@ -46,6 +46,10 @@ export interface PlanCamera {
   fovDeg?: number;
   /** If the camera intentionally crosses the line, the reason (override). */
   overrideReason?: string;
+  /** Lens height above the floor in metres (D25); eye level, 1.6 m, when absent. */
+  heightM?: number;
+  /** Tilt in degrees (D25): negative looks down, positive looks up; level when absent. */
+  tiltDeg?: number;
 }
 
 export interface PlanView {

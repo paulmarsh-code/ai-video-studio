@@ -480,3 +480,36 @@ Paul found the storyboard confusing. If he did, others will. It's now two parts,
 2. **Storyboard** (first called "Layout and pictures"; renamed at Paul's request). Check and approve the character and prop positions, then the cameras. Once both are approved, **Draw pictures** appears. There's no separate approve card: each picture is approved on its own, with a running count ("7 of 11 approved"); when all are approved it leads on to the animatic. Warnings and comments sit under each picture.
 
 **Redraw pictures** shows while any picture isn't approved. It is only enabled for pictures whose inputs have changed since they were drawn: the scene setting, the words, the layout, a prop picture, or the approved pictures they follow. Each picture stores a fingerprint of its prompt and attachments (`check.drawnFrom`) to tell. With nothing changed it says what to change, since the same inputs give much the same picture. "Need to change something?" on a picture is the way to fix one picture.
+
+## D25 — More ways of looking, shot effects, and cameras that go up and down (2026-11-10)
+
+1. **Who looks at whom, from far more wording** (`gaze.ts`, `tests/gaze.test.ts`, 55 cases with made-up names):
+   - Verbs: looks, glances, stares, glares, gazes, peers, peeks, squints, scowls, frowns, smiles, grins, smirks, winks, nods, sneers, points, waves, turns, rolls their eyes at, fixes their eyes on, and more.
+   - Direct objects: spots, notices, watches, eyes, studies, scans, addresses, asks, tells, confronts, faces, sizes up.
+   - Meeting or catching someone's gaze or eye; ignoring or avoiding them (looks away).
+   - Pairs: exchange a look, look at each other, lock eyes, make eye contact.
+   - "Everyone turns to …".
+   - she/he/they carrying on from the clause before, and "her"/"him" as the person they're talking with.
+   - Directions: down, up, away, around, back, left, right, behind, back over their shoulder (at someone).
+   - Looking in or through things: mirrors (rear-view, wing, side, bathroom), windows, windscreens, doors and doorways, keyholes, peepholes, binoculars, telescopes, spyglasses, eyeglasses, periscopes, viewfinders, screens, blinds, gaps.
+   - Their own reflection in a mirror, water or glass.
+2. **Shot effects.** Each thing looked through or into has its own look in the picture and video prompt:
+   - binoculars: two overlapping circles;
+   - a telescope or eyeglass: one round vignette;
+   - a keyhole: its shape;
+   - a peephole: a fish-eye view;
+   - a rear-view or side mirror: a tight shot of the mirror and its reflection;
+   - a window or doorway: a frame within the frame;
+   - blinds or gaps: strips between dark edges;
+   - a reflection in a mirror: over the shoulder into the mirror;
+   - a reflection in water: a high angle down at a rippling reflection;
+   - a reflection in glass: a faint see-through reflection.
+3. **Cameras that go up and down.** Cameras have a height and a tilt (`heightM`, `tiltDeg`; eye level and level by default).
+   - Wording sets them automatically (`vertical.ts`). "Looks down", "over the edge", "the street below" or a reflection in water gives a high camera. "Looks into the hole/well/box" gives a steep overhead camera, moved to just behind and above the person. "Looks up", "up at the window", "overhead" or "towers over" gives a low camera.
+   - The tilt is worked out from the camera's distance, so the person stays in frame.
+   - Picture and video prompts say the angle ("high angle from about 2.8 m up, tilted down about 25°") instead of "eye level".
+   - The layout sketch, the floor plan viewfinder and the 360° background cut all follow the height and tilt.
+   - The floor plan has quick choices (eye level, high, low, overhead, ground level) plus height and tilt sliders.
+4. Layout rules are now version 7, so existing scenes show "Update the layout".
+
+Limit: the floor is flat in the floor plan. A cliff edge or a hole is described in words and shown by the camera's angle, but the ground below isn't modelled as lower.

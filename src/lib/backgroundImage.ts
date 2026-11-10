@@ -76,7 +76,16 @@ export async function renderBackgroundForShot(db: DB, shotId: string): Promise<B
   let x0 = Math.round((ring.startDeg - slice.leftDeg) * PX_PER_DEG);
   x0 = ((x0 % ring.width) + ring.width) % ring.width;
   const w = Math.max(16, Math.min(ring.width, Math.round((slice.leftDeg - slice.rightDeg) * PX_PER_DEG)));
-  return sharp(ring.data).extract({ left: x0, top: 0, width: w, height: H }).resize({ width: 1024, height: 1024, fit: "inside" }).png().toBuffer();
+  // Up and down (D25): the frame's height in degrees, moved up or down by the camera's tilt.
+  // The ring spans about ±34° of level, so a steep tilt reaches its edge and stops there.
+  const aspect = String(plan.aspect ?? "9:16");
+  const [aw, ah] = aspect.split(":").map(Number);
+  const hfov = slice.leftDeg - slice.rightDeg;
+  const vfov = (2 * Math.atan(Math.tan((hfov * Math.PI) / 360) * ((ah || 16) / (aw || 9))) * 180) / Math.PI;
+  const h = Math.max(32, Math.min(H, Math.round(vfov * PX_PER_DEG)));
+  const centre = H / 2 - (cam.tiltDeg ?? 0) * PX_PER_DEG;
+  const top = Math.max(0, Math.min(H - h, Math.round(centre - h / 2)));
+  return sharp(ring.data).extract({ left: x0, top, width: w, height: h }).resize({ width: 1024, height: 1024, fit: "inside" }).png().toBuffer();
 }
 
 /** Whether a shot can have a ring background (two or more view pictures). */

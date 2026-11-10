@@ -6,6 +6,7 @@ import { deriveDuration } from "./duration";
 import { mainSubjectId } from "./composer";
 import { cameraPlacementProblem, facingOf, horizontalFov, PRESET_FOV, occlusions, planForShot, propsBlocking, readCamera, type CameraReading } from "./geometry";
 import { GENRE_PROFILES, genreBonus, type Genre } from "./genre";
+import { verticalFor } from "./vertical";
 import type { CameraPreset, GeometryPlanData, PlanCamera, Point, ShotSpec } from "./types";
 
 export type MomentKind = "establishing" | "dialogue" | "peak" | "reaction" | "exit";
@@ -538,6 +539,25 @@ export function groupMultiShot(shots: ShotInput[], maxSec = 15, maxCuts = 6): Mu
 
 export { facingOf };
 
+/**
+ * Put a camera high or low for a looking-down or looking-up moment (D25). Its tilt is worked out
+ * from its distance, so the person stays in frame: a high camera aims down at their chest, a low
+ * one up at their head. An overhead camera moves to just behind and above them.
+ */
+export function verticalCamera(cam: PlanCamera, v: { kind: string; heightM: number; tiltDeg: number }, subject?: Point): PlanCamera {
+  if (!subject) return { ...cam, heightM: v.heightM, tiltDeg: v.tiltDeg };
+  if (v.kind === "overhead") {
+    const away = norm(sub(cam.position, subject));
+    const position = add(subject, mul(away, 1.0));
+    return { ...cam, position: { x: +position.x.toFixed(2), y: +position.y.toFixed(2) }, lookAt: subject, heightM: v.heightM, tiltDeg: v.tiltDeg };
+  }
+  const dist = Math.max(0.5, Math.hypot(subject.x - cam.position.x, subject.y - cam.position.y));
+  const aimAt = v.kind === "high" ? 1.2 : 1.6; // chest when looking down on them, head when looking up
+  const deg = (Math.atan((aimAt - v.heightM) / dist) * 180) / Math.PI;
+  const tiltDeg = Math.round(v.kind === "high" ? Math.min(-15, deg) : Math.max(10, deg));
+  return { ...cam, heightM: v.heightM, tiltDeg };
+}
+
 export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (id: string) => string, genre: Genre = "neutral"): SceneDesign {
   const line = chooseLine(plan, shots);
   // Anchor screen sides from the dialogue (R-SCREEN): run the dialogue shots first, take the
@@ -559,7 +579,18 @@ export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (i
   }
   
   const best = !line ? { side: 1, ...a } : a.total + 2 * open >= b.total ? { side: 1, ...a } : { side: -1, ...b };
-  return { side: best.side, lineOfAction: line, shots: best.designs, multiShot: groupMultiShot(shots) };
+  // Up and down (D25): a moment about looking down or up gets a high or low camera, on whichever
+  // position and direction was chosen. Said in the reasons, so it shows on the camera.
+  const designs = best.designs.map((d) => {
+    const sh = shots.find((x) => x.id === d.shotId);
+    const v = verticalFor(`${sh?.description ?? ""} ${sh?.spec.actions ?? ""}`);
+    if (!v || !sh) return d;
+    const sp = planForShot(plan, sh.spec);
+    const subj = mainSubjectId(sh.spec);
+    const S = sp.actors.find((a) => a.characterId === subj)?.position;
+    return { ...d, options: d.options.map((o) => ({ ...o, camera: verticalCamera(o.camera, v, S), reasons: [...o.reasons, `R-VERTICAL: ${v.why}`] })) };
+  });
+  return { side: best.side, lineOfAction: line, shots: designs, multiShot: groupMultiShot(shots) };
 }
 
 /**
@@ -572,16 +603,16 @@ export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (i
  * 3 = faces, approach shots from behind the walker (D19c/D19d); 4 = nobody standing with the
  * group drops out of frame, arrivals filmed from further back (D19e); 5 = start and finish
  * positions for anyone moving (D20); 6 = movement marks worked out afresh, props seen across
- * their real extent (D21b).
+ * their real extent (D21b); 7 = high and low cameras for looking down or up (D25).
  */
-export const LAYOUT_RULES = 6;
+export const LAYOUT_RULES = 7;
 
 export function applyDesign(plan: GeometryPlanData, choices: { shotId: string; shotCode: string; option: CameraOption }[], line?: [string, string]) {
   const cameras: PlanCamera[] = [];
   const assign: Record<string, string> = {};
   for (const ch of choices) {
     const c = ch.option.camera;
-    const same = cameras.find((x) => x.preset === c.preset && x.fovDeg === c.fovDeg && Math.hypot(x.position.x - c.position.x, x.position.y - c.position.y) < 0.3 && Math.hypot(x.lookAt.x - c.lookAt.x, x.lookAt.y - c.lookAt.y) < 0.5);
+    const same = cameras.find((x) => x.preset === c.preset && x.fovDeg === c.fovDeg && x.heightM === c.heightM && x.tiltDeg === c.tiltDeg && Math.hypot(x.position.x - c.position.x, x.position.y - c.position.y) < 0.3 && Math.hypot(x.lookAt.x - c.lookAt.x, x.lookAt.y - c.lookAt.y) < 0.5);
     if (same) { assign[ch.shotId] = same.id; continue; }
     const id = `cam-${cameras.length + 1}`;
     cameras.push({ ...c, id, name: `${ch.option.kind.split(" (")[0]} (${ch.shotCode.split("_").pop()})` });

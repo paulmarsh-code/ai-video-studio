@@ -57,7 +57,7 @@ export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; 
     setPlan((pl) => ({ ...pl, actors: pl.actors.map((a) => (a.characterId === id ? { ...a, position: p } : a)) }));
   const moveFurniture = (id: string, p: Point) =>
     setPlan((pl) => ({ ...pl, furniture: (pl.furniture ?? []).map((f) => (f.id === id ? { ...f, position: p } : f)) }));
-  const moveCam = (id: string, patch: Partial<{ position: Point; lookAt: Point; preset: CameraPreset; overrideReason?: string; fovDeg?: number }>) =>
+  const moveCam = (id: string, patch: Partial<{ position: Point; lookAt: Point; preset: CameraPreset; overrideReason?: string; fovDeg?: number; heightM?: number; tiltDeg?: number }>) =>
     setPlan((pl) => ({ ...pl, cameras: pl.cameras.map((c) => (c.id === id ? { ...c, ...patch } : c)) }));
 
   // Line of action endpoints.
@@ -203,6 +203,20 @@ export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; 
                   <input type="range" min={15} max={90} step={1} value={Math.round(cam.fovDeg ?? PRESET_FOV[cam.preset])} className="ml-2 align-middle" aria-label="Lens angle"
                     onChange={(e) => moveCam(cam.id, { fovDeg: Number(e.target.value) })} onMouseDown={pushHistory} />
                 </label>
+                {/* Up and down (D25): height and tilt, with quick choices. */}
+                <div className="mt-2 text-xs" data-testid="camera-vertical">
+                  <p className="mb-1">Height and angle: {(cam.heightM ?? 1.6).toFixed(1)} m up, {cam.tiltDeg ? `${Math.abs(cam.tiltDeg)}° ${cam.tiltDeg < 0 ? "down" : "up"}` : "level"}</p>
+                  <div className="mb-1 flex flex-wrap gap-1">
+                    {([["Eye level", 1.6, 0], ["High, looking down", 2.8, -35], ["Low, looking up", 0.6, 25], ["Overhead", 4, -80], ["Ground level", 0.2, 10]] as const).map(([label, h, t]) => (
+                      <button key={label} type="button" className={`rounded border px-2 py-0.5 ${(cam.heightM ?? 1.6) === h && (cam.tiltDeg ?? 0) === t ? "border-blue-700 bg-blue-50" : "border-neutral-300"}`}
+                        onClick={() => { pushHistory(); moveCam(cam.id, { heightM: h === 1.6 ? undefined : h, tiltDeg: t === 0 ? undefined : t }); }} data-testid={`cam-vert-${label.split(",")[0].toLowerCase().replace(/\s+/g, "-")}`}>{label}</button>
+                    ))}
+                  </div>
+                  <label className="block">Height <input type="range" min={0.1} max={6} step={0.1} value={cam.heightM ?? 1.6} aria-label="Camera height" className="ml-2 align-middle"
+                    onMouseDown={pushHistory} onChange={(e) => moveCam(cam.id, { heightM: Number(e.target.value) })} /></label>
+                  <label className="block">Tilt <input type="range" min={-90} max={60} step={1} value={cam.tiltDeg ?? 0} aria-label="Camera tilt" className="ml-2 align-middle"
+                    onMouseDown={pushHistory} onChange={(e) => moveCam(cam.id, { tiltDeg: Number(e.target.value) })} /></label>
+                </div>
               </div>
               <div>
                 <p className="font-medium">What this camera sees (written into prompts)</p>

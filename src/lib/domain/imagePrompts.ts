@@ -4,11 +4,11 @@
 // rejected); images made in GPT, not Kling (better and cheaper); no text or logos.
 
 import { mainSubjectId } from "./composer";
-import { describeFrame, facingOf, planForShot, PRESET_TEXT, readCamera, readProps } from "./geometry";
+import { describeFrame, facingOf, planForShot, presetText, readCamera, readProps } from "./geometry";
 import { GENRE_PROFILES, type Genre } from "./genre";
 import { gestureDetail } from "./gestures";
 import { propMoves } from "./story";
-import { gazeFor, gazeLine } from "./gaze";
+import { gazeFor, gazeLine, shotEffect } from "./gaze";
 import { joinNames, stripQuotes } from "./text";
 import type { CastMember, GeometryPlanData, ShotSpec } from "./types";
 
@@ -273,12 +273,16 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   // Who looks at whom (D21b), for everyone in the picture.
   if (shot) {
     const inPic = reading ? reading.actors.filter((a) => a.inView && [...shownIds, ...edgeIds].includes(a.characterId) && a.characterId !== fgId).map((a) => a.characterId) : [...shownIds];
-    const gl = gazeLine(gazeFor({ shot, description: i.description, people: i.cast.map((c) => ({ id: c.id, name: c.name })), line: (shotPlan ?? i.plan)?.lineOfAction }), name, inPic);
+    const gz = gazeFor({ shot, description: i.description, people: i.cast.map((c) => ({ id: c.id, name: c.name })), line: (shotPlan ?? i.plan)?.lineOfAction });
+    const gl = gazeLine(gz, name, inPic);
     if (gl) lines.push(gl);
+    // Looking through something has its own look (D25): binoculars, keyhole, mirror, window…
+    const fx = shotEffect(gz, shot.speakerId ?? shot.subjectId ?? shot.visibleIds[0]);
+    if (fx) lines.push(`Shot effect: ${fx}.`);
   }
 
   if (cam && reading && shot) {
-    lines.push(PRESET_TEXT[cam.preset].replace(", static camera", "").replace(" static camera,", ""));
+    lines.push(presetText(cam).replace(", static camera", "").replace(" static camera,", ""));
     // A strict left-to-right order and head count (D18e): looser wording let GPT swap people or drop them.
     const order = reading.actors.filter((a) => a.inView && [...shownIds, ...edgeIds].includes(a.characterId)).sort((a, b) => a.angleDeg - b.angleDeg);
     if (order.length > 1) {

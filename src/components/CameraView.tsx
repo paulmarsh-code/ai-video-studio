@@ -74,7 +74,9 @@ export function CameraView({
   if (!cam) return null;
   const fov = cam.fovDeg ?? PRESET_FOV[cam.preset];
   const reading = readCamera(plan, cam);
-  const horizon = H * 0.4;
+  // Up and down (D25): tilting down raises the horizon in the frame, tilting up lowers it.
+  const focalPx = W / 2 / Math.tan(((fov / 2) * Math.PI) / 180);
+  const horizon = H * 0.4 + Math.tan(((cam.tiltDeg ?? 0) * Math.PI) / 180) * focalPx;
   const wall = reading.backgroundView ?? "";
   const colour = (id: string) => COLOURS[Math.max(0, cast.findIndex((c) => c.id === id)) % COLOURS.length];
   const name = (id: string) => cast.find((c) => c.id === id)?.name ?? id;

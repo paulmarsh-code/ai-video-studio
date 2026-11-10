@@ -38,11 +38,18 @@ export function layoutSketchSvg(i: {
   // The preset's field of view spans the frame's width.
   const tanH = Math.tan((horizontalFov(i.plan, cam) * Math.PI) / 360);
   const focal = W / 2 / tanH;
+  // The camera's own height and tilt (D25): a high camera tilted down, a low one tilted up.
+  const camH = cam.heightM ?? EYE_HEIGHT;
+  const tilt = ((cam.tiltDeg ?? 0) * Math.PI) / 180;
   const toScreen = (p: { x: number; y: number }, z: number) => {
     const rel = { x: p.x - cam.position.x, y: p.y - cam.position.y };
-    const depth = rel.x * f.x + rel.y * f.y;
+    const d0 = rel.x * f.x + rel.y * f.y;
     const lateral = rel.x * r.x + rel.y * r.y;
-    return { depth, x: W / 2 + (lateral / depth) * focal, y: H / 2 - ((z - EYE_HEIGHT) / depth) * focal };
+    const v0 = z - camH;
+    // Rotate (depth, height) by the tilt: looking down brings the floor up the frame.
+    const depth = d0 * Math.cos(tilt) + v0 * Math.sin(tilt);
+    const v = -d0 * Math.sin(tilt) + v0 * Math.cos(tilt);
+    return { depth, x: W / 2 + (lateral / depth) * focal, y: H / 2 - (v / depth) * focal };
   };
 
   type Item = { depth: number; svg: string };
@@ -121,14 +128,16 @@ export function layoutSketchSvg(i: {
   });
 
   items.sort((a, b) => b.depth - a.depth); // far first, so nearer figures overlap them
-  const horizon = H / 2;
+  // The horizon moves with the tilt: down when looking up, up when looking down.
+  const horizon = Math.max(-H, Math.min(2 * H, H / 2 + Math.tan(tilt) * focal));
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`,
     `<rect width="${W}" height="${H}" fill="#fafafa"/>`,
-    `<rect y="${horizon}" width="${W}" height="${H - horizon}" fill="#f0f0f0"/>`,
+    `<rect y="${Math.max(0, horizon)}" width="${W}" height="${Math.max(0, H - Math.max(0, horizon))}" fill="#f0f0f0"/>`,
     `<line x1="0" y1="${horizon}" x2="${W}" y2="${horizon}" stroke="#d4d4d4" stroke-width="2" stroke-dasharray="12 10"/>`,
     i.backgroundView ? `<text x="${W / 2}" y="44" font-size="28" text-anchor="middle" fill="#737373" font-family="sans-serif">behind: ${esc(i.backgroundView)}</text>` : "",
     ...items.map((x) => x.svg),
+    (cam.tiltDeg || (cam.heightM && Math.abs(cam.heightM - EYE_HEIGHT) > 0.3)) ? `<text x="${W / 2}" y="${H - 20}" font-size="26" text-anchor="middle" fill="#404040" stroke="#fff" stroke-width="5" paint-order="stroke" font-family="sans-serif">camera ${(cam.heightM ?? EYE_HEIGHT).toFixed(1)} m up, ${Math.abs(cam.tiltDeg ?? 0).toFixed(0)}° ${(cam.tiltDeg ?? 0) < 0 ? "down" : "up"}</text>` : "",
     `<rect x="2" y="2" width="${W - 4}" height="${H - 4}" fill="none" stroke="#a3a3a3" stroke-width="4"/>`,
     "</svg>",
   ].join("");
