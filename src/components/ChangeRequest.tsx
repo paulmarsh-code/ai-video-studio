@@ -19,7 +19,8 @@ const QUESTIONS = {
     { key: "other", label: "Anything else?", short: "Also", hint: "e.g. a warmer smile; standing straighter" },
   ],
   panel: [
-    { key: "picture", label: "What should change in this picture?", short: "Change", hint: "e.g. Chase holds a champagne glass; Jade looks angrier; move them closer together" },
+    { key: "place", label: "Is anyone or anything not where the layout sketch shows, or the wrong size?", short: "Place and size", hint: "e.g. Marcus is on the wrong side; the table is too small" },
+    { key: "picture", label: "What else should change in this picture?", short: "Change", hint: "e.g. Chase holds a champagne glass; Jade looks angrier" },
     { key: "other", label: "Anything else?", short: "Also", hint: "e.g. warmer light; more guests in the background" },
   ],
   place: [
@@ -123,6 +124,7 @@ export function ChangeRequest({ what, projectId, baseCode, onSubmit }: ChangeReq
               ))}
             </div>
           ))}
+          {what === "panel" && <p className="text-xs text-neutral-600">A place or size problem redraws the picture fresh from the approved layout. To move someone in every shot, unlock the positions and move them on the floor plan.</p>}
           {Object.keys(pics).length > 0 && <p className="text-xs text-neutral-600">A picture is only used for what you added it to. {what === "place" ? "People, signs and text in it are left out." : "The faces and features stay the same."}</p>}
           {picError && <p className="text-xs text-red-700" role="alert">{picError}</p>}
           <div className="flex items-center gap-3">

@@ -12,7 +12,7 @@ import { ActionButton } from "./ActionButton";
 
 const field = "mt-1 w-full rounded border border-neutral-300 px-2 py-1.5 text-sm";
 
-export function StagingFields({ value, onChange }: { value: SceneStaging; onChange: (v: SceneStaging) => void }) {
+export function StagingFields({ value, onChange, propsLocked }: { value: SceneStaging; onChange: (v: SceneStaging) => void; propsLocked?: boolean }) {
   const setProp = (k: number, patch: Partial<KeyProp>) => onChange({ ...value, props: value.props.map((p, i) => (i === k ? { ...p, ...patch } : p)) });
   const levels: { v: CrowdLevel; label: string }[] = [{ v: "none", label: "No one else" }, { v: "few", label: "A few" }, { v: "busy", label: "Busy" }];
   return (
@@ -22,15 +22,15 @@ export function StagingFields({ value, onChange }: { value: SceneStaging; onChan
           placeholder="e.g. standing around the cocktail table, near the bar" />
       </label>
       <div className="text-sm">
-        <p>Key props <span className="text-neutral-500">· objects that matter, drawn the same in every shot</span></p>
+        <p>Key props <span className="text-neutral-500">· {propsLocked ? "locked with the approved positions; unlock the positions to change them" : "objects that matter, drawn the same in every shot"}</span></p>
         {value.props.map((p, k) => (
           <div key={k} className="mt-1 grid gap-2 sm:grid-cols-[12rem_1fr_auto]" data-testid={`staging-prop-${k}`}>
-            <input className={field} value={p.name} onChange={(e) => setProp(k, { name: e.target.value })} placeholder="e.g. cocktail table" aria-label="Prop name" />
-            <input className={field} value={p.detail} onChange={(e) => setProp(k, { detail: e.target.value })} placeholder="size, height and colour, e.g. round, 70 cm across, chest-high, white cloth" aria-label="Prop detail" />
-            <button type="button" className="mt-1 text-xs text-red-700 underline" onClick={() => onChange({ ...value, props: value.props.filter((_, i) => i !== k) })}>Remove</button>
+            <input className={field} value={p.name} disabled={propsLocked} onChange={(e) => setProp(k, { name: e.target.value })} placeholder="e.g. cocktail table" aria-label="Prop name" />
+            <input className={field} value={p.detail} disabled={propsLocked} onChange={(e) => setProp(k, { detail: e.target.value })} placeholder="size, height and colour, e.g. round, 70 cm across, chest-high, white cloth" aria-label="Prop detail" />
+            {!propsLocked && <button type="button" className="mt-1 text-xs text-red-700 underline" onClick={() => onChange({ ...value, props: value.props.filter((_, i) => i !== k) })}>Remove</button>}
           </div>
         ))}
-        <button type="button" className="mt-1 text-xs text-blue-700 underline" data-testid="staging-add-prop" onClick={() => onChange({ ...value, props: [...value.props, { name: "", detail: "" }] })}>+ Add a key prop</button>
+        {!propsLocked && <button type="button" className="mt-1 text-xs text-blue-700 underline" data-testid="staging-add-prop" onClick={() => onChange({ ...value, props: [...value.props, { name: "", detail: "" }] })}>+ Add a key prop</button>}
       </div>
       <div className="text-sm">
         <p>Other people</p>
@@ -49,8 +49,10 @@ export function StagingFields({ value, onChange }: { value: SceneStaging; onChan
   );
 }
 
-export function SceneSettingCard({ sceneId, staging, hasPictures, suggestPrompt, canAuto }: {
+export function SceneSettingCard({ sceneId, staging, hasPictures, suggestPrompt, canAuto, propsLocked }: {
   sceneId: string; staging: SceneStaging; hasPictures: boolean;
+  /** Positions are approved: the key props come from the floor plan and can't be edited here. */
+  propsLocked?: boolean;
   /** The setting-only request built from the saved story; absent when there is no story. */
   suggestPrompt?: string;
   canAuto: boolean;
@@ -80,7 +82,7 @@ export function SceneSettingCard({ sceneId, staging, hasPictures, suggestPrompt,
     <section className="rounded-xl border border-neutral-200 bg-white p-4" data-testid="scene-setting">
       <p className="font-semibold">Scene setting</p>
       <p className="mb-2 text-sm text-neutral-600">Kept the same in every picture and every clip of this scene.</p>
-      <StagingFields value={v} onChange={setV} />
+      <StagingFields value={v} onChange={setV} propsLocked={propsLocked} />
       {suggestPrompt && (
         <div className="mt-2 flex flex-wrap items-start gap-3 text-sm">
           {canAuto && (

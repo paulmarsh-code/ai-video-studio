@@ -10,7 +10,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { approveCamerasAction, approvePanelAction, approvePanelsAction, approvePositionsAction, chooseCamerasAction, setPanelImageAction, unlockSceneAction } from "@/app/studioActions";
+import { approveCamerasAction, approvePanelAction, unapprovePanelAction, approvePanelsAction, approvePositionsAction, chooseCamerasAction, setPanelImageAction, unlockSceneAction } from "@/app/studioActions";
 import type { GeometryPlanData } from "@/lib/domain/types";
 import { PlanThumb } from "./PlanThumb";
 import { uploadBlob } from "@/lib/clientUpload";
@@ -87,8 +87,19 @@ async function checkPicture(panelId: string, assetId: string): Promise<{ pass: b
   } catch { return null; }
 }
 
-/** The change request for one picture: the current picture first, then any reference pictures. */
+/**
+ * The change request for one picture. A place or size problem (D19a) redraws fresh from the
+ * panel's full request and the layout sketch: editing the old picture never moves anyone.
+ * Other changes edit the current picture, which keeps everything else as it is.
+ */
 function changeRequestFor(p: BoardPanel, ch: SubmittedChange) {
+  if (ch.parts.place) {
+    const refNote = ch.refs.length ? ` The last ${ch.refs.length === 1 ? "attached picture is a reference" : `${ch.refs.length} attached pictures are references`} for: ${ch.refs.map((r) => r.for.toLowerCase()).join("; ")}.` : "";
+    return {
+      prompt: `${p.prompt}\nFollow the layout sketch exactly for where everyone and everything stands and how big it is. The last attempt got this wrong: ${ch.text}.${refNote}`,
+      refs: [...assetIds(p.attach), ...ch.refs.map((r) => r.assetId)],
+    };
+  }
   const refNote = ch.refs.length
     ? `\nThe last ${ch.refs.length === 1 ? "attached picture is a reference" : `${ch.refs.length} attached pictures are references`} for: ${ch.refs.map((r) => r.for.toLowerCase()).join("; ")}. Use ${ch.refs.length === 1 ? "it" : "them"} only for that; faces and people come from the current picture.`
     : "";
@@ -319,7 +330,8 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
             <div className="mt-2 flex items-center gap-2 text-sm">
               <span className="font-semibold">{i + 1}</span>
               <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs">{p.seconds} s</span>
-              {p.status === "approved" ? <DoneBadge text="Approved" /> : p.imageAssetId ? <span className="text-xs text-amber-700">to check</span> : null}
+              {p.status === "approved" ? <><DoneBadge text="Approved" /><button type="button" className="text-xs text-neutral-600 underline" data-testid={`board-${p.code}-unapprove`}
+                onClick={async () => { await unapprovePanelAction(p.id); router.refresh(); }}>Undo</button></> : p.imageAssetId ? <span className="text-xs text-amber-700">to check</span> : null}
               {!p.hasCamera && <span className="text-xs text-amber-700">no camera yet</span>}
               {p.hasCamera && p.shotId && p.imageAssetId && <a className="ml-auto text-xs text-blue-700 underline" href={`/api/layout/${p.shotId}`} target="_blank" rel="noreferrer">See the layout</a>}
             </div>
@@ -344,7 +356,7 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
                   <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-3" data-testid={`board-${p.code}-hand-change`}>
                     <p className="mb-2 text-sm font-medium">Make the change in ChatGPT</p>
                     <ByHand p={p} prompt={req.prompt} projectId={b.projectId} baseCode={b.baseCode}
-                      attach={[{ label: "the current picture", assetId: p.imageAssetId! }, ...p.attach, ...handChange[p.id].refs.map((r) => ({ label: `reference: ${r.for.toLowerCase()}`, assetId: r.assetId }))]}
+                      attach={[...(handChange[p.id].parts.place ? [] : [{ label: "the current picture", assetId: p.imageAssetId! }]), ...p.attach, ...handChange[p.id].refs.map((r) => ({ label: `reference: ${r.for.toLowerCase()}`, assetId: r.assetId }))]}
                       onUploaded={() => { setHandChange((x) => { const y = { ...x }; delete y[p.id]; return y; }); router.refresh(); }} />
                   </div>
                 );

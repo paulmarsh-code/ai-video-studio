@@ -162,3 +162,7 @@ export async function approveCamerasAction(sceneId: string) {
 export async function unlockSceneAction(sceneId: string, what: "positions" | "cameras") {
   return run((db) => studio.unlockScene(db, sceneId, what));
 }
+
+export async function unapprovePanelAction(panelId: string) {
+  return run((db) => studio.unapprovePanel(db, panelId));
+}

@@ -78,7 +78,7 @@ export default async function StoryboardPage({ params, searchParams }: { params:
       {missingRefs.length > 0 && <p className="mt-2 text-sm text-amber-700">No approved pictures yet for {missingRefs.map((c) => c.name).join(", ")}. Create them in <Link className="underline" href={`/projects/${id}/characters`}>Characters</Link> so every panel keeps them consistent.</p>}
 
       <div className="mt-5">
-        <SceneSettingCard sceneId={sceneId} staging={asStaging(s.scene.staging)} hasPictures={s.panels.some((p) => p.imageAssetId)} canAuto={!!getTextProvider()}
+        <SceneSettingCard propsLocked={!!locks.positions} sceneId={sceneId} staging={locks.positions && s.plan?.data.furniture?.length ? { ...asStaging(s.scene.staging), props: s.plan.data.furniture.map((f) => ({ name: f.name, detail: f.detail ?? "" })) } : asStaging(s.scene.staging)} hasPictures={s.panels.some((p) => p.imageAssetId)} canAuto={!!getTextProvider()}
           suggestPrompt={s.scene.story.trim() ? stagingPrompt({ story: s.scene.story, venue: s.venue?.name ?? "the venue", characters: chars.filter((c) => castIds.includes(c.slug)).map((c) => ({ id: c.slug, name: c.name, role: c.role })) }) : undefined} />
       </div>
 

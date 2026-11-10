@@ -486,3 +486,51 @@ describe("Picture check against the approved layout (D19)", () => {
     expect(fixLine(missing.problems)).toContain("Fix these problems: Nina and Marcus are missing.");
   });
 });
+
+describe("Fixes from Paul's first locked run (D19a)", () => {
+  it("one prop list from the approved plan, undo approval, and stale pictures after a new layout", async () => {
+    const { openDb } = await import("../src/db/client");
+    const studio = await import("../src/lib/studioRepo");
+    const repo = await import("../src/lib/repo");
+    const db = await openDb(":memory:");
+    const pid = studio.createProject(db, { name: "Fix", format: "Advert", audience: "", outline: "", parts: 1, partSec: 30, aspect: "9:16", style: "", genre: "comedy" });
+    for (const c of CAST) studio.addCharacter(db, pid, { name: c.name, pronoun: "they", role: c.role });
+    const sid = studio.addScene(db, pid, { title: "S", venueId: studio.addVenue(db, pid, "Bar"), castIds: CAST.map((c) => c.id) });
+    const parsed = parseStoryReply(`SCENE\nSPOT: standing around the cocktail table\nPROP: cocktail table - round, chest-high\nPROP: backdrop - purple banner, 3 m wide\nOTHER PEOPLE: busy - 40 guests\n${REPLY}`, CAST);
+    studio.saveStoryboard(db, sid, { story: "x", targetSec: 30, panels: parsed.panels, staging: parsed.staging });
+    studio.approvePositions(db, sid);
+    // Props can't drift from the plan once positions are approved.
+    studio.saveSceneStaging(db, sid, { ...parsed.staging, props: [{ name: "neon sign", detail: "pink" }] });
+    const sc = repo.getScene(db, sid)!;
+    expect((sc.scene.staging as { props: { name: string }[] }).props.map((p) => p.name)).toEqual(["cocktail table", "backdrop"]);
+    expect(sc.shots[0].spec.props!.map((p) => p.name)).toEqual(["cocktail table", "backdrop"]);
+    // Cameras v(n), a picture drawn on it, approved, then undone.
+    const plan = sc.plan!.data;
+    repo.savePlan(db, sid, { ...plan, cameras: [{ id: "c1", name: "c", preset: "wide", position: { x: 0.25, y: 0.5 }, lookAt: { x: 0.25, y: 5 } }] }, "Cameras chosen by the app");
+    for (const sh of repo.getScene(db, sid)!.shots) repo.saveShotSpec(db, sh.id, { ...sh.spec, cameraId: "c1" });
+    studio.approveCameras(db, sid);
+    const p1 = repo.getScene(db, sid)!.panels[0];
+    studio.setPanelImage(db, p1.id, "asset-1");
+    expect(repo.getScene(db, sid)!.panels[0].check).toMatchObject({ drawnOnPlan: repo.getScene(db, sid)!.plan!.version });
+    studio.approvePanel(db, p1.id);
+    studio.unapprovePanel(db, p1.id);
+    expect(repo.getScene(db, sid)!.panels[0].status).toBe("draft");
+    studio.approvePanel(db, p1.id);
+    // A new camera layout makes that picture stale: back to draft, marked to redraw.
+    studio.unlockScene(db, sid, "cameras");
+    repo.savePlan(db, sid, { ...repo.getScene(db, sid)!.plan!.data, cameras: [{ id: "c1", name: "c", preset: "wide", position: { x: 0.25, y: 1 }, lookAt: { x: 0.25, y: 5 } }] }, "Cameras chosen by the app");
+    studio.approveCameras(db, sid);
+    const after = repo.getScene(db, sid)!.panels[0];
+    expect(after.status).toBe("draft");
+    expect(after.check).toMatchObject({ pass: false, stale: true });
+  });
+  it("picture prompts take the key props from the floor plan", async () => {
+    const { panelPrompt } = await import("../src/lib/domain/imagePrompts");
+    const cast = CAST.map((c) => ({ id: c.id, name: c.name, pronoun: "she" as const, voiceLock: "" }));
+    const plan = defaultPlan(CAST.map((c) => c.id), parseStoryReply(REPLY, CAST).panels, [], { spot: "around the table", props: [{ name: "cocktail table", detail: "chest-high" }] });
+    const shot = { ...shotSpecFor(parseStoryReply(REPLY, CAST).panels[1], { code: "P2", venueName: "v", castIds: CAST.map((c) => c.id) }), props: [{ name: "neon sign", detail: "pink" }] };
+    const t = panelPrompt({ description: "x", shot, cast, profiles: {}, plan, venueName: "v" }).text;
+    expect(t).toContain("Key props, identical in every picture of this scene: cocktail table (chest-high).");
+    expect(t).not.toContain("neon sign");
+  });
+});

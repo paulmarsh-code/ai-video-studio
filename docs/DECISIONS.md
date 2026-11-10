@@ -345,3 +345,16 @@ GPT returns them first in the story reply (SPOT, PROP and OTHER PEOPLE lines), a
 **Picture check.** After each GPT picture, the vision model receives the picture, the layout sketch and the characters' front pictures. It reports who it sees left to right, the props it sees and whether there are background people. Pass or fail is decided by rule against the approved layout: everyone present, in the right order, the key props visible, and background people if the scene has them. On a fail, the app redraws once with the problems spelled out; if it still fails, it keeps the picture and the panel shows why. Results are saved on the panel. A check costs well under 1p.
 
 Replay of Jades Entrance with the table and a busy crowd: every camera view shows the table and the guests behind the cast. The over-the-shoulder and close-up shots are correct, and most group shots show all four unblocked. Panels 1, 2 and 7 still have some overlap: approve-then-lock lets the user pick another option in Design shots before approving, and the picture check catches any picture that still comes out wrong.
+
+## D19a — Fixes from the first locked run (2026-11-10)
+
+Paul approved most pictures by mistake, moved Marcus on the floor plan, and asked a change to fix Marcus and the table size. His data showed four general faults:
+
+1. **A move on a locked floor plan was refused quietly.** The plan page now shows a clear banner when positions or cameras are locked, explaining how to unlock them on the storyboard.
+2. **Two prop lists drifted apart.** Props edited in the scene setting after positions were locked differed from the floor plan's, so the request named one set while the sketch and check used the other (hence "the branded backdrop is missing"). Once positions are approved, the floor plan's props are the only list. Approving positions or cameras copies them to the setting and every shot. Picture prompts read them from the plan. The setting card shows them read-only, and a setting save keeps them.
+3. **A change edited the old picture, which never moves anyone.** Picture changes now start with "Is anyone or anything not where the layout sketch shows, or the wrong size?" A place or size answer redraws fresh from the panel's full request and the layout sketch, with the user's words as what the last attempt got wrong. Other changes still edit the current picture. The form explains that moving someone for every shot is done on the floor plan, after unlocking positions.
+4. **There was no undo for an approval.** Approved pictures now have an "Undo" link.
+
+Also:
+- **Floor plans saved by hand are named "Floor plan edited by you".** Before, they inherited the app-made plan's name, so a later setting change could rebuild them and lose the user's edits.
+- **Stale pictures.** Each picture remembers the floor plan version it was drawn from. Approving a new camera layout sends older pictures back to draft, marked "Drawn from an earlier layout", ready for "Redraw the unapproved".

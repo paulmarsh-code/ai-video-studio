@@ -35,7 +35,8 @@ export async function savePlanAction(sceneId: string, data: GeometryPlanData): P
   const db = await getDb();
   const { checkPlanChange } = await import("@/lib/studioRepo");
   try { checkPlanChange(db, sceneId, data); } catch (e) { return { error: (e as Error).message }; }
-  const version = repo.savePlan(db, sceneId, data);
+  // A plan saved by hand is never rebuilt by the app (D19a).
+  const version = repo.savePlan(db, sceneId, data, "Floor plan edited by you");
   revalidatePath("/", "layout");
   return { version };
 }

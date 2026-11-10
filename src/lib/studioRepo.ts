@@ -325,7 +325,10 @@ export function updatePanel(db: DB, panelId: string, input: PanelInput): PanelCh
 
 /** A new picture always needs approving again. */
 export function setPanelImage(db: DB, panelId: string, assetId: string) {
-  db.update(t.panels).set({ imageAssetId: assetId, status: "draft", check: {} }).where(eq(t.panels.id, panelId)).run();
+  // Remember which floor plan version the picture was drawn from (D19a), to spot stale ones.
+  const panel = db.select().from(t.panels).where(eq(t.panels.id, panelId)).get();
+  const plan = panel ? latestPlan(db, panel.sceneId) : undefined;
+  db.update(t.panels).set({ imageAssetId: assetId, status: "draft", check: { drawnOnPlan: plan?.version } }).where(eq(t.panels.id, panelId)).run();
   persist(db);
 }
 
@@ -505,6 +508,9 @@ export function saveStoryboard(db: DB, sceneId: string, s: { story: string; targ
  */
 export function saveSceneStaging(db: DB, sceneId: string, staging: Partial<SceneStaging>) {
   const st = asStaging(staging);
+  // With positions approved, the key props are fixed by the floor plan (D19a).
+  const lockedPlan = sceneLocks(db, sceneId).positions ? latestPlan(db, sceneId) : undefined;
+  if (lockedPlan) st.props = (lockedPlan.data.furniture ?? []).map((f) => ({ name: f.name, detail: f.detail ?? "" }));
   const scene = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();
   if (!scene) throw new Error("Scene not found");
   db.update(t.scenes).set({ staging: st }).where(eq(t.scenes.id, sceneId)).run();
@@ -574,6 +580,7 @@ function latestPlan(db: DB, sceneId: string) {
 export function approvePositions(db: DB, sceneId: string) {
   const plan = latestPlan(db, sceneId);
   if (!plan || !plan.data.actors.length) throw new Error("There is no floor plan to approve yet.");
+  syncPropsFromPlan(db, sceneId);
   setLocks(db, sceneId, { positions: plan.version });
   return plan.version;
 }
@@ -586,6 +593,15 @@ export function approveCameras(db: DB, sceneId: string) {
   const missing = shots.filter((s) => !s.cameraId || !plan.data.cameras.some((c) => c.id === s.cameraId));
   if (missing.length) throw new Error(`${missing.length} panel${missing.length === 1 ? " has" : "s have"} no camera yet. Let the app choose the cameras first.`);
   setLocks(db, sceneId, { ...locks, cameras: plan.version });
+  syncPropsFromPlan(db, sceneId);
+  // Pictures drawn from an earlier layout no longer match: back to draft, marked to redraw.
+  for (const p of panelsOf(db, sceneId)) {
+    const drawn = (p.check as { drawnOnPlan?: number } | null)?.drawnOnPlan;
+    if (p.imageAssetId && (drawn === undefined || drawn < plan.version)) {
+      db.update(t.panels).set({ status: "draft", check: { drawnOnPlan: drawn, pass: false, stale: true, problems: ["Drawn from an earlier layout. Redraw it to match the approved positions and cameras."] } }).where(eq(t.panels.id, p.id)).run();
+    }
+  }
+  persist(db);
   return plan.version;
 }
 
@@ -620,6 +636,28 @@ export function shotIdForPanel(db: DB, panelId: string): string | undefined {
 }
 
 export function setPanelCheck(db: DB, panelId: string, check: { pass: boolean; problems: string[] }) {
-  db.update(t.panels).set({ check: { ...check, at: new Date().toISOString() } }).where(eq(t.panels.id, panelId)).run();
+  const old = (db.select().from(t.panels).where(eq(t.panels.id, panelId)).get()?.check ?? {}) as Record<string, unknown>;
+  db.update(t.panels).set({ check: { drawnOnPlan: old.drawnOnPlan, ...check, at: new Date().toISOString() } }).where(eq(t.panels.id, panelId)).run();
   persist(db);
+}
+
+/** Take back an approval made by mistake (D19a). */
+export function unapprovePanel(db: DB, panelId: string) {
+  db.update(t.panels).set({ status: "draft" }).where(eq(t.panels.id, panelId)).run();
+  persist(db);
+}
+
+/**
+ * Key props come from the approved floor plan once positions are approved (D19a): one list,
+ * used by the sketch, the picture check, picture prompts and Kling prompts alike.
+ */
+function syncPropsFromPlan(db: DB, sceneId: string) {
+  const plan = latestPlan(db, sceneId);
+  const scene = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();
+  if (!plan || !scene) return;
+  const props = (plan.data.furniture ?? []).map((f) => ({ name: f.name, detail: f.detail ?? "" }));
+  db.update(t.scenes).set({ staging: { ...asStaging(scene.staging), props } }).where(eq(t.scenes.id, sceneId)).run();
+  for (const sh of db.select().from(t.shots).where(eq(t.shots.sceneId, sceneId)).all()) {
+    db.update(t.shots).set({ spec: { ...(sh.spec as ShotSpec), props: props.length ? props : undefined } }).where(eq(t.shots.id, sh.id)).run();
+  }
 }
