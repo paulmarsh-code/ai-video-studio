@@ -291,8 +291,9 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
 
   if (cam && reading && shot) {
     lines.push(presetText(cam).replace(", static camera", "").replace(" static camera,", ""));
+    if (shot.shot?.trim()) lines.push(`Shot: ${shot.shot.trim()}.`);
     // Shot size, named framing, lens, point of view and what the angle means (D27).
-    lines.push(...shotLines({ cam, kind: verticalOf(cam).kind, fovDeg: horizontalFov(shotPlan ?? i.plan!, cam), text: `${i.description} ${shot.actions ?? ""}`, name }));
+    lines.push(...shotLines({ cam, kind: verticalOf(cam).kind, fovDeg: horizontalFov(shotPlan ?? i.plan!, cam), text: `${i.description} ${shot.actions ?? ""} ${shot.shot ?? ""}`, name }));
     // A strict left-to-right order and head count (D18e): looser wording let GPT swap people or drop them.
     const order = reading.actors.filter((a) => a.inView && [...shownIds, ...edgeIds].includes(a.characterId)).sort((a, b) => a.angleDeg - b.angleDeg);
     if (order.length > 1) {

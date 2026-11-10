@@ -79,7 +79,7 @@ export function classifyMoment(shot: ShotInput, index: number): MomentKind {
   const text = `${shot.description ?? ""} ${s.actions} ${s.sceneContext}`;
   // A shot the panel names (D27) sets the kind of moment: a close-up is a peak, a wide or
   // establishing shot sets the scene.
-  const named = namedShot(`${shot.description ?? ""} ${s.actions}`);
+  const named = namedShot(`${shot.description ?? ""} ${s.actions} ${s.shot ?? ""}`);
   if (named.size && ["ecu", "cu", "mcu"].includes(named.size) || named.framing === "reaction" || named.framing === "single" || named.framing === "insert") return "peak";
   if (named.framing === "establishing" || named.framing === "master" || named.size === "ws" || named.size === "ls") return "establishing";
   // Walking off needs room to walk: an exit gets a wider shot even on an angry last line (D19b).
@@ -584,7 +584,8 @@ export function verticalCamera(cam0: PlanCamera, v: { kind: string; heightM: num
  * lens so the named size frames the subject. Panels that name nothing are left as they are.
  */
 function namedShotDesign(d: ShotDesign, plan: GeometryPlanData, sh: ShotInput, line: [string, string] | undefined, name: (id: string) => string): ShotDesign {
-  const text = `${sh.description ?? ""} ${sh.spec.actions ?? ""}`;
+  // The panel's own words plus its chosen shot (D28).
+  const text = `${sh.description ?? ""} ${sh.spec.actions ?? ""} ${sh.spec.shot ?? ""}`;
   const n = namedShot(text);
   const sp = planForShot(plan, sh.spec);
   const subj = mainSubjectId(sh.spec);
@@ -709,7 +710,7 @@ export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (i
     // Named shots first (D27), then height, tilt and Dutch roll (D25-D27). A point of view
     // keeps the eyes' own height.
     const d = namedShotDesign(d0, plan, sh, line, name);
-    const v = verticalFor(`${sh.description ?? ""} ${sh.spec.actions ?? ""}`, sh.spec.emotion);
+    const v = verticalFor(`${sh.description ?? ""} ${sh.spec.actions ?? ""} ${sh.spec.shot ?? ""}`, sh.spec.emotion);
     if (!v) return d;
     const sp = planForShot(plan, sh.spec);
     const subj = mainSubjectId(sh.spec);

@@ -14,6 +14,7 @@ import { asStaging, propMoves, propsFromFurniture, stagingPrompt } from "@/lib/d
 import { LAYOUT_RULES } from "@/lib/domain/director";
 import { PanelEditor } from "@/components/PanelEditor";
 import { hasRing } from "@/lib/backgroundImage";
+import { suggestShots } from "@/lib/domain/shotSuggest";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,8 @@ export default async function StoryboardPage({ params, searchParams }: { params:
   const portrait = (brief.aspect ?? "9:16").startsWith("9");
   const castIds = studio.sceneCastIds(db, s.scene);
   const locks = studio.sceneLocks(db, sceneId);
+  const shotOrder = s.shots.map((sh) => ({ id: sh.id, code: sh.code, spec: sh.spec, description: s.panels.find((p) => p.id === sh.panelId)?.description }));
+  const suggestions = suggestShots(shotOrder, (cid) => cast.find((c) => c.id === cid)?.name ?? cid);
   const part: "setting" | "board" = sp.part === "setting" || sp.part === "board" ? sp.part : locks.positions ? "board" : "setting";
   const anyApproved = s.panels.some((p) => p.status === "approved");
   const telling = !anyApproved && (s.panels.length === 0 || sp.story === "1");
@@ -101,6 +104,12 @@ export default async function StoryboardPage({ params, searchParams }: { params:
           names={Object.fromEntries(cast.map((c) => [c.id, c.name]))} settingEmpty={!asStaging(s.scene.staging).spot && !asStaging(s.scene.staging).crowd} projectId={id} sceneId={sceneId} designHref={`/projects/${id}/scenes/${sceneId}/design`} baseCode={base} size={portrait ? "portrait" : "landscape"} canGenerate={canGenerate}
           panels={s.panels.map((p) => {
             const shot = s.shots.find((x) => x.panelId === p.id);
+            // Suggested shot (D28): the app's suggestion until the user chooses one.
+            const k = shot ? shotOrder.findIndex((x) => x.id === shot.id) : -1;
+            const sug = k >= 0 ? suggestions[k] : undefined;
+            const shotInfo = shot?.spec.shotBy === "you" ? { words: shot.spec.shot ?? "", by: "you" as const }
+              : sug && !sug.shot ? { words: "", by: "panel" as const, why: sug.why }
+              : sug ? { words: sug.shot, by: "app" as const, why: sug.why } : undefined;
             const d = p.dialogue[0];
             const prompt = panelPrompt({
               description: p.description, emotion: p.emotion, shot: shot?.spec, cast, profiles, plan: s.plan?.data,
@@ -112,7 +121,7 @@ export default async function StoryboardPage({ params, searchParams }: { params:
             return {
               id: p.id, code: p.code, description: p.description, seconds: p.durationSec, status: p.status, imageAssetId: p.imageAssetId ?? undefined,
               speaker: d ? cast.find((c) => c.id === d.characterId)?.name : undefined, line: d?.text,
-              hasCamera: !!shot?.spec.cameraId, shotId: shot?.id,
+              hasCamera: !!shot?.spec.cameraId, shotId: shot?.id, shot: shotInfo,
               drawnFrom: p.check?.drawnFrom,
               check: p.check?.keptApproved ? { pass: p.check.pass ?? true, problems: [], keptApproved: true } : p.check?.pass === undefined ? undefined : { pass: p.check.pass, problems: p.check.problems ?? [] }, prompt: prompt.text, attach: prompt.attach,
             };

@@ -141,10 +141,11 @@ export function composeKlingPrompt(
       s.background = `Background behind ${subj}: the ${reading.backgroundView}.`;
     }
     // A camera move named in the panel (D27) replaces the genre's usual move.
-    const named = namedShot(shot.actions ?? "");
+    const named = namedShot(`${shot.actions ?? ""} ${shot.shot ?? ""}`);
     const move = named.move ? MOVE_TEXT[named.move] : GENRE_PROFILES[genre].movement;
     s.camera = presetText(cam).includes("static camera") ? presetText(cam).replace("static camera", move) : `${presetText(cam).replace(/\.$/, "")}, ${move}.`;
-    s.camera += ` ${shotLines({ cam, kind: verticalOf(cam).kind, fovDeg: horizontalFov(plan, cam), text: shot.actions ?? "", name: (id) => byId(id)?.name ?? id }).join(" ")}`;
+    if (shot.shot?.trim()) s.camera = `Shot: ${shot.shot.trim()}. ${s.camera}`;
+    s.camera += ` ${shotLines({ cam, kind: verticalOf(cam).kind, fovDeg: horizontalFov(plan, cam), text: `${shot.actions ?? ""} ${shot.shot ?? ""}`, name: (id) => byId(id)?.name ?? id }).join(" ")}`;
   }
 
   // 4. Character and voice lock — word for word.

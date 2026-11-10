@@ -150,7 +150,17 @@ async function chooseCameras(db: Awaited<ReturnType<typeof getDb>>, sceneId: str
     if (locks.cameras) throw new Error("The cameras are approved and locked. Unlock them to choose again.");
     const cast = repo.getCast(db, s.scene.projectId);
     const name = (id: string) => cast.find((c) => c.id === id)?.name ?? id;
-    const inputs = s.shots.map((sh) => ({ id: sh.id, code: sh.code, spec: sh.spec, description: s.panels.find((p) => p.id === sh.panelId)?.description }));
+    const raw = s.shots.map((sh) => ({ id: sh.id, code: sh.code, spec: sh.spec, description: s.panels.find((p) => p.id === sh.panelId)?.description }));
+    // Suggested shots (D28): every panel the user hasn't chosen a shot for gets the app's
+    // suggestion, saved on the shot so the board shows it and the camera follows it.
+    const { suggestShots } = await import("@/lib/domain/shotSuggest");
+    const sug = suggestShots(raw, name);
+    const inputs = raw.map((x, k) => {
+      if (x.spec.shotBy === "you") return x;
+      const spec = { ...x.spec, shot: sug[k].shot || undefined, shotBy: "app" as const };
+      repo.saveShotSpec(db, x.id, spec);
+      return { ...x, spec };
+    });
     // Lens angles depend on the video's shape (D19).
     const base = { ...s.plan.data, aspect: s.plan.data.aspect ?? studio.projectAspect(db, s.scene.projectId) };
     const design = designScene(base, inputs, name, repo.getProjectGenre(db, s.scene.projectId));
@@ -165,6 +175,25 @@ async function chooseCameras(db: Awaited<ReturnType<typeof getDb>>, sceneId: str
     }
     return { chosen: choices.length, missing: design.shots.filter((d) => !d.options.length).map((d) => d.shotCode.split("_").pop()) };
   }
+}
+
+/**
+ * Change a panel's shot (D28): the user's words are kept from now on, and the cameras are
+ * chosen again so the camera view matches. Empty words go back to the app's suggestion.
+ */
+export async function setShotChoiceAction(shotId: string, words: string) {
+  return runAsync(async (db) => {
+    const repo = await import("@/lib/repo");
+    const shot = repo.getShot(db, shotId);
+    if (!shot) throw new Error("That panel's shot wasn't found.");
+    const sceneId = shot.sceneId;
+    const locks = studio.sceneLocks(db, sceneId);
+    if (locks.cameras) throw new Error("The cameras are approved and locked. Choose “Change cameras” first, then change the shot.");
+    const w = words.trim().replace(/\s+/g, " ").slice(0, 200);
+    repo.saveShotSpec(db, shotId, { ...shot.spec, shot: w || undefined, shotBy: w ? "you" : undefined });
+    if (!locks.positions) return { chosen: 0, missing: [] as (string | undefined)[] };
+    return chooseCameras(db, sceneId);
+  });
 }
 
 export async function approvePanelsAction(panelIds: string[]) {

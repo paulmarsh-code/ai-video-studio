@@ -10,7 +10,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { approveCamerasAction, approvePanelAction, unapprovePanelAction, approvePanelsAction, approvePositionsAction, chooseCamerasAction, updateLayoutAction, setPanelImageAction, unlockSceneAction } from "@/app/studioActions";
+import { setShotChoiceAction, approveCamerasAction, approvePanelAction, unapprovePanelAction, approvePanelsAction, approvePositionsAction, chooseCamerasAction, updateLayoutAction, setPanelImageAction, unlockSceneAction } from "@/app/studioActions";
 import type { GeometryPlanData } from "@/lib/domain/types";
 import { PlanThumb } from "./PlanThumb";
 import { uploadBlob } from "@/lib/clientUpload";
@@ -18,6 +18,7 @@ import { imageChangePrompt } from "@/lib/domain/imagePrompts";
 import { fixLine } from "@/lib/domain/pictureCheck";
 import { ActionButton, DoneBadge } from "./ActionButton";
 import { ChangeRequest, type SubmittedChange } from "./ChangeRequest";
+import { SHOT_CHOICES, splitShot } from "@/lib/domain/shotSuggest";
 
 export interface BoardPanel {
   id: string;
@@ -31,6 +32,8 @@ export interface BoardPanel {
   hasCamera: boolean;
   /** Its shot, for the layout sketch (D18f). */
   shotId?: string;
+  /** The shot in film words (D28): the app's suggestion, the user's choice, or named in the panel. */
+  shot?: { words: string; by: "app" | "you" | "panel"; why?: string };
   /** The automatic check against the approved layout (D19). */
   check?: { pass: boolean; problems: string[]; keptApproved?: boolean };
   /** Fingerprint of what the picture was drawn from (D24). */
@@ -351,7 +354,7 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
                 : p.hasCamera && p.shotId
                   // Before a picture exists, show what the camera sees (D19): check the angle first.
                   // eslint-disable-next-line @next/next/no-img-element
-                  ? <><img src={`/api/layout/${p.shotId}?v=${encodeURIComponent(p.prompt.length + p.code)}`} alt={`Layout for panel ${i + 1}`} className="h-full w-full object-cover opacity-80" data-testid={`board-${p.code}-sketch`} />
+                  ? <><img src={`/api/layout/${p.shotId}?v=${encodeURIComponent(`${p.prompt.length}${p.code}${p.shot?.words ?? ""}`)}`} alt={`Layout for panel ${i + 1}`} className="h-full w-full object-cover opacity-80" data-testid={`board-${p.code}-sketch`} />
                     <span className="absolute bottom-2 left-2 rounded bg-white/90 px-2 py-0.5 text-xs text-neutral-700">Camera view from the floor plan</span></>
                   : <span className="absolute inset-0 flex items-center justify-center text-sm text-neutral-500">No picture yet</span>}
               {drawing[p.id] && <span className="absolute inset-0 flex items-center justify-center bg-white/70 text-sm font-medium" data-testid={`board-${p.code}-drawing`}>{drawing[p.id]}</span>}
@@ -366,6 +369,7 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
             </div>
             <p className="mt-1 text-sm">{p.line ? <><span className="font-medium">{p.speaker}:</span> {p.line}</> : <span className="text-neutral-500">Silent</span>}</p>
             <p className="mt-1 text-xs text-neutral-600">{p.description}</p>
+            {p.shot && p.shotId && <ShotPicker p={p} shotId={p.shotId} locked={b.locks.cameras} onDone={(text, ok) => { setMsg({ ok, text }); router.refresh(); }} />}
             {p.imageAssetId && p.check?.keptApproved && p.status === "approved" ? <p className="mt-1 text-xs text-neutral-600" data-testid={`board-${p.code}-check`}>Approved by you on an earlier layout and kept. Redraw it only if it no longer fits.</p>
               : p.imageAssetId && p.check && (p.check.pass
               ? <p className="mt-1 text-xs text-green-700" data-testid={`board-${p.code}-check`}>✓ Matches the approved layout</p>
@@ -401,6 +405,59 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
           </li>
         ))}
       </ol>
+    </div>
+  );
+}
+
+/**
+ * The panel's shot (D28): the app suggests one from the scene's rules; the user can change it.
+ * Changing it chooses the cameras again, so the camera view above matches the new shot.
+ */
+function ShotPicker({ p, shotId, locked, onDone }: { p: BoardPanel; shotId: string; locked: boolean; onDone: (text: string, ok: boolean) => void }) {
+  const [open, setOpen] = useState(false);
+  const start = splitShot(p.shot?.words ?? "");
+  const [v, setV] = useState(start);
+  const sel = "mt-0.5 w-full rounded border border-neutral-300 px-1 py-1 text-xs";
+  const list = (key: "shot" | "angle" | "move", label: string, none: string) => {
+    const cur = v[key];
+    const opts = cur && !SHOT_CHOICES[key].includes(cur) ? [cur, ...SHOT_CHOICES[key]] : SHOT_CHOICES[key];
+    return (
+      <label className="block text-xs">{label}
+        <select className={sel} value={cur} onChange={(e) => setV({ ...v, [key]: e.target.value })} data-testid={`board-${p.code}-shot-${key}`}>
+          <option value="">{none}</option>
+          {opts.map((o) => <option key={o} value={o}>{o[0].toUpperCase() + o.slice(1)}</option>)}
+        </select>
+      </label>
+    );
+  };
+  const save = async (words: string) => {
+    const r = await setShotChoiceAction(shotId, words);
+    if (!r.ok) { onDone(r.error, false); return r; }
+    setOpen(false);
+    onDone(words ? `Panel shot changed to “${words}”.${r.value!.chosen ? " Cameras chosen again: check the camera view." : ""}` : `Back to the app's suggested shot.${r.value!.chosen ? " Cameras chosen again." : ""}`, true);
+    return r;
+  };
+  const label = p.shot!.by === "panel" ? "Named in the panel's words" : p.shot!.words ? p.shot!.words[0].toUpperCase() + p.shot!.words.slice(1) : "Chosen by the camera rules";
+  return (
+    <div className="mt-2 rounded-lg bg-neutral-50 px-2 py-1.5 text-xs" data-testid={`board-${p.code}-shot`}>
+      <p><span className="font-medium">Shot:</span> {label} <span className="text-neutral-500">· {p.shot!.by === "you" ? "your choice" : p.shot!.by === "panel" ? "from the panel" : "suggested"}</span>
+        {!locked && !open && <button type="button" className="ml-2 text-blue-700 underline" onClick={() => { setV(splitShot(p.shot?.words ?? "")); setOpen(true); }} data-testid={`board-${p.code}-shot-change`}>Change</button>}
+      </p>
+      {p.shot!.why && p.shot!.by !== "you" && <p className="text-neutral-500">Why: {p.shot!.why}.</p>}
+      {open && (
+        <div className="mt-1 space-y-1">
+          {list("shot", "Shot", "Let the camera rules decide")}
+          {list("angle", "Angle and height", "As the story suggests")}
+          {list("move", "Camera move (video)", "The genre's usual move")}
+          <div className="flex flex-wrap gap-2 pt-1">
+            <ActionButton label="Use this shot" busyLabel="Choosing the camera…" doneLabel="Done" testId={`board-${p.code}-shot-save`}
+              onAction={() => save([v.shot, v.angle, v.move].filter(Boolean).join(", "))} />
+            {p.shot!.by === "you" && <ActionButton variant="secondary" label="Back to the suggestion" busyLabel="…" doneLabel="Done" onAction={() => save("")} />}
+            <button type="button" className="underline" onClick={() => setOpen(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+      {locked && <p className="text-neutral-500">To change it, unlock the cameras first.</p>}
     </div>
   );
 }

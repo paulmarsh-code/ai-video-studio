@@ -116,6 +116,10 @@ export interface ShotSpec {
   /** Dialogue entered for other characters — normally empty; any entry is flagged. */
   otherDialogue?: Record<string, string>;
   actions: string;
+  /** The shot for this panel in film words (D28), e.g. "medium close-up, low angle, slow push-in". */
+  shot?: string;
+  /** Who chose it: the app's suggestion, or the user (kept when the app suggests again). */
+  shotBy?: "app" | "you";
   emotion?: string;
   intensity?: Intensity;
   cameraId?: string;

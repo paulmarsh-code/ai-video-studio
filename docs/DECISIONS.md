@@ -569,3 +569,26 @@ Paul shared the standard shot vocabulary (camera angles, camera heights, and Ado
 9. Layout rules are now version 9.
 
 Limits: English wording only; the room is still a flat floor; a bird's-eye or crane height is described rather than checked against a ceiling.
+
+## D28 — Suggested shots, which you can change (2026-11-10)
+
+The app now suggests a named shot for every panel, using the guide's rules for building a scene (`shotSuggest.ts`, tests in `tests/shotSuggest.test.ts` with made-up names).
+
+1. **The rules**:
+   - the first shot is an establishing shot;
+   - an arrival is a full shot that tracks them in;
+   - a conversation starts on a two-shot (or a medium long shot for a group), then goes over the shoulder;
+   - the big line or feeling is a close-up (with a slow push-in for strong feeling);
+   - an object the moment turns on gets an insert shot;
+   - seeing someone who isn't in the picture is a point of view;
+   - a group is a medium long shot or three-shot, and two people a two-shot;
+   - a lone reaction is a medium close-up or close-up;
+   - someone leaving is a long shot.
+2. **Angles** come from the feeling and the body (D25–D27): high, low, bird's-eye, worm's-eye or Dutch. **No two shots in a row are the same size** (the guide's progression), apart from over-the-shoulder shots in a conversation.
+3. A panel whose words already name a shot keeps them.
+4. When the app chooses the cameras, each panel's suggestion is saved on its shot (`ShotSpec.shot`, `shotBy: "app"`), and the camera chooser follows it like words in the panel (D27).
+5. **On the storyboard**, each panel shows "Shot: … · suggested" and why. **Change** offers three lists: the shot, the angle and height, and the camera move for the video.
+   - Choosing one saves it as your choice (`shotBy: "you"`, kept when the app suggests again) and chooses the cameras again, so the camera view sketch updates straight away.
+   - "Back to the suggestion" undoes it.
+   - Once the cameras are approved, the shot is locked with them.
+6. Picture and video prompts start their camera lines with "Shot: …".
