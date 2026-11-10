@@ -647,10 +647,34 @@ function namedShotDesign(d: ShotDesign, plan: GeometryPlanData, sh: ShotInput, l
         const dir = { x: p0.x * Math.cos(t) - p0.y * Math.sin(t), y: p0.x * Math.sin(t) + p0.y * Math.cos(t) };
         const right = { x: -dir.y, y: dir.x };
         const half = Math.abs((B.x - A.x) * right.x + (B.y - A.y) * right.y) / 2;
-        // Across the frame's width; a portrait lens angle is for its height (D19), so convert.
-        const wide = 2 * Math.atan((half + 0.45) / dist);
-        const fovDeg = Math.round(Math.min(90, ((plan.aspect === "9:16" ? 2 * Math.atan(Math.tan(wide / 2) * (16 / 9)) : wide) * 180) / Math.PI));
-        return { id: `${sh.code}-two`, name: `Two-shot on ${name(pair[0])} and ${name(pair[1])}`, preset: "two-shot", fovDeg, lookAt: { x: +M.x.toFixed(2), y: +M.y.toFixed(2) }, position: { x: +(M.x + dir.x * dist).toFixed(2), y: +(M.y + dir.y * dist).toFixed(2) } };
+        // Never standing in among the others (D33): a camera a metre and a half from Jade had her
+        // just beside the lens and out of the picture. Step back until nobody near the camera is
+        // left just out of frame: each is either in the picture or well away from it.
+        // Anyone standing right by the pair (within 1.6 m of either) is kept at least at the edge of
+        // the frame (D33): a two-shot in a group still shows a shoulder of the person beside them.
+        const nearby = sp.actors.filter((a) => !pair.includes(a.characterId) && sh.spec.presentIds.includes(a.characterId) && !sh.spec.excludedIds.includes(a.characterId)
+          && Math.min(Math.hypot(a.position.x - A.x, a.position.y - A.y), Math.hypot(a.position.x - B.x, a.position.y - B.y)) < 1.6).map((a) => a.position);
+        const build = (k: number): PlanCamera => {
+          const cpos = { x: M.x + dir.x * k, y: M.y + dir.y * k };
+          let wide = 2 * Math.atan((half + 0.45) / k);
+          for (const o of nearby) {
+            const rel = { x: o.x - cpos.x, y: o.y - cpos.y };
+            const ahead = -(rel.x * dir.x + rel.y * dir.y), lateral = Math.abs(rel.x * dir.y - rel.y * dir.x);
+            if (ahead <= 0.3) continue;
+            const needHalf = Math.atan2(lateral, ahead) - Math.atan(0.2 / ahead) + (2 * Math.PI) / 180; // just inside, with a shoulder in frame
+            wide = Math.max(wide, Math.min((80 * Math.PI) / 180, 2 * needHalf));
+          }
+          // Across the frame's width; a portrait lens angle is for its height (D19), so convert.
+          const fovDeg = Math.round(Math.min(90, ((plan.aspect === "9:16" ? 2 * Math.atan(Math.tan(wide / 2) * (16 / 9)) : wide) * 180) / Math.PI));
+          return { id: `${sh.code}-two`, name: `Two-shot on ${name(pair[0])} and ${name(pair[1])}`, preset: "two-shot", fovDeg, lookAt: { x: +M.x.toFixed(2), y: +M.y.toFixed(2) }, position: { x: +(M.x + dir.x * k).toFixed(2), y: +(M.y + dir.y * k).toFixed(2) } };
+        };
+        const present = sh.spec.presentIds.filter((id) => !pair.includes(id) && !sh.spec.excludedIds.includes(id));
+        const crowded = (c: PlanCamera) => readCamera(sp, c).actors.some((a) => present.includes(a.characterId) && !a.inView
+          && Math.hypot((sp.actors.find((x) => x.characterId === a.characterId)?.position.x ?? 99) - c.position.x, (sp.actors.find((x) => x.characterId === a.characterId)?.position.y ?? 99) - c.position.y) < 2.5);
+        let dd = dist;
+        // Prefer stepping back to a very wide lens: wide lenses stretch faces at the edges.
+        while (dd < 5 && (crowded(build(dd)) || (build(dd).fovDeg ?? 0) > 60)) dd += 0.5;
+        return build(dd);
       };
       const seen = (c: PlanCamera) => readCamera(sp, c).actors.filter((a) => a.inView);
       const tries = [sideOfBase, -sideOfBase].flatMap((sg) => [0, 15, -15, 30, -30, 45, -45, 60, -60, 70, -70].map((o) => ({ sg, o, c: make(sg, o) })))
@@ -774,7 +798,7 @@ export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (i
  * positions for anyone moving (D20); 6 = movement marks worked out afresh, props seen across
  * their real extent (D21b); 7 = high and low cameras for looking down or up (D25).
  */
-export const LAYOUT_RULES = 12;
+export const LAYOUT_RULES = 13;
 
 export function applyDesign(plan: GeometryPlanData, choices: { shotId: string; shotCode: string; option: CameraOption }[], line?: [string, string]) {
   const cameras: PlanCamera[] = [];

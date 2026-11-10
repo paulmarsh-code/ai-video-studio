@@ -6,7 +6,7 @@
 import { mainSubjectId } from "./composer";
 import { describeFrame, facingOf, PRESET_FOV, planForShot, presetText, readCamera, readProps } from "./geometry";
 import { GENRE_PROFILES, type Genre } from "./genre";
-import { aimDetail, gestureDetail } from "./gestures";
+import { aimDetail, exitFrom, gestureDetail } from "./gestures";
 import { propMoves } from "./story";
 import { gazeFor, gazeLine, shotEffect } from "./gaze";
 import { bodyEffect, verticalOf } from "./vertical";
@@ -298,6 +298,8 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
         if (!L || !T || T.depthM <= 0) return [];
         const d = T.angleDeg - L.angleDeg;
         const way = Math.abs(d) <= 3 ? (T.depthM < L.depthM ? "towards the camera's side but past the lens" : "straight ahead into the scene") : `to the ${d > 0 ? "right" : "left"} of the picture`;
+        // At the over-the-shoulder person (D33): looking near the lens, so say plainly whose eyes.
+        if (t === fgId) return [`${name(g.id)} looks at ${name(t!)}'s face, ${name(t!)} being the person in the foreground with their back to us: ${name(g.id)}'s eyes meet theirs, ${way === "straight ahead into the scene" ? "just past the lens" : way}, never into the lens`];
         return [`${name(g.id)} looks ${way}, at ${name(t!)}`];
       });
       if (eyes.length) lines.push(`Eye lines: ${eyes.join("; ")}. Eyes and head turned that way; no one looks into the lens.`);
@@ -310,7 +312,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     const tgt = gz.find((g) => g.id === mainId0)?.at;
     // The gaze names people by first name.
     const tgtPerson = tgt ? i.cast.find((c) => c.name === tgt || c.name.split(/\s+/)[0] === tgt) : undefined;
-    if (mainId0 && tgtPerson) lines.push(...aimDetail(`${i.description} ${shot.actions ?? ""}`, name(mainId0), tgtPerson.name.split(/\s+/)[0]));
+    if (mainId0 && tgtPerson) lines.push(...aimDetail(`${i.description} ${shot.actions ?? ""}`, name(mainId0), tgtPerson.name.split(/\s+/)[0], reading && i.plan ? exitFrom(i.plan.views, reading.forwardDeg) : undefined));
     // Lying down, falling, free fall (D26): how the body and the drop look.
     const mainId = shot.speakerId ?? shot.subjectId ?? shot.visibleIds[0];
     const bx = bodyEffect(`${i.description} ${shot.actions ?? ""}`, mainId ? name(mainId) : "they");
@@ -349,9 +351,21 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
           face = c > 0.5 ? ", facing the camera" : c > -0.35 ? ", seen side-on" : ", seen from behind";
         }
         const d = Math.max(0.5, Math.round(a.depthM * 2) / 2);
-        return { id: a.characterId, d, text: `${name(a.characterId)} about ${d} m from the camera${face}` };
+        return { id: a.characterId, d, face, text: `${name(a.characterId)} about ${d} m from the camera${face}` };
       });
       const near = Math.min(...parts.map((p) => p.d)), far = Math.max(...parts.map((p) => p.d));
+      // Which side of the picture a carried bag is on (D33), when the character's description
+      // says which hand: the left hand is on the right of the picture when they face us.
+      const bags = parts.flatMap((p) => {
+        const hand = carriedHand(i.profiles[p.id]);
+        if (!hand || !/facing the camera|seen from behind/.test(p.face)) return [];
+        const facing = /facing the camera/.test(p.face);
+        const side = facing ? (hand.side === "left" ? "right" : "left") : hand.side;
+        const pr = byId(p.id)?.pronoun;
+        const poss = pr === "she" ? "her" : pr === "he" ? "his" : "their";
+        return [`${name(p.id)}'s ${hand.what} is in ${poss} ${hand.side} hand, so it shows on the ${side} of the picture (${facing ? "facing us, mirror-wise" : "seen from behind"})`];
+      });
+      if (bags.length) lines.push(`Carried: ${bags.join("; ")}. Never swap hands between pictures.`);
       lines.push(`Distance and direction: ${parts.map((p) => p.text).join("; ")}.${far >= near * 1.6 && parts.length > 1 ? ` Keep these distances: whoever is further away is smaller and further back in the room, not lined up beside ${parts.find((p) => p.d === near) ? name(parts.find((p) => p.d === near)!.id) : "the nearer people"}.` : ""}`);
     }
     if (layout) lines.push("Use the attached layout sketch, drawn from the floor plan through this camera, for where each person stands in the frame, how big they appear, the camera angle and the table's height and place. It is only a guide made of labelled shapes: draw real people in the real room and copy nothing of its style, shapes, colours or text.");
@@ -389,4 +403,14 @@ export function lightingOf(text: string): string {
   let out = "";
   for (const x of sentences) { if ((out + " " + x).length > 420) break; out = `${out} ${x}`.trim(); }
   return out;
+}
+
+/** Which hand a character carries their bag in, if their description says (D33). */
+export function carriedHand(p: CharacterProfile | undefined): { side: "left" | "right"; what: string } | undefined {
+  const text = `${p?.wardrobe ?? ""} ${p?.appearance ?? ""} ${(p?.anchors ?? []).join(". ")}`;
+  const m = text.match(/\b((?:hand)?bag|satchel|clutch|briefcase|tote|purse|case|umbrella|phone|cane|folder|clipboard)\b[^.]{0,80}?\b(?:in|on)\s+(?:her|his|their|the)\s+(left|right)\s+(?:hand|arm|shoulder)\b/i)
+    ?? text.match(/\b(?:in|on)\s+(?:her|his|their|the)\s+(left|right)\s+(?:hand|arm|shoulder)\b[^.]{0,80}?\b((?:hand)?bag|satchel|clutch|briefcase|tote|purse|case|umbrella|phone|cane|folder|clipboard)\b/i);
+  if (!m) return undefined;
+  const [what, side] = /left|right/i.test(m[1]) ? [m[2], m[1]] : [m[1], m[2]];
+  return { side: side.toLowerCase() as "left" | "right", what: what.toLowerCase() };
 }

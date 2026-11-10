@@ -51,12 +51,25 @@ const WALK_OFF = /\b(turns?\s+(?:away|on\s+(?:her|his|their)\s+heel)|walks?\s+(?
  * looking at; someone walking away from a person they are still reacting to has their body
  * turned away and their head turned back over the shoulder to them.
  */
-export function aimDetail(text: string, who: string, target: string | undefined): string[] {
+export function aimDetail(text: string, who: string, target: string | undefined, exit?: { name: string; where: string }): string[] {
   if (!target) return [];
   const out: string[] = [];
   const walking = WALK_OFF.test(text);
   if (GESTURE_WORDS.test(text)) out.push(`${who}'s gesture is aimed at ${target}: the hand and arm point towards ${target}, not at anyone else and not at the camera.`);
-  if (walking) out.push(`${who} has turned and is walking away from ${target}: body, hips and feet pointing away from ${target}, mid-stride, while the head turns back over the shoulder towards ${target}${GESTURE_WORDS.test(text) ? " and the gesture is thrown back towards them" : ""}.`);
+  // Leaving heads for the way out (D33), when the venue has one: walking naturally, mid-stride.
+  const heading = exit ? `, heading for the ${exit.name} (${exit.where})` : "";
+  if (walking) out.push(`${who} has turned and is walking away from ${target}${heading}: body, hips and feet pointing that way, caught mid-stride with one foot in front of the other (legs apart, never crossed), while the head turns back over the shoulder towards ${target}${GESTURE_WORDS.test(text) ? " and the gesture is thrown back towards them" : ""}.`);
   else if (out.length) out.push(`${who} faces ${target} while doing it.`);
   return out;
+}
+
+/** The venue's way out (D33): its name and where it is from this camera, in picture words. */
+export function exitFrom(views: { name: string; directionDeg: number }[], forwardDeg: number): { name: string; where: string } | undefined {
+  const v = views.find((x) => /\b(entrance|exit|door|doors|doorway|way out|lobby|foyer)\b/i.test(x.name));
+  if (!v) return undefined;
+  const rel = ((v.directionDeg - forwardDeg + 540) % 360) - 180; // positive is to the camera's left
+  const where = Math.abs(rel) <= 45 ? "ahead, deeper into the picture, away from the camera"
+    : Math.abs(rel) >= 135 ? "behind the camera, so walking towards the camera and past it"
+    : rel > 0 ? "off to the left of the picture" : "off to the right of the picture";
+  return { name: v.name, where };
 }

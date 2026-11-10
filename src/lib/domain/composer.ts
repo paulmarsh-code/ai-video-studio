@@ -6,7 +6,7 @@ import { bodyEffect, verticalOf } from "./vertical";
 import { MOVE_TEXT, namedShot, shotLines } from "./shotLanguage";
 import { levelLines } from "./levels";
 import { describeFrame, PRESET_FOV, planForShot, presetText, readCamera } from "./geometry";
-import { aimDetail, gestureDetail } from "./gestures";
+import { aimDetail, exitFrom, gestureDetail } from "./gestures";
 import { GENRE_PROFILES, type Genre } from "./genre";
 import { capitalise, joinNames, stripQuotes } from "./text";
 import {
@@ -98,7 +98,9 @@ export function composeKlingPrompt(
     // Gestures aimed at the person they look at; walking away while looking back (D30).
     const tgt = subjectId ? gz.find((g) => g.id === subjectId)?.at : undefined;
     const tgtPerson = tgt ? cast.find((c) => c.name === tgt || c.name.split(/\s+/)[0] === tgt) : undefined;
-    if (subjectId && tgtPerson) { const ad = aimDetail(shot.actions ?? "", byId(subjectId)?.name ?? subjectId, tgtPerson.name.split(/\s+/)[0]); if (ad.length) s.scene += ` ${ad.join(" ")}`; }
+    const camR = plan && shot.cameraId ? plan.cameras.find((c) => c.id === shot.cameraId) : undefined;
+    const fwd = camR ? readCamera(planForShot(plan!, shot), camR).forwardDeg : undefined;
+    if (subjectId && tgtPerson) { const ad = aimDetail(shot.actions ?? "", byId(subjectId)?.name ?? subjectId, tgtPerson.name.split(/\s+/)[0], fwd !== undefined && plan ? exitFrom(plan.views, fwd) : undefined); if (ad.length) s.scene += ` ${ad.join(" ")}`; }
     // Lying down, falling, free fall (D26).
     const bx = bodyEffect(shot.actions ?? "", subjectId ? byId(subjectId)?.name ?? "they" : "they");
     if (bx) s.scene += ` Body and angle: ${bx}.`;

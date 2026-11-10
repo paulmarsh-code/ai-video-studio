@@ -82,3 +82,44 @@ describe("Renaming a prop (D32)", () => {
     expect(props[0].ref).toBe("p2");
   });
 });
+
+describe("Bag hand, way out, and two-shots in a group (D33)", () => {
+  it("reads which hand a bag is carried in from the description", async () => {
+    const { carriedHand } = await import("../src/lib/domain/imagePrompts");
+    expect(carriedHand({ wardrobe: "Carries a tan leather satchel in her left hand." })).toEqual({ side: "left", what: "satchel" });
+    expect(carriedHand({ wardrobe: "On his right shoulder, a black tote." })).toEqual({ side: "right", what: "tote" });
+    expect(carriedHand({ wardrobe: "Carries a tan satchel." })).toBeUndefined();
+  });
+  it("finds the way out and says where it is from the camera", async () => {
+    const { exitFrom } = await import("../src/lib/domain/gestures");
+    const views = [{ name: "screen wall", directionDeg: 90 }, { name: "windows and entrance", directionDeg: 270 }];
+    expect(exitFrom(views, 90)?.where).toContain("behind the camera");
+    expect(exitFrom(views, 270)?.where).toContain("ahead");
+    expect(exitFrom(views, 0)?.where).toContain("right of the picture");
+    expect(exitFrom([{ name: "bar", directionDeg: 0 }], 0)).toBeUndefined();
+  });
+  it("walking off is mid-stride towards the way out, legs not crossed", async () => {
+    const { aimDetail } = await import("../src/lib/domain/gestures");
+    const t = aimDetail("Ava scoffs and turns away to walk off.", "Ava", "Ben", { name: "entrance", where: "behind the camera, so walking towards the camera and past it" }).join(" ");
+    expect(t).toContain("heading for the entrance");
+    expect(t).toContain("never crossed");
+    expect(t).toContain("head turns back over the shoulder towards Ben");
+  });
+  it("a two-shot of two people in a group keeps the person right beside them at the edge, from a camera not standing among them", () => {
+    const cast = ["ava", "ben", "cal", "dee"];
+    const panels = [
+      { action: "Ava, Ben, Cal and Dee talk at a table.", inFrame: cast },
+      { action: "Cal and Dee exchange shocked glances.", inFrame: ["cal", "dee"] },
+    ].map((p) => ({ ...p, line: "", emotion: "calm", seconds: 3 }));
+    const plan = defaultPlan(cast, panels as never, [{ name: "screen wall", directionDeg: 90 }], { spot: "around a cocktail table", props: [], crowd: "", crowdLevel: "none" }, "9:16");
+    const shots = panels.map((p, i) => ({ id: `s${i}`, code: `P${i + 1}`, description: p.action, spec: { ...shotSpecFor(p as never, { code: `P${i + 1}`, venueName: "v", castIds: cast, staging: { spot: "around a cocktail table", crowd: "" } }), subjectId: p.inFrame[0], shot: i === 1 ? "medium shot, two-shot" : undefined, shotBy: "app" as const } }));
+    const d = designScene(plan, shots as never, (id) => id);
+    const cam = d.shots[1].options[0].camera;
+    const seen = readCamera(planForShot(plan, shots[1].spec as never), cam).actors;
+    expect(seen.filter((a) => a.inView).map((a) => a.characterId)).toEqual(expect.arrayContaining(["cal", "dee"]));
+    for (const a of plan.actors.filter((x) => !["cal", "dee"].includes(x.characterId))) {
+      const near = Math.hypot(a.position.x - cam.position.x, a.position.y - cam.position.y) < 2.5;
+      if (near) expect(seen.find((x) => x.characterId === a.characterId)!.inView).toBe(true);
+    }
+  });
+});
