@@ -110,6 +110,11 @@ export interface PanelPromptInput {
   /** The background cut from the venue's 360° ring for this camera (D20), when the venue has one. */
   backgroundHref?: string;
   /**
+   * The blocking frame (D34): the shot itself, with the 360° background and labelled stand-ins.
+   * When given it goes first and replaces the separate background and layout sketch.
+   */
+  blockingHref?: string;
+  /**
    * An approved picture of this scene (D18c), attached so later panels keep the same spot,
    * furniture, background guests, light and clothes. Not used for the panel's own picture.
    */
@@ -182,16 +187,21 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   const bgView = reading?.backgroundView;
   // The ring background (D20) replaces the single nearest view: it is exactly what this camera
   // sees behind the people, from where it stands, at its angle and lens.
-  const ring = !!(i.backgroundHref && reading);
-  const bgImage = !ring && bgView ? i.venueViews?.find((v) => v.name === bgView)?.imageAssetId : undefined;
+  const blocking = !!(i.blockingHref && reading);
+  const ring = !blocking && !!(i.backgroundHref && reading);
+  const bgImage = !ring && !blocking && bgView ? i.venueViews?.find((v) => v.name === bgView)?.imageAssetId : undefined;
   if (ring) attach.push({ label: "background", assetId: "", href: i.backgroundHref });
   if (bgImage) attach.push({ label: `${bgView} view`, assetId: bgImage });
-  const layout = !!(i.layoutHref && reading);
+  const layout = !blocking && !!(i.layoutHref && reading);
   if (layout) attach.push({ label: "layout sketch", assetId: "", href: i.layoutHref });
+  // The blocking frame is image 1 (D34): the picture to finish. Everything else follows it.
+  if (blocking) attach.unshift({ label: "blocking frame (the shot to finish)", assetId: "", href: i.blockingHref });
+  const peopleFrom = blocking ? 1 : 0;
 
   const lines: string[] = [];
   lines.push(`${(i.style ?? "photorealistic").replace(/^./, (m) => m.toUpperCase())} storyboard frame for a ${i.aspect ?? "9:16"} video, set in the ${i.venueName}.`);
-  const people = attach.slice(0, peopleCount);
+  if (blocking) lines.push(blockingInstruction(attach.slice(1).map((a) => a.label)));
+  const people = attach.slice(peopleFrom, peopleFrom + peopleCount);
   if (people.length) lines.push(`Use the attached reference images for ${joinNames([...new Set(people.map((a) => a.label.replace(/ (reference|back)$/, "")))])}; keep their faces, hair and clothes identical, every pattern, stripe and colour block included. Bags and anything carried stay exactly as in the reference, in the same hand or on the same shoulder. Mind the mirror (D31): a bag in someone's left hand is on the right of the picture when they face the camera, and on the left of the picture when they are seen from behind.`);
   const backs = people.filter((a) => a.label.endsWith(" back")).map((a) => a.label.replace(/ back$/, ""));
   if (backs.length) lines.push(`${joinNames(backs)} ${backs.length === 1 ? "is" : "are"} seen from behind: copy the back of their clothes, hair and bag exactly from the attached back ${backs.length === 1 ? "image" : "images"}.`);
@@ -415,17 +425,63 @@ export function carriedItems(p: CharacterProfile | undefined): { side: "left" | 
   const text = `${p?.wardrobe ?? ""}. ${p?.appearance ?? ""}. ${(p?.anchors ?? []).join(". ")}`.replace(/\s+/g, " ");
   const out: { side: "left" | "right"; what: string; where: string }[] = [];
   const add = (what: string, side: string, where: string) => {
-    const w = what.trim().replace(/^(?:a|an|the|her|his|their|small|large)\s+/i, "").replace(/\s+(?:held|carried|worn|kept|hanging|slung)$/i, "").trim();
-    if (!w || w.split(/\s+/).length > 6 || out.some((o) => o.what === w.toLowerCase())) return;
-    out.push({ side: side.toLowerCase() as "left" | "right", what: w.toLowerCase(), where: where.toLowerCase() });
+    // Only a phrase that names a thing (D34): "phone consistently" keeps "phone"; words that
+    // name nothing are skipped rather than guessed.
+    const words = what.trim().toLowerCase().replace(/[^a-z' -]/g, " ").split(/\s+/).filter(Boolean);
+    const k = words.findIndex((x) => ITEM_NOUNS.test(x));
+    if (k < 0) return;
+    const w = words.slice(Math.max(0, k - 3), k + 1).filter((x) => !/^(?:a|an|the|her|his|their|and|with|always|usually|consistently|often|held|carried|worn)$/.test(x)).join(" ");
+    if (!w || out.some((o) => itemNoun(o.what) === itemNoun(w))) return;
+    out.push({ side: side.toLowerCase() as "left" | "right", what: w, where: where.toLowerCase() });
   };
   const SIDE = String.raw`(?:in|on|over|across|under)\s+(?:her|his|their|the)\s+(left|right)\s+(hand|arm|shoulder|wrist|hip|side)`;
-  // "<item> in her left hand"
-  for (const m of text.matchAll(new RegExp(String.raw`\b((?:[\w'-]+\s+){0,5}?[\w'-]+)\s+(?:held\s+|carried\s+|worn\s+|kept\s+|hanging\s+|slung\s+)?${SIDE}\b`, "gi"))) {
-    const head = m[1].replace(/^.*\b(?:carries|carrying|holds|holding|wears|wearing|grips|gripping|clutches|clutching)\s+/i, "");
-    add(head, m[2], m[3]);
+  // "<item …> in her left hand": the last thing named earlier in the same clause, however many
+  // words describe it ("satchel with a brass clasp and polished metal fittings in her left hand").
+  for (const m of text.matchAll(new RegExp(String.raw`([^.;:!?]{0,200}?)\s+(?:held\s+|carried\s+|worn\s+|kept\s+|hanging\s+|slung\s+)?${SIDE}\b`, "gi"))) {
+    const words = m[1].trim().split(/\s+/);
+    // Back from the side phrase to the nearest thing named, then its describing words.
+    let k = words.length - 1;
+    while (k >= 0 && !ITEM_NOUNS.test(words[k].toLowerCase().replace(/[^a-z'-]/g, ""))) k--;
+    if (k < 0) continue;
+    let j = k;
+    while (j > 0 && k - j < 4 && !/^(?:a|an|the|her|his|their|carries|carrying|holds|holding|wears|wearing|with|and)$/i.test(words[j - 1])) j--;
+    add(words.slice(j, k + 1).join(" "), m[2], m[3]);
   }
   // "in her left hand, a tan satchel"
   for (const m of text.matchAll(new RegExp(String.raw`${SIDE}\s*,?\s+(?:she|he|they)?\s*(?:holds|carries|wears|has)?\s*((?:a|an|the)\s+(?:[\w'-]+\s+){0,4}[\w'-]+)`, "gi"))) add(m[3], m[1], m[2]);
+  // What the reference picture itself shows (D34), read once and kept with the character; the
+  // description wins where both name the same thing.
+  const read = (p as { held?: { ref?: string; items?: { side: "left" | "right"; what: string; where: string }[] } } | undefined)?.held;
+  if (read?.items && read.ref === p?.refs?.front) {
+    const last = (w: string) => w.split(/\s+/).slice(-1)[0];
+    for (const it of read.items) if (!out.some((o) => last(o.what) === last(it.what))) out.push(it);
+  }
   return out.filter((o) => !/^(?:hand|arm|shoulder|wrist|hip|side|her|his|their)$/.test(o.what));
+}
+
+/** Things people hold, carry or wear on one side (D34), for picking the item out of a phrase. */
+const ITEM_NOUNS = /^(?:bag|bags|handbag|satchel|clutch|purse|tote|briefcase|backpack|rucksack|holdall|suitcase|case|phone|smartphone|mobile|tablet|laptop|book|notebook|folder|clipboard|file|envelope|letter|card|cards|ticket|tickets|glass|flute|drink|cup|mug|coffee|bottle|can|cigarette|cigar|vape|umbrella|cane|stick|keys|key|lanyard|camera|microphone|mic|pen|watch|bracelet|bracelets|bangle|ring|rings|glove|guitar|flowers|bouquet|gift|box|tray|plate|newspaper|magazine|map|sword|gun|torch|lantern|leash|lead|dog|baby|child|coat|jacket|scarf|hat)$/;
+/** The thing an item phrase names: "tan leather satchel" → "satchel". */
+export function itemNoun(what: string): string {
+  const words = what.toLowerCase().split(/\s+/);
+  return [...words].reverse().find((x) => ITEM_NOUNS.test(x)) ?? words[words.length - 1];
+}
+
+/**
+ * The first and governing instruction when a blocking frame is attached (D34). Image 1 is the
+ * shot itself; GPT finishes it rather than composing its own. Written so each element of the
+ * frame has one meaning and one job.
+ */
+export function blockingInstruction(refLabels: string[]): string {
+  return [
+    "IMAGE 1 IS THIS SHOT. Turn image 1 into the finished photograph; do not compose a new picture.",
+    "Image 1 was built from the approved layout: the real room exactly as this camera sees it, with a pale labelled stand-in for each character.",
+    "- Each stand-in becomes the character named on it, standing exactly where the stand-in stands, the same size in the frame, and turned the way its label says (FACING CAMERA, BACK TO CAMERA, or SIDE-ON facing left or right).",
+    "- An orange arrow on the floor marks someone walking: they walk exactly along it, in the arrow's direction.",
+    "- A yellow tag beside a stand-in marks an item they hold: it is on that side of the picture, in that hand.",
+    "- Outlined shapes marked with a prop's name are that prop, in that place, at that size.",
+    "- The room, the background, the light, the camera position, the angle and the lens stay exactly as in image 1. Do not move, swap, re-frame, zoom or re-imagine anything.",
+    "- Remove every stand-in outline, label, arrow and tag: none of them appear in the finished picture.",
+    refLabels.length ? `The other attached images are reference pictures (${refLabels.join(", ")}): use them only for how each character and prop looks, never for where anyone stands or what is behind them.` : "",
+  ].filter(Boolean).join("\n");
 }

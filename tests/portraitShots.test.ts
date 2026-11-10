@@ -92,6 +92,11 @@ describe("Bag hand, way out, and two-shots in a group (D33)", () => {
       { side: "right", what: "smartphone", where: "hand" }, { side: "left", what: "silver watch", where: "wrist" }]);
     expect(carriedItems({ wardrobe: "An acoustic guitar slung over her left shoulder." })).toEqual([{ side: "left", what: "acoustic guitar", where: "shoulder" }]);
     expect(carriedItems({ wardrobe: "Carries a tan satchel." })).toEqual([]);
+    // However many words describe it (Paul's wording, 10 Nov).
+    expect(carriedItems({ wardrobe: "Carries a structured medium-sized tan leather top-handle satchel with a brass clasp and polished metal fittings in her left hand. Small pearl stud earrings." })).toEqual([
+      { side: "left", what: "tan leather top-handle satchel", where: "hand" }]);
+    // A phrase that names nothing is skipped, not guessed.
+    expect(carriedItems({ wardrobe: "Holds it consistently in his right hand." })).toEqual([]);
   });
   it("finds the way out and says where it is from the camera", async () => {
     const { exitFrom } = await import("../src/lib/domain/gestures");

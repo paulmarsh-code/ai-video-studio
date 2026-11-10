@@ -23,6 +23,10 @@ export interface PictureExpectation {
   backgroundSides?: { left?: string; right?: string };
   /** All the venue's area names, for the model to choose from. */
   venueAreas?: string[];
+  /** Items held on one side (D34): who, what, and which side of the picture it must be on. */
+  held?: { name: string; item: string; side: "left" | "right" }[];
+  /** Image 2 is the blocking frame (the approved shot) rather than the plain layout sketch. */
+  blocking?: boolean;
 }
 
 export interface PictureCheck {
@@ -34,19 +38,22 @@ export function checkPrompt(e: PictureExpectation, refNames: string[]): string {
   return [
     "You are checking a storyboard picture against its approved layout. Report only what you actually see.",
     "",
-    "Image 1 is the picture to check. Image 2 is the layout sketch: simple labelled shapes showing who stands where and what the camera sees.",
+    e.blocking
+      ? "Image 1 is the picture to check. Image 2 is the approved shot: the real room from this camera with labelled stand-ins showing who stands where and which way they face, orange arrows for walking and yellow tags for held items."
+      : "Image 1 is the picture to check. Image 2 is the layout sketch: simple labelled shapes showing who stands where and what the camera sees.",
     ...(refNames.length ? [`The next images are reference pictures, in this order: ${refNames.join(", ")}. Use the character ones to tell who is who and to check their clothes; use the prop ones to check how each prop looks.`] : []),
     "",
     `Expected main characters, left to right: ${e.order.length ? e.order.join(", ") : "none"}.${e.shoulder?.length ? ` ${e.shoulder.join(" and ")} may also be seen from behind in the foreground; don't list them.` : ""}`,
     ...(e.edge?.length ? [`${e.edge.join(" and ")} may also be partly visible, cut by the edge of the picture; list them too if you can see them.`] : []),
     `Key props that should be visible: ${e.props.length ? e.props.join(", ") : "none"}.`,
     `Background people expected: ${e.crowd === "none" ? "no one else" : e.crowd === "few" ? "a few other people" : "a busy crowd"}.`,
+    ...(e.held?.length ? [`Held items to locate: ${e.held.map((h) => `${h.name}'s ${h.item}`).join(", ")}. For each, say which side of the picture it is on, as you look at it.`] : []),
     "",
     ...(e.venueAreas?.length ? [`The venue's areas are: ${e.venueAreas.join(", ")}.`] : []),
     "",
     "Ignore style, lighting and small differences in pose or expression. Do check clothes, accessories, carried items and props against their reference pictures: a missing stripe or panel, a different colour, a bag in the other hand, or a table without its cloth is a real difference.",
     "Reply with JSON only, no other text:",
-    '{"left_to_right": ["the main characters you see, left to right, by name; use \\"unknown\\" for anyone you cannot match"], "clothes": [{"name": "character", "matches_reference": true, "difference": "what differs, or empty"}], "props": [{"name": "key prop", "side": "left | centre | right", "depth": "among the people | behind everyone | in front of everyone", "matches_picture": true, "difference": "what differs from its reference picture, or empty"}], "props_seen": ["key props you can see"], "background_left": "which venue area is at the left of the background, or none", "background_right": "which venue area is at the right of the background, or none", "background_people": "none | few | busy", "looking_at_camera": ["main characters looking straight into the camera, or empty"], "notes": "one short sentence on anything clearly wrong, or empty"}',
+    '{"left_to_right": ["the main characters you see, left to right, by name; use \\"unknown\\" for anyone you cannot match"], "clothes": [{"name": "character", "matches_reference": true, "difference": "what differs, or empty"}], "props": [{"name": "key prop", "side": "left | centre | right", "depth": "among the people | behind everyone | in front of everyone", "matches_picture": true, "difference": "what differs from its reference picture, or empty"}], "props_seen": ["key props you can see"], "background_left": "which venue area is at the left of the background, or none", "background_right": "which venue area is at the right of the background, or none", "background_people": "none | few | busy", "looking_at_camera": ["main characters looking straight into the camera, or empty"], "held": [{"name": "character", "item": "the item", "picture_side": "left | right | not visible"}], "notes": "one short sentence on anything clearly wrong, or empty"}',
   ].join("\n");
 }
 
@@ -107,6 +114,13 @@ export function judgePicture(e: PictureExpectation, reply: string): PictureCheck
     const l = area(seen.background_left), r = area(seen.background_right);
     if (l && r && l.includes(norm(sides.right).slice(0, 5)) && r.includes(norm(sides.left).slice(0, 5))) problems.push(`The room is the wrong way round: the ${sides.left} belongs on the left and the ${sides.right} on the right.`);
   }
+  // Held items on the right side of the picture (D34): decided here from the floor plan and
+  // the reference, not left to the model's sense of left and right.
+  for (const h of objs((seen as { held?: unknown }).held)) {
+    const want = e.held?.find((x) => first(x.name) === first(String(h.name ?? "")) && norm(String(h.item ?? "")).includes(norm(x.item).slice(-5)));
+    const side = String(h.picture_side ?? "").toLowerCase();
+    if (want && /^(left|right)$/.test(side) && side !== want.side) problems.push(`${want.name}'s ${want.item} is on the ${side} of the picture; it belongs on the ${want.side}, in the other hand, as in the reference.`);
+  }
   // Nobody looks into the lens (D21b).
   const lookers = list(seen.looking_at_camera).filter((n) => expected.includes(first(n)));
   if (lookers.length) problems.push(`${lookers.join(" and ")} ${lookers.length === 1 ? "is" : "are"} looking at the camera; they should look at each other as the moment says.`);
@@ -118,4 +132,21 @@ export function judgePicture(e: PictureExpectation, reply: string): PictureCheck
 /** The extra instruction for the one automatic redraw. */
 export function fixLine(problems: string[]): string {
   return `\nThe last attempt did not match the approved layout. Fix these problems: ${problems.join(" ")}`;
+}
+
+/**
+ * A targeted correction (D34): image 1 is the picture that didn't match; it is edited to fix
+ * only what the check found, keeping everything else. With a blocking frame, image 2 is the
+ * approved shot to match.
+ */
+export function correctionPrompt(problems: string[], withBlocking: boolean): string {
+  return [
+    "Edit image 1. It is nearly right; fix ONLY these problems and change nothing else:",
+    ...problems.map((p) => `- ${p}`),
+    withBlocking
+      ? "Image 2 is the approved shot: who stands where, which way each person faces, the yellow tags for held items, the orange arrows for walking, and the background. Make image 1 match image 2 on the points above. Do not copy image 2's outlines, labels, arrows or tags into the picture."
+      : "The layout sketch attached last shows who stands where; make image 1 match it on the points above.",
+    "The remaining images are reference pictures: use them for how each character and prop looks. Keep a carried item in the hand the reference shows (their left hand is on the right of the picture when they face us, on the left when we see their back).",
+    "Keep everyone's face, hair, clothes and pose, the room, the light, the camera position and the framing exactly as in image 1, apart from these fixes.",
+  ].join("\n");
 }

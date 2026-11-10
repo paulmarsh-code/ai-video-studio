@@ -116,6 +116,8 @@ export default async function StoryboardPage({ params, searchParams }: { params:
               venueName: s.venue?.name ?? "venue", venueDescription: s.venue?.description, venueViews: s.venue?.views as { name: string; imageAssetId?: string }[] | undefined, aspect: brief.aspect, genre, style: brief.style,
               layoutHref: shot?.spec.cameraId ? `/api/layout/${shot.id}` : undefined,
               backgroundHref: shot?.spec.cameraId && hasRing(s.venue?.views as { imageAssetId?: string }[] | undefined) ? `/api/background/${shot.id}` : undefined,
+              // The blocking frame (D34): the shot itself, finished by GPT.
+              blockingHref: shot?.spec.cameraId && hasRing(s.venue?.views as { imageAssetId?: string }[] | undefined) ? `/api/blocking/${shot.id}` : undefined,
               continuity: anchor && anchor.panel.id !== p.id ? { assetId: anchor.panel.imageAssetId!, label: `approved scene picture (panel ${anchor.n})` } : undefined,
             });
             return {

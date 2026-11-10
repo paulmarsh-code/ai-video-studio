@@ -675,3 +675,22 @@ From Paul's third run of Jade's Entrance.
 4. **Two-shots in a group.** In 6 the two-shot camera stood about 1.5 m from Jade, so she was just beside the lens and missing. The camera now steps back until nobody near it is left just out of frame, and anyone standing right by the pair (within 1.6 m) is kept at least at the edge. It prefers stepping back to a lens wider than 60°. In Paul's scene, panel 6 now has Chase at the left and Jade at the right edge.
 5. **Panels 1 and 2 at the same distance**: panel 2 was still the approved picture from the old layout (drawn at the arrival spot); its new halfway-across camera needs a redraw. Nothing to change in the app.
 6. Layout rules are now version 13.
+
+## D34 — The blocking frame: GPT finishes the shot instead of imagining it (2026-11-10)
+
+Paul: positions, direction of travel, held items (which hand) and the 360° background must be right every time; fixing them one picture at a time would never end. The cause was structural. GPT got the background, a separate layout sketch, character pictures and a long description, and had to compose the shot in its head, so position, direction and background were described rather than given.
+
+1. **The blocking frame** (`blockingImage.ts`, `/api/blocking/[shotId]`) is the shot itself, built before anything is drawn:
+   - the 360° background this camera sees, laid out at the picture's size with the horizon where the camera puts it (`backgroundForFrame`), and a soft blurred continuation beyond the view pictures' height;
+   - a pale stand-in for each character at their exact place and size, labelled with their name and FACING CAMERA, BACK TO CAMERA or SIDE-ON facing left/right (a nose shows side-on, eyes show facing us). Far figures' tags sit above their heads, and tags never overlap;
+   - an orange "walking this way" arrow on the floor for anyone moving: arrivals head for their place, someone walking off heads for the way out (`movesFor`);
+   - a yellow tag on the correct side of the picture for anything held in a hand, on a shoulder or on an arm, mirrored for someone facing us;
+   - the key props outlined in place;
+   - the venue's own balconies and drops are left to the background; areas the cast stands on are outlined.
+2. **Drawing** sends the blocking frame first, as the picture to finish, instead of the separate background and sketch. The prompt opens with `blockingInstruction`: image 1 is this shot; each stand-in becomes the named character exactly there, that size, facing that way; walk along the arrow; held items where the tags are; room, background, light, camera, angle and lens unchanged; remove every outline, label, arrow and tag; other images are only for how people and props look. On the by-hand route the frame is the first attachment.
+3. **Held items from reference pictures** (`heldItemsServer.ts`). Which hand holds the bag, phone or drink is read once from each character's approved front picture with the text model's vision, and kept with that version (redone if the picture changes). The model only reports which side of the picture each item is on; the character's own side is worked out by rule, because a front picture is a mirror. Descriptions win where both name the item, and description parsing now finds the item however many words describe it.
+4. **The check** compares with the blocking frame, and asks where each held item is in the picture. The side is judged by rule ("Jade's satchel is on the right of the picture; it belongs on the left").
+5. **Targeted corrections.** A picture that fails its check is edited, not redrawn: image 1 is the failed picture, image 2 the blocking frame, then the references. "Fix ONLY these problems and change nothing else." Up to twice, then it's shown with what's still off (`correctionPrompt`).
+6. All of this is general: geometry from the floor plan and camera, words from the venue, characters and panels. Without a 360° view (fewer than two venue pictures) the app falls back to the layout sketch as before. Tests: `tests/blocking.d34.test.ts`; the browser test now expects edit-based corrections.
+
+Honest limit: an image model still can't be forced. This gives it the composition as a picture to keep rather than words to interpret, and catches and corrects what slips through.

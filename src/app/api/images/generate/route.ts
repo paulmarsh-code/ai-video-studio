@@ -8,16 +8,35 @@ import { cleanBaseCode, storeAsset } from "@/lib/assetStore";
 import { getImageProvider } from "@/lib/providers/images";
 import { renderLayoutForShot } from "@/lib/layoutImage";
 import { renderBackgroundForShot } from "@/lib/backgroundImage";
+import { renderBlockingForShot } from "@/lib/blockingImage";
+import { ensureHeldItems } from "@/lib/heldItemsServer";
 import * as repo from "@/lib/repo";
 
 export async function POST(req: Request) {
   const provider = getImageProvider();
   if (!provider) return NextResponse.json({ error: "No image provider is connected. Copy the prompt into ChatGPT and upload the image." }, { status: 501 });
-  const body = (await req.json()) as { projectId?: string; baseCode?: string; kind?: string; prompt?: string; refAssetIds?: string[]; size?: "portrait" | "landscape" | "square"; layoutShotId?: string; backgroundShotId?: string };
+  const body = (await req.json()) as { projectId?: string; baseCode?: string; kind?: string; prompt?: string; refAssetIds?: string[]; size?: "portrait" | "landscape" | "square"; layoutShotId?: string; backgroundShotId?: string; blockingShotId?: string; baseAssetId?: string };
   if (!body.projectId || !body.baseCode || !body.prompt) return NextResponse.json({ error: "projectId, baseCode and prompt are required" }, { status: 400 });
   const db = await getDb();
   const refs: { data: Buffer; mime: string; name: string }[] = (body.refAssetIds ?? []).map((id) => repo.getAsset(db, id)).filter((a) => a && fs.existsSync(a.path))
     .map((a) => ({ data: fs.readFileSync(a!.path), mime: a!.mime, name: a!.assetCode }));
+  // A correction edits the picture itself (D34): it goes first, the shot to change.
+  if (body.baseAssetId) {
+    const a = repo.getAsset(db, body.baseAssetId);
+    if (a && fs.existsSync(a.path)) refs.unshift({ data: fs.readFileSync(a.path), mime: a.mime, name: "picture_to_fix.png" });
+  }
+  // The blocking frame (D34) goes first, as the shot to finish; it already holds the
+  // background and the layout, so those aren't sent separately.
+  if (body.blockingShotId) {
+    const shot = repo.getShot(db, body.blockingShotId);
+    if (shot) await ensureHeldItems(db, body.projectId);
+    const png = await renderBlockingForShot(db, body.blockingShotId);
+    if (png) {
+      refs.splice(body.baseAssetId ? 1 : 0, 0, { data: Buffer.from(png), mime: "image/png", name: "blocking_frame.png" });
+      body.backgroundShotId = undefined;
+      body.layoutShotId = undefined;
+    }
+  }
   // The background this camera sees, cut from the room's 360° ring (D20).
   if (body.backgroundShotId) {
     const png = await renderBackgroundForShot(db, body.backgroundShotId);

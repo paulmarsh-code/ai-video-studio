@@ -815,3 +815,37 @@ export function setVenueRoom(db: DB, venueId: string, room: RoomSize | null): nu
   persist(db);
   return n;
 }
+
+// ---------- Held items read from reference pictures (D34) ----------
+
+export type HeldItem = { side: "left" | "right"; what: string; where: string };
+
+/**
+ * What a character holds or wears on one side, read once from their approved front reference
+ * picture and kept with that version (derived data: it is redone if the picture changes).
+ */
+export function characterHeldItems(db: DB, projectId: string, slug: string): HeldItem[] | undefined {
+  const c = listCharacters(db, projectId).find((x) => x.slug === slug);
+  const prof = c?.approved?.profile as (CharacterProfile & { held?: { ref: string; items: HeldItem[] } }) | undefined;
+  if (!prof?.held || prof.held.ref !== prof.refs?.front) return undefined;
+  return prof.held.items;
+}
+
+/** Characters whose held items haven't been read from their current front picture yet. */
+export function charactersNeedingHeldRead(db: DB, projectId: string): { slug: string; versionId: string; frontAssetId: string; name: string }[] {
+  const out: { slug: string; versionId: string; frontAssetId: string; name: string }[] = [];
+  for (const c of listCharacters(db, projectId)) {
+    const prof = c.approved?.profile as (CharacterProfile & { held?: { ref: string } }) | undefined;
+    const front = prof?.refs?.front;
+    if (!c.approved || !front || prof?.held?.ref === front) continue;
+    out.push({ slug: c.slug, versionId: c.approved.id, frontAssetId: front, name: c.name });
+  }
+  return out;
+}
+
+export function saveCharacterHeldItems(db: DB, versionId: string, frontAssetId: string, items: HeldItem[]) {
+  const v = db.select().from(t.characterVersions).where(eq(t.characterVersions.id, versionId)).get();
+  if (!v) return;
+  db.update(t.characterVersions).set({ profile: { ...(v.profile as object), held: { ref: frontAssetId, items } } }).where(eq(t.characterVersions.id, versionId)).run();
+  persist(db);
+}

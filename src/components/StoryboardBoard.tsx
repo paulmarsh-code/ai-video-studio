@@ -15,7 +15,7 @@ import type { GeometryPlanData } from "@/lib/domain/types";
 import { PlanThumb } from "./PlanThumb";
 import { uploadBlob } from "@/lib/clientUpload";
 import { imageChangePrompt } from "@/lib/domain/imagePrompts";
-import { fixLine } from "@/lib/domain/pictureCheck";
+import { correctionPrompt } from "@/lib/domain/pictureCheck";
 import { ActionButton, DoneBadge } from "./ActionButton";
 import { ChangeRequest, type SubmittedChange } from "./ChangeRequest";
 import { SHOT_CHOICES, splitShot } from "@/lib/domain/shotSuggest";
@@ -86,10 +86,10 @@ export function fingerprint(p: { prompt: string; attach: { assetId: string; href
 
 const assetIds = (attach: BoardPanel["attach"]) => attach.filter((a) => !a.href && a.assetId).map((a) => a.assetId);
 
-async function drawPicture(p: { projectId: string; baseCode: string; prompt: string; refs: string[]; size: "portrait" | "landscape"; layoutShotId?: string; backgroundShotId?: string }) {
+async function drawPicture(p: { projectId: string; baseCode: string; prompt: string; refs: string[]; size: "portrait" | "landscape"; layoutShotId?: string; backgroundShotId?: string; blockingShotId?: string; baseAssetId?: string }) {
   const res = await fetch("/api/images/generate", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ projectId: p.projectId, baseCode: p.baseCode, kind: "panel", prompt: p.prompt, refAssetIds: p.refs, size: p.size, layoutShotId: p.layoutShotId, backgroundShotId: p.backgroundShotId }),
+    body: JSON.stringify({ projectId: p.projectId, baseCode: p.baseCode, kind: "panel", prompt: p.prompt, refAssetIds: p.refs, size: p.size, layoutShotId: p.layoutShotId, backgroundShotId: p.backgroundShotId, blockingShotId: p.blockingShotId, baseAssetId: p.baseAssetId }),
   });
   const body = (await res.json()) as { id?: string; error?: string };
   if (!res.ok || !body.id) throw new Error(body.error ?? "GPT didn't return a picture.");
@@ -197,19 +197,24 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
   async function drawChecked(p: BoardPanel, prompt: string, refs: string[]) {
     const layoutShotId = p.hasCamera ? p.shotId : undefined;
     const backgroundShotId = p.attach.some((a) => a.href?.startsWith("/api/background/")) ? p.shotId : undefined;
-    let id = await drawPicture({ projectId: b.projectId, baseCode: codeOf(p), prompt, refs, size: b.size, layoutShotId, backgroundShotId });
+    const blockingShotId = p.attach.some((a) => a.href?.startsWith("/api/blocking/")) ? p.shotId : undefined;
+    let id = await drawPicture({ projectId: b.projectId, baseCode: codeOf(p), prompt, refs, size: b.size, layoutShotId, backgroundShotId, blockingShotId });
     let r = await setPanelImageAction(p.id, id, fingerprint(p));
     if (!r.ok) throw new Error(r.error);
     if (!b.canCheck || !layoutShotId) return;
     setDrawing((x) => ({ ...x, [p.id]: "Checking against the layout…" }));
-    const first = await checkPicture(p.id, id);
-    if (!first || first.pass) return;
-    setDrawing((x) => ({ ...x, [p.id]: "Didn't match the layout: redrawing…" }));
-    id = await drawPicture({ projectId: b.projectId, baseCode: codeOf(p), prompt: prompt + fixLine(first.problems), refs, size: b.size, layoutShotId, backgroundShotId });
-    r = await setPanelImageAction(p.id, id, fingerprint(p));
-    if (!r.ok) throw new Error(r.error);
-    setDrawing((x) => ({ ...x, [p.id]: "Checking again…" }));
-    await checkPicture(p.id, id);
+    let result = await checkPicture(p.id, id);
+    // Targeted corrections (D34): a picture that doesn't match is edited to fix just what's
+    // wrong (a hand, a missing person, the background), keeping everything that's right,
+    // rather than drawn again from scratch. Up to twice; then it's shown with what's still off.
+    for (let attempt = 1; attempt <= 2 && result && !result.pass; attempt++) {
+      setDrawing((x) => ({ ...x, [p.id]: `Fixing: ${result!.problems[0]?.slice(0, 60) ?? "doesn't match"}…` }));
+      id = await drawPicture({ projectId: b.projectId, baseCode: codeOf(p), prompt: correctionPrompt(result.problems, !!blockingShotId), refs, size: b.size, layoutShotId: blockingShotId ? undefined : layoutShotId, blockingShotId, baseAssetId: id });
+      r = await setPanelImageAction(p.id, id, fingerprint(p));
+      if (!r.ok) throw new Error(r.error);
+      setDrawing((x) => ({ ...x, [p.id]: "Checking again…" }));
+      result = await checkPicture(p.id, id);
+    }
   }
 
   async function drawAll(list: BoardPanel[] = missing, verb = "Drawing") {

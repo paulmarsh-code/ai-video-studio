@@ -5,11 +5,13 @@
 import fs from "node:fs";
 import type { DB } from "@/db/client";
 import { mainSubjectId } from "./domain/composer";
-import { planForShot, readCamera, readProps } from "./domain/geometry";
+import { facingOf, planForShot, readCamera, readProps } from "./domain/geometry";
 import { ringSectors, viewSlice, viewsInSlice } from "./domain/panorama";
 import { checkPrompt, judgePicture, type PictureCheck, type PictureExpectation } from "./domain/pictureCheck";
 import { crowdLevelOf } from "./domain/story";
 import { renderLayoutForShot } from "./layoutImage";
+import { renderBlockingForShot } from "./blockingImage";
+import { carriedItems, itemNoun } from "./domain/imagePrompts";
 import { getTextProvider } from "./providers/images";
 import * as repo from "./repo";
 import * as studio from "./studioRepo";
@@ -37,9 +39,24 @@ export function expectationFor(db: DB, shotId: string): { expect: PictureExpecta
     .filter((a) => !a.partial)
     .sort((a, b) => a.angleDeg - b.angleDeg)
     .map((a) => a.characterId);
+  // Held items and the side of the picture they belong on (D34), for people facing us or with
+  // their back to us: the same rule the blocking frame and the prompt use.
+  const profiles = studio.getApprovedProfiles(db, scene.scene.projectId);
+  const held = ids.flatMap((id) => {
+    const pos = plan.actors.find((x) => x.characterId === id)?.position;
+    const fwd = facingOf(plan, id, plan.lineOfAction);
+    if (!pos || !fwd) return [];
+    const vx = cam.position.x - pos.x, vy = cam.position.y - pos.y, l = Math.hypot(vx, vy) || 1;
+    const c = (fwd.x * vx + fwd.y * vy) / l;
+    if (c <= 0.5 && c >= -0.35) return []; // side-on: either side can show
+    return carriedItems(profiles[id]).filter((it) => /^(hand|shoulder|arm)$/.test(it.where)).map((it) => ({
+      name: name(id), item: itemNoun(it.what), side: (c > 0.5 ? (it.side === "left" ? "right" : "left") : it.side) as "left" | "right",
+    }));
+  });
   return {
     ids, projectId: scene.scene.projectId,
     expect: {
+      held,
       order: ids.map(name), props: readProps(plan, cam).filter((p) => p.inView).map((p) => p.name), crowd: crowdLevelOf(shot.spec.crowd ?? ""),
       shoulder: reading.actors.filter((a) => a.inView && a.foreground && (cam.preset === "main-ots" || cam.preset === "reverse-ots") && a.characterId !== subject).map((a) => name(a.characterId)),
       edge: reading.actors.filter((a) => a.inView && a.partial && !shot.spec.excludedIds.includes(a.characterId)).map((a) => name(a.characterId)),
@@ -74,7 +91,10 @@ export async function checkPanelPicture(db: DB, panelId: string, assetId: string
   if (!e) return null;
   const pic = repo.getAsset(db, assetId);
   if (!pic || !fs.existsSync(pic.path)) return null;
-  const layout = await renderLayoutForShot(db, panelShot);
+  // The approved shot itself when there is one (D34); the plain layout sketch otherwise.
+  const blockingPng = await renderBlockingForShot(db, panelShot);
+  const layout = blockingPng ?? await renderLayoutForShot(db, panelShot);
+  if (blockingPng) e.expect.blocking = true;
   const profiles = studio.getApprovedProfiles(db, e.projectId);
   const cast = repo.getCast(db, e.projectId);
   const nameOf = (id: string) => cast.find((c) => c.id === id)?.name ?? id;

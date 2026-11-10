@@ -92,3 +92,41 @@ export async function renderBackgroundForShot(db: DB, shotId: string): Promise<B
 export function hasRing(views: { imageAssetId?: string }[] | undefined): boolean {
   return (views ?? []).filter((v) => v.imageAssetId).length >= 2;
 }
+
+/**
+ * The background this camera sees, laid out at the picture's own size (D34): the ring slice
+ * fills the frame's width, its horizon sits where the camera's horizon is (moved by tilt), and
+ * any sky or floor beyond the ring's height continues its edge colours.
+ */
+export async function backgroundForFrame(db: DB, shotId: string, W: number, Hf: number): Promise<Buffer | null> {
+  const shot = repo.getShot(db, shotId);
+  if (!shot?.spec.cameraId) return null;
+  const scene = repo.getScene(db, shot.sceneId);
+  const full = scene?.plan?.data;
+  const plan = full ? planForShot(full, shot.spec) : undefined;
+  const cam = plan?.cameras.find((c) => c.id === shot.spec.cameraId);
+  if (!scene || !plan || !cam) return null;
+  const ring = await ringForScene(db, shot.sceneId);
+  if (!ring) return null;
+  const slice = viewSlice(plan, cam);
+  let x0 = Math.round((ring.startDeg - slice.leftDeg) * PX_PER_DEG);
+  x0 = ((x0 % ring.width) + ring.width) % ring.width;
+  const w = Math.max(16, Math.min(ring.width, Math.round((slice.leftDeg - slice.rightDeg) * PX_PER_DEG)));
+  const s = W / w;
+  const ringH = Math.round(H * s);
+  const strip = await sharp(ring.data).extract({ left: x0, top: 0, width: w, height: H }).resize({ width: W, height: ringH, fit: "fill" }).png().toBuffer();
+  // Where the horizon falls in the frame: the middle, moved by the tilt (D25).
+  const hfovRad = ((slice.leftDeg - slice.rightDeg) * Math.PI) / 180;
+  const focal = W / 2 / Math.tan(hfovRad / 2);
+  const horizon = Hf / 2 + Math.tan(((cam.tiltDeg ?? 0) * Math.PI) / 180) * focal;
+  const top = Math.round(horizon - ringH / 2);
+  // Beyond the ring's height (portrait frames see more ceiling and floor than the view
+  // pictures hold): a soft, blurred continuation of the room's own colours, so nothing new is
+  // invented there and GPT fills it in naturally.
+  const under = await sharp(strip).resize({ width: W, height: Hf, fit: "fill" }).blur(30).modulate({ brightness: 0.9 }).png().toBuffer();
+  const visTop = Math.max(0, top), cutTop = Math.max(0, -top);
+  const visH = Math.min(ringH - cutTop, Hf - visTop);
+  if (visH <= 0) return under;
+  const part = await sharp(strip).extract({ left: 0, top: cutTop, width: W, height: visH }).png().toBuffer();
+  return sharp(under).composite([{ input: part, left: 0, top: visTop }]).png().toBuffer();
+}

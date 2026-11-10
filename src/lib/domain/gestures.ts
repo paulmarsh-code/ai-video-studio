@@ -44,7 +44,7 @@ export function gestureDetail(...texts: (string | undefined)[]): string[] {
 }
 
 const GESTURE_WORDS = /\b(wave|waves|waving|gestur(?:e|es|ed|ing)|point(?:s|ing)?|middle[- ]finger|the finger|flips?\s+\w+\s+off|shoo(?:s|ing)?|beckon(?:s|ing)?|thumbs?[- ]up|toast(?:s|ing)?|raises?\s+(?:a|his|her|their)\s+glass|flicks?|brush(?:es|ing)?\s+\w+\s+off)\b/i;
-const WALK_OFF = /\b(turns?\s+(?:away|on\s+(?:her|his|their)\s+heel)|walks?\s+(?:off|away|out)|walking\s+(?:off|away)|storms?\s+(?:off|out)|leaves?|leaving|heads?\s+for\s+the\s+(?:door|exit)|strides?\s+(?:off|away))\b/i;
+export const WALK_OFF = /\b(turns?\s+(?:away|on\s+(?:her|his|their)\s+heel)|walks?\s+(?:off|away|out)|walking\s+(?:off|away)|storms?\s+(?:off|out)|leaves?|leaving|heads?\s+for\s+the\s+(?:door|exit)|strides?\s+(?:off|away))\b/i;
 
 /**
  * Where a gesture and the head point (D30). A gesture is aimed at the person the subject is
