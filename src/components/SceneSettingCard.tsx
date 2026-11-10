@@ -5,7 +5,7 @@
 // stay the same from shot to shot.
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { saveSceneStagingAction } from "@/app/studioActions";
 import { mergeSuggestion, parseStaging, type CrowdLevel, type KeyProp, type SceneStaging } from "@/lib/domain/story";
 import { uploadBlob } from "@/lib/clientUpload";
@@ -115,36 +115,55 @@ export function SceneSettingCard({ sceneId, projectId, staging, hasPictures, sug
     const r = await save(merged, changed ? "Suggestions added where the setting was empty; everything you wrote was kept. Saved." : "Nothing to add: everything was already filled in, and your words were kept. Saved.");
     return r.ok;
   };
+  // Filled in by itself (D23): with GPT connected, any empty box is filled from the story as soon
+  // as the scene opens. Nothing typed or attached is ever replaced. The user then corrects it,
+  // adds pictures and saves.
+  const gaps = (x: SceneStaging) => !x.spot.trim() || !x.crowd.trim() || !x.props.length;
+  const [filling, setFilling] = useState(false);
+  async function fillFromStory(auto: boolean) {
+    if (!suggestPrompt) return false;
+    setFilling(true); setMsg(auto ? "Filling in the setting from the story…" : "");
+    try {
+      const res = await fetch("/api/describe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: suggestPrompt }) });
+      const body = (await res.json()) as { text?: string; error?: string };
+      if (!res.ok || !body.text) { setMsg(body.error ?? "GPT didn't reply. Try again."); return false; }
+      const st = parseStaging(body.text);
+      if (!st.spot && !st.crowd && !st.props.length) { setMsg("GPT's reply had no setting in it. Fill the boxes yourself, or try again."); return false; }
+      const r = await save(mergeSuggestion(v, st, propsLocked), "Filled in from the story. Change anything that's wrong, add pictures of the key props, then save.");
+      return r.ok;
+    } finally { setFilling(false); }
+  }
+  useEffect(() => {
+    if (!canAuto || !suggestPrompt || !gaps(staging)) return;
+    const key = `autofill:${sceneId}`;
+    try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, "1"); } catch { /* still fill once */ }
+    void fillFromStory(true);
+    // Once, when the scene opens with gaps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return (
     <section className="rounded-xl border border-neutral-200 bg-white p-4" data-testid="scene-setting">
       <p className="font-semibold">Scene setting</p>
-      <p className="mb-2 text-sm text-neutral-600">Kept the same in every picture and every clip of this scene.</p>
+      <p className="mb-2 text-sm text-neutral-600">Where they are, the key props and anyone else there, the same in every picture and clip. {canAuto ? "Filled in from your story: correct anything, add prop pictures, then save." : ""}</p>
       <StagingFields value={v} onChange={setV} propsLocked={propsLocked} projectId={projectId} />
       {suggestPrompt && (
         <div className="mt-2 flex flex-wrap items-start gap-3 text-sm">
-          {canAuto && (
-            <ActionButton label="Suggest from the story" busyLabel="Reading the story…" doneLabel="Suggested" variant="secondary" doneForMs={2500} testId="staging-suggest"
-              onAction={async () => {
-                setMsg("");
-                const res = await fetch("/api/describe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: suggestPrompt }) });
-                const body = (await res.json()) as { text?: string; error?: string };
-                if (!res.ok || !body.text) { setMsg(body.error ?? "GPT didn't reply. Try again."); return false; }
-                return await use(body.text);
-              }} />
+          {canAuto && gaps(v) && !filling && (
+            <button type="button" className="text-blue-700 underline" data-testid="staging-suggest" onClick={() => void fillFromStory(false)}>Fill the empty boxes from the story</button>
           )}
-          <details open={!canAuto}>
-            <summary className="cursor-pointer text-blue-700">{canAuto ? "Or ask ChatGPT" : "Suggest it with ChatGPT"}</summary>
+          {!canAuto && <details open>
+            <summary className="cursor-pointer text-blue-700">Fill it in with ChatGPT</summary>
             <div className="mt-2 space-y-2">
               <ActionButton label="Copy the request" busyLabel="Copying…" doneLabel="Copied" doneForMs={2500} variant="secondary" testId="staging-copy"
                 onAction={async () => { try { await navigator.clipboard.writeText(suggestPrompt); return true; } catch { return false; } }} />
               <textarea className={field} rows={3} value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Paste ChatGPT's reply here" data-testid="staging-reply" />
               <button type="button" disabled={!reply.trim()} onClick={() => void use(reply)} className="rounded-md border border-blue-700 px-3 py-1 text-blue-700 disabled:opacity-40" data-testid="staging-use">Use this</button>
             </div>
-          </details>
+          </details>}
         </div>
       )}
       <div className="mt-2 flex flex-wrap items-center gap-3">
-        <ActionButton label="Save setting" busyLabel="Saving…" doneLabel="Saved" disabled={!dirty} resetKey={v} testId="staging-save"
+        <ActionButton label="Save changes" busyLabel="Saving…" doneLabel="Saved" disabled={!dirty || filling} resetKey={v} testId="staging-save"
           onAction={() => save(v, "Saved.")} />
         {msg && <span className="text-sm text-neutral-700" role="status">{msg}</span>}
       </div>
