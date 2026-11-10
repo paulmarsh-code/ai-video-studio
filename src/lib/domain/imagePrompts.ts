@@ -140,12 +140,26 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     : [];
   const edge = edgeIds.map(byId).filter((c): c is CastMember => !!c);
 
+  // Who this camera sees from behind (D19f): the over-the-shoulder figure, and anyone whose back
+  // is to the camera by the floor plan (someone walking in, say). They get their back image, so
+  // the back of their clothes is copied, not invented; the front image comes too, for colours.
+  const fromBehind = new Set<string>(fgId ? [fgId] : []);
+  if (cam && shotPlan) for (const a of shotPlan.actors) {
+    const fwd = facingOf(shotPlan, a.characterId, shotPlan.lineOfAction);
+    if (!fwd) continue;
+    const vx = cam.position.x - a.position.x, vy = cam.position.y - a.position.y, l = Math.hypot(vx, vy) || 1;
+    if ((fwd.x * vx + fwd.y * vy) / l < -0.35) fromBehind.add(a.characterId);
+  }
   const attach: PanelPrompt["attach"] = [];
   for (const c of [...visible, ...edge]) {
     const refs = i.profiles[c.id]?.refs ?? {};
-    // Someone seen from behind gets their back image; everyone else their front (or face).
-    const pick = c.id === fgId ? (refs.back ?? refs.front) : (refs.front ?? refs.face);
-    if (pick) attach.push({ label: `${c.name} ${c.id === fgId && refs.back ? "back" : "reference"}`, assetId: pick });
+    if (fromBehind.has(c.id) && refs.back) {
+      attach.push({ label: `${c.name} back`, assetId: refs.back });
+      if (c.id !== fgId && refs.front) attach.push({ label: `${c.name} reference`, assetId: refs.front });
+    } else {
+      const pick = refs.front ?? refs.face ?? refs.back;
+      if (pick) attach.push({ label: `${c.name} reference`, assetId: pick });
+    }
   }
   const peopleCount = attach.length;
   if (i.continuity) attach.push({ label: i.continuity.label, assetId: i.continuity.assetId });
@@ -163,8 +177,13 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   const lines: string[] = [];
   lines.push(`${(i.style ?? "photorealistic").replace(/^./, (m) => m.toUpperCase())} storyboard frame for a ${i.aspect ?? "9:16"} video, set in the ${i.venueName}.`);
   const people = attach.slice(0, peopleCount);
-  if (people.length) lines.push(`Use the attached reference images for ${joinNames(people.map((a) => a.label.replace(/ (reference|back)$/, "")))}; keep their faces, hair and clothes identical, every pattern, stripe and colour block included. Bags and anything carried stay exactly as in the reference, in the same hand or on the same shoulder.`);
+  if (people.length) lines.push(`Use the attached reference images for ${joinNames([...new Set(people.map((a) => a.label.replace(/ (reference|back)$/, "")))])}; keep their faces, hair and clothes identical, every pattern, stripe and colour block included. Bags and anything carried stay exactly as in the reference, in the same hand or on the same shoulder.`);
+  const backs = people.filter((a) => a.label.endsWith(" back")).map((a) => a.label.replace(/ back$/, ""));
+  if (backs.length) lines.push(`${joinNames(backs)} ${backs.length === 1 ? "is" : "are"} seen from behind: copy the back of their clothes, hair and bag exactly from the attached back ${backs.length === 1 ? "image" : "images"}.`);
   if (bgImage) lines.push(`Use the attached ${bgView} image as the background, seen across the room several metres behind the characters: same place, layout and light.${shot?.crowd?.trim() ? " It shows the room empty; fill it with the background guests described below." : ""}`);
+  // The room keeps its order in every shot (D19f): what lies left and right of the background.
+  const sides = reading?.sideViews;
+  if (bgView && (sides?.left || sides?.right)) lines.push(`The room around it, never swapped: ${[sides.left ? `the ${sides.left} is to the left of the ${bgView}` : "", sides.right ? `the ${sides.right} is to the right of the ${bgView}` : ""].filter(Boolean).join("; ")}. Anything of ${sides.left && sides.right ? "them" : "it"} in the picture stays on that side.`);
   const spot = shot?.spot?.trim();
   const crowd = shot?.crowd?.trim();
   // An older approved picture may show an empty room: keep its spot and look, but add the crowd.

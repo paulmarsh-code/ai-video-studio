@@ -62,6 +62,8 @@ export interface CameraReading {
   forwardDeg: number;
   actors: SeenActor[];
   backgroundView?: string;
+  /** The venue views either side of the background (D19f), so the room keeps its order. */
+  sideViews?: { left?: string; right?: string };
 }
 
 /**
@@ -124,7 +126,17 @@ export function readCamera(plan: GeometryPlanData, cam: PlanCamera): CameraReadi
       backgroundView = v.name;
     }
   }
-  return { cameraId: cam.id, forwardDeg, actors, backgroundView };
+  // The views to the left and right of the background: the nearest on each side within 135°.
+  // A positive angle from the camera's direction is to its left.
+  const sideViews: { left?: string; right?: string } = {};
+  let bl = Infinity, br = Infinity;
+  for (const v of plan.views) {
+    if (v.name === backgroundView) continue;
+    const rel = ((v.directionDeg - forwardDeg + 540) % 360) - 180;
+    if (rel > 15 && rel <= 135 && rel < bl) { bl = rel; sideViews.left = v.name; }
+    if (rel < -15 && rel >= -135 && -rel < br) { br = -rel; sideViews.right = v.name; }
+  }
+  return { cameraId: cam.id, forwardDeg, actors, backgroundView, sideViews };
 }
 
 /** Which side of the line of action a point is on: +1, -1 or 0. */

@@ -411,3 +411,8 @@ The picture check passed these shots because, by the plan, those people really w
 Known trade-off: with everyone kept in frame, a scene of a small group gets similar-looking group shots. Variety comes from the moment and the close-ups.
 
 Addendum (D19e): **approved pictures are kept when the cameras change.** Approving a new camera layout used to send every picture drawn on an earlier layout back to draft, including ones Paul had approved (shots 7, 9 and 10 were fine). An approved picture is the user's judgement, so it now stays approved with the note "Approved by you on an earlier layout and kept. Redraw it only if it no longer fits." Unapproved ones still go back to draft, marked to redraw.
+
+## D19f — Backs of clothes, and the room keeps its order (2026-11-10)
+
+1. **Jade's clothes changed when seen from behind** (the skirt's orange panel lost, the bag in the other hand). Only the over-the-shoulder figure got the back reference image. Anyone else seen from behind, like Jade walking in, got only the front image, so GPT invented the back. Now anyone whose back is to the camera by the floor plan gets their back image as well as the front one, with "copy the back of their clothes, hair and bag exactly from the attached back image".
+2. **The room's layout swapped between shots** (banner then bar to the left of the screen wall in some shots, the other way round in others). Only the one venue view straight ahead was described. Each picture now also says which venue views lie to its left and right ("the bar is to the left of the screen wall; the lounge seating is to the right … stays on that side"), worked out from the views' directions and the camera's.
