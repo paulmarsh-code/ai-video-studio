@@ -10,19 +10,19 @@ import { Arrow, Circle, Group, Layer, Line, Rect, Stage, Text, Wedge } from "rea
 import { savePlanAction, addPlanToLibraryAction } from "@/app/actions";
 import { checkLineOfAction, describeFrame, PRESET_FOV, readCamera } from "@/lib/domain/geometry";
 import { planImpact, type ShotRef } from "@/lib/domain/impact";
-import type { CameraPreset, CastMember, GeometryPlanData, PlanCamera, Point } from "@/lib/domain/types";
+import type { CameraPreset, CastMember, GeometryPlanData, PlanCamera, PlanLevel, Point } from "@/lib/domain/types";
 import { CameraView, type RingInfo } from "./CameraView";
 import { fovForSize, lensText, SHOT_SIZES, type ShotSize } from "@/lib/domain/shotLanguage";
 import { propKind } from "@/lib/domain/story";
 import { FindingList } from "./FindingList";
 import { ActionButton } from "./ActionButton";
 
-const SCALE = 66; // pixels per metre
+const MAX_SCALE = 66; // pixels per metre in an ordinary room; larger rooms are drawn smaller (D29)
 const PAD = 30;
 const CONE_M = 7;
 const COLOURS = ["#e11d48", "#2563eb", "#16a34a", "#9333ea", "#ea580c", "#0891b2"];
 
-export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; version: number; cast: CastMember[]; shots: ShotRef[]; ring?: RingInfo }) {
+export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; version: number; cast: CastMember[]; shots: ShotRef[]; ring?: RingInfo; /** The venue page, where the room size is set (D29). */ roomHref?: string }) {
   const { cast } = props;
   const [plan, setPlan] = useState<GeometryPlanData>(props.initial);
   const [saved, setSaved] = useState<GeometryPlanData>(props.initial);
@@ -38,6 +38,8 @@ export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; 
   };
 
   const b = plan.bounds ?? { minX: -5, maxX: 5, minY: 0, maxY: 10 };
+  // A big room or open ground is drawn smaller so it fits on the screen (D29).
+  const SCALE = Math.max(14, Math.min(MAX_SCALE, Math.round(660 / Math.max(b.maxX - b.minX, b.maxY - b.minY))));
   const width = (b.maxX - b.minX) * SCALE + PAD * 2;
   const height = (b.maxY - b.minY) * SCALE + PAD * 2;
   const toPx = (p: Point) => ({ x: PAD + (p.x - b.minX) * SCALE, y: PAD + (b.maxY - p.y) * SCALE });
@@ -56,6 +58,8 @@ export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; 
 
   const moveActor = (id: string, p: Point) =>
     setPlan((pl) => ({ ...pl, actors: pl.actors.map((a) => (a.characterId === id ? { ...a, position: p } : a)) }));
+  const setLevel = (id: string, patch: Partial<PlanLevel>) =>
+    setPlan((pl) => ({ ...pl, levels: (pl.levels ?? []).map((l) => (l.id === id ? { ...l, ...patch } : l)) }));
   const moveFurniture = (id: string, p: Point) =>
     setPlan((pl) => ({ ...pl, furniture: (pl.furniture ?? []).map((f) => (f.id === id ? { ...f, position: p } : f)) }));
   const moveCam = (id: string, patch: Partial<Omit<PlanCamera, "id" | "name">>) =>
@@ -118,6 +122,19 @@ export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; 
             })()}
             </Group>
 
+            {/* Raised and lowered areas (D29): drag to move; size and height on the right. */}
+            {(plan.levels ?? []).map((l) => {
+              const tl = toPx({ x: l.x, y: l.y + l.d });
+              const raised = l.heightM > 0;
+              return (
+                <Group key={`lvl-${l.id}`} x={tl.x} y={tl.y} draggable onDragStart={pushHistory}
+                  onDragEnd={(e) => { const m = toM(e.target.x(), e.target.y()); setLevel(l.id, { x: m.x, y: +(m.y - l.d).toFixed(2) }); }}>
+                  <Rect width={l.w * SCALE} height={l.d * SCALE} fill={raised ? "rgba(168,162,158,0.28)" : "rgba(100,116,139,0.30)"} stroke={raised ? "#78716c" : "#334155"} strokeWidth={2} dash={l.edge === "drop" ? [10, 6] : l.edge === "railing" ? [2, 3] : undefined} />
+                  <Text text={`${l.name} ${l.heightM > 0 ? "+" : ""}${l.heightM} m`} fontSize={11} fill={raised ? "#44403c" : "#1e293b"} x={4} y={4} width={Math.max(60, l.w * SCALE - 8)} />
+                </Group>
+              );
+            })}
+
             {(plan.furniture ?? []).map((f) => {
               const p = toPx(f.position);
               // Drawn by kind (D21): a backdrop or screen is a long thin panel facing the group,
@@ -177,6 +194,41 @@ export function PlanEditor(props: { sceneId: string; initial: GeometryPlanData; 
       </div>
 
       <div className="space-y-4">
+        <div className="rounded-xl border border-neutral-200 bg-white p-5 text-sm" data-testid="plan-levels">
+          <h2 className="text-lg font-semibold">Room and heights</h2>
+          <p className="mt-1 text-neutral-700" data-testid="plan-room">Room: {(b.maxX - b.minX).toFixed(1)} × {(b.maxY - b.minY).toFixed(1)} m{props.roomHref ? <> · <a className="text-blue-700 underline" href={props.roomHref}>change it on the venue</a></> : null}</p>
+          <p className="mt-2 text-neutral-600">Raised or lowered parts of the floor: a stage, a balcony, the top of some stairs, a pit, or the drop past a cliff or roof edge. Anyone, any prop and any camera standing in one is at its height.</p>
+          {(plan.levels ?? []).map((l) => (
+            <div key={l.id} className="mt-2 grid grid-cols-[1fr_auto] gap-2 rounded-lg border border-neutral-200 p-2" data-testid={`level-${l.id}`}>
+              <input className="rounded border border-neutral-300 px-2 py-1" value={l.name} aria-label="Area name" onChange={(e) => setLevel(l.id, { name: e.target.value })} />
+              <button type="button" className="text-xs text-red-700 underline" onClick={() => { pushHistory(); setPlan((pl) => ({ ...pl, levels: (pl.levels ?? []).filter((x) => x.id !== l.id) })); }}>Remove</button>
+              <div className="col-span-2 flex flex-wrap items-center gap-2 text-xs">
+                <label>Height <input type="number" step={0.1} min={-100} max={50} className="w-16 rounded border border-neutral-300 px-1 py-0.5" value={l.heightM} aria-label="Area height" data-testid={`level-${l.id}-height`}
+                  onFocus={pushHistory} onChange={(e) => setLevel(l.id, { heightM: Number(e.target.value) })} /> m {l.heightM < 0 ? "(below the floor)" : ""}</label>
+                <label>Width <input type="number" step={0.5} min={0.5} className="w-14 rounded border border-neutral-300 px-1 py-0.5" value={l.w} aria-label="Area width" onFocus={pushHistory} onChange={(e) => setLevel(l.id, { w: Math.max(0.5, Number(e.target.value)) })} /> m</label>
+                <label>Depth <input type="number" step={0.5} min={0.5} className="w-14 rounded border border-neutral-300 px-1 py-0.5" value={l.d} aria-label="Area depth" onFocus={pushHistory} onChange={(e) => setLevel(l.id, { d: Math.max(0.5, Number(e.target.value)) })} /> m</label>
+                <label>Edge <select className="rounded border border-neutral-300 px-1 py-0.5" value={l.edge ?? "plain"} onChange={(e) => setLevel(l.id, { edge: e.target.value as PlanLevel["edge"] })}>
+                  <option value="plain">plain</option><option value="railing">railing</option><option value="steps">steps</option><option value="drop">sheer drop</option>
+                </select></label>
+              </div>
+            </div>
+          ))}
+          <div className="mt-2 flex flex-wrap gap-2 text-xs">
+            {([["Stage", 1, "plain"], ["Balcony", 4, "railing"], ["Top of stairs", 3, "steps"], ["Pit", -2.5, "plain"], ["Drop (cliff or roof edge)", -20, "drop"]] as const).map(([label, h, edge]) => (
+              <button key={label} type="button" className="rounded border border-neutral-300 px-2 py-1 hover:bg-neutral-50" data-testid={`add-level-${label.split(" ")[0].toLowerCase()}`}
+                onClick={() => {
+                  pushHistory();
+                  const cx = plan.actors.length ? plan.actors.reduce((t, a) => t + a.position.x, 0) / plan.actors.length : (b.minX + b.maxX) / 2;
+                  const cy = plan.actors.length ? plan.actors.reduce((t, a) => t + a.position.y, 0) / plan.actors.length : (b.minY + b.maxY) / 2;
+                  // A drop goes beyond the group; anything else under it.
+                  const lvl: PlanLevel = edge === "drop"
+                    ? { id: `lvl-${Date.now()}`, name: "the drop", heightM: h, x: b.minX, y: +Math.min(b.maxY - 0.5, cy + 1.8).toFixed(2), w: +(b.maxX - b.minX).toFixed(2), d: +(b.maxY - Math.min(b.maxY - 0.5, cy + 1.8)).toFixed(2), edge }
+                    : { id: `lvl-${Date.now()}`, name: `the ${label.toLowerCase()}`, heightM: h, x: +(cx - 2).toFixed(2), y: +(cy - 1.5).toFixed(2), w: 4, d: 3, edge };
+                  setPlan((pl) => ({ ...pl, levels: [...(pl.levels ?? []), lvl] }));
+                }}>+ {label}</button>
+            ))}
+          </div>
+        </div>
         <div className="rounded-xl border border-neutral-200 bg-white p-5">
           <h2 className="text-lg font-semibold">Cameras</h2>
           <div className="mt-2 flex flex-wrap gap-2">

@@ -76,9 +76,26 @@ export interface PlanFurniture {
   imageAssetId?: string;
 }
 
+/**
+ * A raised or lowered area of the floor (D29): a stage, a balcony, the top of some stairs, a pit,
+ * or the drop beyond a cliff edge. Anyone or anything standing in it is at its height.
+ * x, y is the corner nearest the room's origin; w along x, d along y.
+ */
+export interface PlanLevel {
+  id: string;
+  name: string;
+  /** Height of its floor above the room's floor in metres; negative is below (a pit, a drop). */
+  heightM: number;
+  x: number; y: number; w: number; d: number;
+  /** How its edge looks: a railing (balcony), steps, or a sheer drop (cliff, roof edge). */
+  edge?: "railing" | "steps" | "drop" | "plain";
+}
+
 export interface GeometryPlanData {
   /** Room extent in metres (scene-local). */
   bounds?: { minX: number; maxX: number; minY: number; maxY: number };
+  /** Raised and lowered areas (D29); everywhere else is the room's floor, height 0. */
+  levels?: PlanLevel[];
   furniture?: PlanFurniture[];
   /** Which version of the app's layout rules made this plan (D19c); older plans can be updated. */
   rules?: number;

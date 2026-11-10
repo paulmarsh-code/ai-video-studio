@@ -17,6 +17,8 @@ import type { GeometryPlanData, PlanView, Pronoun, ShotSpec } from "./domain/typ
 import { asGenre, type Genre } from "./domain/genre";
 import { addMovementMarks, asStaging, planProps, propHeight, propsFromFurniture, propKind, propWidth, checkStoryboard, defaultPlan, panelSeconds, shotSpecFor, type DraftPanel, type SceneStaging } from "./domain/story";
 import { LAYOUT_RULES } from "./domain/director";
+import { applyRoom, boundsFor, groupCentre, roomFor, roomOf, type RoomSize } from "./domain/room";
+import { levelsFromWords } from "./domain/levels";
 import { getAnimatic, getCast, saveAnimatic, type AnimaticTimeline } from "./repo";
 
 // ---------- Characters ----------
@@ -495,7 +497,7 @@ export function saveStoryboard(db: DB, sceneId: string, s: { story: string; targ
     db.insert(t.shots).values({ id: randomUUID(), sceneId, panelId, code: spec.code, spec }).run();
   });
   if (!db.select().from(t.plans).where(eq(t.plans.sceneId, sceneId)).get()) {
-    db.insert(t.plans).values({ id: randomUUID(), sceneId, name: "First floor plan (from the story)", version: 1, data: defaultPlan(castIds, s.panels, (venue?.views ?? []) as PlanView[], staging, projectAspect(db, scene.projectId)) }).run();
+    db.insert(t.plans).values({ id: randomUUID(), sceneId, name: "First floor plan (from the story)", version: 1, data: defaultPlan(castIds, s.panels, (venue?.views ?? []) as PlanView[], staging, projectAspect(db, scene.projectId), venueRoom(venue)) }).run();
   }
   const locks = (scene.locks ?? {}) as SceneLocks;
   db.update(t.scenes).set({ story: s.story, targetSec: s.targetSec, staging, locks: { positions: locks.positions } }).where(eq(t.scenes.id, sceneId)).run();
@@ -532,7 +534,7 @@ export function saveSceneStaging(db: DB, sceneId: string, staging: Partial<Scene
     // place; props taken off the list leave the plan.
     const C = current.data.actors.length
       ? { x: current.data.actors.reduce((s, a) => s + a.position.x, 0) / current.data.actors.length, y: current.data.actors.reduce((s, a) => s + a.position.y, 0) / current.data.actors.length }
-      : { x: 0.25, y: 4.85 };
+      : groupCentre(roomOf(current.data));
     const placed = planProps(st, current.data.actors.length > 1, C);
     const key = (s: string) => s.trim().toLowerCase();
     const furniture = st.props.map((p, i) => {
@@ -562,7 +564,7 @@ export function saveSceneStaging(db: DB, sceneId: string, staging: Partial<Scene
       return { action: p.description, inFrame: shot?.spec.visibleIds ?? [], speakerId: d?.characterId, line: d?.text ?? "", emotion: p.emotion, seconds: p.durationSec };
     });
     const venue = scene.venueId ? db.select().from(t.venues).where(eq(t.venues.id, scene.venueId)).get() : undefined;
-    db.insert(t.plans).values({ id: randomUUID(), sceneId, name: AUTO_PLANS[0], version: plan!.version + 1, data: defaultPlan(castIds, panels, (venue?.views ?? []) as PlanView[], st, projectAspect(db, scene.projectId)) }).run();
+    db.insert(t.plans).values({ id: randomUUID(), sceneId, name: AUTO_PLANS[0], version: plan!.version + 1, data: defaultPlan(castIds, panels, (venue?.views ?? []) as PlanView[], st, projectAspect(db, scene.projectId), venueRoom(venue)) }).run();
   }
   for (const sh of db.select().from(t.shots).where(eq(t.shots.sceneId, sceneId)).all()) {
     const old = sh.spec as ShotSpec;
@@ -759,4 +761,49 @@ export function applyMovementMarks(db: DB, sceneId: string) {
   });
   if (changed) persist(db);
   return changed;
+}
+
+// ---------- Room size and levels (D29) ----------
+
+/** The venue's room for a new floor plan: its size (set or guessed) and its words. */
+export function venueRoom(venue: { name: string; description: string; setting: string; room: unknown } | undefined) {
+  const r = roomFor(venue);
+  return { room: { widthM: r.widthM, depthM: r.depthM }, text: `${venue?.name ?? ""} ${venue?.description ?? ""}` };
+}
+
+/**
+ * Bring a scene's floor plan to its venue's room size (D29), keeping everyone and everything in
+ * the same place relative to the group, and add raised or lowered areas from the scene's words
+ * if the plan has none. Returns true when the plan changed (saved as a new version).
+ */
+export function syncRoom(db: DB, sceneId: string): boolean {
+  const scene = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();
+  if (!scene) return false;
+  const plan = db.select().from(t.plans).where(eq(t.plans.sceneId, sceneId)).orderBy(desc(t.plans.version)).get();
+  if (!plan) return false;
+  const venue = scene.venueId ? db.select().from(t.venues).where(eq(t.venues.id, scene.venueId)).get() : undefined;
+  const { room, text } = venueRoom(venue);
+  const data = plan.data as GeometryPlanData;
+  const now = roomOf(data);
+  let next = data;
+  if (Math.abs(now.widthM - room.widthM) > 0.05 || Math.abs(now.depthM - room.depthM) > 0.05) next = applyRoom(data, room);
+  if (!next.levels) {
+    const st = asStaging(scene.staging);
+    const levels = levelsFromWords(st.spot, text, next.bounds ?? boundsFor(room), groupCentre(room));
+    if (levels.length) next = { ...next, levels };
+  }
+  if (next === data) return false;
+  db.insert(t.plans).values({ id: randomUUID(), sceneId, name: plan.name, version: plan.version + 1, data: next }).run();
+  persist(db);
+  return true;
+}
+
+/** Set a venue's room size (or null to go back to the guess), and bring its scenes' floor plans to it. */
+export function setVenueRoom(db: DB, venueId: string, room: RoomSize | null): number {
+  if (room && (!(room.widthM >= 1.5 && room.widthM <= 200) || !(room.depthM >= 1.5 && room.depthM <= 200))) throw new Error("Give a width and depth between 1.5 and 200 metres.");
+  db.update(t.venues).set({ room: room ? { widthM: +room.widthM.toFixed(1), depthM: +room.depthM.toFixed(1) } : null }).where(eq(t.venues.id, venueId)).run();
+  let n = 0;
+  for (const sc of db.select().from(t.scenes).where(eq(t.scenes.venueId, venueId)).all()) if (syncRoom(db, sc.id)) n++;
+  persist(db);
+  return n;
 }

@@ -3,6 +3,8 @@
 // rails before anything is saved: one speaker per clip, a line short enough for one clip,
 // clip lengths Kling can make, and a total close to the target length.
 
+import { boundsFor, DEFAULT_ROOM, groupCentre, type RoomSize } from "./room";
+import { levelsFromWords } from "./levels";
 import { countWords, deriveDuration, LEAD_SECONDS, WORDS_PER_SECOND } from "./duration";
 import { cleanReply } from "./describe";
 import { hasQuotes, stripQuotes } from "./text";
@@ -454,7 +456,10 @@ export function shotSpecFor(p: DraftPanel, i: { code: string; venueName: string;
  * most lines faces the rest of the group across a small gap. People can be moved on the
  * floor plan later; the app then shows which shots a move affects.
  */
-export function defaultPlan(castIds: string[], panels: DraftPanel[], views: PlanView[], stagingIn?: Partial<SceneStaging>, aspect?: "9:16" | "16:9"): GeometryPlanData {
+export function defaultPlan(castIds: string[], panels: DraftPanel[], views: PlanView[], stagingIn?: Partial<SceneStaging>, aspect?: "9:16" | "16:9",
+  /** The venue's room (D29): its size and its words, for raised and lowered areas. */
+  venue?: { room?: RoomSize; text?: string }): GeometryPlanData {
+  const room = venue?.room ?? DEFAULT_ROOM;
   const staging = stagingIn ? asStaging(stagingIn) : undefined;
   const said = (id: string) => panels.filter((p) => p.speakerId === id).length + panels.filter((p) => p.inFrame.includes(id)).length / 100;
   const order = [...castIds].sort((a, b) => said(b) - said(a));
@@ -465,18 +470,22 @@ export function defaultPlan(castIds: string[], panels: DraftPanel[], views: Plan
   const others = order.filter((id) => id !== main && id !== partner);
   // Around a small table (D18d): the two talkers face each other across it, everyone else
   // stands on the far side, so no one is ever between the two talkers and the cameras.
-  const C = { x: 0.25, y: 4.85 };
+  // Where the group stands: the same place relative to the room whatever its size (D29).
+  const C = groupCentre(room);
   const at = (deg: number, r: number) => ({ x: +(C.x + r * Math.cos((deg * Math.PI) / 180)).toFixed(2), y: +(C.y + r * Math.sin((deg * Math.PI) / 180)).toFixed(2) });
   const actors = !main ? [] : !partner
-    ? [{ characterId: main, position: { x: 0, y: 5 } }]
+    ? [{ characterId: main, position: { x: +(C.x - 0.25 * room.widthM / 9).toFixed(2), y: +(C.y + 0.15 * room.depthM / 10).toFixed(2) } }]
     : [
       { characterId: main, position: at(0, 1.0) },
       { characterId: partner, position: at(180, 1.0) },
       ...others.map((id, k) => ({ characterId: id, position: at(others.length === 1 ? 90 : 50 + (80 * k) / (others.length - 1), 0.95) })),
     ];
   const line: [string, string] | undefined = partner ? [partner, main] : undefined;
+  const bounds = boundsFor(room);
+  const levels = levelsFromWords(staging?.spot ?? "", venue?.text ?? "", bounds, C);
   return {
-    bounds: { minX: -4.5, maxX: 4.5, minY: 0, maxY: 10 },
+    bounds,
+    ...(levels.length ? { levels } : {}),
     furniture: planProps(staging, actors.length > 1, C),
     actors, cameras: [],
     views: views.map((v) => ({ name: v.name, directionDeg: v.directionDeg })),
@@ -545,9 +554,12 @@ export function addMovementMarks(plan: GeometryPlanData, panels: { action: strin
       let ox = a.position.x - centre.x, oy = a.position.y - centre.y;
       const l = Math.hypot(ox, oy) || 1;
       ox /= l; oy /= l;
-      const room = 2.2; // space behind them for a camera a couple of metres back (D19e)
+      // Space behind them for a camera a couple of metres back (D19e), less in a small room (D29).
+      const small = Math.min(b.maxX - b.minX, b.maxY - b.minY);
+      const room = Math.min(2.2, small * 0.22);
+      const far = Math.min(5, Math.max(1.5, small * 0.45)), near = Math.min(2.5, far * 0.6);
       const reach = (ux: number, uy: number) => {
-        for (let d = 5; d >= 2.5; d -= 0.25) {
+        for (let d = far; d >= near; d -= 0.25) {
           const x = a.position.x + ux * d, y = a.position.y + uy * d;
           if (x > b.minX + room && x < b.maxX - room && y > b.minY + room && y < b.maxY - room) return d;
         }
@@ -560,7 +572,7 @@ export function addMovementMarks(plan: GeometryPlanData, panels: { action: strin
         const d = reach(vx / vl, vy / vl);
         if (t === 0.5 || d > best.d + 0.4) best = { ux: vx / vl, uy: vy / vl, d };
       }
-      const dist = kind === "arriving" ? best.d || 2.5 : 1.4;
+      const dist = kind === "arriving" ? best.d || near : Math.min(1.4, near);
       a.marks.push({
         id: kind,
         label: kind === "arriving" ? "arriving, still well back across the room from the group, not yet with them" : "approaching, a step or two from the group",

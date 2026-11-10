@@ -11,6 +11,7 @@ import { propMoves } from "./story";
 import { gazeFor, gazeLine, shotEffect } from "./gaze";
 import { bodyEffect, verticalOf } from "./vertical";
 import { shotLines } from "./shotLanguage";
+import { levelAt, levelLines } from "./levels";
 import { joinNames, stripQuotes } from "./text";
 import type { CastMember, GeometryPlanData, ShotSpec } from "./types";
 
@@ -259,7 +260,9 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     });
     if (parts.length) lines.push(`Around the ${focal.name}: ${parts.join("; ")}. Nobody stands anywhere else.`);
   }
-  if (crowd) lines.push(`Background: ${sentence(crowd)}${layout ? " The grey figures in the layout sketch show where they stand." : ""} Background guests are out of focus, smaller than the main characters and never look at the camera; none of them look like the main characters.`);
+  // The cast up on a stage or balcony (D29): the crowd stays down on the main floor.
+  const castUp = i.plan?.levels?.length ? i.plan.levels.find((l) => l.heightM > 0 && i.plan!.actors.some((a) => levelAt(i.plan!, a.position) === l)) : undefined;
+  if (crowd) lines.push(`Background: ${sentence(crowd)}${castUp ? ` They are down on the main floor, not up on ${castUp.name} with the characters.` : ""}${layout ? " The grey figures in the layout sketch show where they stand." : ""} Background guests are out of focus, smaller than the main characters and never look at the camera; none of them look like the main characters.`);
   for (const c of visible) {
     const p = i.profiles[c.id];
     const parts = [p?.appearance, p?.wardrobe ? `wearing ${p.wardrobe}` : ""].filter(Boolean).map((x) => stripQuotes(x!).replace(/[.!?]+$/, ""));
@@ -294,6 +297,8 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     if (shot.shot?.trim()) lines.push(`Shot: ${shot.shot.trim()}.`);
     // Shot size, named framing, lens, point of view and what the angle means (D27).
     lines.push(...shotLines({ cam, kind: verticalOf(cam).kind, fovDeg: horizontalFov(shotPlan ?? i.plan!, cam), text: `${i.description} ${shot.actions ?? ""} ${shot.shot ?? ""}`, name }));
+    // Raised and lowered floors (D29): who is above or below the camera, and any drop in view.
+    lines.push(...levelLines(shotPlan ?? i.plan!, cam, reading.actors.filter((a) => a.inView && [...shownIds, ...edgeIds].includes(a.characterId)).map((a) => a.characterId), name));
     // A strict left-to-right order and head count (D18e): looser wording let GPT swap people or drop them.
     const order = reading.actors.filter((a) => a.inView && [...shownIds, ...edgeIds].includes(a.characterId)).sort((a, b) => a.angleDeg - b.angleDeg);
     if (order.length > 1) {

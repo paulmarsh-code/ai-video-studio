@@ -134,6 +134,8 @@ export async function chooseCamerasAction(sceneId: string) {
 export async function updateLayoutAction(sceneId: string) {
   return runAsync(async (db) => {
     studio.unlockScene(db, sceneId, "positions");
+    // The venue's room size and any raised or lowered areas (D29).
+    studio.syncRoom(db, sceneId);
     studio.approvePositions(db, sceneId);
     return chooseCameras(db, sceneId);
   });
@@ -243,4 +245,9 @@ export async function deleteProjectAction(projectId: string, confirmName: string
     }
     return { deleted: p.name };
   });
+}
+
+/** Set a venue's room size (D29), or null to use the size guessed from its words. */
+export async function setVenueRoomAction(venueId: string, room: { widthM: number; depthM: number } | null) {
+  return run((db) => studio.setVenueRoom(db, venueId, room));
 }

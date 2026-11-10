@@ -3,6 +3,7 @@
 // come from the geometry, not from GPT's reading of words like "frame-left".
 // Pure: returns an SVG string; the server turns it into a PNG.
 
+import { cameraZ, floorZ, levelAt } from "./levels";
 import { horizontalFov } from "./geometry";
 import { propKind } from "./story";
 import type { GeometryPlanData, PlanCamera } from "./types";
@@ -39,13 +40,14 @@ export function layoutSketchSvg(i: {
   const tanH = Math.tan((horizontalFov(i.plan, cam) * Math.PI) / 360);
   const focal = W / 2 / tanH;
   // The camera's own height and tilt (D25): a high camera tilted down, a low one tilted up.
-  const camH = cam.heightM ?? EYE_HEIGHT;
+  // The lens's height above the room's floor, standing on any raised area (D29).
+  const camH = cameraZ(i.plan, cam);
   const tilt = ((cam.tiltDeg ?? 0) * Math.PI) / 180;
   const toScreen = (p: { x: number; y: number }, z: number) => {
     const rel = { x: p.x - cam.position.x, y: p.y - cam.position.y };
     const d0 = rel.x * f.x + rel.y * f.y;
     const lateral = rel.x * r.x + rel.y * r.y;
-    const v0 = z - camH;
+    const v0 = z + floorZ(i.plan, p) - camH; // heights count from the floor under each point (D29)
     // Rotate (depth, height) by the tilt: looking down brings the floor up the frame.
     const depth = d0 * Math.cos(tilt) + v0 * Math.sin(tilt);
     const v = -d0 * Math.sin(tilt) + v0 * Math.cos(tilt);
@@ -56,6 +58,58 @@ export function layoutSketchSvg(i: {
   const items: Item[] = [];
   const near = 0.25;
 
+  // Raised and lowered areas (D29): the top drawn as a slab, with its sides down to the floor;
+  // a drop or pit drawn as an edge with the far-below floor darker.
+  for (const l of i.plan.levels ?? []) {
+    const corners = [{ x: l.x, y: l.y }, { x: l.x + l.w, y: l.y }, { x: l.x + l.w, y: l.y + l.d }, { x: l.x, y: l.y + l.d }];
+    // Shift each corner 1 cm inward, so it reads as standing on this level, not the floor around it.
+    const inner = corners.map((c) => ({ x: c.x + (c.x === l.x ? 0.01 : -0.01), y: c.y + (c.y === l.y ? 0.01 : -0.01) }));
+    const at = (p: { x: number; y: number }, z: number) => toScreen(p, z - floorZ(i.plan, p));
+    const clip = (pts: { x: number; y: number }[], z: number) => {
+      const out: { x: number; y: number }[] = [];
+      for (let k = 0; k < pts.length; k++) {
+        const a = pts[k], b2 = pts[(k + 1) % pts.length];
+        const da = at(a, z).depth - near, db = at(b2, z).depth - near;
+        if (da > 0) out.push(a);
+        if ((da > 0) !== (db > 0)) { const t = da / (da - db); out.push({ x: a.x + (b2.x - a.x) * t, y: a.y + (b2.y - a.y) * t }); }
+      }
+      return out;
+    };
+    const poly = (pts: { x: number; y: number }[], z: number) => pts.map((p) => { const q = at(p, z); return `${q.x.toFixed(1)},${q.y.toFixed(1)}`; }).join(" ");
+    const top = clip(inner, l.heightM);
+    if (top.length < 3) continue;
+    const far = Math.max(...top.map((p) => at(p, l.heightM).depth));
+    const raised = l.heightM > 0;
+    let svg = "";
+    if (raised) {
+      // Only the sides that face the camera (corners run anticlockwise), then the top if the
+      // lens is above it; from below you see the front, not the top.
+      for (let k = 0; k < top.length; k++) {
+        const a = top[k], b2 = top[(k + 1) % top.length];
+        const facing = (b2.y - a.y) * (cam.position.x - a.x) - (b2.x - a.x) * (cam.position.y - a.y) > 0;
+        if (facing) svg += `<polygon points="${poly([a, b2], l.heightM)} ${poly([b2, a], 0)}" fill="#d6d3d1" stroke="#78716c" stroke-width="2"/>`;
+      }
+      if (camH > l.heightM) svg += `<polygon points="${poly(top, l.heightM)}" fill="#e7e5e4" fill-opacity="0.9" stroke="#57534e" stroke-width="3"/>`;
+      if (l.edge === "railing") {
+        for (let k = 0; k < top.length; k++) {
+          const a = top[k], b2 = top[(k + 1) % top.length];
+          svg += `<polygon points="${poly([a, b2], l.heightM + 1)} ${poly([b2, a], l.heightM)}" fill="none" stroke="#57534e" stroke-width="2" stroke-dasharray="3 5"/>`;
+        }
+      }
+    } else {
+      // A drop or pit: nothing to stand on at floor level (pale), the far floor below darker,
+      // and the edge as a heavy dashed line.
+      svg += `<polygon points="${poly(top, 0)}" fill="#e0f2fe"/>`;
+      svg += `<polygon points="${poly(top, l.heightM)}" fill="#94a3b8" fill-opacity="0.6" stroke="#64748b" stroke-width="2"/>`;
+      svg += `<polygon points="${poly(top, 0)}" fill="none" stroke="#334155" stroke-width="4" stroke-dasharray="14 8"/>`;
+    }
+    const cz = Math.max(0, l.heightM);
+    const pts = top.map((p) => at(p, cz));
+    const mid = { x: pts.reduce((t, q) => t + q.x, 0) / pts.length, y: Math.min(H - 60, pts.reduce((t, q) => t + q.y, 0) / pts.length), depth: Math.max(...pts.map((q) => q.depth)) };
+    if (mid.depth > near) svg += `<text x="${mid.x.toFixed(1)}" y="${mid.y.toFixed(1)}" font-size="22" text-anchor="middle" fill="#44403c" font-family="sans-serif">${esc(l.name)} (${l.heightM > 0 ? "+" : ""}${Math.round(l.heightM * 10) / 10} m)</text>`;
+    items.push({ depth: far + 50, svg: `<g>${svg}</g>` });
+  }
+
   // Other people: the same grey figures in the same places in every camera view of the scene.
   if (i.crowd === "few" || i.crowd === "busy") {
     const n = i.crowd === "busy" ? 22 : 6;
@@ -65,10 +119,15 @@ export function layoutSketchSvg(i: {
     const occupied = [...i.plan.actors.map((a) => a.position), ...(i.plan.furniture ?? []).map((x) => x.position)];
     const C = occupied.length ? { x: occupied.reduce((s, p) => s + p.x, 0) / occupied.length, y: occupied.reduce((s, p) => s + p.y, 0) / occupied.length } : { x: 0, y: 5 };
     for (let k = 0; k < n; k++) {
-      const ring = 2.6 + (k % 3) * 0.9;
+      // When the cast is up on a stage or balcony, the crowd is down on the floor beyond its edge.
+      const castLevel = i.plan.actors.map((x) => levelAt(i.plan, x.position)).find((l) => l && l.heightM !== 0);
+      const ring = 2.6 + (k % 3) * 0.9 + (castLevel ? Math.max(castLevel.w, castLevel.d) / 2 : 0);
       const ang = (k * 137.5 * Math.PI) / 180; // golden angle: spread evenly, same every time
       const pos = { x: C.x + ring * Math.cos(ang), y: C.y + ring * Math.sin(ang) };
       if (occupied.some((p) => Math.hypot(p.x - pos.x, p.y - pos.y) < 1.1)) continue;
+      // Nobody stands over a drop, and the stage or balcony the cast is on is theirs (D29).
+      const lv = levelAt(i.plan, pos);
+      if (lv && (lv.heightM < -0.5 || i.plan.actors.some((x) => levelAt(i.plan, x.position) === lv))) continue;
       if (Math.hypot(pos.x - cam.position.x, pos.y - cam.position.y) < 1.2) continue;
       const head = toScreen(pos, 1.6);
       if (head.depth < Math.max(1, behind)) continue;
@@ -140,7 +199,7 @@ export function layoutSketchSvg(i: {
     ...items.map((x) => x.svg),
     "</g>",
     (cam.rollDeg || cam.povId) ? `<text x="${W / 2}" y="${H - 52}" font-size="26" text-anchor="middle" fill="#404040" stroke="#fff" stroke-width="5" paint-order="stroke" font-family="sans-serif">${[cam.povId ? `point of view: ${esc(i.people.find((p) => p.id === cam.povId)?.name ?? cam.povId)}'s eyes` : "", cam.rollDeg ? `Dutch angle ${Math.round(cam.rollDeg)}°` : ""].filter(Boolean).join(" · ")}</text>` : "",
-    (cam.tiltDeg || (cam.heightM && Math.abs(cam.heightM - EYE_HEIGHT) > 0.3)) ? `<text x="${W / 2}" y="${H - 20}" font-size="26" text-anchor="middle" fill="#404040" stroke="#fff" stroke-width="5" paint-order="stroke" font-family="sans-serif">camera ${(cam.heightM ?? EYE_HEIGHT).toFixed(1)} m up, ${Math.abs(cam.tiltDeg ?? 0).toFixed(0)}° ${(cam.tiltDeg ?? 0) < 0 ? "down" : "up"}</text>` : "",
+    (cam.tiltDeg || (cam.heightM && Math.abs(cam.heightM - EYE_HEIGHT) > 0.3) || floorZ(i.plan, cam.position)) ? `<text x="${W / 2}" y="${H - 20}" font-size="26" text-anchor="middle" fill="#404040" stroke="#fff" stroke-width="5" paint-order="stroke" font-family="sans-serif">camera ${(cam.heightM ?? EYE_HEIGHT).toFixed(1)} m up${floorZ(i.plan, cam.position) ? ` on ${esc(levelAt(i.plan, cam.position)!.name)}` : ""}, ${Math.abs(cam.tiltDeg ?? 0).toFixed(0)}° ${(cam.tiltDeg ?? 0) < 0 ? "down" : "up"}</text>` : "",
     `<rect x="2" y="2" width="${W - 4}" height="${H - 4}" fill="none" stroke="#a3a3a3" stroke-width="4"/>`,
     "</svg>",
   ].join("");

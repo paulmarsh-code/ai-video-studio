@@ -592,3 +592,30 @@ The app now suggests a named shot for every panel, using the guide's rules for b
    - "Back to the suggestion" undoes it.
    - Once the cameras are approved, the shot is locked with them.
 6. Picture and video prompts start their camera lines with "Shot: …".
+
+## D29 — Room size per venue, and raised and lowered floors (2026-11-10)
+
+Two limits from D25–D28 are now fixed (`room.ts`, `levels.ts`; tests in `tests/roomLevels.test.ts` with made-up names; browser test `room.js`).
+
+1. **Room size per venue.** Every floor plan used to be a 9 × 10 m room inherited from the first demo.
+   - Each venue now has a size (`venues.room`, migration 0007). It is guessed from the venue's name first, then its description: tiny (lift, car, booth), small (bedroom, office), medium (café, living room, pub), large (bar, restaurant), hall (ballroom, warehouse, event space, launch), or outdoors (30 × 30 m). Unrecognised names stay 9 × 10.
+   - The venue page shows the size and whether it was guessed or set, with width and depth boxes and quick sizes.
+   - Saving a size brings every floor plan at that venue to it. Everyone, every mark, prop, camera and raised area moves together, so they keep the same place relative to the group. The group stands in the same place relative to the room whatever its size.
+   - New plans use the venue's size, and "Update the layout" brings older plans to it.
+   - In a small room, arrival marks and the space kept behind them for a camera shrink to fit.
+   - The floor plan shows the room size with a link to change it, and draws big rooms smaller so they fit.
+2. **Raised and lowered floors.** A plan can have areas (`GeometryPlanData.levels`) with a height above or below the floor: a stage (+1 m), a balcony (+4 m, railing), the top of some stairs (+3 m, steps), a pit, or the drop past a cliff (−30 m) or roof edge (−20 m).
+   - Anyone, any prop and any camera standing in an area is at its height. A camera's own height counts from the floor it stands on.
+   - They are made from the scene's words: where the group stands ("on the stage", "on the balcony looking down on the hall", "at the edge of the cliff", "on the rooftop", "at the top of the stairs", "by the pool"), or a balcony or stage the venue's description mentions (placed at the back).
+   - On the floor plan they can be added, moved, sized, given a height and an edge, and removed.
+3. **What changes with heights**:
+   - The camera reading knows when someone is out of the top or bottom of the frame.
+   - Cameras aim in 3D: a level camera whose subject is on a stage, balcony or in a pit tilts to their face (`R-LEVEL`), and high and low angles count from each person's own floor.
+   - No camera can stand over a drop.
+   - The layout sketch draws raised areas as blocks (only the sides facing the camera, and the top only from above, with a railing), and drops and pits as a dashed edge over empty space with the far floor below.
+   - Background people stay off the cast's stage or balcony and away from any drop.
+   - The viewfinder places heads and tables at their real heights.
+   - Picture and video prompts say who is above or below the camera and by how much, that the camera is up there with them, any drop, balcony or stage in view, and that the crowd is down on the main floor.
+4. Layout rules are now version 10.
+
+Limits: areas are rectangles with flat tops (stairs are one step up to their top, not a slope); terrain that rises gradually isn't modelled.

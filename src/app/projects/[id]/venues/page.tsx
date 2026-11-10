@@ -9,6 +9,8 @@ import { setVenueViewImageAction } from "@/app/studioActions";
 import { ImageSlot } from "@/components/ImageSlot";
 import { VenueEditor } from "@/components/VenueEditor";
 import { VenueWizard } from "@/components/VenueWizard";
+import { VenueRoom } from "@/components/VenueRoom";
+import { roomFor } from "@/lib/domain/room";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +65,7 @@ export default async function VenuesPage({ params, searchParams }: { params: Pro
         ) : venue && (
           <section className="rounded-xl border border-neutral-200 bg-neutral-50 p-4">
             <h2 className="mb-3 text-lg font-semibold">{venue.name}</h2>
+            {(() => { const r = roomFor(venue); return <VenueRoom key={`room-${venue.id}-${r.widthM}x${r.depthM}`} venueId={venue.id} widthM={r.widthM} depthM={r.depthM} guessed={r.guessed} label={r.label} />; })()}
             <VenueEditor key={venue.id} canAuto={canAuto} venue={venue} projectId={id} baseCode={baseCode}
               images={hasImages ? (
                 <div key="images" className="grid gap-3 sm:grid-cols-2">

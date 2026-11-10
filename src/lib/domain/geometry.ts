@@ -2,6 +2,7 @@
 // Deterministic — no AI. Coordinates are scene-local metres.
 
 import { verticalText } from "./vertical";
+import { cameraZ, floorZ, levelAt } from "./levels";
 import { SHOT_SIZES } from "./shotLanguage";
 import type {
   CameraPreset,
@@ -64,7 +65,7 @@ export interface SeenActor {
   angleDeg: number; // negative = left of centre
   depthM: number;
   inView: boolean;
-  frame: FramePosition | "out-left" | "out-right" | "behind";
+  frame: FramePosition | "out-left" | "out-right" | "behind" | "out-above" | "out-below";
   foreground: boolean;
 }
 
@@ -94,6 +95,12 @@ export function readCamera(plan: GeometryPlanData, cam: PlanCamera): CameraReadi
   const r = { x: f.y, y: -f.x }; // right-hand vector when looking along f
   const forwardDeg = (deg(Math.atan2(f.y, f.x)) + 360) % 360;
 
+  // Up and down (D29): the frame's vertical half-angle, and the lens's height above the room's
+  // floor, so someone on a balcony far above a level camera is out of the top of the frame.
+  const longFov = cam.fovDeg ?? PRESET_FOV[cam.preset];
+  const vHalf = plan.aspect === "9:16" ? longFov / 2 : deg(Math.atan(Math.tan(((longFov / 2) * Math.PI) / 180) * (9 / 16)));
+  const camZ = cameraZ(plan, cam);
+  const tilt = cam.tiltDeg ?? 0;
   const actors: SeenActor[] = plan.actors.map((a) => {
     const rel = sub(a.position, cam.position);
     const depth = rel.x * f.x + rel.y * f.y;
@@ -104,6 +111,8 @@ export function readCamera(plan: GeometryPlanData, cam: PlanCamera): CameraReadi
     if (depth <= 0) frame = "behind";
     else if (angle < -half) frame = "out-left";
     else if (angle > half) frame = "out-right";
+    else if (deg(Math.atan2(floorZ(plan, a.position) - camZ, depth)) - tilt > vHalf) frame = "out-above"; // feet above the top edge
+    else if (deg(Math.atan2(floorZ(plan, a.position) + 1.7 - camZ, depth)) - tilt < -vHalf) frame = "out-below"; // head below the bottom edge
     else {
       inView = true;
       frame =
@@ -264,6 +273,9 @@ export function cameraPlacementProblem(plan: GeometryPlanData, cam: PlanCamera):
   for (const a of plan.actors) {
     if (Math.hypot(a.position.x - cam.position.x, a.position.y - cam.position.y) < 0.3) return `inside ${a.characterId}`;
   }
+  // Nowhere to stand over a cliff or roof drop (D29).
+  const l = levelAt(plan, cam.position);
+  if (l && (l.edge === "drop" || l.heightM <= -3)) return `over ${l.name}`;
   for (const f of plan.furniture ?? []) {
     if (Math.hypot(f.position.x - cam.position.x, f.position.y - cam.position.y) < f.radiusM + 0.15) return `inside the ${f.name}`;
   }

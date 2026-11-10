@@ -4,6 +4,7 @@
 // Deterministic geometry only — no AI, no credits. People are sized by distance,
 // placed by their angle in the lens, and the shoulder person is drawn soft from behind.
 
+import { cameraZ, floorZ } from "@/lib/domain/levels";
 import { PRESET_FOV, readCamera } from "@/lib/domain/geometry";
 import { viewSlice } from "@/lib/domain/panorama";
 import type { CastMember, GeometryPlanData, PlanCamera, Point } from "@/lib/domain/types";
@@ -78,6 +79,8 @@ export function CameraView({
   const focalPx = W / 2 / Math.tan(((fov / 2) * Math.PI) / 180);
   const horizon = H * 0.4 + Math.tan(((cam.tiltDeg ?? 0) * Math.PI) / 180) * focalPx;
   const wall = reading.backgroundView ?? "";
+  // The lens's height above the room's floor (D29): eye level, a high or low camera, or on a balcony.
+  const camAbs = cameraZ(plan, cam);
   const colour = (id: string) => COLOURS[Math.max(0, cast.findIndex((c) => c.id === id)) % COLOURS.length];
   const name = (id: string) => cast.find((c) => c.id === id)?.name ?? id;
 
@@ -127,7 +130,7 @@ export function CameraView({
 
           {/* Furniture */}
           {tables.map(({ t, pr }) => {
-            const y = horizon + (EYE_M - TABLE_TOP_M) * pr.scale;
+            const y = horizon + (camAbs - floorZ(plan, t.position) - TABLE_TOP_M) * pr.scale;
             const rx = t.radiusM * pr.scale;
             return (
               <g key={t.id}>
@@ -143,14 +146,17 @@ export function CameraView({
             const headR = HEAD_R_M * s;
             const sh = (SHOULDER_M * s) / 2;
             const cx = p.pr.x;
-            const cy = horizon;
+            // Heads at their own height (D29): above the horizon on a balcony, below it in a pit.
+            const z0 = floorZ(plan, plan.actors.find((x) => x.characterId === p.characterId)!.position);
+            const cy = horizon + (camAbs - (z0 + EYE_M)) * s;
+            const feetY = Math.min(H + 40, horizon + (camAbs - z0) * s);
             const fg = p.foreground;
             const isSubject = p.characterId === subjectId;
             const fill = colour(p.characterId);
             return (
               <g key={p.characterId} filter={fg ? "url(#soft)" : undefined} opacity={fg ? 0.9 : 1}>
                 <path
-                  d={`M ${cx - sh} ${H + 40} L ${cx - sh} ${cy + headR * 2.2} Q ${cx - sh} ${cy + headR * 1.3} ${cx - headR * 0.9} ${cy + headR * 1.25} L ${cx + headR * 0.9} ${cy + headR * 1.25} Q ${cx + sh} ${cy + headR * 1.3} ${cx + sh} ${cy + headR * 2.2} L ${cx + sh} ${H + 40} Z`}
+                  d={`M ${cx - sh} ${feetY} L ${cx - sh} ${cy + headR * 2.2} Q ${cx - sh} ${cy + headR * 1.3} ${cx - headR * 0.9} ${cy + headR * 1.25} L ${cx + headR * 0.9} ${cy + headR * 1.25} Q ${cx + sh} ${cy + headR * 1.3} ${cx + sh} ${cy + headR * 2.2} L ${cx + sh} ${feetY} Z`}
                   fill={fg ? "#262626" : fill}
                   opacity={fg ? 1 : 0.85}
                 />

@@ -7,6 +7,7 @@ import { mainSubjectId } from "./composer";
 import { cameraPlacementProblem, facingOf, horizontalFov, PRESET_FOV, occlusions, planForShot, propsBlocking, readCamera, type CameraReading } from "./geometry";
 import { GENRE_PROFILES, genreBonus, type Genre } from "./genre";
 import { povFor, verticalFor } from "./vertical";
+import { cameraZ, floorZ, levelAt } from "./levels";
 import { fovForSize, namedShot, presetsFor, SHOT_SIZES } from "./shotLanguage";
 import { gazeFor } from "./gaze";
 import type { CameraPreset, GeometryPlanData, PlanCamera, Point, ShotSpec } from "./types";
@@ -551,7 +552,7 @@ export { facingOf };
  * from its distance, so the person stays in frame: a high camera aims down at their chest, a low
  * one up at their head. An overhead camera moves to just behind and above them.
  */
-export function verticalCamera(cam0: PlanCamera, v: { kind: string; heightM: number; tiltDeg: number; rollDeg?: number }, subject?: Point): PlanCamera {
+export function verticalCamera(cam0: PlanCamera, v: { kind: string; heightM: number; tiltDeg: number; rollDeg?: number }, subject?: Point, plan?: Pick<GeometryPlanData, "levels">): PlanCamera {
   // A Dutch angle (D27) rolls the frame whatever the height.
   const cam = v.rollDeg ? { ...cam0, rollDeg: v.rollDeg } : cam0;
   if (v.kind === "level" && v.heightM === 1.6 && v.tiltDeg === 0) return cam;
@@ -572,8 +573,10 @@ export function verticalCamera(cam0: PlanCamera, v: { kind: string; heightM: num
   // Level at their height (D26): lying down, on the floor, falling alongside them.
   if (v.tiltDeg === 0) return { ...cam, heightM: v.heightM, tiltDeg: 0 };
   const dist = Math.max(0.5, Math.hypot(subject.x - cam.position.x, subject.y - cam.position.y));
-  const aimAt = v.kind === "high" ? 1.2 : 1.6; // chest when looking down on them, head when looking up
-  const deg = (Math.atan((aimAt - v.heightM) / dist) * 180) / Math.PI;
+  // Chest when looking down on them, head when looking up; on raised or lowered floors (D29) both
+  // heights count from the floor each stands on.
+  const aimAt = (v.kind === "high" ? 1.2 : 1.6) + (plan ? floorZ(plan, subject) : 0);
+  const deg = (Math.atan((aimAt - v.heightM - (plan ? floorZ(plan, cam.position) : 0)) / dist) * 180) / Math.PI;
   const tiltDeg = Math.round(v.kind === "high" ? Math.min(-15, deg) : Math.max(10, deg));
   return { ...cam, heightM: v.heightM, tiltDeg };
 }
@@ -681,6 +684,35 @@ function namedShotDesign(d: ShotDesign, plan: GeometryPlanData, sh: ShotInput, l
   return { ...d, options };
 }
 
+/**
+ * Raised and lowered floors (D29): a camera left level would miss someone on a balcony above it
+ * or in a pit below it. Any level camera whose subject stands at a different height is tilted
+ * to their face, and says so.
+ */
+function aimAcrossLevels(d: ShotDesign, plan: GeometryPlanData, sh: ShotInput | undefined, name: (id: string) => string): ShotDesign {
+  if (!sh || !plan.levels?.length) return d;
+  const sp = planForShot(plan, sh.spec);
+  const subj = mainSubjectId(sh.spec);
+  const S = sp.actors.find((a) => a.characterId === subj)?.position;
+  if (!S || !subj) return d;
+  return {
+    ...d,
+    options: d.options.map((o) => {
+      if (o.camera.tiltDeg) return o;
+      // A point of view looks at what they see; any other camera at its subject.
+      const T = o.camera.povId ? o.camera.lookAt : S;
+      const camAbs = cameraZ(sp, o.camera);
+      const aim = floorZ(sp, T) + 1.5;
+      const dist = Math.max(0.5, Math.hypot(T.x - o.camera.position.x, T.y - o.camera.position.y));
+      if (Math.abs(aim - camAbs) < 0.6) return o;
+      const tiltDeg = Math.round((Math.atan((aim - camAbs) / dist) * 180) / Math.PI);
+      const l = levelAt(sp, T), lc = levelAt(sp, o.camera.position);
+      const why = aim > camAbs ? `${name(subj)} is ${l ? `on ${l.name}` : "on the floor"}, above the camera${lc ? ` on ${lc.name}` : ""}: it tilts up ${Math.abs(tiltDeg)}° to their face` : `${name(subj)} is ${l ? `in ${l.name}` : "on the floor"}, below the camera${lc ? ` on ${lc.name}` : ""}: it tilts down ${Math.abs(tiltDeg)}° to their face`;
+      return { ...o, camera: { ...o.camera, tiltDeg }, reasons: [...o.reasons, `R-LEVEL: ${why}`] };
+    }),
+  };
+}
+
 export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (id: string) => string, genre: Genre = "neutral"): SceneDesign {
   const line = chooseLine(plan, shots);
   // Anchor screen sides from the dialogue (R-SCREEN): run the dialogue shots first, take the
@@ -715,8 +747,8 @@ export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (i
     const sp = planForShot(plan, sh.spec);
     const subj = mainSubjectId(sh.spec);
     const S = sp.actors.find((a) => a.characterId === subj)?.position;
-    return { ...d, options: d.options.map((o) => o.camera.povId ? o : ({ ...o, camera: verticalCamera(o.camera, v, S), reasons: [...o.reasons, `R-VERTICAL: ${v.why}`] })) };
-  });
+    return { ...d, options: d.options.map((o) => o.camera.povId ? o : ({ ...o, camera: verticalCamera(o.camera, v, S, sp), reasons: [...o.reasons, `R-VERTICAL: ${v.why}`] })) };
+  }).map((d) => aimAcrossLevels(d, plan, shots.find((x) => x.id === d.shotId), name));
   return { side: best.side, lineOfAction: line, shots: designs, multiShot: groupMultiShot(shots) };
 }
 
@@ -732,7 +764,7 @@ export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (i
  * positions for anyone moving (D20); 6 = movement marks worked out afresh, props seen across
  * their real extent (D21b); 7 = high and low cameras for looking down or up (D25).
  */
-export const LAYOUT_RULES = 9;
+export const LAYOUT_RULES = 10;
 
 export function applyDesign(plan: GeometryPlanData, choices: { shotId: string; shotCode: string; option: CameraOption }[], line?: [string, string]) {
   const cameras: PlanCamera[] = [];

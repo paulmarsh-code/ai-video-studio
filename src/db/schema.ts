@@ -53,6 +53,8 @@ export const venues = sqliteTable("venues", {
   setting: text("setting").notNull().default("interior"),
   status: text("status").notNull().default("draft"),
   views: text("views", { mode: "json" }).notNull().default([]), // PlanView[]
+  /** Room size in metres (D29): { widthM, depthM }; null means guessed from the venue's words. */
+  room: text("room", { mode: "json" }),
 });
 
 export const scenes = sqliteTable("scenes", {

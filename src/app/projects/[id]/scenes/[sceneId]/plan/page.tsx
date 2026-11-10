@@ -39,6 +39,7 @@ export default async function PlanPage({ params }: { params: Promise<{ id: strin
         cast={cast}
         shots={s.shots.map((sh) => ({ id: sh.id, code: sh.code, spec: sh.spec, approved: approved.has(sh.id) }))}
         ring={ring}
+        roomHref={s.scene.venueId ? `/projects/${id}/venues/${s.scene.venueId}` : undefined}
       />
     </div>
   );

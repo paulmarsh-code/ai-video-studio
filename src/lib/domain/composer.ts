@@ -4,6 +4,7 @@
 import { gazeFor, gazeLine, shotEffect } from "./gaze";
 import { bodyEffect, verticalOf } from "./vertical";
 import { MOVE_TEXT, namedShot, shotLines } from "./shotLanguage";
+import { levelLines } from "./levels";
 import { describeFrame, horizontalFov, planForShot, presetText, readCamera } from "./geometry";
 import { gestureDetail } from "./gestures";
 import { GENRE_PROFILES, type Genre } from "./genre";
@@ -145,6 +146,9 @@ export function composeKlingPrompt(
     const move = named.move ? MOVE_TEXT[named.move] : GENRE_PROFILES[genre].movement;
     s.camera = presetText(cam).includes("static camera") ? presetText(cam).replace("static camera", move) : `${presetText(cam).replace(/\.$/, "")}, ${move}.`;
     if (shot.shot?.trim()) s.camera = `Shot: ${shot.shot.trim()}. ${s.camera}`;
+    // Raised and lowered floors (D29).
+    const lv = levelLines(planForShot(plan, shot), cam, visible.map((c) => c.id), (id) => byId(id)?.name ?? id);
+    if (lv.length) s.positions = `${s.positions ?? ""} ${lv.join(" ")}`.trim();
     s.camera += ` ${shotLines({ cam, kind: verticalOf(cam).kind, fovDeg: horizontalFov(plan, cam), text: `${shot.actions ?? ""} ${shot.shot ?? ""}`, name: (id) => byId(id)?.name ?? id }).join(" ")}`;
   }
 

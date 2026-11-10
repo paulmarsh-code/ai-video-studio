@@ -17,6 +17,18 @@ export function PlanThumb({ plan, names }: { plan: GeometryPlanData; names: Reco
   const m = W / (maxX - minX);
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full rounded border border-neutral-200 bg-neutral-50" role="img" aria-label="Floor plan from above" data-testid="plan-thumb">
+      {/* Raised and lowered areas (D29), clipped to the view. */}
+      {(plan.levels ?? []).map((l) => {
+        const x0 = Math.max(0, sx(l.x)), x1 = Math.min(W, sx(l.x + l.w));
+        const y0 = Math.max(0, sy(l.y + l.d)), y1 = Math.min(H, sy(l.y));
+        if (x1 <= x0 || y1 <= y0) return null;
+        return (
+          <g key={`lvl-${l.id}`}>
+            <rect x={x0} y={y0} width={x1 - x0} height={y1 - y0} fill={l.heightM > 0 ? "#e7e5e4" : "#cbd5e1"} stroke={l.heightM > 0 ? "#78716c" : "#334155"} strokeDasharray={l.edge === "drop" ? "6 4" : undefined} />
+            <text x={x0 + 4} y={y0 + 11} fontSize="9" fill="#44403c">{l.name} {l.heightM > 0 ? "+" : ""}{l.heightM} m</text>
+          </g>
+        );
+      })}
       {(plan.furniture ?? []).map((f) => {
         // Long things (a backdrop, a counter) drawn as a panel facing the group, as on the floor plan (D22).
         const cx = sx(f.position.x), cy = sy(f.position.y);
