@@ -749,3 +749,50 @@ describe("Who looks at whom (D21b)", () => {
     expect(at(gazeFor({ shot: { ...base, subjectId: "j", at: { j: "arriving" } }, description: "She walks through the crowd and spots Chase with Marcus and Nina.", people, line: ["j", "c"] }))).toEqual({ j: "Chase", c: "each other", m: "each other", n: "each other" });
   });
 });
+
+describe("Renaming a prop with positions approved (D32)", () => {
+  it("the plan item keeps its place and takes the new name; the old name is gone", async () => {
+    const { openDb } = await import("../src/db/client");
+    const studio = await import("../src/lib/studioRepo");
+    const repo = await import("../src/lib/repo");
+    const { propsFromFurniture } = await import("../src/lib/domain/story");
+    const db = await openDb(":memory:");
+    const pid = studio.createProject(db, { name: "Fix", format: "Advert", audience: "", outline: "", parts: 1, partSec: 30, aspect: "9:16", style: "", genre: "comedy" });
+    for (const c of CAST) studio.addCharacter(db, pid, { name: c.name, pronoun: "they", role: c.role });
+    const sid = studio.addScene(db, pid, { title: "S", venueId: studio.addVenue(db, pid, "Bar"), castIds: CAST.map((c) => c.id) });
+    const parsed = parseStoryReply(`SCENE\nSPOT: standing around the cocktail table\nPROP: cocktail table - round, chest-high\nPROP: champagne flutes - rectangular display plinth, 1.2 m tall\nOTHER PEOPLE: busy - 40 guests\n${REPLY}`, CAST);
+    studio.saveStoryboard(db, sid, { story: "x", targetSec: 30, panels: parsed.panels, staging: parsed.staging });
+    studio.approvePositions(db, sid);
+    const before = repo.getScene(db, sid)!.plan!.data.furniture!;
+    const props = propsFromFurniture(before).map((p) => (p.name === "champagne flutes" ? { ...p, name: "display plinth" } : p));
+    studio.saveSceneStaging(db, sid, { ...parsed.staging, props });
+    const after = repo.getScene(db, sid)!.plan!.data.furniture!;
+    const was = before.find((f) => f.name === "champagne flutes")!;
+    const now = after.find((f) => f.id === was.id)!;
+    expect(now.name).toBe("display plinth");
+    expect(now.position).toEqual(was.position);
+    expect(after.some((f) => f.name === "champagne flutes")).toBe(false);
+    expect(repo.getScene(db, sid)!.shots[0].spec.props!.map((p) => p.name)).toContain("display plinth");
+  });
+});
+
+describe("Removing a prop with positions approved (D32)", () => {
+  it("a prop taken off the list leaves the plan; an older list without plan references removes nothing", async () => {
+    const { openDb } = await import("../src/db/client");
+    const studio = await import("../src/lib/studioRepo");
+    const repo = await import("../src/lib/repo");
+    const { propsFromFurniture } = await import("../src/lib/domain/story");
+    const db = await openDb(":memory:");
+    const pid = studio.createProject(db, { name: "Fix", format: "Advert", audience: "", outline: "", parts: 1, partSec: 30, aspect: "9:16", style: "", genre: "comedy" });
+    for (const c of CAST) studio.addCharacter(db, pid, { name: c.name, pronoun: "they", role: c.role });
+    const sid = studio.addScene(db, pid, { title: "S", venueId: studio.addVenue(db, pid, "Bar"), castIds: CAST.map((c) => c.id) });
+    const parsed = parseStoryReply(`SCENE\nSPOT: standing around the cocktail table\nPROP: cocktail table - round, chest-high\nPROP: logo backdrop - banner\nOTHER PEOPLE: busy - 40 guests\n${REPLY}`, CAST);
+    studio.saveStoryboard(db, sid, { story: "x", targetSec: 30, panels: parsed.panels, staging: parsed.staging });
+    studio.approvePositions(db, sid);
+    studio.saveSceneStaging(db, sid, { ...parsed.staging, props: [{ name: "cocktail table", detail: "round" }] });
+    expect(repo.getScene(db, sid)!.plan!.data.furniture).toHaveLength(2);
+    const props = propsFromFurniture(repo.getScene(db, sid)!.plan!.data.furniture).filter((p) => p.name !== "logo backdrop");
+    studio.saveSceneStaging(db, sid, { ...parsed.staging, props });
+    expect(repo.getScene(db, sid)!.plan!.data.furniture!.map((f) => f.name)).toEqual(["cocktail table"]);
+  });
+});

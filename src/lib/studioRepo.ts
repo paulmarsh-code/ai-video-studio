@@ -519,15 +519,23 @@ export function saveSceneStaging(db: DB, sceneId: string, staging: Partial<Scene
   const locked = !!sceneLocks(db, sceneId).positions;
   const current = latestPlan(db, sceneId);
   if (locked && current) {
-    // Matched by name, never by list position, so one prop's look can't land on another (D19c).
+    // Matched by the plan item it came from, else by name, never by list position, so one prop's
+    // look can't land on another (D19c). A prop can be renamed (D32): it keeps its place.
     const furniture = (current.data.furniture ?? []).map((f) => {
-      const edit = st.props.find((p) => p.name.trim().toLowerCase() === f.name.trim().toLowerCase());
+      const edit = st.props.find((p) => p.ref === f.id) ?? st.props.find((p) => !p.ref && p.name.trim().toLowerCase() === f.name.trim().toLowerCase());
       if (!edit) return f;
       const { imageAssetId: _old, ...rest } = f;
-      return { ...rest, detail: edit.detail.trim(), heightM: propHeight(`${f.name} ${edit.detail}`), ...(edit.imageAssetId ? { imageAssetId: edit.imageAssetId } : {}) };
+      // A real rename takes the new name; a change of capitals alone keeps the plan's.
+      const name = edit.name.trim() && edit.name.trim().toLowerCase() !== f.name.trim().toLowerCase() ? edit.name.trim() : f.name;
+      return { ...rest, name, detail: edit.detail.trim(), heightM: propHeight(`${name} ${edit.detail}`), ...(edit.imageAssetId ? { imageAssetId: edit.imageAssetId } : {}) };
     });
-    db.update(t.plans).set({ data: { ...current.data, furniture } }).where(eq(t.plans.id, current.id)).run();
-    st.props = propsFromFurniture(furniture);
+    // Taken off the list (D32): a prop that came from the plan and is no longer in the setting
+    // leaves the plan. Only when the list carries plan references, so an older list can't
+    // remove anything by accident.
+    const refs = new Set(st.props.map((p) => p.ref).filter(Boolean));
+    const kept = refs.size ? furniture.filter((f) => refs.has(f.id)) : furniture;
+    db.update(t.plans).set({ data: { ...current.data, furniture: kept } }).where(eq(t.plans.id, current.id)).run();
+    st.props = propsFromFurniture(kept);
   } else if (current && !AUTO_PLANS.includes(current.name) && st.props.length) {
     // A floor plan the user edited (not locked): the setting's props are merged in by name, so
     // nothing typed here is lost when the positions are approved (D19c). New props get a first
@@ -538,11 +546,11 @@ export function saveSceneStaging(db: DB, sceneId: string, staging: Partial<Scene
     const placed = planProps(st, current.data.actors.length > 1, C);
     const key = (s: string) => s.trim().toLowerCase();
     const furniture = st.props.map((p, i) => {
-      const old = (current.data.furniture ?? []).find((f) => key(f.name) === key(p.name));
+      const old = (current.data.furniture ?? []).find((f) => (p.ref && f.id === p.ref) || key(f.name) === key(p.name));
       const text = `${p.name} ${p.detail}`;
       if (!old) return placed[i];
       const { imageAssetId: _old, ...rest } = old;
-      return { ...rest, detail: p.detail, heightM: propHeight(text), ...(p.imageAssetId ? { imageAssetId: p.imageAssetId } : {}) };
+      return { ...rest, name: p.name.trim() || old.name, detail: p.detail, heightM: propHeight(text), ...(p.imageAssetId ? { imageAssetId: p.imageAssetId } : {}) };
     }).filter(Boolean);
     const ids = new Set<string>();
     for (const f of furniture) { while (ids.has(f.id)) f.id = `${f.id}-b`; ids.add(f.id); }

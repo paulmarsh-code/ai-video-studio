@@ -39,11 +39,11 @@ export function StagingFields({ value, onChange, propsLocked, projectId }: {
           placeholder="e.g. standing around the cocktail table, near the bar" />
       </label>
       <div className="text-sm">
-        <p>Key props <span className="text-neutral-500">· {propsLocked ? "what they are and where they stand are locked with the positions; you can still correct how they look, including what's on them" : "objects that matter, drawn the same in every shot, including what's on them"}</span></p>
+        <p>Key props <span className="text-neutral-500">· {propsLocked ? "where they stand is locked with the positions; you can still rename them, correct how they look (including what's on them) or remove one that shouldn't be there" : "objects that matter, drawn the same in every shot, including what's on them"}</span></p>
         {value.props.map((p, k) => (
           <div key={k} className="mt-1 grid items-start gap-2 sm:grid-cols-[12rem_1fr_auto]" data-testid={`staging-prop-${k}`}>
-            <input className={`${field} ${propsLocked ? "bg-neutral-100 text-neutral-600" : ""}`} value={p.name} readOnly={propsLocked} title={propsLocked ? "To change what this prop is, change the positions first" : undefined}
-              onChange={(e) => setProp(k, { name: e.target.value })} placeholder="e.g. cocktail table" aria-label="Prop name" />
+            <input className={field} value={p.name} title={propsLocked ? "Renaming keeps it where it stands on the floor plan" : undefined}
+              onChange={(e) => setProp(k, { name: e.target.value })} placeholder="e.g. cocktail table" aria-label="Prop name" data-testid={`staging-prop-${k}-name`} />
             <input className={field} value={p.detail} onChange={(e) => setProp(k, { detail: e.target.value })} placeholder="size, height, colour and what's on it, e.g. round, chest-high, white floor-length cloth, three champagne flutes on top" aria-label="Prop detail" data-testid={`staging-prop-${k}-detail`} />
             <div className="mt-1 flex items-center gap-2 text-xs">
               {projectId && (p.imageAssetId ? (
@@ -58,7 +58,8 @@ export function StagingFields({ value, onChange, propsLocked, projectId }: {
                     onChange={(e) => { const f = e.target.files?.[0]; if (f) void addPicture(k, f); e.target.value = ""; }} />
                 </label>
               ))}
-              {!propsLocked && <button type="button" className="text-red-700 underline" onClick={() => onChange({ ...value, props: value.props.filter((_, i) => i !== k) })}>Remove</button>}
+              {(!propsLocked || p.ref) && <button type="button" className="text-red-700 underline" data-testid={`staging-prop-${k}-remove`} title={propsLocked ? "Takes it off the floor plan; redraw the pictures it was in" : undefined}
+                onClick={() => onChange({ ...value, props: value.props.filter((_, i) => i !== k) })}>Remove</button>}
             </div>
           </div>
         ))}

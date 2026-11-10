@@ -33,6 +33,8 @@ export interface KeyProp {
   detail: string;
   /** A reference picture of the prop (D19c). */
   imageAssetId?: string;
+  /** The floor plan item this prop is (D32), so it can be renamed without losing its place. */
+  ref?: string;
 }
 
 export type CrowdLevel = "none" | "few" | "busy";
@@ -64,7 +66,8 @@ export function asStaging(v: unknown): SceneStaging {
   const props = (Array.isArray(o.props) ? o.props : [])
     .map((p) => {
       const img = (p as KeyProp)?.imageAssetId;
-      return { name: clean((p as KeyProp)?.name), detail: clean((p as KeyProp)?.detail), ...(typeof img === "string" && img ? { imageAssetId: img } : {}) };
+      const ref = (p as KeyProp)?.ref;
+      return { name: clean((p as KeyProp)?.name), detail: clean((p as KeyProp)?.detail), ...(typeof img === "string" && img ? { imageAssetId: img } : {}), ...(typeof ref === "string" && ref ? { ref } : {}) };
     })
     .filter((p) => p.name);
   const level = crowdLevelOf(crowd, o.crowdLevel);
@@ -214,7 +217,7 @@ const GATHER = /\b(table|bar|counter|desk|sofa|couch|bench|stall|stand|fire ?pit
  */
 /** The key props as the scene setting lists them, from the floor plan's furniture. */
 export function propsFromFurniture(furniture: { name: string; detail?: string; imageAssetId?: string }[] | undefined): KeyProp[] {
-  return (furniture ?? []).map((f) => ({ name: f.name, detail: f.detail ?? "", ...(f.imageAssetId ? { imageAssetId: f.imageAssetId } : {}) }));
+  return (furniture ?? []).map((f) => ({ name: f.name, detail: f.detail ?? "", ...(f.imageAssetId ? { imageAssetId: f.imageAssetId } : {}), ...((f as { id?: string }).id ? { ref: (f as { id?: string }).id } : {}) }));
 }
 
 export function planProps(staging: SceneStaging | undefined, group: boolean, C: { x: number; y: number }) {

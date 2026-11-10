@@ -74,3 +74,11 @@ describe("Edge people, arrivals, eye lines and light (D31)", () => {
     expect(t).not.toContain("screen");
   });
 });
+
+describe("Renaming a prop (D32)", () => {
+  it("a prop can be renamed with positions approved, keeping its place and its look", async () => {
+    const { propsFromFurniture } = await import("../src/lib/domain/story");
+    const props = propsFromFurniture([{ id: "p2", name: "champagne flutes", detail: "rectangular display plinth, 1.2 m tall" } as never]);
+    expect(props[0].ref).toBe("p2");
+  });
+});

@@ -655,3 +655,12 @@ Explained to Paul rather than changed:
 - Looking at the screen wall, the bar is on the left (his venue description says so too).
 - The prop named "champagne flutes" is described as a display plinth, which muddles the check's wording; renaming it fixes that.
 - The room is still the guessed 18 × 22 m hall until he sets the real size.
+
+## D32 — Props can be renamed or removed after positions are approved (2026-11-10)
+
+Paul's floor plan had a prop named "champagne flutes" whose description was a display plinth, and a "GLOWVANE illuminated logo backdrop" his venue doesn't have. Both came from the auto-filled setting. Once positions were approved, prop names were read-only and props couldn't be removed, so there was no way to fix either. The picture check kept failing on both: it looked for flutes standing on their own, and for a logo banner that GPT, with no logo anywhere in the venue pictures, often didn't draw.
+
+- Each prop in the setting now carries a reference to its floor plan item (`KeyProp.ref`).
+- With positions approved, a prop can be renamed: the plan item keeps its place and takes the new name; a change of capitals alone keeps the plan's name.
+- A prop can be removed: it leaves the floor plan. This only happens when the list carries plan references, so an older list can't remove anything by accident.
+- The setting card's hint says so. Tests are in `tests/story.test.ts`; the browser test now expects renaming to be allowed.
