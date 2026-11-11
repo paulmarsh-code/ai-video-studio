@@ -785,7 +785,11 @@ export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (i
     // Named shots first (D27), then height, tilt and Dutch roll (D25-D27). A point of view
     // keeps the eyes' own height.
     const d = namedShotDesign(d0, plan, sh, line, name);
-    const v = verticalFor(`${sh.description ?? ""} ${sh.spec.actions ?? ""} ${sh.spec.shot ?? ""}`, sh.spec.emotion);
+    // A posture carried on from earlier panels counts (D37): still lying on the bed.
+    const poser = sh.spec.subjectId ?? sh.spec.speakerId ?? sh.spec.visibleIds[0];
+    const pe = poser ? sh.spec.posture?.[poser] : undefined;
+    const lying = pe?.pose === "lying" && !/\b(?:lie|lies|lying|lay)\b/i.test(sh.description ?? "") ? ` ${name(poser!)} is lying${pe.on ? ` on ${pe.on}` : ""}.` : "";
+    const v = verticalFor(`${lying} ${sh.description ?? ""} ${sh.spec.actions ?? ""} ${sh.spec.shot ?? ""}`.trim(), sh.spec.emotion);
     if (!v) return d;
     const sp = planForShot(plan, sh.spec);
     const subj = mainSubjectId(sh.spec);

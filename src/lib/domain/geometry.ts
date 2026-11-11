@@ -4,7 +4,7 @@
 import { verticalText } from "./vertical";
 import { cameraZ, floorZ, levelAt } from "./levels";
 import { SHOT_SIZES } from "./shotLanguage";
-import type { PanelBlock,
+import type { PoseEntry, PanelBlock,
   CameraPreset,
   CastMember,
   Finding,
@@ -335,12 +335,16 @@ export function readProps(plan: GeometryPlanData, cam: PlanCamera): { id: string
  * say) stands there instead of their usual place. Everything that reads a camera for a shot
  * uses this, so the sketch, the prompts, the check and the camera choice all agree.
  */
-export function planForShot(plan: GeometryPlanData, shot?: { at?: Record<string, string>; blocking?: Record<string, PanelBlock> }): GeometryPlanData {
+export function planForShot(plan: GeometryPlanData, shot?: { at?: Record<string, string>; blocking?: Record<string, PanelBlock>; posture?: Record<string, PoseEntry> }): GeometryPlanData {
   const at = shot?.at;
   const bl = shot?.blocking;
-  if ((!at || !Object.keys(at).length) && (!bl || !Object.keys(bl).length)) return plan;
+  const po = shot?.posture;
+  if ((!at || !Object.keys(at).length) && (!bl || !Object.keys(bl).length) && (!po || !Object.keys(po).length)) return plan;
   // Someone who has left (D36) isn't in the panel at all.
-  const actors = plan.actors.filter((a) => !bl?.[a.characterId]?.gone).map((a) => {
+  const actors = plan.actors.filter((a) => !bl?.[a.characterId]?.gone).map((a0) => {
+    // Their posture in this panel (D37).
+    const p = po?.[a0.characterId];
+    const a = p && p.pose !== "standing" ? { ...a0, pose: p.pose, ...(p.on ? { poseOn: p.on } : {}) } : a0;
     // Positions set for this panel (D35) come first; then marks from the panel's words.
     const b = bl?.[a.characterId];
     if (b) return { ...a, position: b.at, ...(b.to ? { to: b.to } : {}), ...(b.facingDeg !== undefined ? { facingDeg: b.facingDeg } : {}) };

@@ -102,8 +102,22 @@ export function composeKlingPrompt(
     const fwd = camR ? readCamera(planForShot(plan!, shot), camR).forwardDeg : undefined;
     if (subjectId && tgtPerson) { const ad = aimDetail(shot.actions ?? "", byId(subjectId)?.name ?? subjectId, tgtPerson.name.split(/\s+/)[0], fwd !== undefined && plan ? exitFrom(plan.views, fwd) : undefined); if (ad.length) s.scene += ` ${ad.join(" ")}`; }
     // Lying down, falling, free fall (D26).
-    const bx = bodyEffect(shot.actions ?? "", subjectId ? byId(subjectId)?.name ?? "they" : "they");
+    // A posture carried on from earlier panels counts (D37): lying on the bed staring at the ceiling.
+    const sp0 = subjectId ? shot.posture?.[subjectId] : undefined;
+    const carriedBody = sp0 && sp0.pose === "lying" ? ` ${byId(subjectId!)?.name ?? "they"} is lying${sp0.on ? ` on ${sp0.on}` : ""}.` : "";
+    const bx = bodyEffect(`${carriedBody} ${shot.actions ?? ""}`.trim(), subjectId ? byId(subjectId)?.name ?? "they" : "they");
     if (bx) s.scene += ` Body and angle: ${bx}.`;
+  }
+  // Posture through the clip (D37): what stays the same and what changes.
+  for (const [id, e] of Object.entries(shot.posture ?? {})) {
+    if (!shot.visibleIds.includes(id)) continue;
+    const who = byId(id);
+    const nm = who?.name ?? id;
+    const subj = who?.pronoun === "she" ? "she" : who?.pronoun === "he" ? "he" : "they";
+    const on = e.on ? ` on ${e.on}` : "";
+    if (e.end) s.scene += ` At the end of the walk ${nm} ${e.end === "sitting" ? "sits down" : e.end === "lying" ? "lies down" : e.end === "kneeling" ? "kneels" : "crouches"}${on}.`;
+    else if (e.from && e.from !== e.pose) s.scene += e.pose === "standing" ? ` ${nm} gets up from ${e.from} and is standing.` : ` ${nm} ${e.pose === "sitting" ? (e.from === "lying" ? "sits up" : "sits down") : e.pose === "lying" ? "lies down" : e.pose === "kneeling" ? "kneels down" : "crouches down"}${on} during the clip, from ${e.from}.`;
+    else if (e.pose !== "standing") s.scene += ` ${nm} stays ${e.pose}${on} throughout; ${subj} ${subj === "they" ? "do" : "does"} not get up.`;
   }
   // A prop taken away on this panel or an earlier one (D35) isn't listed; one in someone's hands (D36) is said.
   const goneProps = new Set((plan?.furniture ?? []).filter((f) => shot.blocking?.[`prop:${f.id}`]?.gone).map((f) => f.name));

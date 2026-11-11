@@ -19,7 +19,7 @@ import { addMovementMarks, asStaging, planProps, propHeight, propsFromFurniture,
 import { LAYOUT_RULES } from "./domain/director";
 import { applyRoom, boundsFor, groupCentre, roomFor, roomOf, type RoomSize } from "./domain/room";
 import { carryBlocking, type BlockEntry } from "./domain/blocking";
-import { blockingFromWords } from "./domain/panelWords";
+import { blockingFromWords, posturesFromWords, startPose } from "./domain/panelWords";
 import { levelsFromWords } from "./domain/levels";
 import { getAnimatic, getCast, saveAnimatic, type AnimaticTimeline } from "./repo";
 
@@ -896,6 +896,7 @@ export function savePanelBlocking(db: DB, changes: { shotId: string; entries: Re
     for (const [id, e] of Object.entries(ch.entries)) {
       if (!e) { delete blocking[id]; continue; }
       const to = e.to && Math.hypot(e.to.x - e.at.x, e.to.y - e.at.y) > 0.2 ? round(e.to) : undefined;
+      if (id.startsWith("pose:")) { if (e.pose) blocking[id] = { at: { x: 0, y: 0 }, pose: e.pose, ...(e.only ? { only: true } : {}), by: "you" }; else delete blocking[id]; continue; }
       blocking[id] = { at: round(e.at), ...(to ? { to } : {}), ...(e.facingDeg !== undefined && !to ? { facingDeg: ((Math.round(e.facingDeg) % 360) + 360) % 360 } : {}), ...(e.only ? { only: true } : {}), ...(e.gone && id.startsWith("prop:") ? { gone: true } : {}), by: "you" };
     }
     db.update(t.shots).set({ spec: { ...spec, blocking } }).where(eq(t.shots.id, shot.id)).run();
@@ -935,7 +936,21 @@ export function applyPanelWords(db: DB, sceneId: string): boolean {
     db.update(t.shots).set({ spec }).where(eq(t.shots.id, sh.id)).run();
   });
   const carried = recarry(db, sceneId);
-  return changed || carried;
+  // Postures (D37): from the words, carried on until they change, standing for anyone walking.
+  const now = panelsOf(db, sceneId).map((p) => ({ p, sh: shotForPanel(db, p.id) })).filter((x): x is { p: typeof x.p; sh: NonNullable<typeof x.sh> } => !!x.sh);
+  const poses = posturesFromWords(plan.data, now.map(({ p, sh }) => ({
+    action: p.description, subjectId: sh.spec.subjectId ?? sh.spec.speakerId ?? sh.spec.visibleIds[0], visibleIds: sh.spec.visibleIds, at: sh.spec.at, blocking: sh.spec.blocking,
+  })), people, startPose(asStaging(scene.staging).spot, plan.data));
+  let posed = false;
+  now.forEach(({ sh }, k) => {
+    const next = Object.keys(poses[k]).length ? poses[k] : undefined;
+    if (JSON.stringify(sh.spec.posture ?? null) === JSON.stringify(next ?? null)) return;
+    posed = true;
+    const spec: ShotSpec = { ...sh.spec, posture: next };
+    if (!next) delete spec.posture;
+    db.update(t.shots).set({ spec }).where(eq(t.shots.id, sh.id)).run();
+  });
+  return changed || carried || posed;
 }
 
 /** Recompute what carries on from panel to panel across a scene, in panel order (D35). */

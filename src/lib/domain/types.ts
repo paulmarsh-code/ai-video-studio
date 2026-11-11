@@ -38,6 +38,28 @@ export interface PlanActor {
   facingDeg?: number;
   /** Where they walk to during this panel (D35); set per shot. */
   to?: Point;
+  /** Standing, sitting, lying… in this panel (D37); set per shot. Standing if not said. */
+  pose?: Pose;
+  /** What they sit or lie on, in words ("the bed") (D37). */
+  poseOn?: string;
+}
+
+/** How someone's body is (D37): it carries on from panel to panel until the words change it. */
+export type Pose = "standing" | "sitting" | "lying" | "kneeling" | "crouching";
+
+/** Someone's posture in one panel (D37). */
+export interface PoseEntry {
+  pose: Pose;
+  /** What they sit or lie on, in words. */
+  on?: string;
+  /** "you" set it, "app" read it in this panel's words, "carried" kept from before. */
+  by: "you" | "app" | "carried";
+  /** The words it came from. */
+  why?: string;
+  /** Their posture in the panel before, when this panel changes it ("sits up" from lying). */
+  from?: Pose;
+  /** Walking in this panel, then ending like this ("walks to the sofa and sits down"). */
+  end?: Pose;
 }
 
 /**
@@ -60,6 +82,8 @@ export interface PanelBlock {
   with?: string;
   /** What the app read in the panel's words to set it (D36), for the floor plan to show. */
   why?: string;
+  /** A posture you set for someone on this panel (D37), keyed "pose:" and their id. */
+  pose?: Pose;
 }
 
 export interface PlanCamera {
@@ -188,6 +212,8 @@ export interface ShotSpec {
   from?: Record<string, string>;
   /** Positions set for this panel on the storyboard (D35), character id → spot. */
   blocking?: Record<string, PanelBlock>;
+  /** Everyone's posture in this panel (D37), worked out by the app from the words, carried on, or set by you. */
+  posture?: Record<string, PoseEntry>;
   /** Key props of the scene (D19), identical in every picture and clip. */
   props?: { name: string; detail: string; imageAssetId?: string }[];
 }

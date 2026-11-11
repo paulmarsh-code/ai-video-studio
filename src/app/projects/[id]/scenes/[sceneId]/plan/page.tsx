@@ -5,6 +5,8 @@ import * as repo from "@/lib/repo";
 import { PlanEditorLoader } from "@/components/PlanEditorLoader";
 import { sceneLocks } from "@/lib/studioRepo";
 import { ringForScene } from "@/lib/backgroundImage";
+import { startPose } from "@/lib/domain/panelWords";
+import { asStaging } from "@/lib/domain/story";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +48,7 @@ export default async function PlanPage({ params, searchParams }: { params: Promi
         panels={s.panels.flatMap((p) => { const sh = s.shots.find((x) => x.panelId === p.id); return sh ? [{ shotId: sh.id, code: p.code, description: p.description }] : []; })}
         initialStep={initialStep}
         locks={{ positions: !!locks.positions, cameras: !!locks.cameras }}
+        scenePose={startPose(asStaging(s.scene.staging).spot, s.plan.data)}
       />
     </div>
   );

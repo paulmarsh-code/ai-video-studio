@@ -13,6 +13,7 @@ import { bodyEffect, verticalOf } from "./vertical";
 import { shotLines } from "./shotLanguage";
 import { levelAt, levelLines } from "./levels";
 import { joinNames, stripQuotes } from "./text";
+import { postureWords } from "./panelWords";
 import type { CastMember, GeometryPlanData, ShotSpec } from "./types";
 
 export interface CharacterProfile {
@@ -218,7 +219,9 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   // The same light in every picture (D31): one picture came out much darker than the rest.
   const light = lightingOf(i.venueDescription ?? "");
   if (light) lines.push(`Lighting, identical in every picture of this scene: ${light} Same brightness, colour and mood as the other pictures of the scene; not darker, not brighter.`);
-  if (spot) lines.push(`Where: ${sentence(spot)} Keep it in the picture wherever the camera would see it, always the same height and size. Everyone keeps their own place and posture around it${/\b(sit|sits|sitting|seated|sofa|couch|bench)\b/i.test(spot) ? "" : ", standing upright"}; no one leans on it or on the bar unless the moment says so.`);
+  // Posture (D37): anyone not simply standing is said, so no one stands who should be lying.
+  const posed = Object.entries(shot?.posture ?? {}).filter(([, e]) => e.pose !== "standing" || e.from);
+  if (spot) lines.push(`Where: ${sentence(spot)} Keep it in the picture wherever the camera would see it, always the same height and size. Everyone keeps their own place and posture around it${/\b(sit|sits|sitting|seated|sofa|couch|bench|lie|lies|lying|bed)\b/i.test(spot) || posed.length ? "" : ", standing upright"}; no one leans on it or on the bar unless the moment says so.`);
   // The floor plan's props are the approved list (D19a); the shot's copy is the fallback.
   const planProps = ((shotPlan ?? i.plan)?.furniture ?? []).map((f) => ({ name: f.name, detail: f.detail ?? "" }));
   const props = planProps.length ? planProps : shot?.props ?? [];
@@ -234,6 +237,10 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     const groupNear = castDepths.length ? Math.min(...castDepths) : undefined;
     const where = (p: { depthM: number }) => groupFar === undefined ? "" : p.depthM > groupFar + 1 ? `, behind everyone, about ${Math.round(p.depthM - groupFar)} m further back than the furthest person` : groupNear !== undefined && p.depthM < groupNear - 0.5 ? ", in front of everyone, nearer the camera" : ", among the people";
     if (seen.length) lines.push(`In this picture: ${joinNames(seen.map((p) => `the ${p.name} (${p.frame === "centre" ? "centre" : p.frame.replace("frame-", "")}, about ${Math.max(1, Math.round(p.depthM))} m from the camera${where(p)})`))}. ${seen.length === 1 ? "It must be" : "They must be"} clearly visible, at exactly that distance; nothing else like ${seen.length === 1 ? "it" : "them"} anywhere else in the picture.`);
+  }
+  if (posed.length) {
+    const ws = posed.filter(([id]) => shownIds.includes(id) || !shot?.visibleIds?.length).map(([id, e]) => postureWords(name(id), e, byId(id)?.pronoun as "she" | "he" | "they" | undefined)).filter(Boolean);
+    if (ws.length) lines.push(`Posture: ${ws.join("; ")}. Show exactly this; the body stays as it was unless this says it changed.`);
   }
   // Someone on a mark (D19b): say where they are, so the picture doesn't put them with the group.
   for (const [id, markId] of Object.entries(shot?.at ?? {})) {

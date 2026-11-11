@@ -12,8 +12,9 @@ import { savePlanAction, addPlanToLibraryAction } from "@/app/actions";
 import { savePanelBlockingAction } from "@/app/studioActions";
 import { checkLineOfAction, describeFrame, facingOf, planForShot, PRESET_FOV, readCamera } from "@/lib/domain/geometry";
 import { blockSource, carryBlocking, withEdits, type BlockEntry } from "@/lib/domain/blocking";
+import { posturesFromWords } from "@/lib/domain/panelWords";
 import { planImpact, type ShotRef } from "@/lib/domain/impact";
-import type { CameraPreset, CastMember, GeometryPlanData, PlanCamera, PlanLevel, Point, ShotSpec } from "@/lib/domain/types";
+import type { CameraPreset, CastMember, GeometryPlanData, PlanCamera, PlanLevel, Point, Pose, ShotSpec } from "@/lib/domain/types";
 import { CameraView, type RingInfo } from "./CameraView";
 import { fovForSize, lensText, SHOT_SIZES, type ShotSize } from "@/lib/domain/shotLanguage";
 import { propKind } from "@/lib/domain/story";
@@ -36,10 +37,11 @@ export function PlanEditor(props: {
   /** The storyboard's panels, in order, for stepping through each panel's positions (D35). */ panels?: PanelStep[];
   /** 0 is the scene plan, 1 the first panel… */ initialStep?: number;
   locks?: { positions: boolean; cameras: boolean };
+  /** The posture the scene setting starts everyone in (D37). */ scenePose?: { pose: Pose; on?: string };
 }) {
   const { cast } = props;
   const router = useRouter();
-  const panels = props.panels ?? [];
+  const panels = useMemo(() => props.panels ?? [], [props.panels]);
   const locks = props.locks ?? { positions: false, cameras: false };
   const [plan, setPlan] = useState<GeometryPlanData>(props.initial);
   const [saved, setSaved] = useState<GeometryPlanData>(props.initial);
@@ -83,7 +85,15 @@ export function PlanEditor(props: {
   const pk = step - 1;
   const panel = panelMode ? panels[pk] : undefined;
   const pspec = panelMode ? effSpecs[pk] : undefined;
-  const shown = pspec ? planForShot(plan, pspec) : plan;
+  // Postures (D37), worked out here too so a change shows at once on every later panel.
+  const poses = useMemo(
+    () => posturesFromWords(plan, panels.map((pn, k) => {
+      const sp = effSpecs[k];
+      return { action: pn.description, subjectId: sp?.subjectId ?? sp?.speakerId ?? sp?.visibleIds?.[0], visibleIds: sp?.visibleIds ?? [], at: sp?.at, blocking: sp?.blocking };
+    }), cast.map((c) => ({ id: c.id, name: c.name })), props.scenePose),
+    [plan, panels, effSpecs, cast, props.scenePose],
+  );
+  const shown = pspec ? planForShot(plan, { ...pspec, posture: poses[pk] }) : plan;
   const panelCam = pspec?.cameraId ? shown.cameras.find((c) => c.id === pspec.cameraId) : undefined;
   const changedPanels = Object.entries(edits).filter(([, e]) => Object.keys(e).length);
   const curEntry = (key: string): BlockEntry => {
@@ -346,7 +356,7 @@ export function PlanEditor(props: {
                     <Circle radius={11} fill={colour(id)} stroke={src ? SRC_RING[src.kind] ?? (src.kind === "carried" ? (src.fromApp ? "#0d9488" : "#111827") : "#fff") : "#fff"} strokeWidth={src && src.kind !== "plan" ? 3 : 2} dash={src?.kind === "carried" ? [4, 3] : undefined} />
                     {sel && <Circle radius={16} stroke="#2563eb" strokeWidth={2} dash={[3, 3]} />}
                     <Text text={name(id).charAt(0)} fontSize={12} fontStyle="bold" fill="#fff" x={-5} y={-6} />
-                    <Text text={name(id)} fontSize={11} fill="#171717" x={13} y={-6} />
+                    <Text text={`${name(id)}${a.pose ? ` (${a.pose})` : ""}`} fontSize={11} fill="#171717" x={13} y={-6} />
                   </Group>
                   {/* Turn handle for the chosen person, unless they're walking (then they face the way they walk). */}
                   {sel && !a.to && (() => {
@@ -423,6 +433,27 @@ export function PlanEditor(props: {
                           {inPic ? " · in the picture" : " · in the room, not in the picture"}
                         </span>
                       </div>
+                      {(() => {
+                        // Posture (D37): carried on from the panel before unless the words or you change it.
+                        const pe = poses[pk]?.[id];
+                        const mineP = pspec.blocking?.[`pose:${id}`];
+                        const now: Pose = pe?.pose ?? "standing";
+                        return (
+                          <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs" data-testid={`panel-person-${id}-posture`}>
+                            <label>Posture <select className="rounded border border-neutral-300 px-1 py-0.5" value={now} aria-label={`${name(id)} posture`} data-testid={`panel-person-${id}-pose`}
+                              onChange={(e) => { pushEdit(); setEntry(`pose:${id}`, { at: { x: 0, y: 0 }, pose: e.target.value as Pose }); }}>
+                              {(["standing", "sitting", "lying", "kneeling", "crouching"] as Pose[]).map((x) => <option key={x} value={x}>{x}</option>)}
+                            </select></label>
+                            <span className="text-neutral-600" data-testid={`panel-person-${id}-pose-source`}>
+                              {mineP ? "set by you" : !pe ? "standing (nothing says otherwise)"
+                                : pe.by === "carried" ? `${pe.pose}${pe.on ? ` on ${pe.on}` : ""}, carried on from before`
+                                : pe.end ? `walking, then ${pe.end}${pe.on ? ` on ${pe.on}` : ""}`
+                                : `from the words: ${pe.why ?? pe.pose}${pe.from ? ` (was ${pe.from})` : ""}`}
+                            </span>
+                            {mineP && <button type="button" className="underline" onClick={() => { pushEdit(); clearEntry(`pose:${id}`); }}>back to the words</button>}
+                          </div>
+                        );
+                      })()}
                       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                         {a.to
                           ? <span className="text-orange-800">Faces the way they walk.</span>

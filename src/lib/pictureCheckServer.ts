@@ -11,7 +11,7 @@ import { checkPrompt, judgePicture, type PictureCheck, type PictureExpectation }
 import { crowdLevelOf } from "./domain/story";
 import { renderLayoutForShot } from "./layoutImage";
 import { renderBlockingForShot } from "./blockingImage";
-import { carriedItems, itemNoun } from "./domain/imagePrompts";
+import { carriedItems, heldProps, itemNoun } from "./domain/imagePrompts";
 import { getTextProvider } from "./providers/images";
 import * as repo from "./repo";
 import * as studio from "./studioRepo";
@@ -49,7 +49,7 @@ export function expectationFor(db: DB, shotId: string): { expect: PictureExpecta
     const vx = cam.position.x - pos.x, vy = cam.position.y - pos.y, l = Math.hypot(vx, vy) || 1;
     const c = (fwd.x * vx + fwd.y * vy) / l;
     if (c <= 0.5 && c >= -0.35) return []; // side-on: either side can show
-    return carriedItems(profiles[id]).filter((it) => /^(hand|shoulder|arm)$/.test(it.where)).map((it) => ({
+    return [...carriedItems(profiles[id]), ...heldProps(plan, id, profiles[id])].filter((it) => /^(hand|shoulder|arm)$/.test(it.where)).map((it) => ({
       name: name(id), item: itemNoun(it.what), side: (c > 0.5 ? (it.side === "left" ? "right" : "left") : it.side) as "left" | "right",
     }));
   });
@@ -57,6 +57,8 @@ export function expectationFor(db: DB, shotId: string): { expect: PictureExpecta
     ids, projectId: scene.scene.projectId,
     expect: {
       held,
+      // Posture (D37): anyone not simply standing, or who has just got up.
+      postures: ids.flatMap((id) => { const pe = shot.spec.posture?.[id]; return pe && (pe.pose !== "standing" || pe.from) ? [{ name: name(id), pose: pe.pose, ...(pe.on ? { on: pe.on } : {}) }] : []; }),
       order: ids.map(name), props: readProps(plan, cam).filter((p) => p.inView).map((p) => p.name), crowd: crowdLevelOf(shot.spec.crowd ?? ""),
       shoulder: reading.actors.filter((a) => a.inView && a.foreground && (cam.preset === "main-ots" || cam.preset === "reverse-ots") && a.characterId !== subject).map((a) => name(a.characterId)),
       edge: reading.actors.filter((a) => a.inView && a.partial && !shot.spec.excludedIds.includes(a.characterId)).map((a) => name(a.characterId)),

@@ -26,7 +26,7 @@ export function carryBlocking<T extends { spec: ShotSpec }>(shots: T[]): ShotSpe
       out[id] = { at: st.at, ...(st.facingDeg !== undefined ? { facingDeg: st.facingDeg } : {}), ...(st.gone ? { gone: true } : {}), ...(st.with ? { with: st.with } : {}), by: "carried" };
     }
     for (const [id, b] of Object.entries(mine)) {
-      if (b.only) continue;
+      if (b.only || id.startsWith("pose:")) continue; // a posture you set is carried by the posture rules (D37)
       const end = b.to ?? b.at;
       // A way to face carries on if it was set; after a walk they face the others again as usual.
       const facing = b.to ? undefined : b.facingDeg;

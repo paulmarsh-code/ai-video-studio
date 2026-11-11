@@ -741,3 +741,21 @@ So the per-panel positions (D35) are now filled in by the app from each panel's 
 - **Existing scenes**: layout rules 14. The storyboard offers "Update the layout", which reads the words, approves the positions where they are and chooses the cameras again.
 
 Everything feeds the blocking frame (D34): where each person stands, which way they face, the walk arrow, who isn't there, and what's in whose hand are drawn into image 1 for GPT to finish, and checked afterwards. That's how the plan makes the pictures consistent rather than just describing them. All rules are general; tests use made-up scenes (`tests/panelWords.d36.test.ts`), replayed on Paul's Jade's Entrance: Jade faces Chase in panel 4, steps closer in 7, walks off to the entrance in 11.
+
+### D37 — Posture carries on from panel to panel (2026-11-11)
+
+Paul: "Aron is lying on his bed… picks up his phone… re-reads the text." Next panel: "He is upset, puts his phone down and stares at the ceiling." Nothing says he moved, so he is still lying. But "Aron sits up…" changes it. Posture must carry on unless the words change it.
+
+- **Read from the words** (`posturesFromWords`, `panelWords.ts`): lying ("lies on his bed", "is lying down", "lies back", "gets into bed", "curled up on the sofa"; not "lies to her"), sitting ("sits up", "sits on the edge of the bed", "seated at the table"), standing ("gets up", "stands up", "gets out of bed", "rises", "jumps to his feet"), kneeling and crouching. The last one in a panel wins for each person, worked out with the same who-does-it rules as D36. "The phone sits on the desk" is a thing, not a person.
+- **Carried on** to the next panels until the words, or you, change it. What they lie or sit on is kept ("the single bed") and named in the prompts.
+- **Walking means standing**: someone walking in a panel is on their feet in the picture; "walks to the sofa and sits down" ends sitting, and that carries on.
+- **The scene setting** can start everyone off ("sitting round the kitchen table").
+- **Stored per shot** (`spec.posture`, with by app/carried/you, where it came from, and the posture before when it changed), worked out with the per-panel positions (D36) every time the words or positions change. You can set a posture on any panel with the stepper's posture control; it carries on from there ("back to the words" undoes it).
+- **Everything uses it**:
+  - the blocking frame: seated, kneeling and crouching stand-ins are shorter, and someone lying is drawn flat on what they lie on, labelled "LYING ON SINGLE BED";
+  - the picture prompt: "Posture: Aron is lying on the single bed, still lying as in the panel before: he has not got up" or "Aron has just sat up and is sitting on the single bed now (he was lying before)";
+  - the video prompt: "Aron stays lying on the single bed throughout; he does not get up" or "Aron sits up on the single bed during the clip, from lying";
+  - the camera: a carried "lying" counts, so "stares at the ceiling" while still lying gets the overhead camera (D26);
+  - the floor plan's viewfinder draws seated and lying people;
+  - the picture check asks each person's posture and a wrong one becomes a correction ("Aron is standing; Aron must be lying on the single bed").
+- General for any scene; tests use Paul's two examples with made-up names (`tests/posture.d37.test.ts`).

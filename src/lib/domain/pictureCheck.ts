@@ -29,6 +29,8 @@ export interface PictureExpectation {
   held?: { name: string; item: string; side: "left" | "right" }[];
   /** Image 2 is the blocking frame (the approved shot) rather than the plain layout sketch. */
   blocking?: boolean;
+  /** How each person's body must be (D37): standing, sitting, lying, kneeling or crouching. */
+  postures?: { name: string; pose: "standing" | "sitting" | "lying" | "kneeling" | "crouching"; on?: string }[];
 }
 
 export interface PictureCheck {
@@ -50,12 +52,13 @@ export function checkPrompt(e: PictureExpectation, refNames: string[]): string {
     `Key props that should be visible: ${e.props.length ? e.props.join(", ") : "none"}.`,
     `Background people expected: ${e.crowd === "none" ? "no one else" : e.crowd === "few" ? "a few other people" : "a busy crowd"}.`,
     ...(e.held?.length ? [`Held items to locate: ${e.held.map((h) => `${h.name}'s ${h.item}`).join(", ")}. For each, say which side of the picture it is on, as you look at it.`] : []),
+    ...(e.postures?.length ? [`Postures to check: ${e.postures.map((x) => x.name).join(", ")}. For each, say whether they are standing, sitting, lying, kneeling or crouching.`] : []),
     "",
     ...(e.venueAreas?.length ? [`The venue's areas are: ${e.venueAreas.join(", ")}.`] : []),
     "",
     "Ignore style, lighting and small differences in pose or expression. Do check clothes, accessories, carried items and props against their reference pictures: a missing stripe or panel, a different colour, a bag in the other hand, or a table without its cloth is a real difference.",
     "Reply with JSON only, no other text:",
-    '{"left_to_right": ["the main characters you see, left to right, by name; use \\"unknown\\" for anyone you cannot match"], "clothes": [{"name": "character", "matches_reference": true, "difference": "what differs, or empty"}], "props": [{"name": "key prop", "side": "left | centre | right", "depth": "among the people | behind everyone | in front of everyone", "matches_picture": true, "difference": "what differs from its reference picture, or empty"}], "props_seen": ["key props you can see"], "background_left": "which venue area is at the left of the background, or none", "background_right": "which venue area is at the right of the background, or none", "background_people": "none | few | busy", "looking_at_camera": ["main characters looking straight into the camera, or empty"], "held": [{"name": "character", "item": "the item", "picture_side": "left | right | not visible"}], "notes": "one short sentence on anything clearly wrong, or empty"}',
+    '{"left_to_right": ["the main characters you see, left to right, by name; use \\"unknown\\" for anyone you cannot match"], "clothes": [{"name": "character", "matches_reference": true, "difference": "what differs, or empty"}], "props": [{"name": "key prop", "side": "left | centre | right", "depth": "among the people | behind everyone | in front of everyone", "matches_picture": true, "difference": "what differs from its reference picture, or empty"}], "props_seen": ["key props you can see"], "background_left": "which venue area is at the left of the background, or none", "background_right": "which venue area is at the right of the background, or none", "background_people": "none | few | busy", "looking_at_camera": ["main characters looking straight into the camera, or empty"], "held": [{"name": "character", "item": "the item", "picture_side": "left | right | not visible"}], "postures": [{"name": "character", "pose": "standing | sitting | lying | kneeling | crouching"}], "notes": "one short sentence on anything clearly wrong, or empty"}',
   ].join("\n");
 }
 
@@ -123,6 +126,12 @@ export function judgePicture(e: PictureExpectation, reply: string): PictureCheck
     const want = e.held?.find((x) => first(x.name) === first(String(h.name ?? "")) && itemGroup(String(h.item ?? "")) === itemGroup(x.item));
     const side = String(h.picture_side ?? "").toLowerCase();
     if (want && /^(left|right)$/.test(side) && side !== want.side) problems.push(`${want.name}'s ${want.item} is on the ${side} of the picture; move it to the ${want.side} side of the picture, into ${want.name}'s other hand, as in the reference. The hand on the ${side} side is then empty and relaxed.`);
+  }
+  // Posture (D37): someone who should still be lying isn't standing.
+  for (const x of objs((seen as { postures?: unknown }).postures)) {
+    const want = e.postures?.find((w) => first(w.name) === first(String(x.name ?? "")));
+    const got = String(x.pose ?? "").toLowerCase().trim();
+    if (want && /^(standing|sitting|lying|kneeling|crouching)$/.test(got) && got !== want.pose) problems.push(`${want.name} is ${got}; ${want.name} must be ${want.pose}${want.on ? ` ${want.pose === "standing" ? "by" : "on"} ${want.on}` : ""}, as in the approved shot.`);
   }
   // Nobody looks into the lens (D21b).
   const lookers = list(seen.looking_at_camera).filter((n) => expected.includes(first(n)));

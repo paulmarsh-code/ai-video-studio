@@ -152,12 +152,23 @@ export function CameraView({
             const sh = (SHOULDER_M * s) / 2;
             const cx = p.pr.x;
             // Heads at their own height (D29): above the horizon on a balcony, below it in a pit.
-            const z0 = floorZ(plan, plan.actors.find((x) => x.characterId === p.characterId)!.position);
-            const cy = horizon + (camAbs - (z0 + EYE_M)) * s;
+            const actor = plan.actors.find((x) => x.characterId === p.characterId)!;
+            const z0 = floorZ(plan, actor.position);
+            // Posture (D37): a seated or kneeling head is lower; someone lying is flat.
+            const seat = actor.poseOn && /\b(bed|sofa|couch|settee|bench|chair|seat|stool|armchair)\b/i.test(actor.poseOn) ? 0.5 : actor.pose === "lying" ? 0.12 : 0.45;
+            const eye = actor.pose === "sitting" ? seat + 0.75 : actor.pose === "kneeling" ? 1.15 : actor.pose === "crouching" ? 0.9 : actor.pose === "lying" ? seat + 0.15 : EYE_M;
+            const cy = horizon + (camAbs - (z0 + eye)) * s;
             const feetY = Math.min(H + 40, horizon + (camAbs - z0) * s);
             const fg = p.foreground;
             const isSubject = p.characterId === subjectId;
             const fill = colour(p.characterId);
+            if (actor.pose === "lying") return (
+              <g key={p.characterId}>
+                <rect x={cx - 0.85 * s} y={cy - 0.14 * s} width={1.7 * s} height={0.28 * s} rx={0.14 * s} fill={fill} opacity={0.85} />
+                <circle cx={cx + 0.75 * s} cy={cy - 0.05 * s} r={headR} fill="#f5d0b5" stroke={fill} strokeWidth={Math.max(1, headR * 0.12)} />
+                <text x={cx} y={Math.max(14, cy - 0.3 * s)} textAnchor="middle" fontSize={12} fontWeight={isSubject ? 700 : 500} fill="#fff" stroke="#0008" strokeWidth={3} paintOrder="stroke">{name(p.characterId)} (lying)</text>
+              </g>
+            );
             return (
               <g key={p.characterId} filter={fg ? "url(#soft)" : undefined} opacity={fg ? 0.9 : 1}>
                 <path

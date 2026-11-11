@@ -182,7 +182,34 @@ export function layoutSketchSvg(i: {
   i.people.forEach((p, k) => {
     const a = i.plan.actors.find((x) => x.characterId === p.id);
     if (!a) return;
-    const h = p.heightM ?? 1.72;
+    // Posture (D37): sitting, kneeling and crouching figures are shorter; lying ones lie flat
+    // across the picture on what they lie on, so the frame shows the body as it is.
+    const seatProp = a.poseOn ? (i.plan.furniture ?? []).find((x) => a.poseOn!.toLowerCase().includes(x.name.toLowerCase())) : undefined;
+    const seatZ = seatProp?.heightM ?? (a.poseOn && /\b(bed|sofa|couch|settee|bench|chair|seat|stool|armchair)\b/i.test(a.poseOn) ? 0.5 : a.pose === "lying" ? 0.12 : 0.45);
+    const h = a.pose === "sitting" ? seatZ + 0.85 : a.pose === "kneeling" ? 1.25 : a.pose === "crouching" ? 1.0 : (p.heightM ?? 1.72);
+    const poseWord = a.pose && a.pose !== "standing" ? `${a.pose.toUpperCase()}${a.poseOn ? ` ON ${a.poseOn.replace(/^the\s+/i, "").toUpperCase()}` : ""}` : "";
+    if (a.pose === "lying") {
+      const col = COLOURS[k % COLOURS.length];
+      const bold = p.id === i.subjectId;
+      const lw = (p.heightM ?? 1.72) / 2 - 0.1;
+      const hp = { x: a.position.x + r.x * lw, y: a.position.y + r.y * lw }, fp = { x: a.position.x - r.x * lw, y: a.position.y - r.y * lw };
+      const H0 = toScreen(hp, seatZ + 0.15), F0 = toScreen(fp, seatZ + 0.12), c0 = toScreen(a.position, seatZ + 0.15);
+      if (c0.depth < near || (H0.x < 0 && F0.x < 0) || (H0.x > W && F0.x > W)) return;
+      const thick = Math.max(12, (0.32 / c0.depth) * focal);
+      const headR = Math.max(8, (0.12 / c0.depth) * focal);
+      const fsN = Math.max(20, Math.min(44, thick * 0.9)), fs2 = Math.max(16, Math.min(26, fsN * 0.6));
+      const ty = Math.max(fsN + 8, Math.min(H - fs2 * 2, Math.min(H0.y, F0.y) - thick - fs2 * 1.6));
+      const fill = OV ? "#e5e7eb" : col;
+      items.push({
+        depth: c0.depth,
+        svg: `<g><line x1="${F0.x.toFixed(1)}" y1="${F0.y.toFixed(1)}" x2="${H0.x.toFixed(1)}" y2="${H0.y.toFixed(1)}" stroke="${col}" stroke-width="${(thick + (bold ? 10 : 6)).toFixed(1)}" stroke-linecap="round"/>`
+          + `<line x1="${F0.x.toFixed(1)}" y1="${F0.y.toFixed(1)}" x2="${H0.x.toFixed(1)}" y2="${H0.y.toFixed(1)}" stroke="${fill}" stroke-opacity="0.93" stroke-width="${thick.toFixed(1)}" stroke-linecap="round"/>`
+          + `<circle cx="${H0.x.toFixed(1)}" cy="${(H0.y - headR * 0.4).toFixed(1)}" r="${headR.toFixed(1)}" fill="${fill}" stroke="${col}" stroke-width="${bold ? 8 : 5}"/>`
+          + `<text x="${c0.x.toFixed(1)}" y="${ty.toFixed(1)}" font-size="${fsN.toFixed(0)}" font-weight="700" text-anchor="middle" fill="#111" stroke="#fff" stroke-width="6" paint-order="stroke" font-family="sans-serif">${esc(p.name.split(/\s+/)[0].toUpperCase())}</text>`
+          + `<text x="${c0.x.toFixed(1)}" y="${(ty + fs2 * 1.3).toFixed(1)}" font-size="${fs2.toFixed(0)}" font-weight="700" text-anchor="middle" fill="${col}" stroke="#fff" stroke-width="5" paint-order="stroke" font-family="sans-serif">${esc(poseWord)}</text></g>`,
+      });
+      return;
+    }
     const head = toScreen(a.position, h - 0.12);
     if (head.depth < near) return;
     const feet = toScreen(a.position, 0);
@@ -204,7 +231,8 @@ export function layoutSketchSvg(i: {
       const tl = Math.hypot(toCam.x, toCam.y) || 1;
       const cf = fwd ? (fwd.x * toCam.x + fwd.y * toCam.y) / tl : 1;
       const lat = fwd ? fwd.x * r.x + fwd.y * r.y : 0;
-      const facing = cf > 0.5 ? "FACING CAMERA" : cf < -0.35 ? "BACK TO CAMERA" : `SIDE-ON, FACING ${lat > 0 ? "RIGHT" : "LEFT"}`;
+      const facing0 = cf > 0.5 ? "FACING CAMERA" : cf < -0.35 ? "BACK TO CAMERA" : `SIDE-ON, FACING ${lat > 0 ? "RIGHT" : "LEFT"}`;
+      const facing = poseWord ? `${poseWord}, ${facing0}` : facing0;
       const fsN = Math.min(fs, 44);
       const fs2 = Math.max(16, Math.min(26, fsN * 0.6));
       // Small, far-off figures get their name tag above the head, staggered so neighbours'

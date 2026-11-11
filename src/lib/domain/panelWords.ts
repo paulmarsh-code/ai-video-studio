@@ -6,7 +6,7 @@
 // and the scene's props. Whatever the user sets on a panel wins over this, and arrival marks
 // from the words (D19b) are left to do their job.
 
-import type { GeometryPlanData, PanelBlock, PlanFurniture, PlanView, Point } from "./types";
+import type { GeometryPlanData, PanelBlock, PlanFurniture, PlanView, Point, Pose, PoseEntry } from "./types";
 
 export type AppBlock = Omit<PanelBlock, "by"> & { by: "app"; why: string };
 
@@ -254,10 +254,119 @@ export function blockingFromWords(plan: GeometryPlanData, panels: WordsPanel[], 
  * ("as Aron walks off"); otherwise a name starting a sentence or clause ("Jade, fuming, gives
  * Chase the finger and turns away": Jade); otherwise whoever did the last one (she, he, and).
  */
-function subjectIn(seg: string, atStart: boolean, byFirst: (w: string) => { id: string } | undefined): string | undefined {
-  const right = /\b([A-Z][a-z]+)\b(?:['’]s\s+\w+)?(?:\s*,[^,]{0,40},)?\s*(?:(?:\w+ly|then|now|also|just|still|finally|quickly|slowly|suddenly)\s+)*$/.exec(seg);
+export function subjectIn(seg: string, atStart: boolean, byFirst: (w: string) => { id: string } | undefined): string | undefined {
+  const right = /\b([A-Z][a-z]+)\b(?:['’]s\s+\w+)?(?:\s*,[^,]{0,40},)?\s*(?:(?:\w+ly|then|now|also|just|still|finally|quickly|slowly|suddenly|is|was|are|were|has|had|been|remains|stays|keeps|lies|sits)\s+)*$/.exec(seg);
   if (right && byFirst(right[1])) return byFirst(right[1])!.id;
   const starts = new RegExp(String.raw`(?:${atStart ? "^\\s*|" : ""}[.;!?]\s+|\b(?:and|but|while|as|then|so)\s+)(?:(?:Then|Meanwhile|Now|Suddenly|Finally|Later|Still),?\s+)?([A-Z][a-z]+)\b`, "g");
   for (const m of seg.matchAll(starts)) { const p = byFirst(m[1]); if (p) return p.id; }
+  return undefined;
+}
+
+// ---------- Posture from panel to panel (D37) ----------
+// Someone lying on their bed stays lying in the next panel unless the words say they sit up,
+// get up, or walk somewhere. Each panel's posture is the last one its words give, or the one
+// before carried on. Walking (or leaving) means standing.
+
+const ON_WHAT = String.raw`(?:\s+(?:on|in|across|upon|at|onto|into)\s+(?:(?:the|his|her|their|a|an|its|my|our)\s+)?(?:edge\s+of\s+(?:the|his|her|their)\s+)?${PHRASE})?`;
+const POSES: { pose: Pose; re: RegExp }[] = [
+  // Lying: "lies on his bed", "is lying down", "lies back", "in bed", "curled up on the sofa".
+  // Not "lies to her" or "lays the table".
+  { pose: "lying", re: new RegExp(String.raw`\b(?:lie(?:s)?|lying|lay)\b(?!\s+(?:to|about)\b)(?:\s+(?:down|back|flat|still|awake|motionless|there|face\s+(?:up|down)|curled\s+up|on\s+(?:his|her|their)\s+(?:back|front|side|stomach)))*${ON_WHAT}|\b(?:gets?|got|climbs?|climbed|crawls?|crawled|slips?|slipped)\s+(?:back\s+)?(?:into|in)\s+(?:(?:his|her|their|the)\s+)?(bed)\b|\b(?:curl(?:s|ed)?\s+up|stretch(?:es|ed)?\s+out|sprawl(?:s|ed)?|flop(?:s|ped)?\s+(?:down|back))${ON_WHAT}|\b(?:in\s+bed|asleep\s+(?:on|in)\s+the\s+\w+)\b`, "g") },
+  // Sitting: "sits up", "sits on the edge of the bed", "is sitting", "sat at the table", "perched on".
+  { pose: "sitting", re: new RegExp(String.raw`\b(?:sit(?:s)?|sitting|sat|seated|perch(?:es|ed|ing)?)\b(?:\s+(?:up|down|back|bolt\s+upright|upright|forward|alone|quietly|still))*${ON_WHAT}`, "g") },
+  // Standing: "gets up", "stands up", "gets out of bed", "rises", "jumps to his feet", "stands".
+  { pose: "standing", re: /\b(?:stand(?:s)?\s+up|standing\s+up|stood\s+up|gets?\s+(?:up|out\s+of\s+(?:bed|the\s+\w+)|to\s+(?:his|her|their)\s+feet)|got\s+(?:up|out\s+of\s+bed)|getting\s+up|ris(?:es|ing)|rose|jumps?\s+(?:up|to\s+(?:his|her|their)\s+feet)|leaps?\s+up|springs?\s+up|climbs?\s+out\s+of\s+bed|stands|standing|stood)\b/g },
+  { pose: "kneeling", re: /\b(?:kneel(?:s|ing)?|knelt|drops?\s+to\s+(?:his|her|their)\s+knees|on\s+(?:his|her|their)\s+knees)\b/g },
+  { pose: "crouching", re: /\b(?:crouch(?:es|ed|ing)?|squat(?:s|ted|ting)?|ducks?\s+down|hunker(?:s|ed)?\s+down)\b/g },
+];
+
+/** Postures, panel by panel (D37), given each panel's final positions (who walks, who has left). */
+export function posturesFromWords(plan: GeometryPlanData, panels: (WordsPanel & { blocking?: Record<string, PanelBlock> })[], people: { id: string; name: string }[], start?: { pose: Pose; on?: string }): Record<string, PoseEntry>[] {
+  const props = plan.furniture ?? [];
+  const byFirst = (w: string) => people.find((p) => p.name.split(/\s+/)[0].toLowerCase() === w.toLowerCase() || p.name.toLowerCase() === w.toLowerCase());
+  const state = new Map<string, { pose: Pose; on?: string }>();
+  if (start) for (const a of plan.actors) state.set(a.characterId, { ...start });
+  const onWords = (t: string | undefined) => {
+    if (!t) return undefined;
+    const hit = resolve(t, props, []);
+    if (hit?.kind === "prop") return `the ${hit.f.name}`;
+    const head = t.trim().split(/\s+/).filter((w) => !SKIP_HEADS.has(singular(w)) || /^(?:floor|ground)$/.test(w));
+    return head.length ? `the ${head.join(" ")}` : undefined;
+  };
+  return panels.map((pn) => {
+    const out: Record<string, PoseEntry> = {};
+    const bl = pn.blocking ?? {};
+    const setHere = new Map<string, { pose: Pose; on?: string; why: string; by: "you" | "app"; only?: boolean }>();
+    // The words, in order: the last posture for each person wins.
+    const found: { pose: Pose; m: RegExpExecArray }[] = [];
+    for (const r of POSES) { r.re.lastIndex = 0; let m; while ((m = r.re.exec(pn.action))) found.push({ pose: r.pose, m }); }
+    found.sort((x, y) => x.m.index - y.m.index || y.m[0].length - x.m[0].length);
+    let actor = pn.subjectId, prevEnd = 0, lastEnd = -1;
+    for (const { pose, m } of found) {
+      if (m.index < lastEnd) continue; // overlaps the one before
+      const seg = pn.action.slice(prevEnd, m.index);
+      const who = subjectIn(seg, prevEnd === 0, byFirst);
+      if (who) actor = who;
+      prevEnd = lastEnd = m.index + m[0].length;
+      // "The phone sits on the desk": a thing, not a person.
+      if (!who && /\b(?:the|a|an|his|her|their|its)\s+[a-z][\w'-]*\s*$/i.test(seg)) continue;
+      if (!actor) continue;
+      const target = m.slice(1).find((x) => x);
+      const before = state.get(actor);
+      // "Sits on the bed" keeps what they're on if it isn't said again.
+      const on = onWords(target) ?? (pose !== "standing" && before?.pose !== "standing" ? before?.on : undefined);
+      setHere.set(actor, { pose, ...(on && pose !== "standing" ? { on } : {}), why: m[0].trim(), by: "app" });
+    }
+    // A posture you set on this panel wins (D37).
+    for (const [k, b] of Object.entries(bl)) if (k.startsWith("pose:") && b.pose) setHere.set(k.slice(5), { pose: b.pose, by: "you", why: "set by you", ...(b.only ? { only: true } : {}), ...(b.pose !== "standing" ? { on: setHere.get(k.slice(5))?.on ?? state.get(k.slice(5))?.on } : {}) });
+    for (const a of plan.actors) {
+      const id = a.characterId;
+      if (bl[id]?.gone) { state.set(id, { pose: "standing" }); continue; } // left on foot
+      const before = state.get(id);
+      const here = setHere.get(id);
+      // Walking in this panel: on their feet in the picture; what the words end with carries on.
+      if (bl[id]?.to && here?.by !== "you") {
+        out[id] = { pose: "standing", by: "app", why: "walks", ...((before?.pose ?? "standing") !== "standing" ? { from: before!.pose } : {}), ...(here && here.pose !== "standing" ? { end: here.pose, ...(here.on ? { on: here.on } : {}) } : {}) };
+        state.set(id, here ? { pose: here.pose, ...(here.on ? { on: here.on } : {}) } : { pose: "standing" });
+        continue;
+      }
+      if (here) {
+        const changed = (before?.pose ?? "standing") !== here.pose;
+        out[id] = { pose: here.pose, ...(here.on ? { on: here.on } : {}), by: here.by, why: here.why, ...(changed ? { from: before?.pose ?? "standing" } : {}) };
+        if (!here.only) state.set(id, { pose: here.pose, ...(here.on ? { on: here.on } : {}) });
+      } else if (before && before.pose !== "standing") out[id] = { ...before, by: "carried" };
+    }
+    return out;
+  });
+}
+
+/** Words for someone's posture in a picture or clip (D37), or nothing for plain standing. */
+export function postureWords(name: string, e: PoseEntry | undefined, pr: "she" | "he" | "they" = "they"): string | undefined {
+  if (!e) return undefined;
+  const on = e.on ? ` ${e.pose === "lying" ? "on" : e.pose === "sitting" ? (/\b(table|desk|bar|counter)\b/.test(e.on) ? "at" : "on") : "on"} ${e.on}` : "";
+  const word = { standing: "standing", sitting: "sitting", lying: "lying", kneeling: "kneeling", crouching: "crouching" }[e.pose];
+  const subj = pr === "she" ? "she" : pr === "he" ? "he" : "they";
+  const has = pr === "they" ? "have" : "has";
+  if (e.from && e.from !== e.pose) {
+    if (e.pose === "standing") return `${name} has just got up: ${subj} ${pr === "they" ? "are" : "is"} on ${pr === "she" ? "her" : pr === "he" ? "his" : "their"} feet now, no longer ${e.from}`;
+    return `${name} ${has} just ${e.pose === "sitting" ? (e.from === "lying" ? "sat up" : "sat down") : e.pose === "lying" ? "lain down" : e.pose === "kneeling" ? "knelt down" : "crouched down"} and is ${word}${on} now (${subj} ${pr === "they" ? "were" : "was"} ${e.from} before)`;
+  }
+  if (e.pose === "standing") return undefined;
+  return `${name} is ${word}${on}${e.by === "carried" ? `, still ${word} as in the panel before: ${subj} ${has} not got up` : ""}`;
+}
+
+/** The posture a scene setting gives everyone at the start (D37): "sitting round the kitchen table". */
+export function startPose(spot: string | undefined, plan: GeometryPlanData): { pose: Pose; on?: string } | undefined {
+  if (!spot) return undefined;
+  for (const r of POSES) {
+    if (r.pose === "standing") continue;
+    r.re.lastIndex = 0;
+    const m = r.re.exec(spot);
+    if (m) {
+      const t = m.slice(1).find((x) => x);
+      const hit = t ? resolve(t, plan.furniture ?? [], []) : undefined;
+      return { pose: r.pose, ...(hit?.kind === "prop" ? { on: `the ${hit.f.name}` } : t ? { on: `the ${t}` } : {}) };
+    }
+  }
   return undefined;
 }

@@ -203,7 +203,7 @@ export async function setShotChoiceAction(shotId: string, words: string) {
  * panel. What's set carries on to later panels until they're placed again (unless "this panel
  * only"). Once the positions are approved, the cameras are chosen again to see the new places.
  */
-export async function savePanelBlockingAction(changes: { shotId: string; entries: Record<string, { at: { x: number; y: number }; to?: { x: number; y: number }; facingDeg?: number; only?: boolean; gone?: boolean } | null> }[]) {
+export async function savePanelBlockingAction(changes: { shotId: string; entries: Record<string, { at: { x: number; y: number }; to?: { x: number; y: number }; facingDeg?: number; only?: boolean; gone?: boolean; pose?: "standing" | "sitting" | "lying" | "kneeling" | "crouching" } | null> }[]) {
   return runAsync(async (db) => {
     const { sceneId } = studio.savePanelBlocking(db, changes);
     if (!studio.sceneLocks(db, sceneId).positions) return { chosen: 0, missing: [] as (string | undefined)[] };
