@@ -9,8 +9,8 @@ import { mainSubjectId } from "./domain/composer";
 import { facingOf, pictureXY, planForShot, readCamera, readProps } from "./domain/geometry";
 import { cameraZ, floorZ } from "./domain/levels";
 import { ringSectors, viewSlice, viewsInSlice } from "./domain/panorama";
-import { checkPrompt, judgePicture, lookLine, marksPrompt, planPrompt, type Figure, type PictureCheck, type PictureExpectation } from "./domain/pictureCheck";
-import { numberPeople, type Person } from "./domain/peopleDetect";
+import { checkPrompt, gazePrompt, judgePicture, lookLine, marksPrompt, matchPeople, planPrompt, type Figure, type GazeEvidence, type PictureCheck, type PictureExpectation } from "./domain/pictureCheck";
+import { detectorKind, headCrop, numberPeople, type Person } from "./domain/peopleDetect";
 import { detectPeople } from "./peopleDetector";
 import { crowdLevelOf } from "./domain/story";
 import { renderLayoutForShot } from "./layoutImage";
@@ -92,6 +92,18 @@ export function expectationFor(db: DB, shotId: string): { expect: PictureExpecta
         }));
       })(),
       propPictures: (plan.furniture ?? []).filter((f) => f.imageAssetId).map((f) => f.name),
+      // Props the detector can find (D55), with where their foot meets the floor in the picture.
+      propSpots: (() => {
+        const depths = reading.actors.filter((a) => a.inView && !a.foreground).map((a) => a.depthM);
+        const far = depths.length ? Math.max(...depths) : undefined, near = depths.length ? Math.min(...depths) : undefined;
+        return readProps(plan, cam).filter((p) => p.inView).flatMap((p) => {
+          const kind = detectorKind(p.name);
+          const f = (plan.furniture ?? []).find((x) => x.name === p.name);
+          const foot = f ? pictureXY(plan, cam, f.position, 0) : undefined;
+          if (!kind || !f || !foot || foot.y > 1.02 || foot.y < 0) return [];
+          return [{ name: p.name, kind, x: +foot.x.toFixed(3), baseY: +foot.y.toFixed(3), among: far !== undefined && near !== undefined && p.depthM <= far + 1 && p.depthM >= near - 0.5 }];
+        });
+      })(),
       // The room's order behind them (D21), from the 360° ring.
       backgroundSides: (() => {
         if (plan.views.length < 2) return undefined;
@@ -159,15 +171,30 @@ export async function withMarks(picture: Buffer, people: Person[]): Promise<Buff
   const W = meta.width ?? 1024, H = meta.height ?? 1536;
   const fs0 = Math.round(Math.min(W, H) / 40);
   const colours = ["#ff3b30", "#34c759", "#0a84ff", "#ff9f0a", "#af52de", "#ffd60a", "#00c7be", "#ff2d55"];
-  const parts = people.map((p, i) => {
+  // Each number sits on the person's chest (D54), not at a corner: where outlines overlap, a
+  // corner label sat beside the wrong face and the model took the person behind for the one in front.
+  const outlines = people.map((p, i) => {
     const c = colours[i % colours.length], x = p.x0 * W, y = p.y0 * H, w = (p.x1 - p.x0) * W, h = (Math.min(p.y1, 1) - p.y0) * H;
-    const label = String(p.n ?? i + 1), lw = label.length * fs0 * 0.62 + 10;
-    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="none" stroke="${c}" stroke-width="3"/>`
-      + `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${lw.toFixed(1)}" height="${fs0 + 8}" fill="${c}"/>`
-      + `<text x="${(x + 5).toFixed(1)}" y="${(y + fs0 + 1).toFixed(1)}" font-family="sans-serif" font-size="${fs0}" font-weight="bold" fill="#000">${label}</text>`;
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="none" stroke="${c}" stroke-width="2"/>`;
   });
+  const labels = people.map((p, i) => {
+    const c = colours[i % colours.length], label = String(p.n ?? i + 1);
+    const cx = ((p.x0 + p.x1) / 2) * W, cy = (p.y0 + 0.22 * (Math.min(p.y1, 1) - p.y0)) * H, r = fs0 * (label.length > 1 ? 0.85 : 0.7);
+    return `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="${c}" stroke="#000" stroke-width="2"/>`
+      + `<text x="${cx.toFixed(1)}" y="${(cy + fs0 * 0.36).toFixed(1)}" text-anchor="middle" font-family="sans-serif" font-size="${fs0}" font-weight="bold" fill="#000">${label}</text>`;
+  });
+  const parts = [...outlines, ...labels];
   const svg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">${parts.join("")}</svg>`);
   return sharp(picture).composite([{ input: svg, left: 0, top: 0 }]).png().toBuffer();
+}
+
+/** The faces the eye-contact question was asked about, side by side and named, for the test record (D54). */
+async function faceStrip(images: Buffer[], names: string[]): Promise<Buffer> {
+  const S = 384, label = 36;
+  const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const text = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${S * images.length}" height="${label}">${names.map((n, i) => `<text x="${i * S + 8}" y="26" font-family="sans-serif" font-size="22" font-weight="bold" fill="#000">${i + 1}. ${esc(n)}</text>`).join("")}</svg>`);
+  return sharp({ create: { width: S * images.length, height: S + label, channels: 3, background: "#ffffff" } })
+    .composite([{ input: text, left: 0, top: 0 }, ...images.map((input, i) => ({ input, left: i * S, top: label }))]).png().toBuffer();
 }
 
 export async function checkPanelPicture(db: DB, panelId: string, assetId: string): Promise<PictureCheck | null> {
@@ -215,21 +242,34 @@ export async function checkPanelPicture(db: DB, panelId: string, assetId: string
   const marked = found ? numberPeople(found.people) : [];
   const overlay = figures.length && !found ? await withPlan(picture, figures, e.eyeY).catch(() => undefined) : undefined;
   const marks = found ? await withMarks(picture, marked).catch(() => undefined) : undefined;
+  if (marks) e.expect.gazeByFace = true;
   const [reply, planReply] = await Promise.all([
     text.describe(checkPrompt(e.expect, usable.map((r) => r.label)), images),
     marks ? text.describe(marksPrompt(e.expect, who, marked.length), [{ data: marks, mime: "image/png" }]).catch(() => "")
       : overlay ? text.describe(planPrompt(e.expect, who), [{ data: picture, mime: pic.mime }, { data: overlay, mime: "image/png" }]).catch(() => "")
       : Promise.resolve(undefined),
   ]);
-  const plan = found && planReply !== undefined ? { people: marked, reply: planReply, aspect: found.height / found.width } : planReply;
-  const result = judgePicture(e.expect, reply, plan);
+  const plan = found && planReply !== undefined ? { people: marked, things: found.things, reply: planReply, aspect: found.height / found.width } : planReply;
+  // Eye contact on a close crop of each matched face (D54).
+  let gaze: GazeEvidence | undefined, faces: Buffer | undefined;
+  if (found && typeof plan === "object" && e.expect.gazeByFace) {
+    const crops = matchPeople(e.expect, plan).map((m) => ({ name: m.name, at: headCrop(m.box, found.width, found.height) }));
+    const asked = crops.filter((c) => c.at);
+    const images = await Promise.all(asked.map((c) => sharp(picture).extract({ left: c.at!.left, top: c.at!.top, width: c.at!.size, height: c.at!.size }).resize(384, 384).png().toBuffer())).catch(() => []);
+    if (images.length && images.length === asked.length) {
+      const said = await text.describe(gazePrompt(asked.map((c) => ({ name: c.name, look: who.find((w) => w.name === c.name)?.look ?? "" }))), images.map((data) => ({ data, mime: "image/png" }))).catch(() => undefined);
+      if (said !== undefined) gaze = { reply: said, asked: asked.map((c) => c.name), tooSmall: crops.filter((c) => !c.at).map((c) => c.name) };
+      if (testMode()) faces = await faceStrip(images, asked.map((c) => c.name)).catch(() => undefined);
+    } else if (!asked.length && crops.length) gaze = { reply: "", asked: [], tooSmall: crops.map((c) => c.name) };
+  }
+  const result = judgePicture(e.expect, reply, plan, gaze);
   studio.setPanelCheck(db, panelId, result);
   // Test mode (B4): the check goes with its picture's record, and a line into results.csv.
   if (testMode()) {
     const code = repo.getShot(db, panelShot)?.spec.code ?? panelId;
         // The record shows the plan (dashed) and where each person was found (solid) together.
     const record = found ? await withPlan(picture, figures, e.eyeY, (result.measured ?? []).flatMap((m) => { const box = marked.find((p) => p.n === m.box); return box ? [{ name: m.name, box }] : []; })).catch(() => undefined) : overlay;
-    recordCheck({ panelCode: code.replace(/^.*_(P\d+)$/i, "$1"), assetId, picture, overlay: record, marks, check: result, expected: { order: e.expect.order, figures: e.expect.figures, eyeY: e.eyeY }, replies: { check: reply, plan: planReply } });
+    recordCheck({ panelCode: code.replace(/^.*_(P\d+)$/i, "$1"), assetId, picture, overlay: record, marks, faces, check: result, expected: { order: e.expect.order, figures: e.expect.figures, eyeY: e.eyeY }, replies: { check: reply, plan: planReply, gaze: gaze?.reply } });
   }
   return result;
 }

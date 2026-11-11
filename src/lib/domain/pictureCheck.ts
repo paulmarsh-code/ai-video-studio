@@ -5,10 +5,10 @@
 // is decided here, by rule.
 
 import { itemGroup } from "./imagePrompts";
-import type { Person } from "./peopleDetect";
+import type { Person, Thing } from "./peopleDetect";
 
 /** The plan check measured (D53): everyone the detector found, numbered, and which number the model says is whom. */
-export interface MeasuredPlan { people: Person[]; reply: string; /** The picture's height over its width. */ aspect: number }
+export interface MeasuredPlan { people: Person[]; reply: string; /** The picture's height over its width. */ aspect: number; /** Furniture the detector found (D55). */ things?: Thing[] }
 
 export interface PictureExpectation {
   /** Main characters the camera sees, left to right, from the approved floor plan. */
@@ -35,6 +35,13 @@ export interface PictureExpectation {
   blocking?: boolean;
   /** How each person's body must be (D37): standing, sitting, lying, kneeling or crouching. */
   postures?: { name: string; pose: "standing" | "sitting" | "lying" | "kneeling" | "crouching"; on?: string }[];
+  /** Eye contact is asked on close crops of each face (D54), not on the whole picture. */
+  gazeByFace?: boolean;
+  /**
+   * Props the detector can find (D55): their kind, where across the picture they should be, and
+   * where their foot should meet the floor (0 top, 1 bottom), projected from the plan.
+   */
+  propSpots?: { name: string; kind: string; x: number; baseY: number; among?: boolean }[];
   /** Where each main person should be in the picture (B1), projected from the plan. */
   figures?: Figure[];
 }
@@ -63,6 +70,8 @@ export interface PictureCheck {
   areas?: Record<CheckArea, AreaResult>;
   /** Each person against their planned box (D51, D52): the model's comparison, roughly how many times the planned height, and where their head is (0 top, 1 bottom) against where the plan puts it. */
   measured?: { name: string; fit?: string; heightRatio?: number; headY?: number; plannedHeadY?: number; x?: number; plannedX?: number; /** The detector's outline number (D53). */ box?: number }[];
+  /** Each detectable prop's measured place against the plan (D55). */
+  propsMeasured?: { name: string; x: number; plannedX: number; baseY: number; plannedBaseY: number }[];
   /** How sizes and heads were found (D53): measured by the detector, or the vision model's estimate. */
   measuredBy?: "detector" | "estimate";
   /** Heads against the planned eye level (D52): "on", "above" or "below", read from where the heads are. */
@@ -90,7 +99,7 @@ export function checkPrompt(e: PictureExpectation, refNames: string[]): string {
     "",
     "Ignore style, lighting and small differences in pose or expression. Do check clothes, accessories, carried items and props against their reference pictures: a missing stripe or panel, a different colour, a bag in the other hand, or a table without its cloth is a real difference.",
     "Reply with JSON only, no other text:",
-    `{"left_to_right": ["the main characters you see, left to right, by name; use \\"unknown\\" for anyone you cannot match"], "clothes": [{"name": "character", "matches_reference": true, "difference": "what differs, or empty"}], "props": [{"name": "key prop", "side": "left | centre | right", "depth": "among the people | behind everyone | in front of everyone", "matches_picture": true, "difference": "what differs from its reference picture, or empty"}], "props_seen": ["key props you can see"], "background_left": "which venue area is at the left of the background, or none", "background_right": "which venue area is at the right of the background, or none", "background_people": "none | few | busy", "looking_at_camera": ["main characters looking straight into the camera, or empty"], "held": [{"name": "character", "item": "the item", "picture_side": "left | right | not visible"}], "postures": [{"name": "character", "pose": "standing | sitting | lying | kneeling | crouching"}], "notes": "one short sentence on anything clearly wrong, or empty"}`,
+    `{"left_to_right": ["the main characters you see, left to right, by name; use \\"unknown\\" for anyone you cannot match"], "clothes": [{"name": "character", "matches_reference": true, "difference": "what differs, or empty"}], "props": [{"name": "key prop", "side": "left | centre | right", "depth": "among the people | behind everyone | in front of everyone", "matches_picture": true, "difference": "what differs from its reference picture, or empty"}], "props_seen": ["key props you can see"], "background_left": "which venue area is at the left of the background, or none", "background_right": "which venue area is at the right of the background, or none", "background_people": "none | few | busy", ${e.gazeByFace ? "" : '"looking_at_camera": ["main characters whose eyes look straight into the lens, making eye contact with the viewer (facing the camera while looking at someone else does not count), or empty"], '} "held": [{"name": "character", "item": "the item", "picture_side": "left | right | not visible"}], "postures": [{"name": "character", "pose": "standing | sitting | lying | kneeling | crouching"}], "notes": "one short sentence on anything clearly wrong, or empty"}`,
   ].join("\n");
 }
 
@@ -142,6 +151,62 @@ export function marksPrompt(e: PictureExpectation, who: Who[], count: number): s
   ].join("\n");
 }
 
+/** The JSON object in a model's reply, possibly inside a code fence; an empty object if there isn't one. */
+function replyObject(text: string): Record<string, unknown> {
+  try { return JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] ?? "") as Record<string, unknown>; } catch { return {}; }
+}
+
+/**
+ * Which outline is whom (D53), from the model's answer: one outline per person, and only the
+ * main characters the check judges.
+ */
+export function matchPeople(e: PictureExpectation, plan: MeasuredPlan): { name: string; box: Person }[] {
+  const people = replyObject(plan.reply).people;
+  const picks = Array.isArray(people) ? people.filter((x) => x && typeof x === "object") as Record<string, unknown>[] : [];
+  const first = (t: string) => (t.split(/\s+/)[0] ?? t).toLowerCase().replace(/[^a-z]/g, "");
+  const used = new Set<number>();
+  return (e.figures ?? []).flatMap((want) => {
+    const n = Math.round(Number(picks.find((f) => first(String(f.name ?? "")) === first(want.name))?.box));
+    const box = Number.isFinite(n) && n > 0 && !used.has(n) ? plan.people.find((p) => p.n === n) : undefined;
+    if (!box) return [];
+    used.add(n);
+    return [{ name: want.name, box }];
+  });
+}
+
+/**
+ * Eye contact (D54), asked on a close crop of each main character's face, in the order given. The
+ * crop also confirms the match: if the person in the middle of it isn't the one described, the
+ * outline picked was someone else's, and that person isn't measured.
+ */
+export function gazePrompt(people: Who[]): string {
+  return [
+    "You are checking people in close-ups from a storyboard picture. Report only what you actually see.",
+    "",
+    "Each image is a close crop of one person's head and shoulders, in this order:",
+    ...people.map((p, i) => `- image ${i + 1} should be ${p.name}${p.look ? `: ${p.look}` : ""}`),
+    "",
+    "For each image, look at the person in the middle of it:",
+    "- is_them: \"yes\" if they fit the description, \"no\" if they are clearly someone else (for example a different face, hair or clothes), \"can't tell\" if not enough of them shows.",
+    "- eyes: \"into the lens\" only if their eyes look straight into the camera, making eye contact with the viewer. Someone whose face or body is turned towards the camera but whose eyes look at another person or anything else is \"elsewhere\"; so is someone seen from behind or side-on. \"can't tell\" if you can't see their eyes clearly enough.",
+    "",
+    "Reply with JSON only, no other text:",
+    '{"people": [{"name": "character", "is_them": "yes | no | can\'t tell", "eyes": "into the lens | elsewhere | can\'t tell"}]}',
+  ].join("\n");
+}
+
+/** Who the face check says was matched to the wrong person (D54). */
+function wrongMatches(gaze: GazeEvidence | undefined): Set<string> {
+  if (!gaze) return new Set();
+  const v = replyObject(gaze.reply).people;
+  const said = Array.isArray(v) ? v.filter((x) => x && typeof x === "object") as Record<string, unknown>[] : [];
+  const first = (t: string) => (t.split(/\s+/)[0] ?? t).toLowerCase().replace(/[^a-z]/g, "");
+  return new Set(gaze.asked.filter((n) => /^no\b/.test(String(said.find((x) => first(String(x.name ?? "")) === first(n))?.is_them ?? "").toLowerCase().trim())));
+}
+
+/** The face check's evidence (D54): its answer, who was asked, and who was too small to ask about. */
+export interface GazeEvidence { reply: string; asked: string[]; tooSmall: string[] }
+
 /**
  * One line on how to recognise a character (D52): the first sentence of their clothes that names
  * a colour (a general opening like "smart-casual style" tells the model nothing), else the
@@ -157,7 +222,7 @@ export function lookLine(wardrobe: string, anchors: string[] = []): string {
 }
 
 /** Decide pass or fail from what the model saw, by rule. */
-export function judgePicture(e: PictureExpectation, reply: string, plan?: string | MeasuredPlan): PictureCheck {
+export function judgePicture(e: PictureExpectation, reply: string, plan?: string | MeasuredPlan, gaze?: GazeEvidence): PictureCheck {
   // The answer is JSON, possibly inside a code fence: take the object itself.
   const json = reply.match(/\{[\s\S]*\}/)?.[0];
   let seen: { left_to_right?: unknown; props_seen?: unknown; background_people?: unknown; notes?: unknown; clothes?: unknown; props?: unknown; background_left?: unknown; background_right?: unknown; looking_at_camera?: unknown };
@@ -230,8 +295,21 @@ export function judgePicture(e: PictureExpectation, reply: string, plan?: string
     const got = String(x.pose ?? "").toLowerCase().trim();
     if (want && /^(standing|sitting|lying|kneeling|crouching)$/.test(got) && got !== want.pose) add("blocking", `${want.name} is ${got}; ${want.name} must be ${want.pose}${want.on ? ` ${want.pose === "standing" ? "by" : "on"} ${want.on}` : ""}, as in the approved shot.`);
   }
-  // Nobody looks into the lens (D21b).
-  const lookers = list(seen.looking_at_camera).filter((n) => expected.includes(first(n)));
+  // Nobody looks into the lens (D21b), judged on a close crop of each face when there is one
+  // (D54): on the whole picture the model took facing the camera for eye contact.
+  let lookers = list(seen.looking_at_camera).filter((n) => expected.includes(first(n)));
+  if (gaze) {
+    const eyes = (() => { const v = replyObject(gaze.reply).people; return Array.isArray(v) ? v.filter((x) => x && typeof x === "object") as Record<string, unknown>[] : []; })();
+    lookers = [];
+    const wrong = wrongMatches(gaze);
+    for (const name of gaze.asked.filter((n) => !wrong.has(n))) {
+      const said = String(eyes.find((x) => first(String(x.name ?? "")) === first(name))?.eyes ?? "").toLowerCase();
+      if (/into the lens/.test(said)) lookers.push(name);
+      else if (!/elsewhere/.test(said)) unmeasured.blocking.push(`${name}: eyes not clear, eye contact not judged`);
+    }
+    for (const name of gaze.tooSmall) unmeasured.blocking.push(`${name}: face too small to see where they look`);
+  }
+  else if (e.gazeByFace && e.order.length) unmeasured.blocking.push("eye contact: not judged");
   if (lookers.length) add("blocking", `${lookers.join(" and ")} ${lookers.length === 1 ? "is" : "are"} looking at the camera; they should look at each other as the moment says.`);
   const bg = String(seen.background_people ?? "").toLowerCase();
   if (e.crowd !== "none" && /none/.test(bg)) add("room", "No background people, but the scene has them.");
@@ -249,13 +327,13 @@ export function judgePicture(e: PictureExpectation, reply: string, plan?: string
   if (typeof plan === "object" && e.figures?.length) {
     // Measured (D53): the detector's outline for each person, matched by the model.
     measuredBy = "detector";
-    const picks = parsePlan(plan.reply);
-    const used = new Set<number>();
+    const matched = matchPeople(e, plan);
+    const wrong = wrongMatches(gaze);
     for (const want of judged) {
-      const n = Math.round(Number(picks.find((f) => first(String(f.name ?? "")) === first(want.name))?.box));
-      const box = Number.isFinite(n) && n > 0 && !used.has(n) ? plan.people.find((p) => p.n === n) : undefined;
+      const box = matched.find((x) => x.name === want.name)?.box;
       if (!box) { unmeasured.blocking.push(`${want.name}: not matched to anyone found, not measured`); continue; }
-      used.add(n);
+      if (wrong.has(want.name)) { unmeasured.blocking.push(`${want.name}: the outline picked was someone else, not measured`); continue; }
+      const n = box.n!;
       const cx = (box.x0 + box.x1) / 2;
       const m: (typeof measured)[number] = { name: want.name, box: n, headY: +box.y0.toFixed(3), plannedHeadY: want.headY, x: +cx.toFixed(3), plannedX: want.x };
       measured.push(m);
@@ -322,12 +400,32 @@ export function judgePicture(e: PictureExpectation, reply: string, plan?: string
     } else unmeasured.blocking.push("eye level: not judged");
   }
 
+  // Props the detector knows, against their planned place (D55): the same measuring as the people,
+  // judged only when the eye level is right; when the camera is wrong everything moves and the
+  // camera problem says so. A table several metres in front of the group it should stand among
+  // passed the model's front-or-behind question.
+  const propsMeasured: NonNullable<PictureCheck["propsMeasured"]> = [];
+  if (typeof plan === "object" && e.propSpots?.length) {
+    for (const spot of e.propSpots) {
+      if (eyeLevel !== "on") break;
+      const near = (plan.things ?? []).filter((t) => t.kind === spot.kind)
+        .map((t) => ({ t, dx: Math.abs((t.x0 + t.x1) / 2 - spot.x) })).sort((a, b) => a.dx - b.dx)[0];
+      if (!near || near.dx > 0.3) { unmeasured.room.push(`the ${spot.name}: not found by the detector, place not measured`); continue; }
+      const cx = (near.t.x0 + near.t.x1) / 2, foot = Math.min(near.t.y1, 1);
+      propsMeasured.push({ name: spot.name, x: +cx.toFixed(3), plannedX: spot.x, baseY: +foot.toFixed(3), plannedBaseY: spot.baseY });
+      const where = `its foot is about ${pct(foot)} of the way down the picture, but image 1 has it about ${pct(spot.baseY)} down${spot.among ? ", among the people" : ""}`;
+      if (foot - spot.baseY > 0.08) add("room", `The ${spot.name} is well in front of where image 1 puts it: ${where}. Keep it where image 1 shows it.`, true);
+      else if (spot.baseY - foot > 0.08) add("room", `The ${spot.name} is well behind where image 1 puts it: ${where}. Keep it where image 1 shows it.`, true);
+      else if (Math.abs(cx - spot.x) > 0.15) add("room", `The ${spot.name} is about ${pct(cx)} of the way across the picture; image 1 has it about ${pct(spot.x)} across.`, true);
+    }
+  }
+
   const areas = Object.fromEntries((["blocking", "look", "room"] as CheckArea[]).map((a) => {
     const ps = issues.filter((x) => x.area === a).map((x) => x.text);
     return [a, { pass: ps.length === 0, problems: ps, unmeasured: unmeasured[a] }];
   })) as Record<CheckArea, AreaResult>;
   const problems = issues.map((x) => x.text);
-  return { pass: problems.length === 0, problems, areas, ...(issues.some((x) => x.redraw) ? { redraw: true } : {}), ...(measured.length ? { measured } : {}), ...(eyeLevel ? { eyeLevel } : {}), ...(measuredBy ? { measuredBy } : {}) };
+  return { pass: problems.length === 0, problems, areas, ...(issues.some((x) => x.redraw) ? { redraw: true } : {}), ...(measured.length ? { measured } : {}), ...(eyeLevel ? { eyeLevel } : {}), ...(measuredBy ? { measuredBy } : {}), ...(propsMeasured.length ? { propsMeasured } : {}) };
 }
 
 /** The extra instruction for the one automatic redraw. */

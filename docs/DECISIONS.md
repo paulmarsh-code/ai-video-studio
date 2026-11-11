@@ -1036,3 +1036,44 @@ Paul ran D52's "Check again". It caught the camera fault, but on numbers the mod
   - The runtime is now loaded when a check runs, not when the app is built (`import(/* webpackIgnore: true */ ...)`). Without the package, the app builds and the check falls back to the estimate.
   - The panel then lists under "Couldn't judge" that exact sizes and heads are the vision model's estimate because the detector isn't running, with the fix: run `npm install` and restart.
   - Both ways were tested in the browser on Paul's picture.
+
+### T1–T3 results (2026-11-11), panel 1, measured by D53
+
+Nine draws were made: three per run, three runs. The check measured each one; the figures below leave out "looking at the camera" (see D54).
+
+| Run | Model and request | Heads (planned 48% down) | Group's size (planned 17% of height) | Blocking passed |
+| --- | --- | --- | --- | --- |
+| T1 | gpt-image-2, full request | 21–25% down: camera pointed down in all 3 | up to 2.7× | 0 of 3 |
+| T2 | gpt-image-2, short request | 22–27% down: all 3 | up to 2.8× | 0 of 3 |
+| T3 | gpt-image-2.6-sunburst, short request (two were "Redraw it from the layout") | 45–49% down: right in all 3 | about 1.5–1.7× | see D54 |
+
+- **The old model is the camera fault, not the request.** Full and short requests on gpt-image-2 gave the same result. The newer model follows image 1's camera every time.
+- **What T3 still gets wrong** (Paul saw the second): it draws the group a little too close, and puts the table several metres in front of them instead of among them. D54 and D55 make the check see both.
+- **Not yet known:** the newer model's price. Paul is to check the OpenAI usage page before it becomes the default.
+
+### D54: Eye contact judged on face close-ups; numbers on chests; close-ups confirm the match (2026-11-11)
+
+"Looking at the camera" failed 8 of the 9 draws. In the final one, Chase and Marcus face the camera (as the plan has them) but look at each other, and Paul could see it. The model took facing the camera for eye contact, on faces about 40 pixels tall. The close-ups made for this then showed a worse problem: in Paul's real check, the model had matched Chase and Marcus to two people standing just behind them. Each number sat at the corner of its outline, and where outlines overlapped, number 3 was beside Chase's face. So two of T3's "fits" had been measured on the wrong people.
+
+- **Failure fixed (D38).** Pictures were failed for eye contact that isn't there, which would trigger needless redraws. People were also measured on the wrong outline, which can pass a wrong picture. Both reach generation through the picture check and its redraw.
+- **Numbers on the chest.** Each person found is numbered in a circle on their chest, a fifth of the way down their outline, not at a corner. Outlines are drawn thinner.
+- **Face close-ups.** Each matched main character is cropped head and shoulders from the picture (`headCrop`, at least 48 pixels) and enlarged. The close-ups go in one short request. For each, the model is given the character's one-line look and asked two things:
+  - **is_them**: does the person in the middle fit the description?
+  - **eyes**: into the lens, elsewhere, or can't tell. Facing the camera while looking at someone else is "elsewhere"; so is someone seen from behind or side-on.
+- **The rules.**
+  - A "no" on is_them means the outline was someone else's. That person isn't measured, and isn't judged for eye contact; the panel says so.
+  - Only "into the lens" fails.
+  - "Can't tell", and a face too small to crop, are listed under "Couldn't judge".
+  - The main check no longer asks about eye contact when the close-ups are asked. If they couldn't be asked, it says eye contact wasn't judged.
+- **Test records.** `check_faces.png` shows the close-ups, named, and `check.json` keeps the answer.
+- **Tested.** This ran on Paul's final T3 picture in the browser, with the real detector and stand-in answers. The close-ups show Chase, Marcus and Nina each looking at the others, and Jade from behind. With them matched correctly, the group measures Chase 1.7×, Marcus 1.6× and Nina 1.5× (so blocking fails on size), and nobody is failed for eye contact.
+
+### D55: Props the detector knows are measured against the plan (2026-11-11)
+
+Paul pointed out that in all three T3 pictures the cocktail table is a long way in front of Chase, Marcus and Nina. The plan has it among them, under a metre from each. The check passed "Room and props". Its question only catches a prop that's clearly behind when it should be in front, or the other way round. "Among the people" against "well in front of them" slipped through.
+
+- **Failure fixed (D38).** A table drawn several metres from the group it belongs with passed. It reaches generation through the picture check: the problem, with figures, goes into the redraw.
+- **Measured like the people.** The detector already sees furniture: table, chair, sofa, bench, plant pot, bed and television. A key prop whose name says it's one of these (`detectorKind`: a "cocktail table" is a table; a bar counter, a plinth or a logo wall isn't) gets a planned place from the plan's projection: where its foot meets the floor in the picture, and where across. The nearest detected object of that kind is compared with it. If its foot is more than 8% of the picture's height lower, the prop is well in front; if higher, well behind. If it's more than 15% across, it's in the wrong place across. Each fails "Room and props" with the figures and asks for a redraw.
+- **Only when the camera is right.** Props are judged only when the eye level passes. If the camera has moved, everything moves, and the camera problem already says so.
+- **Not found** (nothing of that kind near its place) is listed under "Couldn't judge", never passed. Props the detector doesn't know stay with the vision model's description.
+- **Tested.** On Paul's final T3 picture: "The cocktail table is well in front of where image 1 puts it: its foot is about 91% of the way down the picture, but image 1 has it about 67% down, among the people." The detector also found the table in the other T3 pictures and in T1.

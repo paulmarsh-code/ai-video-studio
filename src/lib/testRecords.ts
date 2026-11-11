@@ -61,7 +61,7 @@ const csvCell = (v: unknown) => { const t = String(v ?? ""); return /[",\n]/.tes
  * Save a check with its picture's record (B4), or in a record of its own for a picture checked
  * again, and add a line to data/tests/results.csv for comparing runs.
  */
-export function recordCheck(r: { panelCode: string; assetId: string; picture?: Buffer; overlay?: Buffer; check: PictureCheck; expected?: unknown; replies?: { check?: string; plan?: string }; marks?: Buffer }): void {
+export function recordCheck(r: { panelCode: string; assetId: string; picture?: Buffer; overlay?: Buffer; check: PictureCheck; expected?: unknown; replies?: { check?: string; plan?: string; gaze?: string }; marks?: Buffer; faces?: Buffer }): void {
   try {
     fs.mkdirSync(root(), { recursive: true });
     const t = tag(r.assetId);
@@ -77,6 +77,7 @@ export function recordCheck(r: { panelCode: string; assetId: string; picture?: B
     fs.writeFileSync(path.join(root(), dir, n ? `check_${n + 1}.json` : "check.json"), JSON.stringify({ ...r.check, expected: r.expected, replies: r.replies, at: new Date().toISOString() }, null, 2));
     // What the check model was shown (D51): the picture with the plan's boxes and eye level drawn on.
     if (r.overlay) fs.writeFileSync(path.join(root(), dir, n ? `check_${n + 1}_plan_overlay.png` : "check_plan_overlay.png"), r.overlay);
+    if (r.faces) fs.writeFileSync(path.join(root(), dir, n ? `check_${n + 1}_faces.png` : "check_faces.png"), r.faces);
     if (r.marks) fs.writeFileSync(path.join(root(), dir, n ? `check_${n + 1}_people_found.png` : "check_people_found.png"), r.marks);
     let settings: Record<string, unknown> = {};
     try { settings = JSON.parse(fs.readFileSync(path.join(root(), dir, "settings.json"), "utf8")); } catch { /* a re-checked picture has none */ }
