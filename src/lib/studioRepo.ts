@@ -879,7 +879,8 @@ export function saveCharacterHeldItems(db: DB, versionId: string, frontAssetId: 
 /**
  * Save positions set on panels (D35): each entry places someone on that panel (or null puts
  * them back to what the earlier panels and the scene plan give). Carried positions are then
- * worked out again for the whole scene. Not while the cameras are approved.
+ * worked out again for the whole scene. The cameras stay as they are, approved or not (D39):
+ * fixing one picture never moves another panel's camera.
  */
 export function savePanelBlocking(db: DB, changes: { shotId: string; entries: Record<string, BlockEntry | null> }[]): { sceneId: string } {
   if (!changes.length) throw new Error("Nothing to save.");
@@ -890,7 +891,6 @@ export function savePanelBlocking(db: DB, changes: { shotId: string; entries: Re
     if (!shot) throw new Error("That panel wasn't found.");
     if (sceneId && shot.sceneId !== sceneId) throw new Error("Those panels are in different scenes.");
     sceneId = shot.sceneId;
-    if (sceneLocks(db, sceneId).cameras) throw new Error("The cameras are approved and locked. Choose “Change cameras” on the storyboard first, then move people for a panel.");
     const spec = shot.spec as ShotSpec;
     const blocking: Record<string, PanelBlock> = { ...(spec.blocking ?? {}) };
     for (const [id, e] of Object.entries(ch.entries)) {

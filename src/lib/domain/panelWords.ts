@@ -123,6 +123,7 @@ export function blockingFromWords(plan: GeometryPlanData, panels: WordsPanel[], 
       if (k.startsWith("prop:")) { const id = k.slice(5); if (e.gone) propAt.delete(id); else propAt.set(id, e.to ?? e.at); held.delete(id); continue; }
       if (e.gone) { left.set(k, e.at); continue; }
       left.delete(k);
+      if (e.only) continue; // this panel only: the next panel starts from where they were
       pos.set(k, e.to ?? e.at);
     }
     for (const id of marked) {

@@ -119,10 +119,14 @@ describe("Saving positions per panel (D35)", () => {
     if (!ordered[2].spec.at?.[who]) expect(ordered[2].spec.blocking?.[who]?.by).toBe("carried");
   });
 
-  it("refuses while the cameras are locked", async () => {
+  it("works while the cameras are locked, and keeps them (D39)", async () => {
     const { db, sceneId, shots } = await fresh();
     db.update((await import("../src/db/schema")).scenes).set({ locks: { positions: 1, cameras: 1 } }).run();
-    expect(() => studio.savePanelBlocking(db, [{ shotId: shots[0].id, entries: { x: { at: { x: 0, y: 0 } } } }])).toThrow(/Change cameras/);
-    expect(sceneId).toBeTruthy();
+    const who = shots[0].spec.visibleIds[0];
+    const cam = repo.getShot(db, shots[0].id)!.spec.cameraId;
+    studio.savePanelBlocking(db, [{ shotId: shots[0].id, entries: { [who]: { at: { x: 0, y: 3 } } } }]);
+    expect(repo.getShot(db, shots[0].id)!.spec.blocking?.[who]?.at).toEqual({ x: 0, y: 3 });
+    expect(repo.getShot(db, shots[0].id)!.spec.cameraId).toBe(cam);
+    expect(studio.sceneLocks(db, sceneId).cameras).toBe(1);
   });
 });

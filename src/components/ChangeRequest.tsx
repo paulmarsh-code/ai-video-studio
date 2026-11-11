@@ -19,7 +19,7 @@ const QUESTIONS = {
     { key: "other", label: "Anything else?", short: "Also", hint: "e.g. a warmer smile; standing straighter" },
   ],
   panel: [
-    { key: "place", label: "Is anyone or anything not where the layout sketch shows, or the wrong size?", short: "Place and size", hint: "e.g. the man on the left should be on the right; the table is too small" },
+    { key: "place", label: "Is anyone in the wrong place, facing the wrong way or in the wrong posture?", short: "Who stands where", hint: "e.g. move Jade closer to Nina and have Marcus walk off to the right" },
     { key: "picture", label: "What else should change in this picture?", short: "Change", hint: "e.g. he holds a glass; she looks angrier" },
     { key: "other", label: "Anything else?", short: "Also", hint: "e.g. warmer light; more guests in the background" },
   ],
@@ -124,7 +124,7 @@ export function ChangeRequest({ what, projectId, baseCode, onSubmit }: ChangeReq
               ))}
             </div>
           ))}
-          {what === "panel" && <p className="text-xs text-neutral-600">A place or size problem redraws the picture fresh from the approved layout. To move someone in every shot, unlock the positions and move them on the floor plan.</p>}
+          {what === "panel" && <p className="text-xs text-neutral-600">Anything about who stands where opens this panel&apos;s floor plan with your words applied, so you can see it before the picture is redrawn. It carries on to the next panels unless you tick &ldquo;This panel only&rdquo;.</p>}
           {Object.keys(pics).length > 0 && <p className="text-xs text-neutral-600">A picture is only used for what you added it to. {what === "place" ? "People, signs and text in it are left out." : "The faces and features stay the same."}</p>}
           {picError && <p className="text-xs text-red-700" role="alert">{picError}</p>}
           <div className="flex items-center gap-3">

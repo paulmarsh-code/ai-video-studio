@@ -763,3 +763,16 @@ Paul: "Aron is lying on his bed… picks up his phone… re-reads the text." Nex
 ### D38: Only what improves consistency, continuity or the finished video (2026-11-11)
 
 Paul: "I want to be careful not to build complexity into the app that is not needed. We only want to add enhancements that improve consistency and continuity and improve the viewing experience of the end product." This is now the test for every change, written into `CLAUDE.md`. Each change must name the visible failure it fixes and how it reaches the generation: the blocking frame, a prompt line, the camera choice or the picture check.
+
+### D39: Changing who stands where, in words, from "Need to change something?" (2026-11-11)
+
+Paul: the app does the work, so the planner should only appear when the user needs to change something, inside "Need to change something?", and the user should be able to write the change and see the planner adjust: "move Jade closer to Nina and have Marcus walk off to the right".
+
+The D38 test: the visible failure is a person in the wrong place, facing the wrong way or in the wrong posture in a picture; the fix reaches the generation through the blocking frame the picture is redrawn from.
+
+- **On the storyboard**, "Need to change something?" now asks "Is anyone in the wrong place, facing the wrong way or in the wrong posture?". An answer opens that panel's floor plan with the words already applied: the plan, this panel's camera view and what it sees, and "Done: Jade: closer to Nina; Marcus: walks off to the right of the picture (this panel only)", or what wasn't understood. More can be typed there, or people dragged, then "Save and redraw the picture" saves the positions and redraws the picture fresh from the new blocking frame (with any other changes asked for). The separate "Positions for this panel" link on each card is gone.
+- **The words** (`changeWords.ts`): move/put/bring someone closer to, next to, or further from someone; to the left or right, nearer the camera or further back (as the picture shows them, from the panel's camera); to the other side of a prop or person; swap two people; turn someone to face someone or something; someone should be sitting, lying…; walk off to the left or right (out of the picture on that side, for this panel only); take a prop away. Anything else goes through the panel-word readers (D36, D37): "sits on the sofa", "walks to the bar".
+- **Carrying on**: a change carries on to the next panels unless "This panel only" is ticked, except a walk-off, which is for its panel only (later panels follow their own words).
+- **Cameras stay as they are**: saving a panel's positions no longer re-chooses cameras and works while the cameras are approved, so fixing one picture never moves another panel's camera.
+- **Simpler card** (D38): on each person, only "This panel only", "Undo this change" and, for the app's own placements, "Not this". The facing slider, walk checkbox and walk-off button are gone; words, dragging and the turn handle do those. The floor plan page keeps its panel stepper, with the same words box.
+- Tests: `tests/changeWords.d39.test.ts`; browser test on a copy of Jade's Entrance: the change opens panel 5's plan with both changes applied, a second typed change, save, the picture redrawn, positions saved.

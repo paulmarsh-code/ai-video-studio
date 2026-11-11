@@ -5,7 +5,7 @@
 // camera live: who is frame-left/centre/right, the soft foreground, the background view,
 // and 180° line warnings. Characters are only ever moved by the user.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Arrow, Circle, Group, Layer, Line, Rect, Stage, Text, Wedge } from "react-konva";
 import { savePlanAction, addPlanToLibraryAction } from "@/app/actions";
@@ -13,6 +13,7 @@ import { savePanelBlockingAction } from "@/app/studioActions";
 import { checkLineOfAction, describeFrame, facingOf, planForShot, PRESET_FOV, readCamera } from "@/lib/domain/geometry";
 import { blockSource, carryBlocking, withEdits, type BlockEntry } from "@/lib/domain/blocking";
 import { posturesFromWords } from "@/lib/domain/panelWords";
+import { changeFromWords } from "@/lib/domain/changeWords";
 import { planImpact, type ShotRef } from "@/lib/domain/impact";
 import type { CameraPreset, CastMember, GeometryPlanData, PlanCamera, PlanLevel, Point, Pose, ShotSpec } from "@/lib/domain/types";
 import { CameraView, type RingInfo } from "./CameraView";
@@ -29,8 +30,6 @@ const COLOURS = ["#e11d48", "#2563eb", "#16a34a", "#9333ea", "#ea580c", "#0891b2
 /** One step of the panel stepper (D35): a panel of the storyboard and its shot. */
 export interface PanelStep { shotId: string; code: string; description: string }
 
-const EXIT_RE = /\b(entrance|exit|door|doors|doorway|way out|lobby|foyer)\b/i;
-
 export function PlanEditor(props: {
   sceneId: string; initial: GeometryPlanData; version: number; cast: CastMember[]; shots: ShotRef[]; ring?: RingInfo;
   /** The venue page, where the room size is set (D29). */ roomHref?: string;
@@ -38,11 +37,15 @@ export function PlanEditor(props: {
   /** 0 is the scene plan, 1 the first panel… */ initialStep?: number;
   locks?: { positions: boolean; cameras: boolean };
   /** The posture the scene setting starts everyone in (D37). */ scenePose?: { pose: Pose; on?: string };
+  /**
+   * Opened from a storyboard panel's "Need to change something?" (D39): just that panel, with
+   * the user's words applied, and Save hands back to redraw the picture.
+   */
+  focus?: { words?: string; onDone: (saved: boolean) => void };
 }) {
   const { cast } = props;
   const router = useRouter();
   const panels = useMemo(() => props.panels ?? [], [props.panels]);
-  const locks = props.locks ?? { positions: false, cameras: false };
   const [plan, setPlan] = useState<GeometryPlanData>(props.initial);
   const [saved, setSaved] = useState<GeometryPlanData>(props.initial);
   const [savedVersion, setSavedVersion] = useState(props.version);
@@ -62,6 +65,9 @@ export function PlanEditor(props: {
   const [editHistory, setEditHistory] = useState<Record<string, Record<string, BlockEntry | null>>[]>([]);
   const [selActor, setSelActor] = useState("");
   const [panelStatus, setPanelStatus] = useState("");
+  // Changes in words (D39): "move Jade closer to Nina and have Marcus walk off to the right".
+  const [words, setWords] = useState(props.focus?.words ?? "");
+  const [read, setRead] = useState<{ understood: string[]; unclear: string[] } | null>(null);
   const pushEdit = () => setEditHistory((h) => [...h.slice(-49), edits]);
   const undoEdit = () => {
     if (!editHistory.length) return;
@@ -118,6 +124,29 @@ export function PlanEditor(props: {
     return before ? (before.to ?? before.position) : (plan.actors.find((a) => a.characterId === id)?.position ?? { x: 0, y: 0 });
   };
   const SRC_RING: Record<string, string> = { here: "#111827", app: "#0d9488", mark: "#d97706" };
+  const applyWords = (text: string) => {
+    if (!panel || !text.trim()) return;
+    const r = changeFromWords(text, shown, panelCam, cast.map((c) => ({ id: c.id, name: c.name })));
+    setRead({ understood: r.understood, unclear: r.unclear });
+    if (!Object.keys(r.entries).length) return;
+    pushEdit();
+    setEdits((e) => {
+      const mine = { ...(e[panel.shotId] ?? {}) };
+      for (const [k, v] of Object.entries(r.entries)) {
+        const only = v.only || (pspec?.blocking?.[k]?.by === "you" && pspec.blocking[k].only);
+        mine[k] = { ...v, ...(only ? { only: true } : {}) };
+      }
+      return { ...e, [panel.shotId]: mine };
+    });
+  };
+  // Opened with words from the storyboard: apply them once, straight away.
+  const applied = useRef(false);
+  useEffect(() => {
+    if (applied.current || !props.focus?.words?.trim() || !panel) return;
+    applied.current = true;
+    applyWords(props.focus.words);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panel]);
 
   const b = plan.bounds ?? { minX: -5, maxX: 5, minY: 0, maxY: 10 };
   // A big room or open ground is drawn smaller so it fits on the screen (D29).
@@ -131,24 +160,6 @@ export function PlanEditor(props: {
   });
   const name = (id: string) => cast.find((c) => c.id === id)?.name ?? id;
   const colour = (id: string) => COLOURS[Math.max(0, cast.findIndex((c) => c.id === id)) % COLOURS.length];
-  /** Somewhere to walk off to (D35): towards the way out if the venue has one, else out of the camera's sight, at most 6 m. */
-  const walkOff = (from: Point): Point => {
-    const exit = plan.views.find((v) => EXIT_RE.test(v.name));
-    let deg = 0;
-    if (exit) deg = exit.directionDeg;
-    else if (panelCam) {
-      const f = { x: panelCam.lookAt.x - panelCam.position.x, y: panelCam.lookAt.y - panelCam.position.y };
-      const lateral = (from.x - panelCam.position.x) * f.y - (from.y - panelCam.position.y) * f.x; // > 0: on the camera's right
-      deg = (Math.atan2(f.y, f.x) * 180) / Math.PI + (lateral > 0 ? -90 : 90);
-    }
-    const dx = Math.cos((deg * Math.PI) / 180), dy = Math.sin((deg * Math.PI) / 180);
-    const m = 0.3;
-    const tx = dx > 1e-6 ? (b.maxX - m - from.x) / dx : dx < -1e-6 ? (b.minX + m - from.x) / dx : Infinity;
-    const ty = dy > 1e-6 ? (b.maxY - m - from.y) / dy : dy < -1e-6 ? (b.minY + m - from.y) / dy : Infinity;
-    const t = Math.max(0.5, Math.min(6, tx, ty));
-    return { x: +(from.x + dx * t).toFixed(2), y: +(from.y + dy * t).toFixed(2) };
-  };
-
   const lineFindings = useMemo(() => checkLineOfAction(plan, cast), [plan, cast]);
   const impact = useMemo(() => planImpact(saved, plan, props.shots, cast), [saved, plan, props.shots, cast]);
   const cam = plan.cameras.find((c) => c.id === selectedCam);
@@ -179,7 +190,8 @@ export function PlanEditor(props: {
   return (
     <div className="mt-6 grid gap-6 xl:grid-cols-[auto_1fr]">
       <div className="overflow-auto rounded-xl border border-neutral-200 bg-white p-2">
-        {panels.length > 0 && (
+        {props.focus && panel && <p className="mb-2 px-1 font-semibold" data-testid="plan-step-label">Panel {step}: {panel.description}</p>}
+        {panels.length > 0 && !props.focus && (
           <div className="mb-2 px-1" data-testid="plan-stepper" style={{ maxWidth: Math.max(width, 420) }}>
             <div className="flex flex-wrap items-center gap-2">
               <button type="button" aria-label="Previous panel" data-testid="plan-prev" disabled={step === 0} onClick={() => go(step - 1)}
@@ -388,9 +400,23 @@ export function PlanEditor(props: {
           <>
             <div className="rounded-xl border border-blue-200 bg-white p-5 text-sm" data-testid="panel-positions">
               <h2 className="text-lg font-semibold">Positions in panel {step}</h2>
-              <p className="mt-1 text-neutral-700">{panel.description}</p>
+              {!props.focus && <p className="mt-1 text-neutral-700">{panel.description}</p>}
               <p className="mt-1 text-xs text-neutral-500">{pspec.shot ? `Shot: ${pspec.shot}. ` : ""}{panelCam ? `Camera: ${panelCam.name}.` : "No camera chosen for this panel yet: approve the positions on the storyboard and the app chooses one."}</p>
-              {locks.cameras && <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-amber-900" data-testid="panel-locked">The cameras are approved and locked, so moves here can&apos;t be saved. Use “Change cameras” on the storyboard first.</p>}
+              <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/40 p-3" data-testid="panel-words">
+                <label className="block font-medium">What should change in this panel?
+                  <textarea className="mt-1 w-full rounded border border-neutral-300 bg-white px-2 py-1" rows={2} value={words} data-testid="panel-words-input"
+                    placeholder="e.g. move Jade closer to Nina and have Marcus walk off to the right" onChange={(e) => setWords(e.target.value)} />
+                </label>
+                <button type="button" className="mt-1 rounded-md bg-blue-700 px-3 py-1 text-white hover:bg-blue-800 disabled:opacity-40" disabled={!words.trim()} data-testid="panel-words-apply"
+                  onClick={() => applyWords(words)}>Show it on the plan</button>
+                {read && (
+                  <div className="mt-2 text-xs" data-testid="panel-words-read">
+                    {read.understood.length > 0 && <p className="text-green-800">Done: {read.understood.join("; ")}.</p>}
+                    {read.unclear.length > 0 && <p className="text-amber-800">Not understood: {read.unclear.map((x) => `“${x}”`).join(", ")}. Try naming who and where (move Jade next to the bar), or drag them on the plan.</p>}
+                  </div>
+                )}
+                <p className="mt-1 text-xs text-neutral-500">Left and right are as the picture shows them. Or drag people on the plan; click someone to turn them.</p>
+              </div>
               {panelCam && (
                 <div className="mt-3">
                   <p className="mb-1 font-medium">This panel&apos;s camera view{props.ring ? ", with the venue's 360° view behind" : ""}</p>
@@ -417,9 +443,6 @@ export function PlanEditor(props: {
                   const src = blockSource(effSpecs, pk, id);
                   const own = pspec.blocking?.[id]?.by === "you" ? pspec.blocking[id] : undefined;
                   const inPic = !!pspec.visibleIds?.includes(id);
-                  const fwd = facingOf(shown, id, shown.lineOfAction);
-                  const deg = a.facingDeg ?? (fwd ? Math.round((Math.atan2(fwd.y, fwd.x) * 180) / Math.PI) : 90);
-                  const base = plan.actors.find((x) => x.characterId === id)?.position;
                   return (
                     <li key={id} className={`rounded-lg border p-2 ${selActor === id ? "border-blue-500" : "border-neutral-200"}`} data-testid={`panel-person-${id}`} onClick={() => setSelActor(id)}>
                       <div className="flex flex-wrap items-baseline gap-2">
@@ -455,29 +478,9 @@ export function PlanEditor(props: {
                         );
                       })()}
                       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                        {a.to
-                          ? <span className="text-orange-800">Faces the way they walk.</span>
-                          : <label>Facing <input type="range" min={-180} max={180} step={5} value={((deg + 540) % 360) - 180} aria-label={`${name(id)} facing`} className="align-middle" data-testid={`panel-person-${id}-facing`}
-                              onMouseDown={pushEdit} onChange={(e) => setEntry(id, { facingDeg: Number(e.target.value) })} />
-                              {a.facingDeg !== undefined
-                                ? <button type="button" className="ml-1 underline" onClick={() => { pushEdit(); setEntry(id, { facingDeg: undefined }); }}>auto</button>
-                                : <span className="ml-1 text-neutral-500">(auto: towards the others)</span>}
-                            </label>}
-                        <label><input type="checkbox" checked={!!a.to} data-testid={`panel-person-${id}-walks`} onChange={(e) => {
-                          pushEdit();
-                          if (!e.target.checked) { setEntry(id, { to: undefined }); return; }
-                          const d = fwd ?? { x: 0, y: 1 };
-                          const to = { x: +Math.min(b.maxX - 0.3, Math.max(b.minX + 0.3, a.position.x + d.x * 1.5)).toFixed(2), y: +Math.min(b.maxY - 0.3, Math.max(b.minY + 0.3, a.position.y + d.y * 1.5)).toFixed(2) };
-                          setEntry(id, { to, facingDeg: undefined });
-                        }} /> Walks during this panel</label>
-                        <button type="button" className="rounded border border-neutral-300 px-2 py-0.5 hover:bg-neutral-50" data-testid={`panel-person-${id}-walkoff`}
-                          onClick={() => { pushEdit(); setEntry(id, { to: walkOff(a.position), facingDeg: undefined }); }}>
-                          Walks off{plan.views.find((v) => EXIT_RE.test(v.name)) ? ` (to the ${plan.views.find((v) => EXIT_RE.test(v.name))!.name})` : ""}
-                        </button>
                         {own && <label><input type="checkbox" checked={!!own.only} data-testid={`panel-person-${id}-only`} onChange={(e) => { pushEdit(); setEntry(id, { only: e.target.checked || undefined }); }} /> This panel only</label>}
-                        {own && <button type="button" className="text-red-700 underline" data-testid={`panel-person-${id}-clear`} onClick={() => { pushEdit(); clearEntry(id); }}>Clear this panel&apos;s change</button>}
+                        {own && <button type="button" className="text-red-700 underline" data-testid={`panel-person-${id}-clear`} onClick={() => { pushEdit(); clearEntry(id); }}>Undo this change</button>}
                         {src.kind === "app" && <button type="button" className="underline" data-testid={`panel-person-${id}-undo-app`} title="Keeps them where they were in the panel before" onClick={() => { pushEdit(); setEntry(id, { at: prevPos(id), to: undefined, facingDeg: undefined }); }}>Not this: keep them where they were</button>}
-                        {!own && src.kind !== "plan" && src.kind !== "app" && base && <button type="button" className="underline" onClick={() => { pushEdit(); setEntry(id, { at: base, to: undefined, facingDeg: undefined }); }}>Back to the scene plan from here</button>}
                       </div>
                       {a.to && <p className="mt-1 text-xs text-orange-800">Walks about {Math.round(Math.hypot(a.to.x - a.position.x, a.to.y - a.position.y) * 2) / 2} m: drag the ring at the end of the orange arrow to change where.</p>}
                     </li>
@@ -513,16 +516,18 @@ export function PlanEditor(props: {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <ActionButton label={changedPanels.length > 1 ? `Save positions (${changedPanels.length} panels)` : "Save positions"} busyLabel="Saving…" doneLabel="Saved" testId="panel-save"
-                disabled={!changedPanels.length || locks.cameras || dirty} resetKey={edits}
-                title={dirty ? "Save the scene plan first" : locks.cameras ? "The cameras are locked" : ""}
+              <ActionButton label={props.focus ? "Save and redraw the picture" : changedPanels.length > 1 ? `Save positions (${changedPanels.length} panels)` : "Save positions"} busyLabel="Saving…" doneLabel="Saved" testId="panel-save"
+                disabled={!changedPanels.length || dirty} resetKey={edits}
+                title={dirty ? "Save the scene plan first" : ""}
                 onAction={async () => {
                   const r = await savePanelBlockingAction(changedPanels.map(([shotId, entries]) => ({ shotId, entries })));
                   if (!r.ok) { setPanelStatus(r.error); return false; }
                   setEdits({}); setEditHistory([]);
-                  setPanelStatus(locks.positions ? "Saved. The cameras were chosen again for the new places; redraw the pictures of the panels that changed." : "Saved.");
+                  if (props.focus) { props.focus.onDone(true); return; }
+                  setPanelStatus("Saved. Redraw the pictures of the panels that changed.");
                   router.refresh();
                 }} />
+              {props.focus && <button type="button" className="text-neutral-600 underline" data-testid="panel-cancel" onClick={() => props.focus!.onDone(false)}>Cancel</button>}
               <button type="button" disabled={!editHistory.length} onClick={undoEdit} className="rounded-md border border-neutral-300 px-3 py-1 text-sm disabled:opacity-40">Undo last move</button>
               {changedPanels.length > 0 && <span className="text-sm text-neutral-600">Unsaved: panel {changedPanels.map(([sid]) => panels.findIndex((x) => x.shotId === sid) + 1).sort((x, y) => x - y).join(", ")}</span>}
               {dirty && <span className="text-sm text-amber-700">The scene plan has unsaved changes: save it first.</span>}

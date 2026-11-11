@@ -9,7 +9,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { setShotChoiceAction, approveCamerasAction, approvePanelAction, unapprovePanelAction, approvePanelsAction, approvePositionsAction, chooseCamerasAction, updateLayoutAction, setPanelImageAction, unlockSceneAction } from "@/app/studioActions";
 import type { GeometryPlanData } from "@/lib/domain/types";
 import { PlanThumb } from "./PlanThumb";
@@ -19,6 +19,8 @@ import { correctionPrompt } from "@/lib/domain/pictureCheck";
 import { ActionButton, DoneBadge } from "./ActionButton";
 import { ChangeRequest, type SubmittedChange } from "./ChangeRequest";
 import { SHOT_CHOICES, splitShot } from "@/lib/domain/shotSuggest";
+import { PlanEditorLoader } from "./PlanEditorLoader";
+import type { PlanEditorData } from "@/lib/planEditorData";
 
 export interface BoardPanel {
   id: string;
@@ -170,6 +172,18 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
   const [progress, setProgress] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [handChange, setHandChange] = useState<Record<string, SubmittedChange>>({});
+  // "Who stands where" changes open this panel's floor plan with the words applied (D39); once
+  // saved, the picture is redrawn from the new layout as soon as the page has the new positions.
+  const [planning, setPlanning] = useState<{ p: BoardPanel; index: number; ch: SubmittedChange } | null>(null);
+  const pendingRedraw = useRef<{ panelId: string; ch: SubmittedChange } | null>(null);
+  useEffect(() => {
+    const pr = pendingRedraw.current;
+    if (!pr) return;
+    pendingRedraw.current = null;
+    const p = b.panels.find((x) => x.id === pr.panelId);
+    if (p) void redraw(p, pr.ch);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [b]);
 
   const camerasDone = b.panels.every((p) => p.hasCamera);
   const missing = b.panels.filter((p) => !p.imageAssetId);
@@ -242,6 +256,11 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
     setMsg(bad ? { ok: false, text: `${done} picture${done === 1 ? "" : "s"} drawn; ${bad} failed. ${[...reasons].join(" ")} The reason is also shown under each panel.` } : { ok: true, text: `${done} picture${done === 1 ? "" : "s"} drawn.` });
     router.refresh();
     return bad === 0;
+  }
+
+  function submitChange(p: BoardPanel, index: number, ch: SubmittedChange) {
+    if (ch.parts.place && p.shotId && p.hasCamera) { setPlanning({ p, index, ch }); return; }
+    return redraw(p, ch);
   }
 
   async function redraw(p: BoardPanel, ch: SubmittedChange) {
@@ -357,6 +376,17 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
       </div>
       {msg && <p className={`text-sm ${msg.ok ? "text-green-700" : "text-red-700"}`} role="status">{msg.text}</p>}
 
+      {planning && (
+        <PanelPlanner sceneId={b.sceneId} index={planning.index} words={planning.ch.parts.place}
+          onDone={(saved) => {
+            const pl = planning;
+            setPlanning(null);
+            if (!saved) return;
+            pendingRedraw.current = { panelId: pl.p.id, ch: pl.ch };
+            router.refresh();
+          }} />
+      )}
+
       <ol className={`grid gap-4 ${b.size === "portrait" ? "sm:grid-cols-2 lg:grid-cols-3" : "md:grid-cols-2"}`}>
         {b.panels.map((p, i) => (
           <li key={p.id} className="rounded-xl border border-neutral-200 bg-white p-3" data-testid={`board-${p.code}`}>
@@ -382,7 +412,6 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
             </div>
             <p className="mt-1 text-sm">{p.line ? <><span className="font-medium">{p.speaker}:</span> {p.line}</> : <span className="text-neutral-500">Silent</span>}</p>
             <p className="mt-1 text-xs text-neutral-600">{p.description}</p>
-            {p.shotId && <p className="mt-1 text-xs"><Link className="text-blue-700 underline" href={`${b.planHref}?panel=${i + 1}`} data-testid={`board-${p.code}-positions`}>Positions for this panel</Link></p>}
             {p.shot && p.shotId && <ShotPicker p={p} shotId={p.shotId} locked={b.locks.cameras} onDone={(text, ok) => { setMsg({ ok, text }); router.refresh(); }} />}
             {p.imageAssetId && p.check?.keptApproved && p.status === "approved" ? <p className="mt-1 text-xs text-neutral-600" data-testid={`board-${p.code}-check`}>Approved by you on an earlier layout and kept. Redraw it only if it no longer fits.</p>
               : p.imageAssetId && p.check && (p.check.pass
@@ -396,7 +425,7 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
                   onAction={async () => { const r = await approvePanelAction(p.id); router.refresh(); return r; }} />
               )}
               {p.imageAssetId && (
-                <ChangeRequest key={p.imageAssetId} what="panel" projectId={b.projectId} baseCode={codeOf(p)} onSubmit={(ch) => redraw(p, ch)} />
+                <ChangeRequest key={p.imageAssetId} what="panel" projectId={b.projectId} baseCode={codeOf(p)} onSubmit={(ch) => submitChange(p, i, ch)} />
               )}
               {handChange[p.id] && (() => {
                 const req = changeRequestFor(p, handChange[p.id]);
@@ -481,4 +510,37 @@ function hashText(t: string): string {
   let h = 5381;
   for (let k = 0; k < t.length; k++) h = ((h << 5) + h + t.charCodeAt(k)) | 0;
   return (h >>> 0).toString(36);
+}
+
+/**
+ * One panel's floor plan, opened from "Need to change something?" (D39): the user's words are
+ * already applied; they check the plan and the camera view, adjust by typing or dragging, and
+ * Save hands back to redraw the picture.
+ */
+function PanelPlanner({ sceneId, index, words, onDone }: { sceneId: string; index: number; words?: string; onDone: (saved: boolean) => void }) {
+  const [data, setData] = useState<PlanEditorData | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let live = true;
+    fetch(`/api/plan-editor/${sceneId}`, { cache: "no-store" })
+      .then(async (r) => { const j = await r.json(); if (!live) return; if (!r.ok) setError(j.error ?? "Couldn't open the floor plan."); else setData(j as PlanEditorData); })
+      .catch((e) => live && setError(e instanceof Error ? e.message : String(e)));
+    return () => { live = false; };
+  }, [sceneId]);
+  const { planName: _n, venueName: _v, ...editor } = data ?? ({} as PlanEditorData);
+  void _n; void _v;
+  return (
+    <div className="fixed inset-0 z-50 overflow-auto bg-black/40 p-4" role="dialog" aria-modal="true" data-testid="panel-planner">
+      <div className="mx-auto max-w-[1500px] rounded-xl bg-neutral-50 p-4 shadow-xl">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold">Who stands where in panel {index + 1}</h2>
+          <button type="button" className="text-sm text-neutral-600 underline" onClick={() => onDone(false)}>Close</button>
+        </div>
+        <p className="text-sm text-neutral-600">Your words are applied below. Check the plan and the camera view, change anything by typing or dragging, then save to redraw the picture.</p>
+        {error ? <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>
+          : !data ? <p className="mt-3 text-sm text-neutral-500">Opening the floor plan…</p>
+          : <PlanEditorLoader {...editor} initialStep={index + 1} focus={{ words, onDone }} />}
+      </div>
+    </div>
+  );
 }
