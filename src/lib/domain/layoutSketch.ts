@@ -38,6 +38,8 @@ export function layoutSketchSvg(i: {
   moves?: Record<string, { x: number; y: number }>;
   /** What each person holds on one side (D34), marked at that side of the picture. */
   held?: Record<string, { side: "left" | "right"; what: string; where: string }[]>;
+  /** Flat props' own pictures (D57), by prop id, as data: addresses: drawn at their place in the blocking frame. */
+  propPictures?: Record<string, string>;
 }): string {
   const OV = !!i.overlay;
   const W = i.size === "portrait" ? 768 : 1152;
@@ -170,6 +172,15 @@ export function layoutSketchSvg(i: {
         depth: c.depth,
         svg: `<g><path d="M ${(c.x - rx).toFixed(1)} ${c.y.toFixed(1)} L ${(c.x - fx).toFixed(1)} ${floor.y.toFixed(1)} Q ${c.x.toFixed(1)} ${(floor.y + ry).toFixed(1)} ${(c.x + fx).toFixed(1)} ${floor.y.toFixed(1)} L ${(c.x + rx).toFixed(1)} ${c.y.toFixed(1)} Z" fill="#ece8df" fill-opacity="${OV ? 0.92 : 1}" stroke="#525252" stroke-width="3"/>`
           + `<ellipse cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" rx="${rx.toFixed(1)}" ry="${ry.toFixed(1)}" fill="#f7f5f0" fill-opacity="${OV ? 0.95 : 1}" stroke="#525252" stroke-width="3"/>${label}</g>`,
+      });
+    } else if (kind === "flat" && OV && i.propPictures?.[fu.id]) {
+      // A flat prop with a picture (D57): its own picture at its real place and size, so the sign
+      // GPT draws is the one at the planned spot. A pale panel lost out to wherever GPT chose.
+      const w = ((fu.radiusM * 2) / c.depth) * focal, h = Math.max(0, floor.y - c.y);
+      items.push({
+        depth: c.depth,
+        svg: `<g><image href="${i.propPictures[fu.id]}" x="${(c.x - w / 2).toFixed(1)}" y="${c.y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" preserveAspectRatio="xMidYMid slice"/>`
+          + `<rect x="${(c.x - w / 2).toFixed(1)}" y="${c.y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="none" stroke="#525252" stroke-width="2"/>${label}</g>`,
       });
     } else {
       // Flat things and columns: an upright block at their real width and height.

@@ -187,7 +187,7 @@ export function gazePrompt(people: Who[]): string {
     ...people.map((p, i) => `- image ${i + 1} should be ${p.name}${p.look ? `: ${p.look}` : ""}`),
     "",
     "For each image, look at the person in the middle of it:",
-    "- is_them: \"yes\" if they fit the description, \"no\" if they are clearly someone else (for example a different face, hair or clothes), \"can't tell\" if not enough of them shows.",
+    "- is_them: \"yes\" if they fit the description, \"no\" only if they are clearly someone else (a different face, hair or clothes that the close-up shows), \"can't tell\" if not enough of them shows. Clothes the close-up can't show don't count against them: someone seen from behind, whose described clothes are out of view, is \"can't tell\" unless their hair or what does show clearly differs.",
     "- eyes: \"into the lens\" only if their eyes look straight into the camera, making eye contact with the viewer. Someone whose face or body is turned towards the camera but whose eyes look at another person or anything else is \"elsewhere\"; so is someone seen from behind or side-on. \"can't tell\" if you can't see their eyes clearly enough.",
     "",
     "Reply with JSON only, no other text:",

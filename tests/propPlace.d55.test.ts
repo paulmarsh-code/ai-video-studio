@@ -66,3 +66,24 @@ describe("Image 1 shows only the plan's furniture (D56)", () => {
     expect(looseFurniture(things, spots, 0.5).map((t) => [t.kind, t.x0])).toEqual([["dining table", 0.44], ["chair", 0.1]]);
   });
 });
+
+describe("Flat props are drawn as their own picture in image 1 (D57)", () => {
+  it("a sign with a picture is placed as that picture at its spot; a table keeps its stand-in", async () => {
+    const { layoutSketchSvg } = await import("../src/lib/domain/layoutSketch");
+    const plan = {
+      aspect: "9:16", bounds: { minX: -9, maxX: 9, minY: 0, maxY: 22 }, actors: [],
+      furniture: [
+        { id: "sign", name: "ACME logo backdrop", position: { x: 1, y: 12 }, radiusM: 1.5, heightM: 2.5, imageAssetId: "a" },
+        { id: "tbl", name: "cocktail table", position: { x: -1, y: 9 }, radiusM: 0.35, imageAssetId: "b" },
+      ],
+      cameras: [{ id: "c", name: "Wide", preset: "wide", position: { x: 0, y: 2 }, lookAt: { x: 0, y: 10 }, fovDeg: 60 }],
+      views: [],
+    };
+    const pics = { sign: "data:image/png;base64,AAAA", tbl: "data:image/png;base64,BBBB" };
+    const svg = layoutSketchSvg({ plan: plan as never, camera: plan.cameras[0] as never, people: [], size: "portrait", overlay: true, propPictures: pics });
+    expect(svg).toContain('href="data:image/png;base64,AAAA"');
+    expect(svg).not.toContain("BBBB");
+    // Without the blocking frame's overlay (the plain sketch), no pictures.
+    expect(layoutSketchSvg({ plan: plan as never, camera: plan.cameras[0] as never, people: [], size: "portrait", propPictures: pics })).not.toContain("AAAA");
+  });
+});

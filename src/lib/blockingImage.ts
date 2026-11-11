@@ -5,7 +5,9 @@
 // GPT is asked to finish this picture (replace the stand-ins with the characters), not to
 // imagine a new one, so position, direction and background are drawn in, not described.
 
+import fs from "node:fs";
 import sharp from "sharp";
+import { propKind } from "./domain/story";
 import type { DB } from "@/db/client";
 import { planForShot, readCamera } from "./domain/geometry";
 import { layoutSketchSvg } from "./domain/layoutSketch";
@@ -37,6 +39,19 @@ export function movesFor(full: { actors: { characterId: string; position: { x: n
   return moves;
 }
 
+/** Flat props' own pictures (D57) as data: addresses for the blocking frame: signs, backdrops, screens, posters. */
+async function flatPropPictures(db: DB, plan: { furniture?: { id: string; name: string; detail?: string; imageAssetId?: string }[] }): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  for (const f of plan.furniture ?? []) {
+    if (!f.imageAssetId || propKind(`${f.name} ${f.detail ?? ""}`, f.name) !== "flat") continue;
+    const a = repo.getAsset(db, f.imageAssetId);
+    if (!a || !fs.existsSync(a.path)) continue;
+    const png = await sharp(fs.readFileSync(a.path)).resize({ width: 1024, height: 1024, fit: "inside", withoutEnlargement: true }).png().toBuffer().catch(() => undefined);
+    if (png) out[f.id] = `data:image/png;base64,${png.toString("base64")}`;
+  }
+  return out;
+}
+
 export async function renderBlockingForShot(db: DB, shotId: string, extraHeld?: Record<string, { side: "left" | "right"; what: string; where: string }[]>): Promise<Buffer | null> {
   const shot = repo.getShot(db, shotId);
   if (!shot?.spec.cameraId) return null;
@@ -66,7 +81,7 @@ export async function renderBlockingForShot(db: DB, shotId: string, extraHeld?: 
     people: plan.actors.filter((a) => shot.spec.presentIds.includes(a.characterId) && !shot.spec.excludedIds.includes(a.characterId))
       .map((a) => ({ id: a.characterId, name: cast.find((c) => c.id === a.characterId)?.name ?? a.characterId })),
     subjectId: mainSubjectId(shot.spec), backgroundView: readCamera(plan, cam).backgroundView,
-    moves: movesFor(full, shot.spec, plan, text), held,
+    moves: movesFor(full, shot.spec, plan, text), held, propPictures: await flatPropPictures(db, plan),
   });
   const over = await sharp(Buffer.from(svg)).resize({ width: W, height: H, fit: "fill" }).png().toBuffer();
   return sharp(bg).composite([{ input: over, left: 0, top: 0 }]).png().toBuffer();
