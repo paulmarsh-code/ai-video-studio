@@ -18,7 +18,7 @@ export const WORD_GUIDES = {
     intro: "Write the change in plain words. The app moves people on this panel's floor plan so you can see it before the picture is redrawn.",
     groups: [
       { heading: "Closer or further apart", examples: ["move Ava closer to Ben", "put Ava next to Ben", "move Ava further from Ben"], check: "change" },
-      { heading: "As the picture shows it", examples: ["move Ben a bit to the left", "move Ben to the right", "move Ben closer to the camera", "move Ben further back", "Ava comes in from the right"], check: "change" },
+      { heading: "As the picture shows it", examples: ["move Ben a bit to the left", "move Ben to the right", "move Ben closer to the camera", "move Ben further back", "Ava comes in from the right", "Ava approaches the group from the left"], check: "change" },
       { heading: "Swap or cross over", examples: ["swap Ava and Ben", "move Ava to the other side of the table"], check: "change" },
       { heading: "Facing", examples: ["turn Ben to face Ava", "turn Ben away from Ava"], check: "change" },
       { heading: "Sitting, lying, standing", examples: ["Ava should be sitting", "Ben is lying down", "put Ava on the sofa"], check: "change" },

@@ -821,3 +821,15 @@ D38 test: a camera in the wrong place for one picture is a visible failure; the 
 - Anyone who must be in the picture is still kept in view (D42): if the moved camera leaves them out, it turns just enough, and the planner says so.
 - The whole scene's cameras are still set on the floor plan page after "Change cameras", for re-shooting the scene.
 - Tests: `tests/aim.d42.test.ts` (own camera where you put it; shared camera and other panels untouched; moving again reuses it); browser test on a copy of Jade's Entrance: drag panel 1's camera, view updates, saved as its own camera, panel 2 unchanged.
+
+### D44: Seeing and changing someone's approach (2026-11-11)
+
+Paul wanted Jade to approach the group from a different angle in panel 1. He moved Jade and the camera, typed "the angle jade approaches the group", got "Not understood", and felt "Show it on the plan" did nothing. The planner didn't show her path to the group at all, so the angle couldn't be seen, and the camera had to be placed by hand.
+
+D38 test: an arrival from the wrong direction is a visible failure; the fixes reach the blocking frame (her start and walk arrow) and the camera choice.
+
+- **Her path is drawn**: on a panel where someone arrives, crosses or approaches (D19b), an orange dashed arrow runs from where they start to their place with the others, labelled "Jade walks to the group". Dragging her start moves the arrow, so the angle of approach is what you see. This is the same walk the blocking frame draws for GPT.
+- **"Let the app place the camera"** on the panel: the app chooses this panel's camera with the same film rules it uses for the whole scene, from where everyone is now (for example behind or beside someone arriving, on the scene's side of the line). It says what it chose and why. Saved as the panel's own camera (D43). Left and right in typed changes are as the picture shows them, so a camera placed afterwards can put the same person on the other side of the picture.
+- **Words**: "Jade approaches the group from the left" (and "approaches Ben from the right") is understood.
+- **When words change nothing**, the planner now says "Nothing changed. The app couldn't tell who should go where from …", and offers wording that works with the names used (e.g. "Jade comes in from the right", "Jade approaches the group from the left") as buttons that apply it.
+- Tests: suggestions are all understood words (`tests/changeWords.d39.test.ts`); browser test on a copy of Jade's Entrance: Paul's words → "Nothing changed" with suggestions → suggestion applied → path drawn → app places the camera → saved as panel 1's own camera with Jade in view.

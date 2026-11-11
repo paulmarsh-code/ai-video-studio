@@ -122,7 +122,7 @@ export function changeFromWords(text: string, plan: GeometryPlanData, cam: PlanC
     }
     // Coming in from one side of the picture (D42): "Jade comes in from the right". They start
     // well over on that side, inside the frame, at the same distance from the camera.
-    if ((m = new RegExp(String.raw`^${NAME}\s+(?:should\s+)?(?:comes?|coming|walks?|walking|approach(?:es|ing)?|enters?|entering|arrives?|arriving|heads?)\s+(?:in\s+|over\s+|up\s+)?from\s+(?:the\s+)?(left|right)\b`, "i").exec(c))) {
+    if ((m = new RegExp(String.raw`^${NAME}\s+(?:should\s+)?(?:comes?|come|coming|walks?|walking|approach(?:es|ing)?|enters?|entering|arrives?|arriving|heads?)\s+(?:in\s+|over\s+|up\s+)?(?:(?:to\s+|towards\s+)?(?:the\s+(?:group|others|table|room)|them|[A-Z][a-z]+)\s+)?from\s+(?:the\s+)?(left|right)\b`, "i").exec(c))) {
       const who = byFirst(m[1]); const here = who && pos.get(who.id); const f = here && inPicture(here);
       if (who && here && f) {
         const s = m[2].toLowerCase() === "right" ? 1 : -1, by = s * 0.78 * f.half - f.lat;
@@ -174,4 +174,19 @@ export function changeFromWords(text: string, plan: GeometryPlanData, cam: PlanC
     if (understood.length === before) unclear.push(raw);
   }
   return { entries, understood, unclear };
+}
+
+/**
+ * Wording that would work, for words that changed nothing (D44): with the names the user
+ * used, so they can see what to write instead.
+ */
+export function changeSuggestions(unclear: string[], people: { id: string; name: string }[]): string[] {
+  const text = unclear.join(" ");
+  const named = people.filter((p) => new RegExp(`\\b${p.name.split(/\s+/)[0]}\\b`, "i").test(text)).map((p) => p.name.split(/\s+/)[0]);
+  const a = named[0] ?? people[0]?.name.split(/\s+/)[0] ?? "Ava";
+  const b = named[1] ?? people.find((p) => p.name.split(/\s+/)[0] !== a)?.name.split(/\s+/)[0] ?? "Ben";
+  if (/\b(angle|direction|approach|comes?|coming|enters?|arriv)/i.test(text)) return [`${a} comes in from the right`, `${a} approaches the group from the left`];
+  if (/\b(face|facing|look|turn)/i.test(text)) return [`turn ${a} to face ${b}`, `turn ${a} away from ${b}`];
+  if (/\b(sit|sitting|lie|lying|stand)/i.test(text)) return [`${a} should be sitting`, `put ${a} on the sofa`];
+  return [`move ${a} closer to ${b}`, `move ${a} a bit to the left`, `${a} comes in from the right`];
 }

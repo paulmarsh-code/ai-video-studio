@@ -883,7 +883,7 @@ export function saveCharacterHeldItems(db: DB, versionId: string, frontAssetId: 
  * worked out again for the whole scene. The cameras stay as they are, approved or not (D39):
  * fixing one picture never moves another panel's camera.
  */
-export function savePanelBlocking(db: DB, changes: { shotId: string; entries: Record<string, BlockEntry | null>; camera?: { position: Point; lookAt: Point } }[]): { sceneId: string; turned: { code: string; who: string[] }[] } {
+export function savePanelBlocking(db: DB, changes: { shotId: string; entries: Record<string, BlockEntry | null>; camera?: { position: Point; lookAt: Point } & Partial<Pick<PlanCamera, "preset" | "fovDeg" | "heightM" | "tiltDeg" | "rollDeg" | "size">> }[]): { sceneId: string; turned: { code: string; who: string[] }[] } {
   if (!changes.length) throw new Error("Nothing to save.");
   const round = (p: Point) => ({ x: +p.x.toFixed(2), y: +p.y.toFixed(2) });
   let sceneId = "";
@@ -905,7 +905,13 @@ export function savePanelBlocking(db: DB, changes: { shotId: string; entries: Re
   // What the app reads in the words is worked out again around what you set (D36).
   if (!applyPanelWords(db, sceneId)) recarry(db, sceneId);
   // A camera moved for a panel (D43): that panel's own camera; the others stay as they are.
-  for (const ch of changes) if (ch.camera) panelCamera(db, sceneId, ch.shotId, (c) => ({ ...c, position: round(ch.camera!.position), lookAt: round(ch.camera!.lookAt) }));
+  for (const ch of changes) {
+    if (!ch.camera) continue;
+    // Only the camera's own settings: where it stands, where it looks, its lens, height and tilt.
+    const { preset, fovDeg, heightM, tiltDeg, rollDeg, size } = ch.camera;
+    const extra = Object.fromEntries(Object.entries({ preset, fovDeg, heightM, tiltDeg, rollDeg, size }).filter(([, v]) => v !== undefined));
+    panelCamera(db, sceneId, ch.shotId, (c) => ({ ...c, ...extra, position: round(ch.camera!.position), lookAt: round(ch.camera!.lookAt) }));
+  }
   // Anyone who must be in the picture but has been moved out of its camera's view (D42).
   const turned = aimPanelCameras(db, sceneId, changes.map((c) => c.shotId));
   persist(db);

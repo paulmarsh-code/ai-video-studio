@@ -89,3 +89,19 @@ describe("The camera turns as little as it can (D42)", () => {
     expect(r.filter((a) => a.inView).length).toBeGreaterThanOrEqual(3); // the others still in shot
   });
 });
+
+describe("Approach and suggestions (D44)", () => {
+  it("'approaches the group from the left' is understood", () => {
+    const r = changeFromWords("Ava approaches the group from the left", plan, cam, people);
+    expect(r.understood).toEqual(["Ava: comes in from the left of the picture"]);
+    expect(r.entries.ava.at.x).toBeLessThan(0);
+  });
+  it("words that change nothing get suggestions with the names used", async () => {
+    const { changeSuggestions } = await import("../src/lib/domain/changeWords");
+    const r = changeFromWords("the angle ava approaches the group", plan, cam, people);
+    expect(r.unclear.length).toBe(1);
+    const sug = changeSuggestions(r.unclear, people);
+    expect(sug[0]).toBe("Ava comes in from the right");
+    for (const x of sug) expect(changeFromWords(x, plan, cam, people).unclear).toEqual([]);
+  });
+});

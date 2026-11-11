@@ -28,6 +28,7 @@ export async function planEditorProps(db: DB, sceneId: string) {
     panels: s.panels.flatMap((p) => { const sh = s.shots.find((x) => x.panelId === p.id); return sh ? [{ shotId: sh.id, code: p.code, description: p.description }] : []; }),
     locks: { positions: !!locks.positions, cameras: !!locks.cameras },
     scenePose: startPose(asStaging(s.scene.staging).spot, s.plan.data),
+    genre: repo.getProjectGenre(db, projectId),
   };
 }
 

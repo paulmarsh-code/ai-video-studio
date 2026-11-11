@@ -84,6 +84,8 @@ export interface PanelBlock {
   why?: string;
   /** A posture you set for someone on this panel (D37), keyed "pose:" and their id. */
   pose?: Pose;
+  /** In the floor plan editor's unsaved "@camera" edit only (D44): the camera the app chose for this panel. */
+  camera?: Partial<PlanCamera>;
 }
 
 export interface PlanCamera {

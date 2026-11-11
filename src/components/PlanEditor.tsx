@@ -13,7 +13,9 @@ import { savePanelBlockingAction } from "@/app/studioActions";
 import { aimToInclude, checkLineOfAction, describeFrame, facingOf, planForShot, PRESET_FOV, readCamera } from "@/lib/domain/geometry";
 import { blockSource, carryBlocking, withEdits, type BlockEntry } from "@/lib/domain/blocking";
 import { posturesFromWords } from "@/lib/domain/panelWords";
-import { changeFromWords } from "@/lib/domain/changeWords";
+import { changeFromWords, changeSuggestions } from "@/lib/domain/changeWords";
+import { designScene } from "@/lib/domain/director";
+import type { Genre } from "@/lib/domain/genre";
 import { planImpact, type ShotRef } from "@/lib/domain/impact";
 import type { CameraPreset, CastMember, GeometryPlanData, PlanCamera, PlanLevel, Point, Pose, ShotSpec } from "@/lib/domain/types";
 import { CameraView, type RingInfo } from "./CameraView";
@@ -43,6 +45,7 @@ export function PlanEditor(props: {
    * the user's words applied, and Save hands back to redraw the picture.
    */
   focus?: { words?: string; onDone: (saved: boolean) => void };
+  /** The project's genre, for the app's camera choice on a panel (D44). */ genre?: Genre;
 }) {
   const { cast } = props;
   const router = useRouter();
@@ -68,7 +71,8 @@ export function PlanEditor(props: {
   const [panelStatus, setPanelStatus] = useState("");
   // Changes in words (D39): "move Jade closer to Nina and have Marcus walk off to the right".
   const [words, setWords] = useState(props.focus?.words ?? "");
-  const [read, setRead] = useState<{ understood: string[]; unclear: string[] } | null>(null);
+  const [read, setRead] = useState<{ understood: string[]; unclear: string[]; suggest: string[] } | null>(null);
+  const [camNote, setCamNote] = useState("");
   const pushEdit = () => setEditHistory((h) => [...h.slice(-49), edits]);
   const undoEdit = () => {
     if (!editHistory.length) return;
@@ -104,7 +108,7 @@ export function PlanEditor(props: {
   // This panel's camera, as moved here if it has been (D43): the "@camera" edit.
   const camMoved = panel ? edits[panel.shotId]?.["@camera"] : undefined;
   const camSaved = pspec?.cameraId ? shown0.cameras.find((c) => c.id === pspec.cameraId) : undefined;
-  const cam0 = camSaved && camMoved ? { ...camSaved, position: camMoved.at, lookAt: camMoved.to ?? camSaved.lookAt } : camSaved;
+  const cam0 = camSaved && camMoved ? { ...camSaved, ...(camMoved.camera ?? {}), id: camSaved.id, name: camSaved.name, position: camMoved.at, lookAt: camMoved.to ?? camSaved.lookAt } : camSaved;
   // Anyone who must be in the picture but is out of the camera's view: the camera turns to
   // take them in (D42), shown here as it will be saved.
   const mustSee = cam0 && pspec ? (pspec.visibleIds ?? []).filter((id) => id !== cam0.povId && shown0.actors.some((a) => a.characterId === id)) : [];
@@ -115,7 +119,22 @@ export function PlanEditor(props: {
   const moveThisCam = (patch: { position?: Point; lookAt?: Point }) => {
     if (!panel || !cam0) return;
     const cur = shown.cameras.find((c) => c.id === cam0.id) ?? cam0;
-    setEdits((e) => ({ ...e, [panel.shotId]: { ...(e[panel.shotId] ?? {}), "@camera": { at: patch.position ?? cur.position, to: patch.lookAt ?? cur.lookAt } } }));
+    setEdits((e) => ({ ...e, [panel.shotId]: { ...(e[panel.shotId] ?? {}), "@camera": { ...(e[panel.shotId]?.["@camera"] ?? {}), at: patch.position ?? cur.position, to: patch.lookAt ?? cur.lookAt } } }));
+  };
+  /**
+   * The app places this panel's camera (D44), with the same film rules it uses for the whole
+   * scene, from where everyone is now: e.g. behind someone arriving, so we see where they go.
+   */
+  const appCamera = () => {
+    if (!panel) return;
+    const design = designScene(plan, panels.map((pn, k) => ({ id: pn.shotId, code: pn.code, spec: { ...effSpecs[k], posture: poses[k] } as ShotSpec, description: pn.description })), name, props.genre ?? "neutral");
+    const opt = design.shots.find((d) => d.shotId === panel.shotId)?.options[0];
+    if (!opt) { setCamNote("The app couldn't find a camera that sees everyone in this panel from here. Move people closer together, or drag the camera yourself."); return; }
+    pushEdit();
+    const { id: _id, name: _n, ...cam } = opt.camera;
+    void _id; void _n;
+    setEdits((e) => ({ ...e, [panel.shotId]: { ...(e[panel.shotId] ?? {}), "@camera": { at: cam.position, to: cam.lookAt, camera: cam } } }));
+    setCamNote(`Placed by the app: ${opt.kind}.${opt.reasons[0] ? ` ${opt.reasons[0].replace(/^R-[A-Z-]+:\s*/, "")}.` : ""} Not saved yet.`);
   };
   const panelCam = pspec?.cameraId ? shown.cameras.find((c) => c.id === pspec.cameraId) : undefined;
   const changedPanels = Object.entries(edits).filter(([, e]) => Object.keys(e).length);
@@ -143,8 +162,9 @@ export function PlanEditor(props: {
   const SRC_RING: Record<string, string> = { here: "#111827", app: "#0d9488", mark: "#d97706" };
   const applyWords = (text: string) => {
     if (!panel || !text.trim()) return;
-    const r = changeFromWords(text, shown0, cam0, cast.map((c) => ({ id: c.id, name: c.name })));
-    setRead({ understood: r.understood, unclear: r.unclear });
+    const people = cast.map((c) => ({ id: c.id, name: c.name }));
+    const r = changeFromWords(text, shown0, cam0, people);
+    setRead({ understood: r.understood, unclear: r.unclear, suggest: r.unclear.length ? changeSuggestions(r.unclear, people) : [] });
     if (!Object.keys(r.entries).length) return;
     pushEdit();
     setEdits((e) => {
@@ -342,6 +362,19 @@ export function PlanEditor(props: {
               );
             })}
 
+            {/* Someone arriving (D44): their path from where they start to their place with the others. */}
+            {panelMode && pspec && shown.actors.filter((a) => !a.to && ["arriving", "crossing", "approaching"].includes(pspec.at?.[a.characterId] ?? "")).map((a) => {
+              const home = plan.actors.find((x) => x.characterId === a.characterId)?.position;
+              if (!home || Math.hypot(home.x - a.position.x, home.y - a.position.y) < 0.3) return null;
+              const s0 = toPx(a.position), e0 = toPx(home);
+              return (
+                <Group key={`arrive-${a.characterId}`} listening={false}>
+                  <Arrow points={[s0.x, s0.y, e0.x, e0.y]} stroke="#ea580c" fill="#ea580c" strokeWidth={2} dash={[7, 5]} pointerLength={9} pointerWidth={9} />
+                  <Text text={`${name(a.characterId).split(" ")[0]} walks to the group`} fontSize={10} fill="#9a3412" x={(s0.x + e0.x) / 2 + 6} y={(s0.y + e0.y) / 2 - 12} />
+                </Group>
+              );
+            })}
+
             {/* Walks during a panel (D35): a dashed arrow to a ring you can drag. */}
             {panelMode && shown.actors.filter((a) => a.to).map((a) => {
               const s0 = toPx(a.position), e0 = toPx(a.to!);
@@ -421,6 +454,8 @@ export function PlanEditor(props: {
               <h2 className="text-lg font-semibold">Positions in panel {step}</h2>
               {!props.focus && <p className="mt-1 text-neutral-700">{panel.description}</p>}
               <p className="mt-1 text-xs text-neutral-500">{pspec.shot ? `Shot: ${pspec.shot}. ` : ""}{panelCam ? `Camera: ${panelCam.name}. Drag the camera to move it, or its white handle to aim it: for this panel only, other panels keep theirs.` : "No camera chosen for this panel yet: approve the positions on the storyboard and the app chooses one."}{camMoved ? " (moved, not saved yet)" : ""}</p>
+              {panelCam && <p className="mt-1 text-xs"><button type="button" className="rounded border border-blue-300 bg-white px-2 py-0.5 text-blue-800 hover:bg-blue-50" data-testid="panel-app-camera" onClick={appCamera}>Let the app place the camera</button>
+                <span className="ml-2 text-neutral-600">{camNote || "after moving people, for the best camera for this panel"}</span></p>}
               <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/40 p-3" data-testid="panel-words">
                 <label className="block font-medium">What should change in this panel?<WordsHelp guide="change" />
                   <textarea className="mt-1 w-full rounded border border-neutral-300 bg-white px-2 py-1" rows={2} value={words} data-testid="panel-words-input"
@@ -431,7 +466,16 @@ export function PlanEditor(props: {
                 {read && (
                   <div className="mt-2 text-xs" data-testid="panel-words-read">
                     {read.understood.length > 0 && <p className="text-green-800">Done: {read.understood.join("; ")}.</p>}
-                    {read.unclear.length > 0 && <p className="text-amber-800">Not understood: {read.unclear.map((x) => `“${x}”`).join(", ")}. Try naming who and where (move Jade next to the bar), or drag them on the plan.</p>}
+                    {read.unclear.length > 0 && (
+                      <div className="rounded border border-amber-300 bg-amber-50 p-2 text-amber-900" data-testid="panel-words-unclear">
+                        <p><strong>{read.understood.length ? "Partly done." : "Nothing changed."}</strong> The app couldn&apos;t tell who should go where from {read.unclear.map((x) => `“${x}”`).join(", ")}. Say who, and where to: for example</p>
+                        <p className="mt-1 flex flex-wrap gap-1">{read.suggest.map((x) => (
+                          <button key={x} type="button" className="rounded border border-amber-400 bg-white px-2 py-0.5 hover:bg-amber-100" data-testid="panel-words-suggest"
+                            onClick={() => { setWords(x); applyWords(x); }}>{x}</button>
+                        ))}</p>
+                        <p className="mt-1">Or drag them on the plan.</p>
+                      </div>
+                    )}
                   </div>
                 )}
                 <p className="mt-1 text-xs text-neutral-500">Left and right are as the picture shows them. Or drag people on the plan; click someone to turn them.</p>
@@ -546,7 +590,7 @@ export function PlanEditor(props: {
                 onAction={async () => {
                   const r = await savePanelBlockingAction(changedPanels.map(([shotId, entries]) => {
                     const { "@camera": cam, ...rest } = entries;
-                    return { shotId, entries: rest, ...(cam ? { camera: { position: cam.at, lookAt: cam.to ?? cam.at } } : {}) };
+                    return { shotId, entries: rest, ...(cam ? { camera: { ...(cam.camera ?? {}), position: cam.at, lookAt: cam.to ?? cam.at } } : {}) };
                   }));
                   if (!r.ok) { setPanelStatus(r.error); return false; }
                   setEdits({}); setEditHistory([]);
