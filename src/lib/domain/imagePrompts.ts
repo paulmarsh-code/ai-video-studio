@@ -181,8 +181,9 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   if (i.continuity) attach.push({ label: i.continuity.label, assetId: i.continuity.assetId });
   // Key props with a reference picture (D19c): the ones this camera sees, or all of them
   // without a camera, so the prop looks the same in every shot.
-  const seenProps = cam && i.plan ? readProps(i.plan, cam).filter((p) => p.inView).map((p) => p.name) : undefined;
-  const propPics = (i.plan?.furniture ?? []).filter((f) => f.imageAssetId && (!seenProps || seenProps.includes(f.name)));
+  // Props come from this panel's plan (D35): one taken away on an earlier panel isn't here.
+  const seenProps = cam && shotPlan ? readProps(shotPlan, cam).filter((p) => p.inView).map((p) => p.name) : undefined;
+  const propPics = ((shotPlan ?? i.plan)?.furniture ?? []).filter((f) => f.imageAssetId && (!seenProps || seenProps.includes(f.name)));
   for (const f of propPics) attach.push({ label: `${f.name} picture`, assetId: f.imageAssetId! });
   const bgView = reading?.backgroundView;
   // The ring background (D20) replaces the single nearest view: it is exactly what this camera
@@ -219,7 +220,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   if (light) lines.push(`Lighting, identical in every picture of this scene: ${light} Same brightness, colour and mood as the other pictures of the scene; not darker, not brighter.`);
   if (spot) lines.push(`Where: ${sentence(spot)} Keep it in the picture wherever the camera would see it, always the same height and size. Everyone keeps their own place and posture around it${/\b(sit|sits|sitting|seated|sofa|couch|bench)\b/i.test(spot) ? "" : ", standing upright"}; no one leans on it or on the bar unless the moment says so.`);
   // The floor plan's props are the approved list (D19a); the shot's copy is the fallback.
-  const planProps = (i.plan?.furniture ?? []).map((f) => ({ name: f.name, detail: f.detail ?? "" }));
+  const planProps = ((shotPlan ?? i.plan)?.furniture ?? []).map((f) => ({ name: f.name, detail: f.detail ?? "" }));
   const props = planProps.length ? planProps : shot?.props ?? [];
   if (props.length) lines.push(`Key props, identical in every picture of this scene: ${props.map((p) => `${p.name}${p.detail ? ` (${stripQuotes(p.detail).replace(/[.]$/, "")})` : ""}`).join("; ")}. Show each exactly as described, every time, with nothing extra on or around it.`);
   if (propPics.length) lines.push(`Use the attached ${joinNames(propPics.map((f) => `${f.name} picture`))} for exactly how ${propPics.length === 1 ? "it looks" : "they look"}: same shape, colours, materials and everything on ${propPics.length === 1 ? "it" : "them"}. Only its place and size in the frame come from the layout.`);
@@ -236,6 +237,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   }
   // Someone on a mark (D19b): say where they are, so the picture doesn't put them with the group.
   for (const [id, markId] of Object.entries(shot?.at ?? {})) {
+    if (shot?.blocking?.[id]) continue; // placed on the floor plan for this panel (D35)
     const m = i.plan?.actors.find((a) => a.characterId === id)?.marks?.find((x) => x.id === markId);
     if (m) lines.push(`${name(id)} is ${m.label}.`);
   }
@@ -246,7 +248,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   for (const [id, fromId] of Object.entries(shot?.from ?? {})) {
     const m = i.plan?.actors.find((a) => a.characterId === id)?.marks?.find((x) => x.id === fromId);
     const end = shot?.at?.[id];
-    if (m && !end) lines.push(`${name(id)} has just walked over from where they were (${m.label.split(",")[0]}) and is now in their own place with the others, not still on the way.`);
+    if (m && !end && !shot?.blocking?.[id]) lines.push(`${name(id)} has just walked over from where they were (${m.label.split(",")[0]}) and is now in their own place with the others, not still on the way.`);
   }
   // Where everyone stands relative to the focal prop, and whom they face (D20): no one talking
   // to the group from metres away unless the plan puts them there.
@@ -356,17 +358,23 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
       const f0 = { x: cam.lookAt.x - cam.position.x, y: cam.lookAt.y - cam.position.y };
       const fl0 = Math.hypot(f0.x, f0.y) || 1;
       const fw = { x: f0.x / fl0, y: f0.y / fl0 }, rt = { x: fw.y, y: -fw.x };
-      for (const [id, mark] of Object.entries(shot.at ?? {})) {
-        if (!["arriving", "crossing", "approaching"].includes(mark) || !order.some((a) => a.characterId === id)) continue;
-        const from = shotPlan.actors.find((x) => x.characterId === id)?.position;
-        const to = i.plan.actors.find((x) => x.characterId === id)?.position;
+      // Arrivals from the panel's words, and walks set on the storyboard (D35).
+      const walkers = [
+        ...Object.entries(shot.at ?? {}).filter(([id, mark]) => ["arriving", "crossing", "approaching"].includes(mark) && !shotPlan.actors.find((x) => x.characterId === id)?.to).map(([id]) => id),
+        ...shotPlan.actors.filter((x) => x.to).map((x) => x.characterId),
+      ];
+      for (const id of walkers) {
+        if (!order.some((a) => a.characterId === id)) continue;
+        const me = shotPlan.actors.find((x) => x.characterId === id);
+        const from = me?.position;
+        const to = me?.to ?? i.plan.actors.find((x) => x.characterId === id)?.position;
         if (!from || !to) continue;
         const d = { x: to.x - from.x, y: to.y - from.y };
         const dl = Math.hypot(d.x, d.y) || 1;
         const across = (d.x * rt.x + d.y * rt.y) / dl, away = (d.x * fw.x + d.y * fw.y) / dl;
         const parts = [Math.abs(across) > 0.3 ? `towards the ${across > 0 ? "right" : "left"} of the picture` : "", away > 0.3 ? "away from the camera" : away < -0.3 ? "towards the camera" : ""].filter(Boolean);
         const seen = away > 0.5 ? "we see their back" : away < -0.5 ? "we see their front" : `we see their ${across > 0 ? "left" : "right"} side and the side of their face, not their face full-on`;
-        lines.push(`Walking: ${name(id)} is mid-stride, walking ${parts.join(" and ") || "on"}, heading for the group along the orange arrow; ${seen}. Body, feet and eyes all point the way they walk, never at the camera.`);
+        lines.push(`Walking: ${name(id)} is mid-stride, walking ${parts.join(" and ") || "on"}, ${me?.to ? "along the orange arrow" : "heading for the group along the orange arrow"}; ${seen}. Body, feet and eyes all point the way they walk, never at the camera.`);
       }
     }
     if (placed.length && shotPlan) {

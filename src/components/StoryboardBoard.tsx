@@ -367,7 +367,7 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
                 : p.hasCamera && p.shotId
                   // Before a picture exists, show what the camera sees (D19): check the angle first.
                   // eslint-disable-next-line @next/next/no-img-element
-                  ? <><img src={`/api/layout/${p.shotId}?v=${encodeURIComponent(`${p.prompt.length}${p.code}${p.shot?.words ?? ""}`)}`} alt={`Layout for panel ${i + 1}`} className="h-full w-full object-cover opacity-80" data-testid={`board-${p.code}-sketch`} />
+                  ? <><img src={`/api/layout/${p.shotId}?v=${encodeURIComponent(`${hashText(p.prompt)}${p.code}${p.shot?.words ?? ""}`)}`} alt={`Layout for panel ${i + 1}`} className="h-full w-full object-cover opacity-80" data-testid={`board-${p.code}-sketch`} />
                     <span className="absolute bottom-2 left-2 rounded bg-white/90 px-2 py-0.5 text-xs text-neutral-700">Camera view from the floor plan</span></>
                   : <span className="absolute inset-0 flex items-center justify-center text-sm text-neutral-500">No picture yet</span>}
               {drawing[p.id] && <span className="absolute inset-0 flex items-center justify-center bg-white/70 text-sm font-medium" data-testid={`board-${p.code}-drawing`}>{drawing[p.id]}</span>}
@@ -382,6 +382,7 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
             </div>
             <p className="mt-1 text-sm">{p.line ? <><span className="font-medium">{p.speaker}:</span> {p.line}</> : <span className="text-neutral-500">Silent</span>}</p>
             <p className="mt-1 text-xs text-neutral-600">{p.description}</p>
+            {p.shotId && <p className="mt-1 text-xs"><Link className="text-blue-700 underline" href={`${b.planHref}?panel=${i + 1}`} data-testid={`board-${p.code}-positions`}>Positions for this panel</Link></p>}
             {p.shot && p.shotId && <ShotPicker p={p} shotId={p.shotId} locked={b.locks.cameras} onDone={(text, ok) => { setMsg({ ok, text }); router.refresh(); }} />}
             {p.imageAssetId && p.check?.keptApproved && p.status === "approved" ? <p className="mt-1 text-xs text-neutral-600" data-testid={`board-${p.code}-check`}>Approved by you on an earlier layout and kept. Redraw it only if it no longer fits.</p>
               : p.imageAssetId && p.check && (p.check.pass
@@ -473,4 +474,11 @@ function ShotPicker({ p, shotId, locked, onDone }: { p: BoardPanel; shotId: stri
       {locked && <p className="text-neutral-500">To change it, unlock the cameras first.</p>}
     </div>
   );
+}
+
+/** A short fingerprint of some text, so a changed layout isn't served from the browser's cache. */
+function hashText(t: string): string {
+  let h = 5381;
+  for (let k = 0; k < t.length; k++) h = ((h << 5) + h + t.charCodeAt(k)) | 0;
+  return (h >>> 0).toString(36);
 }

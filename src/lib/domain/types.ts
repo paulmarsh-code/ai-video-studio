@@ -34,6 +34,27 @@ export interface PlanActor {
    * A shot picks one with ShotSpec.at; otherwise the person is at `position`.
    */
   marks?: { id: string; label: string; position: Point }[];
+  /** Which way they face in this panel, in plan degrees (0 = +x, 90 = +y) (D35); set per shot. */
+  facingDeg?: number;
+  /** Where they walk to during this panel (D35); set per shot. */
+  to?: Point;
+}
+
+/**
+ * Where someone (or a prop) is in one panel (D35), set with the floor plan's panel stepper:
+ * their spot, where they walk to during the panel (if they move), and which way they face.
+ * People are keyed by character id, props by "prop:" and the prop's id. "you" is set on this
+ * panel; "carried" follows on from an earlier panel until it is moved again.
+ */
+export interface PanelBlock {
+  at: Point;
+  to?: Point;
+  facingDeg?: number;
+  by: "you" | "carried";
+  /** Set on this panel only: later panels go back to where they were before. */
+  only?: boolean;
+  /** A prop taken away from this panel on (or for this panel only). */
+  gone?: boolean;
 }
 
 export interface PlanCamera {
@@ -158,6 +179,8 @@ export interface ShotSpec {
    * spot. The picture shows where they end (`at`, or their place); the clip moves them across.
    */
   from?: Record<string, string>;
+  /** Positions set for this panel on the storyboard (D35), character id → spot. */
+  blocking?: Record<string, PanelBlock>;
   /** Key props of the scene (D19), identical in every picture and clip. */
   props?: { name: string; detail: string; imageAssetId?: string }[];
 }

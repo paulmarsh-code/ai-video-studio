@@ -105,7 +105,10 @@ export function composeKlingPrompt(
     const bx = bodyEffect(shot.actions ?? "", subjectId ? byId(subjectId)?.name ?? "they" : "they");
     if (bx) s.scene += ` Body and angle: ${bx}.`;
   }
-  if (shot.props?.length) s.scene += ` Key props, unchanged in every clip: ${shot.props.map((p) => `${p.name}${p.detail ? ` (${stripQuotes(p.detail).replace(/[.]$/, "")})` : ""}`).join("; ")}.`;
+  // A prop taken away on this panel or an earlier one (D35) isn't listed.
+  const goneProps = new Set((plan?.furniture ?? []).filter((f) => shot.blocking?.[`prop:${f.id}`]?.gone).map((f) => f.name));
+  const keptProps = (shot.props ?? []).filter((p) => !goneProps.has(p.name));
+  if (keptProps.length) s.scene += ` Key props, unchanged in every clip: ${keptProps.map((p) => `${p.name}${p.detail ? ` (${stripQuotes(p.detail).replace(/[.]$/, "")})` : ""}`).join("; ")}.`;
 
   // Movement in this clip (D20): from where they start to where they end.
   for (const [id, fromId] of Object.entries(shot.from ?? {})) {
@@ -113,7 +116,33 @@ export function composeKlingPrompt(
     const start = fromId === "place" ? "their own place at the group" : marks.find((m) => m.id === fromId)?.label.split(",")[0];
     const endId = shot.at?.[id];
     const end = endId ? marks.find((m) => m.id === endId)?.label.split(",")[0] : "their own place with the others";
-    if (start && end) s.scene += ` ${byId(id)?.name ?? id} walks from ${start} to ${end} during the shot.`;
+    if (start && end && !shot.blocking?.[id]) s.scene += ` ${byId(id)?.name ?? id} walks from ${start} to ${end} during the shot.`;
+  }
+
+  // A walk set for this panel on the storyboard (D35): from their spot to where they end.
+  {
+    const sp = plan ? planForShot(plan, shot) : undefined;
+    const camW = sp && shot.cameraId ? sp.cameras.find((c) => c.id === shot.cameraId) : undefined;
+    for (const [id, b] of Object.entries(shot.blocking ?? {})) {
+      if (!b.to || id.startsWith("prop:")) continue;
+      const d = Math.round(Math.hypot(b.to.x - b.at.x, b.to.y - b.at.y) * 2) / 2;
+      // Where the walk ends, as this camera sees it: off the side, past the lens, away or nearer.
+      let where = "to the spot the floor plan sets for the end of it";
+      if (sp && camW) {
+        const r0 = readCamera(sp, camW).actors.find((a) => a.characterId === id);
+        const r1 = readCamera({ ...sp, actors: sp.actors.map((a) => (a.characterId === id ? { ...a, position: b.to!, to: undefined } : a)) }, camW).actors.find((a) => a.characterId === id);
+        if (r1) {
+          where = r1.frame === "out-left" ? "and out of the picture on the left"
+            : r1.frame === "out-right" ? "and out of the picture on the right"
+            : r1.frame === "behind" ? "past the camera and out of the picture"
+            : !r1.inView ? "and out of the picture"
+            : r0 && r1.depthM > r0.depthM + 1 ? `away from the camera, ending ${r1.frame === "centre" ? "in the centre" : `on the ${r1.frame.replace("frame-", "")}`} of the picture`
+            : r0 && r1.depthM < r0.depthM - 1 ? `towards the camera, ending ${r1.frame === "centre" ? "in the centre" : `on the ${r1.frame.replace("frame-", "")}`} of the picture`
+            : `across to the ${r1.frame === "centre" ? "centre" : r1.frame.replace("frame-", "")} of the picture`;
+        }
+      }
+      s.scene += ` ${byId(id)?.name ?? id} walks about ${d} m during the shot, from where they start in the first frame ${where}, at a natural pace.`;
+    }
   }
 
   // 3 + 7. Positions, distance and background from the plan.

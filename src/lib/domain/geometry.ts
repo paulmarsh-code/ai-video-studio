@@ -4,7 +4,7 @@
 import { verticalText } from "./vertical";
 import { cameraZ, floorZ, levelAt } from "./levels";
 import { SHOT_SIZES } from "./shotLanguage";
-import type {
+import type { PanelBlock,
   CameraPreset,
   CastMember,
   Finding,
@@ -335,15 +335,23 @@ export function readProps(plan: GeometryPlanData, cam: PlanCamera): { id: string
  * say) stands there instead of their usual place. Everything that reads a camera for a shot
  * uses this, so the sketch, the prompts, the check and the camera choice all agree.
  */
-export function planForShot(plan: GeometryPlanData, shot?: { at?: Record<string, string> }): GeometryPlanData {
+export function planForShot(plan: GeometryPlanData, shot?: { at?: Record<string, string>; blocking?: Record<string, PanelBlock> }): GeometryPlanData {
   const at = shot?.at;
-  if (!at || !Object.keys(at).length) return plan;
+  const bl = shot?.blocking;
+  if ((!at || !Object.keys(at).length) && (!bl || !Object.keys(bl).length)) return plan;
   return {
     ...plan,
     actors: plan.actors.map((a) => {
-      const m = at[a.characterId] && a.marks?.find((x) => x.id === at[a.characterId]);
+      // Positions set for this panel (D35) come first; then marks from the panel's words.
+      const b = bl?.[a.characterId];
+      if (b) return { ...a, position: b.at, ...(b.to ? { to: b.to } : {}), ...(b.facingDeg !== undefined ? { facingDeg: b.facingDeg } : {}) };
+      const m = at?.[a.characterId] && a.marks?.find((x) => x.id === at[a.characterId]);
       return m ? { ...a, position: m.position } : a;
     }),
+    // Props moved or taken away on a panel (D35).
+    ...(plan.furniture && bl && Object.keys(bl).some((k) => k.startsWith("prop:"))
+      ? { furniture: plan.furniture.filter((f) => !bl[`prop:${f.id}`]?.gone).map((f) => (bl[`prop:${f.id}`] ? { ...f, position: bl[`prop:${f.id}`].at } : f)) }
+      : {}),
   };
 }
 
@@ -379,6 +387,9 @@ export function propsBlocking(plan: GeometryPlanData, cam: PlanCamera, targetIds
  */
 export function facingOf(plan: GeometryPlanData, id: string, line?: Iterable<string>): Point | undefined {
   const a = plan.actors.find((x) => x.characterId === id);
+  // Set for this panel (D35): the way they were turned, or the way they walk.
+  if (a?.facingDeg !== undefined) return { x: Math.cos((a.facingDeg * Math.PI) / 180), y: Math.sin((a.facingDeg * Math.PI) / 180) };
+  if (a?.to && Math.hypot(a.to.x - a.position.x, a.to.y - a.position.y) > 0.1) return norm(sub(a.to, a.position));
   const others = plan.actors.filter((x) => x.characterId !== id).map((x) => x.position);
   if (!a || !others.length) return undefined;
   const group = { x: others.reduce((s, p) => s + p.x, 0) / others.length, y: others.reduce((s, p) => s + p.y, 0) / others.length };

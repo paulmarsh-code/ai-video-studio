@@ -198,6 +198,19 @@ export async function setShotChoiceAction(shotId: string, words: string) {
   });
 }
 
+/**
+ * Positions for one panel (D35): place people, turn them, or set where they walk to during the
+ * panel. What's set carries on to later panels until they're placed again (unless "this panel
+ * only"). Once the positions are approved, the cameras are chosen again to see the new places.
+ */
+export async function savePanelBlockingAction(changes: { shotId: string; entries: Record<string, { at: { x: number; y: number }; to?: { x: number; y: number }; facingDeg?: number; only?: boolean; gone?: boolean } | null> }[]) {
+  return runAsync(async (db) => {
+    const { sceneId } = studio.savePanelBlocking(db, changes);
+    if (!studio.sceneLocks(db, sceneId).positions) return { chosen: 0, missing: [] as (string | undefined)[] };
+    return chooseCameras(db, sceneId);
+  });
+}
+
 export async function approvePanelsAction(panelIds: string[]) {
   return run((db) => { for (const id of panelIds) studio.approvePanel(db, id); return panelIds.length; });
 }

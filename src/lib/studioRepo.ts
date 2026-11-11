@@ -13,11 +13,12 @@ import type { CharacterProfile, RefView } from "./domain/imagePrompts";
 import { approvalProblems } from "./domain/approval";
 import { deriveDuration } from "./domain/duration";
 import { hasQuotes } from "./domain/text";
-import type { GeometryPlanData, PlanView, Pronoun, ShotSpec } from "./domain/types";
+import type { GeometryPlanData, PanelBlock, PlanView, Point, Pronoun, ShotSpec } from "./domain/types";
 import { asGenre, type Genre } from "./domain/genre";
 import { addMovementMarks, asStaging, planProps, propHeight, propsFromFurniture, propKind, propWidth, checkStoryboard, defaultPlan, panelSeconds, shotSpecFor, type DraftPanel, type SceneStaging } from "./domain/story";
 import { LAYOUT_RULES } from "./domain/director";
 import { applyRoom, boundsFor, groupCentre, roomFor, roomOf, type RoomSize } from "./domain/room";
+import { carryBlocking, type BlockEntry } from "./domain/blocking";
 import { levelsFromWords } from "./domain/levels";
 import { getAnimatic, getCast, saveAnimatic, type AnimaticTimeline } from "./repo";
 
@@ -355,6 +356,7 @@ export function movePanel(db: DB, panelId: string, dir: -1 | 1) {
   const ids = list.map((x) => x.id);
   [ids[i], ids[j]] = [ids[j], ids[i]];
   ids.forEach((id, k) => db.update(t.panels).set({ order: k + 1 }).where(eq(t.panels.id, id)).run());
+  recarry(db, p.sceneId); // what carries on follows the new order (D35)
   persist(db);
 }
 
@@ -365,7 +367,9 @@ export function deletePanel(db: DB, panelId: string) {
     throw new Error("This panel's shot has takes logged, so it can't be deleted.");
   }
   if (shot) db.delete(t.shots).where(eq(t.shots.id, shot.id)).run();
+  const gone = db.select().from(t.panels).where(eq(t.panels.id, panelId)).get();
   db.delete(t.panels).where(eq(t.panels.id, panelId)).run();
+  if (gone) recarry(db, gone.sceneId); // D35
   persist(db);
 }
 
@@ -767,7 +771,7 @@ export function applyMovementMarks(db: DB, sceneId: string) {
     changed = true;
     db.update(t.shots).set({ spec: { ...sh.spec, at: at[i], from: from[i], cameraId: undefined } }).where(eq(t.shots.id, sh.id)).run();
   });
-  if (changed) persist(db);
+  if (changed) { recarry(db, sceneId); persist(db); } // a mark ends what was carried (D35)
   return changed;
 }
 
@@ -794,7 +798,19 @@ export function syncRoom(db: DB, sceneId: string): boolean {
   const data = plan.data as GeometryPlanData;
   const now = roomOf(data);
   let next = data;
-  if (Math.abs(now.widthM - room.widthM) > 0.05 || Math.abs(now.depthM - room.depthM) > 0.05) next = applyRoom(data, room);
+  if (Math.abs(now.widthM - room.widthM) > 0.05 || Math.abs(now.depthM - room.depthM) > 0.05) {
+    next = applyRoom(data, room);
+    // Positions set per panel (D35) move with everything else.
+    const a = groupCentre(now), c = groupCentre(room);
+    const nb = next.bounds ?? boundsFor(room);
+    const mv = (q: Point): Point => ({ x: +Math.min(nb.maxX - 0.3, Math.max(nb.minX + 0.3, q.x + c.x - a.x)).toFixed(2), y: +Math.min(nb.maxY - 0.3, Math.max(nb.minY + 0.3, q.y + c.y - a.y)).toFixed(2) });
+    for (const sh of db.select().from(t.shots).where(eq(t.shots.sceneId, sceneId)).all()) {
+      const sp = sh.spec as ShotSpec;
+      if (!sp.blocking) continue;
+      const blocking = Object.fromEntries(Object.entries(sp.blocking).map(([id, b]) => [id, { ...b, at: mv(b.at), ...(b.to ? { to: mv(b.to) } : {}) }]));
+      db.update(t.shots).set({ spec: { ...sp, blocking } }).where(eq(t.shots.id, sh.id)).run();
+    }
+  }
   if (!next.levels) {
     const st = asStaging(scene.staging);
     const levels = levelsFromWords(st.spot, text, next.bounds ?? boundsFor(room), groupCentre(room));
@@ -850,4 +866,48 @@ export function saveCharacterHeldItems(db: DB, versionId: string, frontAssetId: 
   if (!v) return;
   db.update(t.characterVersions).set({ profile: { ...(v.profile as object), held: { ref: frontAssetId, v: HELD_READ_VERSION, items } } }).where(eq(t.characterVersions.id, versionId)).run();
   persist(db);
+}
+
+// ---------- Positions per panel (D35) ----------
+
+/**
+ * Save positions set on panels (D35): each entry places someone on that panel (or null puts
+ * them back to what the earlier panels and the scene plan give). Carried positions are then
+ * worked out again for the whole scene. Not while the cameras are approved.
+ */
+export function savePanelBlocking(db: DB, changes: { shotId: string; entries: Record<string, BlockEntry | null> }[]): { sceneId: string } {
+  if (!changes.length) throw new Error("Nothing to save.");
+  const round = (p: Point) => ({ x: +p.x.toFixed(2), y: +p.y.toFixed(2) });
+  let sceneId = "";
+  for (const ch of changes) {
+    const shot = db.select().from(t.shots).where(eq(t.shots.id, ch.shotId)).get();
+    if (!shot) throw new Error("That panel wasn't found.");
+    if (sceneId && shot.sceneId !== sceneId) throw new Error("Those panels are in different scenes.");
+    sceneId = shot.sceneId;
+    if (sceneLocks(db, sceneId).cameras) throw new Error("The cameras are approved and locked. Choose “Change cameras” on the storyboard first, then move people for a panel.");
+    const spec = shot.spec as ShotSpec;
+    const blocking: Record<string, PanelBlock> = { ...(spec.blocking ?? {}) };
+    for (const [id, e] of Object.entries(ch.entries)) {
+      if (!e) { delete blocking[id]; continue; }
+      const to = e.to && Math.hypot(e.to.x - e.at.x, e.to.y - e.at.y) > 0.2 ? round(e.to) : undefined;
+      blocking[id] = { at: round(e.at), ...(to ? { to } : {}), ...(e.facingDeg !== undefined && !to ? { facingDeg: ((Math.round(e.facingDeg) % 360) + 360) % 360 } : {}), ...(e.only ? { only: true } : {}), ...(e.gone && id.startsWith("prop:") ? { gone: true } : {}), by: "you" };
+    }
+    db.update(t.shots).set({ spec: { ...spec, blocking } }).where(eq(t.shots.id, shot.id)).run();
+  }
+  recarry(db, sceneId);
+  persist(db);
+  return { sceneId };
+}
+
+/** Recompute what carries on from panel to panel across a scene, in panel order (D35). */
+export function recarry(db: DB, sceneId: string): boolean {
+  const shots = panelsOf(db, sceneId).map((p) => shotForPanel(db, p.id)).filter((x): x is NonNullable<typeof x> => !!x);
+  const next = carryBlocking(shots);
+  let changed = false;
+  shots.forEach((sh, k) => {
+    if (JSON.stringify(sh.spec.blocking ?? null) === JSON.stringify(next[k].blocking ?? null)) return;
+    changed = true;
+    db.update(t.shots).set({ spec: next[k] }).where(eq(t.shots.id, sh.id)).run();
+  });
+  return changed;
 }

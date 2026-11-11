@@ -18,10 +18,12 @@ import * as studio from "./studioRepo";
 import type { CharacterProfile } from "./domain/imagePrompts";
 
 /** Who is walking where in this shot: arrivals head for their place; someone leaving heads for the way out. */
-export function movesFor(full: { actors: { characterId: string; position: { x: number; y: number } }[]; views: { name: string; directionDeg: number }[] }, shot: { at?: Record<string, string>; subjectId?: string; speakerId?: string; visibleIds: string[]; actions?: string; sceneContext?: string }, shotPlan: { actors: { characterId: string; position: { x: number; y: number } }[] }, text: string) {
+export function movesFor(full: { actors: { characterId: string; position: { x: number; y: number } }[]; views: { name: string; directionDeg: number }[] }, shot: { at?: Record<string, string>; subjectId?: string; speakerId?: string; visibleIds: string[]; actions?: string; sceneContext?: string }, shotPlan: { actors: { characterId: string; position: { x: number; y: number }; to?: { x: number; y: number } }[] }, text: string) {
   const moves: Record<string, { x: number; y: number }> = {};
+  // A walk set for this panel on the storyboard (D35): from their spot to where they end.
+  for (const a of shotPlan.actors) if (a.to) moves[a.characterId] = a.to;
   for (const [id, mark] of Object.entries(shot.at ?? {})) {
-    if (!["arriving", "crossing", "approaching"].includes(mark)) continue;
+    if (moves[id] || !["arriving", "crossing", "approaching"].includes(mark)) continue;
     const place = full.actors.find((a) => a.characterId === id)?.position;
     if (place) moves[id] = place;
   }
