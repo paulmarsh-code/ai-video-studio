@@ -841,3 +841,16 @@ On Paul's real panel 1 the orange path was drawn but he couldn't see it: thin, d
 - **A path you can see**: arrivals' paths and walks are now a bold solid orange arrow ("Jade's path to the group"), and the line of action isn't drawn on a panel's planner, only on the scene plan.
 - **Nobody drops out unnoticed**: if someone who was in the panel's original shot isn't in the picture with the camera as it is now (moved by you, or turned), the planner says so: "Chase was in this panel's original shot but isn't in the picture with this camera. Use “Let the app place the camera”, or move the camera so they're in the blue area."
 - On Paul's own data, "Let the app place the camera" for his positions gives a wide shot with Chase, Marcus and Nina on the left and Jade on the right walking to them; the warning then goes. Browser test on a copy of his scene.
+
+### D46: One form for changing a panel (2026-11-11)
+
+To move Jade on panel 1, Paul had to type something into "Is anyone in the wrong place…" just to reach the planner, move her, then delete the words. He asked for "Need to change something?" to open one form with the planner showing and the other changes below it, and a single Submit.
+
+D38 test: no new feature. The same planner (D39) and the same picture changes reach the generation as before (the blocking frame and the change prompt); this only takes away a step that made people type words they didn't mean.
+
+- On a panel that has a camera, "Need to change something?" opens "Change panel N": that panel's planner on top (drag people, the camera or the path, or type a change into it), then "Anything else about the picture?" with the other questions (what else should change, anything else, pictures to show what you mean). The separate "who stands where" box is gone from this form, because the planner is it.
+- One "Submit changes" bar at the bottom, pinned on screen as you scroll. It stays disabled until something changes. The planner's own Save and Cancel are hidden in this form.
+- **Positions or camera changed**: they're saved for this panel (and carried on as before, D35), then the picture is redrawn fresh from the new layout, with any other changes added to the prompt ("follow the layout exactly, not any earlier picture").
+- **Only a picture change**: the current picture is edited, as before.
+- Cancel closes the form and draws nothing. Panels with no camera yet keep the plain form.
+- Browser test on a copy of Paul's scene: one click opens the planner with no typing; no separate place box; Submit waits for a change; no planner Save inside; moved positions → one fresh redraw; picture-only change → edit of the current picture; Cancel → nothing drawn.

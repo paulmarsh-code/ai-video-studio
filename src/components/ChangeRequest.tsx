@@ -7,7 +7,7 @@
 // Each "looks" question can also take a picture to illustrate it ("clothes like this"), which
 // is referenced in the change prompt alongside the words (D17b).
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ActionButton } from "./ActionButton";
 import { uploadBlob } from "@/lib/clientUpload";
 import { WordsHelp } from "./WordsHelp";
@@ -48,17 +48,22 @@ export interface ChangeRequestProps {
   projectId: string;
   baseCode: string;
   onSubmit: (change: SubmittedChange) => void | Promise<{ ok: boolean; text: string } | void>;
+  /**
+   * Shown inside a larger form (D46): always open, no Yes/No and no Submit of its own; every
+   * change is reported, and the form submits it with the rest.
+   */
+  embedded?: { onChange: (change: SubmittedChange) => void; leaveOut?: string[] };
 }
 
-export function ChangeRequest({ what, projectId, baseCode, onSubmit }: ChangeRequestProps) {
+export function ChangeRequest({ what, projectId, baseCode, onSubmit, embedded }: ChangeRequestProps) {
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
-  const [open, setOpen] = useState(false);
-  const [yes, setYes] = useState(false);
+  const [open, setOpen] = useState(!!embedded);
+  const [yes, setYes] = useState(!!embedded);
   const [parts, setParts] = useState<Record<string, string>>({});
   const [pics, setPics] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState<string | null>(null);
   const [picError, setPicError] = useState("");
-  const questions = QUESTIONS[what];
+  const questions = QUESTIONS[what].filter((q) => !embedded?.leaveOut?.includes(q.key));
   const looks = (q: (typeof questions)[number]) => !("visual" in q) || q.visual !== false;
   const answered = questions.filter((q) => parts[q.key]?.trim() || pics[q.key]);
   const line = (q: (typeof questions)[number]) => {
@@ -70,6 +75,10 @@ export function ChangeRequest({ what, projectId, baseCode, onSubmit }: ChangeReq
   const visual = answered.some(looks);
   const refs = questions.filter((q) => pics[q.key] && looks(q)).map((q) => ({ for: q.short, assetId: pics[q.key] }));
   const submitted = { text: change, parts: Object.fromEntries(answered.map((q) => [q.key, parts[q.key]?.trim() ?? ""])), visual, refs };
+  const report = embedded?.onChange;
+  const key = JSON.stringify(submitted);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { report?.(JSON.parse(key) as SubmittedChange); }, [key]);
 
   async function addPicture(key: string, file: File) {
     setPicError("");
@@ -102,7 +111,7 @@ export function ChangeRequest({ what, projectId, baseCode, onSubmit }: ChangeReq
         </p>
       ) : (
         <>
-          <p>Fill in only what should change. Everything else stays the same.</p>
+          {!embedded && <p>Fill in only what should change. Everything else stays the same.</p>}
           {questions.map((q) => (
             <div key={q.key}>
               <label className="block">{q.label}{what === "panel" && q.key === "place" && <WordsHelp guide="change" />}
@@ -125,10 +134,10 @@ export function ChangeRequest({ what, projectId, baseCode, onSubmit }: ChangeReq
               ))}
             </div>
           ))}
-          {what === "panel" && <p className="text-xs text-neutral-600">Anything about who stands where opens this panel&apos;s floor plan with your words applied, so you can see it before the picture is redrawn. It carries on to the next panels unless you tick &ldquo;This panel only&rdquo;.</p>}
+          {what === "panel" && !embedded && <p className="text-xs text-neutral-600">A place or size problem redraws the picture fresh from the approved layout.</p>}
           {Object.keys(pics).length > 0 && <p className="text-xs text-neutral-600">A picture is only used for what you added it to. {what === "place" ? "People, signs and text in it are left out." : "The faces and features stay the same."}</p>}
           {picError && <p className="text-xs text-red-700" role="alert">{picError}</p>}
-          <div className="flex items-center gap-3">
+          {!embedded && <div className="flex items-center gap-3">
             <ActionButton label="Submit changes" busyLabel="Submitting…" doneLabel="Submitted" testId="change-submit" disabled={!change || !!uploading}
               resetKey={[parts, pics]}
               onAction={async () => {
@@ -139,8 +148,8 @@ export function ChangeRequest({ what, projectId, baseCode, onSubmit }: ChangeReq
                 return r ?? undefined;
               }} />
             <button type="button" onClick={() => { setYes(false); setOpen(false); setParts({}); setPics({}); setNote(null); }} className="text-neutral-600 underline">{note?.ok ? "Close" : "Cancel"}</button>
-          </div>
-          {answered.length > 0 && !visual && !note && <p className="text-xs text-neutral-600">Nothing about how they look is changing, so this is saved straight away. No new images are needed.</p>}
+          </div>}
+          {!embedded && answered.length > 0 && !visual && !note && <p className="text-xs text-neutral-600">Nothing about how they look is changing, so this is saved straight away. No new images are needed.</p>}
           {note && <p className={`text-sm ${note.ok ? "text-green-700" : "text-red-700"}`} role="status">{note.text}</p>}
         </>
       )}

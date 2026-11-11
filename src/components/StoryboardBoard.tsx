@@ -116,8 +116,13 @@ async function checkPicture(panelId: string, assetId: string): Promise<{ pass: b
 function changeRequestFor(p: BoardPanel, ch: SubmittedChange) {
   if (ch.parts.place) {
     const refNote = ch.refs.length ? ` The last ${ch.refs.length === 1 ? "attached picture is a reference" : `${ch.refs.length} attached pictures are references`} for: ${ch.refs.map((r) => r.for.toLowerCase()).join("; ")}.` : "";
+    // Changed on the floor plan (D46): the layout is already new; say only what else to change.
+    const planned = ch.parts.place.startsWith("changed on this panel's floor plan");
+    const also = Object.entries(ch.parts).filter(([k, v]) => k !== "place" && v).map(([, v]) => v).join(". ");
     return {
-      prompt: `${p.prompt}\nFollow the layout sketch exactly for where everyone and everything stands and how big it is. The last attempt got this wrong: ${ch.text}.${refNote}`,
+      prompt: planned
+        ? `${p.prompt}\nWho stands where, which way they face and the camera have just been changed for this picture: follow the layout exactly, not any earlier picture.${also ? ` Also: ${also}.` : ""}${refNote}`
+        : `${p.prompt}\nFollow the layout sketch exactly for where everyone and everything stands and how big it is. The last attempt got this wrong: ${ch.text}.${refNote}`,
       refs: [...assetIds(p.attach), ...ch.refs.map((r) => r.assetId)],
     };
   }
@@ -174,7 +179,9 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
   const [handChange, setHandChange] = useState<Record<string, SubmittedChange>>({});
   // "Who stands where" changes open this panel's floor plan with the words applied (D39); once
   // saved, the picture is redrawn from the new layout as soon as the page has the new positions.
-  const [planning, setPlanning] = useState<{ p: BoardPanel; index: number; ch: SubmittedChange } | null>(null);
+  // "Need to change something?" opens one form for the panel (D46): its floor plan at the top,
+  // the other changes below, one Submit.
+  const [changing, setChanging] = useState<{ p: BoardPanel; index: number } | null>(null);
   const pendingRedraw = useRef<{ panelId: string; ch: SubmittedChange } | null>(null);
   useEffect(() => {
     const pr = pendingRedraw.current;
@@ -281,10 +288,6 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
     return bad === 0;
   }
 
-  function submitChange(p: BoardPanel, index: number, ch: SubmittedChange) {
-    if (ch.parts.place && p.shotId && p.hasCamera) { setPlanning({ p, index, ch }); return; }
-    return redraw(p, ch);
-  }
 
   async function redraw(p: BoardPanel, ch: SubmittedChange) {
     if (!b.canGenerate) { setHandChange((x) => ({ ...x, [p.id]: ch })); return; }
@@ -399,14 +402,15 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
       </div>
       {msg && <p className={`text-sm ${msg.ok ? "text-green-700" : "text-red-700"}`} role="status">{msg.text}</p>}
 
-      {planning && (
-        <PanelPlanner sceneId={b.sceneId} index={planning.index} words={planning.ch.parts.place}
-          onDone={(saved) => {
-            const pl = planning;
-            setPlanning(null);
-            if (!saved) return;
-            pendingRedraw.current = { panelId: pl.p.id, ch: pl.ch };
-            router.refresh();
+      {changing && (
+        <PanelChange sceneId={b.sceneId} index={changing.index} projectId={b.projectId} baseCode={codeOf(changing.p)}
+          onDone={(r) => {
+            const pl = changing;
+            setChanging(null);
+            if (!r) return;
+            // Positions or camera saved: redraw once the page has them; otherwise edit the picture now.
+            if (r.saved) { pendingRedraw.current = { panelId: pl.p.id, ch: r.ch }; router.refresh(); }
+            else void redraw(pl.p, r.ch);
           }} />
       )}
 
@@ -454,7 +458,12 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
                   onAction={async () => { const r = await approvePanelAction(p.id); router.refresh(); return r; }} />
               )}
               {p.imageAssetId && (
-                <ChangeRequest key={p.imageAssetId} what="panel" projectId={b.projectId} baseCode={codeOf(p)} onSubmit={(ch) => submitChange(p, i, ch)} />
+                p.hasCamera && p.shotId
+                  ? <button type="button" onClick={() => setChanging({ p, index: i })} data-testid="change-open"
+                      className="w-full rounded-lg border border-blue-200 bg-blue-50/40 px-4 py-2 text-left text-sm font-semibold text-blue-900 hover:bg-blue-50">
+                      Need to change something?
+                    </button>
+                  : <ChangeRequest key={p.imageAssetId} what="panel" projectId={b.projectId} baseCode={codeOf(p)} onSubmit={(ch) => redraw(p, ch)} />
               )}
               {handChange[p.id] && (() => {
                 const req = changeRequestFor(p, handChange[p.id]);
@@ -542,13 +551,19 @@ function hashText(t: string): string {
 }
 
 /**
- * One panel's floor plan, opened from "Need to change something?" (D39): the user's words are
- * already applied; they check the plan and the camera view, adjust by typing or dragging, and
- * Save hands back to redraw the picture.
+ * Changing one panel (D46): its floor plan at the top (drag people or the camera, or type a
+ * change), then anything else about the picture, then one Submit. Positions or camera changes
+ * are saved and the picture redrawn fresh from the new layout, with the other changes; other
+ * changes alone edit the current picture.
  */
-function PanelPlanner({ sceneId, index, words, onDone }: { sceneId: string; index: number; words?: string; onDone: (saved: boolean) => void }) {
+function PanelChange({ sceneId, index, projectId, baseCode, onDone }: {
+  sceneId: string; index: number; projectId: string; baseCode: string;
+  onDone: (r: { saved: boolean; ch: SubmittedChange } | null) => void;
+}) {
   const [data, setData] = useState<PlanEditorData | null>(null);
   const [error, setError] = useState("");
+  const [planner, setPlanner] = useState<{ changed: boolean; summary: string; save: () => Promise<{ ok: boolean; error?: string }> } | null>(null);
+  const [other, setOther] = useState<SubmittedChange | null>(null);
   useEffect(() => {
     let live = true;
     fetch(`/api/plan-editor/${sceneId}`, { cache: "no-store" })
@@ -558,17 +573,39 @@ function PanelPlanner({ sceneId, index, words, onDone }: { sceneId: string; inde
   }, [sceneId]);
   const { planName: _n, venueName: _v, ...editor } = data ?? ({} as PlanEditorData);
   void _n; void _v;
+  const anything = !!planner?.changed || !!other?.text;
   return (
     <div className="fixed inset-0 z-50 overflow-auto bg-black/40 p-4" role="dialog" aria-modal="true" data-testid="panel-planner">
       <div className="mx-auto max-w-[1500px] rounded-xl bg-neutral-50 p-4 shadow-xl">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">Who stands where in panel {index + 1}</h2>
-          <button type="button" className="text-sm text-neutral-600 underline" onClick={() => onDone(false)}>Close</button>
+          <h2 className="text-lg font-semibold">Change panel {index + 1}</h2>
+          <button type="button" className="text-sm text-neutral-600 underline" onClick={() => onDone(null)}>Close</button>
         </div>
-        <p className="text-sm text-neutral-600">Your words are applied below. Check the plan and the camera view, change anything by typing or dragging, then save to redraw the picture.</p>
+        <p className="text-sm text-neutral-600">Change who stands where or the camera on the floor plan: drag them, or type what should change. Add anything else about the picture below. Then submit to redraw it.</p>
         {error ? <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>
           : !data ? <p className="mt-3 text-sm text-neutral-500">Opening the floor plan…</p>
-          : <PlanEditorLoader {...editor} initialStep={index + 1} focus={{ words, onDone }} />}
+          : <PlanEditorLoader {...editor} initialStep={index + 1} focus={{ onDone: () => onDone(null), bind: setPlanner }} />}
+        <div className="mt-6 rounded-xl border border-neutral-200 bg-white p-4" data-testid="panel-change-other">
+          <h3 className="font-semibold">Anything else about the picture?</h3>
+          <div className="mt-2">
+            <ChangeRequest what="panel" projectId={projectId} baseCode={baseCode} onSubmit={() => undefined} embedded={{ onChange: setOther, leaveOut: ["place"] }} />
+          </div>
+        </div>
+        <div className="sticky bottom-0 z-10 -mx-4 mt-4 flex flex-wrap items-center gap-3 rounded-b-xl border-t border-neutral-200 bg-neutral-50/95 px-4 py-3 backdrop-blur" data-testid="panel-change-bar">
+          <ActionButton label="Submit changes" busyLabel="Saving…" doneLabel="Submitted" testId="panel-change-submit" disabled={!anything}
+            onAction={async () => {
+              if (planner?.changed) {
+                const r = await planner.save();
+                if (!r.ok) { setError(r.error ?? "Couldn't save the positions."); return false; }
+                const place = `changed on this panel's floor plan${planner.summary ? ` (${planner.summary})` : ""}`;
+                onDone({ saved: true, ch: { text: [`Who stands where: ${place}`, other?.text].filter(Boolean).join(". "), parts: { ...(other?.parts ?? {}), place }, visual: true, refs: other?.refs ?? [] } });
+                return;
+              }
+              if (other?.text) onDone({ saved: false, ch: other });
+            }} />
+          <button type="button" className="text-sm text-neutral-600 underline" onClick={() => onDone(null)} data-testid="panel-change-cancel">Cancel</button>
+          <span className="text-sm text-neutral-600">{!anything ? "Nothing to change yet." : planner?.changed ? "Saves the new positions and redraws the picture from them, with anything else you've asked for." : "Edits the current picture with what you've asked for."}</span>
+        </div>
       </div>
     </div>
   );

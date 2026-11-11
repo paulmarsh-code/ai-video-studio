@@ -44,7 +44,14 @@ export function PlanEditor(props: {
    * Opened from a storyboard panel's "Need to change something?" (D39): just that panel, with
    * the user's words applied, and Save hands back to redraw the picture.
    */
-  focus?: { words?: string; onDone: (saved: boolean) => void };
+  focus?: {
+    words?: string; onDone: (saved: boolean) => void;
+    /**
+     * Inside the panel's change form (D46): the form has the Submit button. The planner tells
+     * it whether anything changed, what, and how to save it.
+     */
+    bind?: (planner: { changed: boolean; summary: string; save: () => Promise<{ ok: boolean; error?: string }> }) => void;
+  };
   /** The project's genre, for the app's camera choice on a panel (D44). */ genre?: Genre;
 }) {
   const { cast } = props;
@@ -184,6 +191,27 @@ export function PlanEditor(props: {
       return { ...e, [panel.shotId]: mine };
     });
   };
+  // Inside the change form (D46): keep the form told how to save, and what changed.
+  const bind = props.focus?.bind;
+  useEffect(() => {
+    if (!bind || !panel) return;
+    const mine = edits[panel.shotId] ?? {};
+    const keys = Object.keys(mine);
+    const summary = [read?.understood.length ? read.understood.join("; ") : "", keys.some((k) => !k.startsWith("@")) ? "people or props moved on the floor plan" : "", keys.includes("@camera") ? "the camera moved" : ""].filter(Boolean).join("; ");
+    bind({
+      changed: changedPanels.length > 0,
+      summary,
+      save: async () => {
+        const r = await savePanelBlockingAction(changedPanels.map(([shotId, entries]) => {
+          const { "@camera": cam, ...rest } = entries;
+          return { shotId, entries: rest, ...(cam ? { camera: { ...(cam.camera ?? {}), position: cam.at, lookAt: cam.to ?? cam.at } } : {}) };
+        }));
+        return r.ok ? { ok: true } : { ok: false, error: r.error };
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [edits, read]);
+
   // Opened with words from the storyboard: apply them once, straight away.
   const applied = useRef(false);
   useEffect(() => {
@@ -597,7 +625,7 @@ export function PlanEditor(props: {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <ActionButton label={props.focus ? "Save and redraw the picture" : changedPanels.length > 1 ? `Save positions (${changedPanels.length} panels)` : "Save positions"} busyLabel="Saving…" doneLabel="Saved" testId="panel-save"
+              {!props.focus?.bind && <ActionButton label={props.focus ? "Save and redraw the picture" : changedPanels.length > 1 ? `Save positions (${changedPanels.length} panels)` : "Save positions"} busyLabel="Saving…" doneLabel="Saved" testId="panel-save"
                 disabled={!changedPanels.length || dirty} resetKey={edits}
                 title={dirty ? "Save the scene plan first" : ""}
                 onAction={async () => {
@@ -610,8 +638,8 @@ export function PlanEditor(props: {
                   if (props.focus) { props.focus.onDone(true); return; }
                   setPanelStatus("Saved. Redraw the pictures of the panels that changed.");
                   router.refresh();
-                }} />
-              {props.focus && <button type="button" className="text-neutral-600 underline" data-testid="panel-cancel" onClick={() => props.focus!.onDone(false)}>Cancel</button>}
+                }} />}
+              {props.focus && !props.focus.bind && <button type="button" className="text-neutral-600 underline" data-testid="panel-cancel" onClick={() => props.focus!.onDone(false)}>Cancel</button>}
               <button type="button" disabled={!editHistory.length} onClick={undoEdit} className="rounded-md border border-neutral-300 px-3 py-1 text-sm disabled:opacity-40">Undo last move</button>
               {changedPanels.length > 0 && <span className="text-sm text-neutral-600">Unsaved: panel {changedPanels.map(([sid]) => panels.findIndex((x) => x.shotId === sid) + 1).sort((x, y) => x - y).join(", ")}</span>}
               {dirty && <span className="text-sm text-amber-700">The scene plan has unsaved changes: save it first.</span>}
