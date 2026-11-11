@@ -281,6 +281,7 @@ export function judgePicture(e: PictureExpectation, reply: string, plan?: string
   } else if (typeof plan === "string" && e.figures?.length) {
     // The vision model's estimate (D52), when the detector can't run.
     measuredBy = "estimate";
+    unmeasured.blocking.push("exact sizes and heads (the person detector isn't running, so these are the vision model's estimate; run npm install and restart)");
     const got = parsePlan(plan);
     for (const want of judged) {
       const g = got.find((f) => first(String(f.name ?? "")) === first(want.name));

@@ -41,7 +41,7 @@ describe("The plan check reads heads and compares sizes with the plan (D49, D51,
     expect(all).not.toMatch(/Dee is drawn/);
     expect(all).toMatch(/The camera is too high or tilted down: heads are about 19% of the way down the picture, but image 1 has them about 48% down/);
     expect(r.eyeLevel).toBe("above");
-    expect(r.areas!.blocking.unmeasured).toEqual(["Ben: hidden, size not judged"]);
+    expect(r.areas!.blocking.unmeasured).toEqual([expect.stringMatching(/person detector isn't running/), "Ben: hidden, size not judged"]);
     expect(r.measured?.find((m) => m.name === "Ava Stone")).toEqual({ name: "Ava Stone", plannedHeadY: 0.488, headY: 0.2, fit: "bigger", heightRatio: 2.1 });
   });
 
@@ -86,7 +86,7 @@ describe("The plan check reads heads and compares sizes with the plan (D49, D51,
     expect(r.areas!.look.pass).toBe(false);
     expect(r.areas!.blocking.pass).toBe(true);
     expect(r.redraw).toBeUndefined();
-    expect(r.areas!.blocking.unmeasured).toEqual(["Ava Stone: size not judged", "Ben: size not judged", "Cleo: size not judged", "Dee: size not judged", "eye level: not judged"]);
+    expect(r.areas!.blocking.unmeasured).toEqual([expect.stringMatching(/person detector isn't running/), "Ava Stone: size not judged", "Ben: size not judged", "Cleo: size not judged", "Dee: size not judged", "eye level: not judged"]);
     // Without a plan check (no figures sent) nothing is said about it.
     expect(judgePicture(expect0, main).areas!.blocking.unmeasured).toEqual([]);
   });

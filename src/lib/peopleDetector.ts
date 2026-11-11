@@ -43,7 +43,9 @@ async function modelFile(): Promise<string> {
 export async function detectPeople(picture: Buffer): Promise<{ people: Person[]; width: number; height: number }> {
   if (!session) {
     session = (async () => {
-      const ort = await import("onnxruntime-node");
+      // Loaded when the check runs, not when the app is built, so a computer without the package
+      // still builds and the check falls back to the estimate instead of failing to compile.
+      const ort = (await import(/* webpackIgnore: true */ "onnxruntime-node")) as typeof import("onnxruntime-node");
       tensor = ort.Tensor as unknown as typeof tensor;
       return ort.InferenceSession.create(await modelFile()) as unknown as Awaited<NonNullable<typeof session>>;
     })();
