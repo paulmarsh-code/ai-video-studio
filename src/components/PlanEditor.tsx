@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
 import { Arrow, Circle, Group, Layer, Line, Rect, Stage, Text, Wedge } from "react-konva";
 import { savePlanAction, addPlanToLibraryAction } from "@/app/actions";
 import { savePanelBlockingAction } from "@/app/studioActions";
-import { aimToInclude, checkLineOfAction, describeFrame, facingOf, planForShot, PRESET_FOV, readCamera } from "@/lib/domain/geometry";
+import { aimToInclude, checkLineOfAction, describeFrame, facingOf, horizontalFov, nearestKeeping, planForShot, PRESET_FOV, readCamera, turnToKeep } from "@/lib/domain/geometry";
 import { blockSource, carryBlocking, withEdits, type BlockEntry } from "@/lib/domain/blocking";
 import { posturesFromWords } from "@/lib/domain/panelWords";
 import { changeFromWords, changeSuggestions } from "@/lib/domain/changeWords";
@@ -21,6 +21,7 @@ import type { CameraPreset, CastMember, GeometryPlanData, PlanCamera, PlanLevel,
 import { CameraView, type RingInfo } from "./CameraView";
 import { fovForSize, lensText, SHOT_SIZES, type ShotSize } from "@/lib/domain/shotLanguage";
 import { propKind } from "@/lib/domain/story";
+import { joinNames } from "@/lib/domain/text";
 import { FindingList } from "./FindingList";
 import { ActionButton } from "./ActionButton";
 import { WordsHelp } from "./WordsHelp";
@@ -50,7 +51,7 @@ export function PlanEditor(props: {
      * Inside the panel's change form (D46): the form has the Submit button. The planner tells
      * it whether anything changed, what, and how to save it.
      */
-    bind?: (planner: { changed: boolean; summary: string; save: () => Promise<{ ok: boolean; error?: string }> }) => void;
+    bind?: (planner: { changed: boolean; summary: string; save: () => Promise<{ ok: boolean; error?: string; note?: string }> }) => void;
   };
   /** The project's genre, for the app's camera choice on a panel (D44). */ genre?: Genre;
 }) {
@@ -111,17 +112,45 @@ export function PlanEditor(props: {
     }), cast.map((c) => ({ id: c.id, name: c.name })), props.scenePose),
     [plan, panels, effSpecs, cast, props.scenePose],
   );
-  const shown0 = pspec ? planForShot(plan, { ...pspec, posture: poses[pk] }) : plan;
-  // This panel's camera, as moved here if it has been (D43): the "@camera" edit.
-  const camMoved = panel ? edits[panel.shotId]?.["@camera"] : undefined;
-  const camSaved = pspec?.cameraId ? shown0.cameras.find((c) => c.id === pspec.cameraId) : undefined;
-  const cam0 = camSaved && camMoved ? { ...camSaved, ...(camMoved.camera ?? {}), id: camSaved.id, name: camSaved.name, position: camMoved.at, lookAt: camMoved.to ?? camSaved.lookAt } : camSaved;
-  // Anyone who must be in the picture but is out of the camera's view: the camera turns to
-  // take them in (D42), shown here as it will be saved.
-  const mustSee = cam0 && pspec ? (pspec.visibleIds ?? []).filter((id) => id !== cam0.povId && shown0.actors.some((a) => a.characterId === id)) : [];
-  const aimed = cam0 ? aimToInclude(shown0, cam0, mustSee) : undefined;
-  const outOfView = cam0 && aimed !== cam0 ? mustSee.filter((id) => !readCamera(shown0, cam0).actors.find((a) => a.characterId === id)?.inView) : [];
-  const shown = cam0 && aimed && aimed !== camSaved ? { ...shown0, cameras: shown0.cameras.map((c) => (c.id === cam0.id ? aimed : c)) } : shown0;
+  /**
+   * A panel's plan and camera as edited here: its people (D35, D37), its camera as moved (D43,
+   * the "@camera" edit), turned to take in anyone who must be in the picture (D42) and to keep
+   * everyone in the panel's own shot (D47), and who would still drop out of it (D45).
+   */
+  const viewOf = (k: number) => {
+    const pn = panels[k], sp = effSpecs[k];
+    if (!pn || !sp) return undefined;
+    const s0 = planForShot(plan, { ...sp, posture: poses[k] });
+    const moved = edits[pn.shotId]?.["@camera"];
+    const savedCam = sp.cameraId ? s0.cameras.find((c) => c.id === sp.cameraId) : undefined;
+    const c0 = savedCam && moved ? { ...savedCam, ...(moved.camera ?? {}), id: savedCam.id, name: savedCam.name, position: moved.at, lookAt: moved.to ?? savedCam.lookAt } : savedCam;
+    const must = c0 ? (sp.visibleIds ?? []).filter((id) => id !== c0.povId && s0.actors.some((a) => a.characterId === id)) : [];
+    // The panel's own shot: who its original camera has wholly in the picture, where everyone is now.
+    const orig = c0 ? plan.cameras.find((c) => c.id === c0.id.split("~")[0]) : undefined;
+    const inScene = (sp.presentIds ?? []).concat(sp.visibleIds ?? []);
+    const was = orig ? readCamera(s0, orig).actors.filter((a) => a.inView && !a.partial && a.characterId !== c0?.povId && inScene.includes(a.characterId)).map((a) => a.characterId) : [];
+    const keep = [...new Set([...must, ...was])];
+    const forMust = c0 ? aimToInclude(s0, c0, must) : undefined;
+    const aimedK = forMust ? (turnToKeep(s0, forMust, keep) ?? forMust) : undefined;
+    const shownK = c0 && aimedK && aimedK !== savedCam ? { ...s0, cameras: s0.cameras.map((c) => (c.id === c0.id ? aimedK : c)) } : s0;
+    const cam = sp.cameraId ? shownK.cameras.find((c) => c.id === sp.cameraId) : undefined;
+    const now = cam ? readCamera(shownK, cam).actors.filter((a) => a.inView).map((a) => a.characterId) : [];
+    const lostK = orig && cam ? was.filter((id) => !now.includes(id)) : [];
+    // Kept in by the app only when they're just past the edge of the picture: a camera turned
+    // right round (the group behind it) or framed tight on purpose is the user's choice.
+    const reading = cam ? readCamera(shownK, cam) : undefined;
+    const half = cam ? horizontalFov(shownK, cam) / 2 : 0;
+    const autoKeep = lostK.length > 0 && lostK.every((id) => { const a = reading?.actors.find((x) => x.characterId === id); return !!a && a.depthM > 0 && Math.abs(a.angleDeg) - half <= 15; });
+    return { pn, sp, s0, c0, savedCam, moved, must, keep, aimed: aimedK, shown: shownK, cam, lost: lostK, autoKeep };
+  };
+  const view = panelMode ? viewOf(pk) : undefined;
+  const shown0 = view?.s0 ?? plan;
+  // This panel's camera, as moved here if it has been (D43).
+  const camMoved = view?.moved;
+  const cam0 = view?.c0;
+  const aimed = view?.aimed;
+  const outOfView = cam0 && aimed !== cam0 ? (view?.keep ?? []).filter((id) => !readCamera(shown0, cam0).actors.find((a) => a.characterId === id)?.inView) : [];
+  const shown = view?.shown ?? plan;
   /** Move or aim this panel's camera (D43): kept as an edit until saved. */
   const moveThisCam = (patch: { position?: Point; lookAt?: Point }) => {
     if (!panel || !cam0) return;
@@ -129,30 +158,75 @@ export function PlanEditor(props: {
     setEdits((e) => ({ ...e, [panel.shotId]: { ...(e[panel.shotId] ?? {}), "@camera": { ...(e[panel.shotId]?.["@camera"] ?? {}), at: patch.position ?? cur.position, to: patch.lookAt ?? cur.lookAt } } }));
   };
   /**
-   * The app places this panel's camera (D44), with the same film rules it uses for the whole
-   * scene, from where everyone is now: e.g. behind someone arriving, so we see where they go.
+   * The app's camera for panel k (D44), with the same film rules it uses for the whole scene,
+   * from where everyone is now. With `keep`, only a camera that has them all wholly in the
+   * picture, the one nearest where the camera is now (D47), so the angle chosen stays.
    */
+  const placeFor = (k: number, keep?: { ids: string[]; near: Point }) => {
+    const pn = panels[k];
+    if (!pn) return undefined;
+    const design = designScene(plan, panels.map((x, j) => ({ id: x.shotId, code: x.code, spec: { ...effSpecs[j], posture: poses[j] } as ShotSpec, description: x.description })), name, props.genre ?? "neutral");
+    const opts = design.shots.find((d) => d.shotId === pn.shotId)?.options ?? [];
+    if (!keep) return opts[0];
+    return nearestKeeping(planForShot(plan, { ...effSpecs[k], posture: poses[k] }), opts, keep.ids, keep.near);
+  };
+  const setCamera = (shotId: string, c: PlanCamera) => {
+    const { id: _id, name: _n, ...cam } = c;
+    void _id; void _n;
+    setEdits((e) => ({ ...e, [shotId]: { ...(e[shotId] ?? {}), "@camera": { at: cam.position, to: cam.lookAt, camera: cam } } }));
+  };
+  /** "Let the app place the camera" (D44): e.g. behind someone arriving, so we see where they go. */
   const appCamera = () => {
     if (!panel) return;
-    const design = designScene(plan, panels.map((pn, k) => ({ id: pn.shotId, code: pn.code, spec: { ...effSpecs[k], posture: poses[k] } as ShotSpec, description: pn.description })), name, props.genre ?? "neutral");
-    const opt = design.shots.find((d) => d.shotId === panel.shotId)?.options[0];
+    const opt = placeFor(pk);
     if (!opt) { setCamNote("The app couldn't find a camera that sees everyone in this panel from here. Move people closer together, or drag the camera yourself."); return; }
     pushEdit();
-    const { id: _id, name: _n, ...cam } = opt.camera;
-    void _id; void _n;
-    setEdits((e) => ({ ...e, [panel.shotId]: { ...(e[panel.shotId] ?? {}), "@camera": { at: cam.position, to: cam.lookAt, camera: cam } } }));
+    setCamera(panel.shotId, opt.camera);
     setCamNote(`Placed by the app: ${opt.kind}.${opt.reasons[0] ? ` ${opt.reasons[0].replace(/^R-[A-Z-]+:\s*/, "")}.` : ""} Not saved yet.`);
   };
-  const panelCam = pspec?.cameraId ? shown.cameras.find((c) => c.id === pspec.cameraId) : undefined;
-  // Who was in this panel's original shot but isn't in the picture with the camera as it is
-  // now (D45), e.g. after moving the camera: said, so nobody drops out unnoticed.
-  const origCam = cam0 ? plan.cameras.find((c) => c.id === cam0.id.split("~")[0]) : undefined;
-  const lost = origCam && panelCam && pspec ? (() => {
-    const was = readCamera(shown, origCam).actors.filter((a) => a.inView && !a.partial).map((a) => a.characterId);
-    const now = readCamera(shown, panelCam).actors.filter((a) => a.inView).map((a) => a.characterId);
-    return was.filter((id) => !now.includes(id) && (pspec.presentIds ?? []).concat(pspec.visibleIds ?? []).includes(id));
-  })() : [];
+  /** "Keep everyone in" (D47): the app's camera nearest this one that has everyone in the shot. */
+  const keepEveryone = () => {
+    if (!panel || !view?.c0) return;
+    const opt = placeFor(pk, { ids: view.keep, near: view.c0.position });
+    if (!opt) { setCamNote("The app couldn't find a camera that keeps everyone in from here. Move people closer together, or drag the camera yourself."); return; }
+    pushEdit();
+    setCamera(panel.shotId, opt.camera);
+    const who = joinNames(view.lost.map((id) => name(id).split(" ")[0]));
+    setCamNote(`${who ? `${who} ${view.lost.length === 1 ? "wasn't" : "weren't"} in the picture with this camera, so the` : "The"} app moved it to keep everyone in. Not saved yet.`);
+  };
+  const panelCam = view?.cam;
+  // Who was in this panel's own shot but isn't in the picture with the camera as it is now
+  // (D45), e.g. after moving it: kept in when it's saved (D47), so nobody drops out unnoticed.
+  const lost = view?.lost ?? [];
   const changedPanels = Object.entries(edits).filter(([, e]) => Object.keys(e).length);
+  /**
+   * What saving sends: each changed panel's placements and its camera, as shown here. A camera
+   * that would leave someone in the panel's own shot out of the picture is replaced by the
+   * app's nearest camera that keeps everyone in (D47), and the note says so.
+   */
+  const toSave = () => {
+    const notes: string[] = [];
+    const changes = changedPanels.map(([shotId, entries]) => {
+      const { "@camera": camEdit, ...rest } = entries;
+      const k = panels.findIndex((x) => x.shotId === shotId);
+      const v = k >= 0 ? viewOf(k) : undefined;
+      let camera = camEdit ? { ...(camEdit.camera ?? {}), position: camEdit.at, lookAt: camEdit.to ?? camEdit.at } : undefined;
+      // Turned here to keep everyone in (D42, D47): saved as shown.
+      if (v?.aimed && v.c0 && v.aimed !== v.c0) camera = { ...(camera ?? {}), position: v.aimed.position, lookAt: v.aimed.lookAt, ...(v.aimed.fovDeg !== undefined ? { fovDeg: v.aimed.fovDeg } : {}) };
+      if (v?.lost.length && v.c0) {
+        const opt = v.autoKeep ? placeFor(k, { ids: v.keep, near: v.c0.position }) : undefined;
+        const who = joinNames(v.lost.map((id) => name(id).split(" ")[0]));
+        if (opt) {
+          const { id: _id, name: _n, ...c } = opt.camera;
+          void _id; void _n;
+          camera = c;
+          notes.push(`${who} would have been out of panel ${k + 1}'s picture, so the app moved its camera to keep everyone in.`);
+        } else notes.push(`${who} ${v.lost.length === 1 ? "isn't" : "aren't"} in panel ${k + 1}'s picture with this camera${v.autoKeep ? ", and the app couldn't find one that keeps everyone in" : ""}.`);
+      }
+      return { shotId, entries: rest, ...(camera ? { camera } : {}) };
+    });
+    return { changes, note: notes.join(" ") };
+  };
   const curEntry = (key: string): BlockEntry => {
     const bl = pspec?.blocking?.[key];
     if (bl) return { at: bl.at, ...(bl.to ? { to: bl.to } : {}), ...(bl.facingDeg !== undefined ? { facingDeg: bl.facingDeg } : {}), ...(bl.only && bl.by === "you" ? { only: true } : {}), ...(bl.gone ? { gone: true } : {}) };
@@ -202,15 +276,23 @@ export function PlanEditor(props: {
       changed: changedPanels.length > 0,
       summary,
       save: async () => {
-        const r = await savePanelBlockingAction(changedPanels.map(([shotId, entries]) => {
-          const { "@camera": cam, ...rest } = entries;
-          return { shotId, entries: rest, ...(cam ? { camera: { ...(cam.camera ?? {}), position: cam.at, lookAt: cam.to ?? cam.at } } : {}) };
-        }));
-        return r.ok ? { ok: true } : { ok: false, error: r.error };
+        const { changes, note } = toSave();
+        const r = await savePanelBlockingAction(changes);
+        return r.ok ? { ok: true, note } : { ok: false, error: r.error };
       },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [edits, read]);
+
+  // In a panel's change form (D47): if someone in the panel's shot is out of the picture with
+  // its camera, the app moves the camera to keep everyone in as the form opens, so it's seen.
+  const keptOnOpen = useRef(false);
+  useEffect(() => {
+    if (keptOnOpen.current || !props.focus || !view) return;
+    keptOnOpen.current = true;
+    if (view.autoKeep) keepEveryone();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view?.pn.shotId]);
 
   // Opened with words from the storyboard: apply them once, straight away.
   const applied = useRef(false);
@@ -523,7 +605,8 @@ export function PlanEditor(props: {
               )}
               {lost.length > 0 && (
                 <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900" data-testid="panel-lost">
-                  {lost.map((id) => name(id).split(" ")[0]).join(" and ")} {lost.length === 1 ? "was" : "were"} in this panel&apos;s original shot but {lost.length === 1 ? "isn't" : "aren't"} in the picture with this camera. Use &ldquo;Let the app place the camera&rdquo;, or move the camera so {lost.length === 1 ? "they're" : "they're all"} in the blue area.
+                  {joinNames(lost.map((id) => name(id).split(" ")[0]))} {lost.length === 1 ? "is" : "are"} in this panel&apos;s shot but not in the picture with this camera.{view?.autoKeep ? ` When you ${props.focus?.bind ? "submit" : "save"}, the app moves the camera to keep everyone in.` : ""}{" "}
+                  <button type="button" className="underline" data-testid="panel-keep-everyone" onClick={keepEveryone}>{view?.autoKeep ? "Show it now" : "Keep everyone in"}</button>
                 </p>
               )}
               {panelCam && (
@@ -629,14 +712,12 @@ export function PlanEditor(props: {
                 disabled={!changedPanels.length || dirty} resetKey={edits}
                 title={dirty ? "Save the scene plan first" : ""}
                 onAction={async () => {
-                  const r = await savePanelBlockingAction(changedPanels.map(([shotId, entries]) => {
-                    const { "@camera": cam, ...rest } = entries;
-                    return { shotId, entries: rest, ...(cam ? { camera: { ...(cam.camera ?? {}), position: cam.at, lookAt: cam.to ?? cam.at } } : {}) };
-                  }));
+                  const { changes, note } = toSave();
+                  const r = await savePanelBlockingAction(changes);
                   if (!r.ok) { setPanelStatus(r.error); return false; }
                   setEdits({}); setEditHistory([]);
                   if (props.focus) { props.focus.onDone(true); return; }
-                  setPanelStatus("Saved. Redraw the pictures of the panels that changed.");
+                  setPanelStatus(`Saved.${note ? ` ${note}` : ""} Redraw the pictures of the panels that changed.`);
                   router.refresh();
                 }} />}
               {props.focus && !props.focus.bind && <button type="button" className="text-neutral-600 underline" data-testid="panel-cancel" onClick={() => props.focus!.onDone(false)}>Cancel</button>}

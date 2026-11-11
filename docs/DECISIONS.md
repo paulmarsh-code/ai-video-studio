@@ -854,3 +854,26 @@ D38 test: no new feature. The same planner (D39) and the same picture changes re
 - **Only a picture change**: the current picture is edited, as before.
 - Cancel closes the form and draws nothing. Panels with no camera yet keep the plain form.
 - Browser test on a copy of Paul's scene: one click opens the planner with no typing; no separate place box; Submit waits for a change; no planner Save inside; moved positions → one fresh redraw; picture-only change → edit of the current picture; Cancel → nothing drawn.
+
+### D47: Nobody drops out of a panel's shot, and the scene's own logo is allowed (2026-11-11)
+
+Paul redrew panel 1 with the new form. Jade came out where his layout put her, but Chase was missing again and the GLOWVANE logo was a new design (a white sunburst, where earlier pictures had a dark backdrop with a gold "G").
+
+What happened, from his data:
+- **Chase**: panel 1's own camera (the one Paul had moved) has Chase about 3° past the left edge. The planner warned, but nothing stopped it, so the request said "Exactly 3 people", and the check passed because panel 1's "in frame" list is only Jade.
+- **The logo**: the last line of every picture request said "No text, no logos", while the props asked for a "GLOWVANE illuminated logo backdrop". The fresh picture left the backdrop out, the check flagged it, and the correction added one with a logo it made up. The backdrop has no picture and its words don't describe the logo, so every picture has had a different one (four different logos in five pictures).
+
+D38 test: a person missing from the shot and a logo that changes between pictures are visible failures. The fixes reach the camera choice, the prompt's last line, and the prop's reference picture.
+
+- **Keeping everyone in the shot**: whoever the panel's original camera has in the picture (where everyone is now) is kept in.
+  - First the camera turns, keeping its place and lens, when a turn is enough. This shows live on the planner, as D42 does for the people who must be in it.
+  - When a turn isn't enough, the app uses its own camera for the panel that has everyone in it, the one nearest where the camera was, so the angle chosen stays as close as it can (`nearestKeeping`). In the change form this happens as it opens, with a note: "Chase wasn't in the picture with this camera, so the app moved it to keep everyone in." On saving, it's applied to any panel still missing someone, and the panel card says what was done.
+  - Only when they're just past the edge (in front of the camera, at most 15° outside the frame). A camera turned right round, with the group behind it, or framed tight on purpose is left as set. The planner says who isn't in the picture and offers "Keep everyone in".
+- **The scene's own logo**: when a prop carries a logo or lettering (logo, sign, banner, poster, lettering, wordmark, billboard, placard, menu board), the last line of the picture and video prompts says "No other text or logos: the only lettering and logo are on the <prop>, exactly as described" (or "as in its attached picture"). Scenes without one keep "No text, no logos" (`signage.ts`).
+- **A logo needs a picture**: a prop with a logo or lettering but no picture is flagged on the storyboard ("Logos and signs: … GPT makes it up and it comes out different in every picture") and next to the prop in the scene setting. The picture is sent with every panel picture the prop is in, as for any prop (D19c), and the check compares against it.
+- Tests: `tests/signsAndKeep.d47.test.ts`. Browser tests on a copy of Paul's scene:
+  - opening panel 1's form moves the camera to keep Chase in and says so, and the request has all four people;
+  - the request no longer forbids the logo;
+  - the sign notices show on the board and in the scene setting;
+  - a camera turned round on purpose is left alone, with "Keep everyone in" offered;
+  - D46's form test still passes.

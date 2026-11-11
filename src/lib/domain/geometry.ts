@@ -139,6 +139,50 @@ export function aimToInclude(plan: GeometryPlanData, cam: PlanCamera, ids: strin
   return { ...cam, lookAt: at((lo + hi) / 2), fovDeg: widen(need) };
 }
 
+/**
+ * Turn a camera, keeping where it stands and its lens, so everyone named is wholly in the
+ * picture (D47): for the people in a panel's own shot, who mustn't drop out because the camera
+ * was moved. The same camera when they're all in already; undefined when no turn can do it.
+ */
+export function turnToKeep(plan: GeometryPlanData, cam: PlanCamera, ids: string[]): PlanCamera | undefined {
+  const here = ids.filter((id) => plan.actors.some((a) => a.characterId === id));
+  const whole = (c: PlanCamera) => {
+    const seen = readCamera(plan, c).actors;
+    return here.every((id) => { const a = seen.find((x) => x.characterId === id); return !!a && a.inView && !a.partial; });
+  };
+  if (whole(cam)) return cam;
+  const f = sub(cam.lookAt, cam.position);
+  const dist = Math.hypot(f.x, f.y) || 1;
+  const fwdDeg = (Math.atan2(f.y, f.x) * 180) / Math.PI;
+  const wrap = (d: number) => ((d + 540) % 360) - 180;
+  const room = (horizontalFov(plan, cam) / 2) * 0.92;
+  const spans = here.map((id) => plan.actors.find((a) => a.characterId === id)!.position).map((p) => {
+    const v = sub(p, cam.position), d = Math.hypot(v.x, v.y) || 0.1;
+    const off = wrap((Math.atan2(v.y, v.x) * 180) / Math.PI - fwdDeg), m = (Math.atan(0.35 / d) * 180) / Math.PI;
+    return { lo: off - m, hi: off + m };
+  });
+  const lo = Math.min(...spans.map((s) => s.lo)), hi = Math.max(...spans.map((s) => s.hi));
+  if ((hi - lo) / 2 > room) return undefined;
+  const shift = hi > room ? hi - room : lo < -room ? lo + room : 0;
+  const turned = ((fwdDeg + shift) * Math.PI) / 180;
+  const out = { ...cam, lookAt: { x: +(cam.position.x + Math.cos(turned) * dist).toFixed(2), y: +(cam.position.y + Math.sin(turned) * dist).toFixed(2) } };
+  return whole(out) ? out : undefined;
+}
+
+/**
+ * Of some cameras (the app's choices for a panel), the one nearest a spot that has everyone
+ * named wholly in the picture (D47): keeping a moved camera's angle as far as it can.
+ */
+export function nearestKeeping<T extends { camera: PlanCamera }>(plan: GeometryPlanData, options: T[], ids: string[], near: Point): T | undefined {
+  const whole = (c: PlanCamera) => ids.every((id) => {
+    if (!plan.actors.some((a) => a.characterId === id)) return true;
+    const a = readCamera(plan, c).actors.find((x) => x.characterId === id);
+    return !!a && a.inView && !a.partial;
+  });
+  const far = (c: PlanCamera) => Math.hypot(c.position.x - near.x, c.position.y - near.y);
+  return options.filter((o) => whole(o.camera)).sort((a, b) => far(a.camera) - far(b.camera))[0];
+}
+
 export function readCamera(plan: GeometryPlanData, cam: PlanCamera): CameraReading {
   const fov = horizontalFov(plan, cam);
   const half = fov / 2;

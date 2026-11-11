@@ -11,6 +11,7 @@ import { mergeSuggestion, parseStaging, type CrowdLevel, type KeyProp, type Scen
 import { uploadBlob } from "@/lib/clientUpload";
 import { ActionButton } from "./ActionButton";
 import { WordsHelp } from "./WordsHelp";
+import { isSign } from "@/lib/domain/signage";
 
 const field = "mt-1 w-full rounded border border-neutral-300 px-2 py-1.5 text-sm";
 
@@ -59,6 +60,7 @@ export function StagingFields({ value, onChange, propsLocked, projectId }: {
                     onChange={(e) => { const f = e.target.files?.[0]; if (f) void addPicture(k, f); e.target.value = ""; }} />
                 </label>
               ))}
+              {projectId && !p.imageAssetId && isSign(p) && <span className="text-amber-800" data-testid={`staging-prop-${k}-sign`}>has a logo or lettering: add a picture so it&apos;s the same in every shot</span>}
               {(!propsLocked || p.ref) && <button type="button" className="text-red-700 underline" data-testid={`staging-prop-${k}-remove`} title={propsLocked ? "Takes it off the floor plan; redraw the pictures it was in" : undefined}
                 onClick={() => onChange({ ...value, props: value.props.filter((_, i) => i !== k) })}>Remove</button>}
             </div>

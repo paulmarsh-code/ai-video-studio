@@ -14,6 +14,7 @@ import { shotLines } from "./shotLanguage";
 import { levelAt, levelLines } from "./levels";
 import { joinNames, stripQuotes } from "./text";
 import { postureWords } from "./panelWords";
+import { noTextRule } from "./signage";
 import type { CastMember, GeometryPlanData, ShotSpec } from "./types";
 
 export interface CharacterProfile {
@@ -428,7 +429,8 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   if (visible.length === 1 && edge.length) lines.push(`Exactly one of each person: ${joinNames([...visible, ...edge].map((c) => c.name))}. ${visible[0].name} is the main subject.`);
   else if (visible.length === 1) lines.push(crowd ? `Only ${visible[0].name} in the foreground; other guests only in the background.` : `Only ${visible[0].name} in frame.`);
   else if (visible.length > 1) lines.push(`Exactly one of each person: ${joinNames([...visible, ...edge].map((c) => c.name))}. No other people in the foreground.`);
-  lines.push("No text, no logos, no speech bubbles, no watermark.");
+  // A logo or sign that is part of the scene is the one exception (D47).
+  lines.push(noTextRule(props, ["no speech bubbles", "no watermark"], propPics.map((f) => f.name)));
   return { text: lines.join("\n"), attach };
 }
 

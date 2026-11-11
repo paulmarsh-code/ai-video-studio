@@ -16,6 +16,7 @@ import { PanelEditor } from "@/components/PanelEditor";
 import { hasRing } from "@/lib/backgroundImage";
 import { ensureHeldItems } from "@/lib/heldItemsServer";
 import { suggestShots } from "@/lib/domain/shotSuggest";
+import { signsWithoutPicture } from "@/lib/domain/signage";
 
 export const dynamic = "force-dynamic";
 
@@ -104,6 +105,7 @@ export default async function StoryboardPage({ params, searchParams }: { params:
       {part === "board" && <div className="mt-5">
         <StoryboardBoard canCheck={!!getTextProvider()} locks={{ positions: !!locks.positions, cameras: !!locks.cameras }}
           heldWarnings={cast.filter((c) => (s.scene.cast as string[] | undefined)?.length ? (s.scene.cast as string[]).includes(c.id) : true).flatMap((c) => heldConflicts(c.name, profiles[c.id], c.pronoun))}
+          signsNoPicture={signsWithoutPicture(s.plan?.data.furniture?.length ? s.plan.data.furniture : asStaging(s.scene.staging).props)} settingHref="?part=setting"
           propMoves={s.panels.flatMap((p) => { const m = propMoves(p.description, (s.plan?.data.furniture ?? []).map((f) => f.name)); return m.length ? [`${p.code} moves the ${m.join(" and the ")}`] : []; })}
           outdated={!!s.plan && (!!locks.positions || s.plan.data.cameras.length > 0) && (s.plan.data.rules ?? 0) < LAYOUT_RULES} plan={s.plan?.data} planHref={`/projects/${id}/scenes/${sceneId}/plan`}
           names={Object.fromEntries(cast.map((c) => [c.id, c.name]))} settingEmpty={!asStaging(s.scene.staging).spot && !asStaging(s.scene.staging).crowd} projectId={id} sceneId={sceneId} designHref={`/projects/${id}/scenes/${sceneId}/design`} baseCode={base} size={portrait ? "portrait" : "landscape"} canGenerate={canGenerate}

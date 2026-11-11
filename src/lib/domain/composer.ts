@@ -9,6 +9,7 @@ import { describeFrame, PRESET_FOV, planForShot, presetText, readCamera } from "
 import { aimDetail, exitFrom, gestureDetail } from "./gestures";
 import { GENRE_PROFILES, type Genre } from "./genre";
 import { capitalise, joinNames, stripQuotes } from "./text";
+import { noTextRule } from "./signage";
 import {
   KLING_OMNI_PRESET,
   type CastMember,
@@ -246,7 +247,8 @@ export function composeKlingPrompt(
   } else if (visible.length > 1) {
     guards.push(`Exactly one of each person: ${joinNames(visible.map((c) => c.name))}.`);
   }
-  guards.push("No text, no logos.");
+  // A logo or sign that is part of the scene is the one exception (D47).
+  guards.push(noTextRule(keptProps));
   s.guards = guards.join(" ");
 
   const order = [

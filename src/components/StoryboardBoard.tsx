@@ -65,6 +65,10 @@ export interface StoryboardBoardProps {
   heldWarnings?: string[];
   /** Panels whose text moves a prop (D20), e.g. "P5 moves the cocktail table". */
   propMoves?: string[];
+  /** Props with a logo or lettering but no picture (D47): drawn differently in every picture. */
+  signsNoPicture?: string[];
+  /** The scene setting, where a prop's picture is added. */
+  settingHref?: string;
   /** For the top-down view of positions. */
   plan?: GeometryPlanData;
   names: Record<string, string>;
@@ -182,6 +186,8 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
   // "Need to change something?" opens one form for the panel (D46): its floor plan at the top,
   // the other changes below, one Submit.
   const [changing, setChanging] = useState<{ p: BoardPanel; index: number } | null>(null);
+  // What the app did to a panel's camera when its change was saved (D47), shown on the panel.
+  const [camNotes, setCamNotes] = useState<Record<string, string>>({});
   const pendingRedraw = useRef<{ panelId: string; ch: SubmittedChange } | null>(null);
   useEffect(() => {
     const pr = pendingRedraw.current;
@@ -332,6 +338,12 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
           </div>
         </div>
       )}
+      {!!b.signsNoPicture?.length && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm" data-testid="sign-warnings">
+          <p className="font-semibold">Logos and signs</p>
+          <p className="mt-1 text-neutral-800">{b.signsNoPicture.map((x) => `The ${x}`).join(" and ")} {b.signsNoPicture.length === 1 ? "has" : "have"} a logo or lettering but no picture, so GPT makes it up and it comes out different in every picture. Add a picture of it under Key props in {b.settingHref ? <a className="text-blue-700 underline" href={b.settingHref}>1. Scene setting</a> : "1. Scene setting"}: the artwork, or a crop of a picture where it looks right. Then redraw.</p>
+        </div>
+      )}
       {!!b.heldWarnings?.length && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm" data-testid="held-warnings">
           <p className="font-semibold">Which hand holds what</p>
@@ -409,6 +421,7 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
             setChanging(null);
             if (!r) return;
             // Positions or camera saved: redraw once the page has them; otherwise edit the picture now.
+            setCamNotes((x) => { const y = { ...x }; if (r.note) y[pl.p.id] = r.note; else delete y[pl.p.id]; return y; });
             if (r.saved) { pendingRedraw.current = { panelId: pl.p.id, ch: r.ch }; router.refresh(); }
             else void redraw(pl.p, r.ch);
           }} />
@@ -450,6 +463,7 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
                     <span className="ml-2 text-neutral-600">about 7p · or redraw it, or change it below</span>
                   </p>}
                 </div>)}
+            {camNotes[p.id] && <p className="mt-1 text-xs text-amber-800" data-testid={`board-${p.code}-camnote`}>{camNotes[p.id]}</p>}
             {failed[p.id] && <p className="mt-1 text-xs text-red-700" role="alert" data-testid={`board-${p.code}-failed`}>GPT couldn&apos;t draw this one. {plainReason(failed[p.id])}</p>}
 
             <div className="mt-3 space-y-2">
@@ -558,11 +572,11 @@ function hashText(t: string): string {
  */
 function PanelChange({ sceneId, index, projectId, baseCode, onDone }: {
   sceneId: string; index: number; projectId: string; baseCode: string;
-  onDone: (r: { saved: boolean; ch: SubmittedChange } | null) => void;
+  onDone: (r: { saved: boolean; ch: SubmittedChange; note?: string } | null) => void;
 }) {
   const [data, setData] = useState<PlanEditorData | null>(null);
   const [error, setError] = useState("");
-  const [planner, setPlanner] = useState<{ changed: boolean; summary: string; save: () => Promise<{ ok: boolean; error?: string }> } | null>(null);
+  const [planner, setPlanner] = useState<{ changed: boolean; summary: string; save: () => Promise<{ ok: boolean; error?: string; note?: string }> } | null>(null);
   const [other, setOther] = useState<SubmittedChange | null>(null);
   useEffect(() => {
     let live = true;
@@ -598,7 +612,7 @@ function PanelChange({ sceneId, index, projectId, baseCode, onDone }: {
                 const r = await planner.save();
                 if (!r.ok) { setError(r.error ?? "Couldn't save the positions."); return false; }
                 const place = `changed on this panel's floor plan${planner.summary ? ` (${planner.summary})` : ""}`;
-                onDone({ saved: true, ch: { text: [`Who stands where: ${place}`, other?.text].filter(Boolean).join(". "), parts: { ...(other?.parts ?? {}), place }, visual: true, refs: other?.refs ?? [] } });
+                onDone({ saved: true, note: r.note, ch: { text: [`Who stands where: ${place}`, other?.text].filter(Boolean).join(". "), parts: { ...(other?.parts ?? {}), place }, visual: true, refs: other?.refs ?? [] } });
                 return;
               }
               if (other?.text) onDone({ saved: false, ch: other });
