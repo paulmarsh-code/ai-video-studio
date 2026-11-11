@@ -576,3 +576,15 @@ export function facingOf(plan: GeometryPlanData, id: string, line?: Iterable<str
   return Math.hypot(v.x, v.y) < 0.05 ? undefined : norm(v);
 }
 
+
+/**
+ * A panel's camera by name (D59), and the camera it was copied from when it's the panel's own
+ * copy ("<name>, for this panel"): the floor plan shows both, so the panel says which it uses.
+ */
+export function panelCameraLabel(plan: { cameras: { id: string; name: string }[] } | undefined, cameraId: string | undefined): { name: string; copyOf?: string } | undefined {
+  const cam = cameraId ? plan?.cameras.find((c) => c.id === cameraId) : undefined;
+  if (!cam) return undefined;
+  if (!cam.id.includes("~")) return { name: cam.name };
+  const base = plan!.cameras.find((c) => c.id === cam.id.split("~")[0]);
+  return { name: cam.name, copyOf: base?.name ?? cam.name.replace(/, (turned|for this panel)$/, "") };
+}

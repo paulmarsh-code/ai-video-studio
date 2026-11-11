@@ -34,6 +34,8 @@ export interface BoardPanel {
   hasCamera: boolean;
   /** Its shot, for the layout sketch (D18f). */
   shotId?: string;
+  /** The camera this panel uses (D59), and the one it was copied from when it's the panel's own copy. */
+  camera?: { name: string; copyOf?: string };
   /** The shot in film words (D28): the app's suggestion, the user's choice, or named in the panel. */
   shot?: { words: string; by: "app" | "you" | "panel"; why?: string };
   /** The automatic check against the approved layout (D19), by area (B1). */
@@ -579,6 +581,8 @@ function ShotPicker({ p, shotId, locked, onDone }: { p: BoardPanel; shotId: stri
         {!locked && !open && <button type="button" className="ml-2 text-blue-700 underline" onClick={() => { setV(splitShot(p.shot?.words ?? "")); setOpen(true); }} data-testid={`board-${p.code}-shot-change`}>Change</button>}
       </p>
       {p.shot!.why && p.shot!.by !== "you" && <p className="text-neutral-500">Why: {p.shot!.why}.</p>}
+      {p.camera && <p data-testid={`board-${p.code}-camera`}><span className="font-medium">Camera:</span> {p.camera.name}
+        {p.camera.copyOf && <span className="text-amber-800"> · this panel&apos;s own copy, moved from “{p.camera.copyOf}” to suit this panel. The floor plan shows both: select “{p.camera.name}” there to see what this panel sees.</span>}</p>}
       {open && (
         <div className="mt-1 space-y-1">
           {list("shot", "Shot", "Let the camera rules decide")}

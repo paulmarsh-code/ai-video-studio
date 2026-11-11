@@ -142,6 +142,14 @@ export function characterChangePrompt(current: CurrentCharacter, change: string,
   ].filter((l, i, a) => l !== "" || a[i - 1] !== "").join("\n");
 }
 
+/**
+ * Empty the floor (D59): the venue's views without loose furniture or people, so the scene's own
+ * props, placed by the layout, are the only ones in a shot. Run through the usual change flow.
+ * Room pictures set for an event put their own tables where GPT copied them, and clearing them
+ * from image 1 cost the room its look (D56).
+ */
+export const EMPTY_FLOOR_CHANGE = "Empty the floor: take out every free-standing table, chair, stool, sofa and pot plant standing on the floor, everything on them (glasses, flowers, candles, ice buckets) and any people. Keep everything built in exactly as it is, in the same places and light: walls, bar, counters, shelving, screens, signs, lights, windows, columns, balcony, stairs and the floor itself. Describe the room as before, without mentioning that the floor is empty: each scene places its own furniture.";
+
 export function venueChangePrompt(current: { setting?: string; description: string; views: string[] }, change: string, refs?: ChangeReference[]): string {
   return [
     "I am refining a location for a short AI video. The current description is below. The attached image board shows how it looks now: four views in a 2 by 2 grid.",

@@ -18,6 +18,7 @@ import { hasRing } from "@/lib/backgroundImage";
 import { ensureHeldItems } from "@/lib/heldItemsServer";
 import { suggestShots } from "@/lib/domain/shotSuggest";
 import { signsWithoutPicture } from "@/lib/domain/signage";
+import { panelCameraLabel } from "@/lib/domain/geometry";
 
 export const dynamic = "force-dynamic";
 
@@ -131,7 +132,7 @@ export default async function StoryboardPage({ params, searchParams }: { params:
             return {
               id: p.id, code: p.code, description: p.description, seconds: p.durationSec, status: p.status, imageAssetId: p.imageAssetId ?? undefined,
               speaker: d ? cast.find((c) => c.id === d.characterId)?.name : undefined, line: d?.text,
-              hasCamera: !!shot?.spec.cameraId, shotId: shot?.id, shot: shotInfo,
+              hasCamera: !!shot?.spec.cameraId, shotId: shot?.id, shot: shotInfo, camera: panelCameraLabel(s.plan?.data, shot?.spec.cameraId),
               drawnFrom: p.check?.drawnFrom,
               check: p.check?.keptApproved ? { pass: p.check.pass ?? true, problems: [], keptApproved: true } : p.check?.pass === undefined ? undefined : { pass: p.check.pass, problems: p.check.problems ?? [], ...(p.check.areas ? { areas: p.check.areas } : {}), ...(p.check.redraw ? { redraw: true } : {}) },
               // The full or short request (B3), chosen by a setting, and anything contradictory left in it.
