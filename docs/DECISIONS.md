@@ -703,3 +703,10 @@ Paul's panel 1 still had Jade's bag in the wrong hand. The reading of her refere
 - Readings made the old way are ignored and redone (`HELD_READ_VERSION` 2).
 - The check matches held items by kind of thing, so "handbag" on the wrong side fails a "satchel" expectation.
 
+### D34b — The reference picture decides the hand; walking spelt out; corrections must show (2026-11-11)
+
+Looking at Jade's reference picture: the satchel is on the left of the image, so it is in her RIGHT hand, since she faces us. Paul's description said "in her left hand", which is the side of the picture, not her hand. That mirror is what had been catching GPT, the check and the description alike. D34a made the description win, so the frames tagged the wrong side and GPT faithfully followed them (Paul: "GPT followed your image refs").
+- The reference picture now wins on which side; it is also what GPT copies.
+- Where a description disagrees, the storyboard shows a "Which hand holds what" warning with the correct wording (`heldConflicts`). Readings are made when the storyboard opens.
+- Walking: a "Walking:" line in the prompt says which way across the picture and whether away from or towards the camera, and which side of them we see, because GPT turned the halfway-across walker to face the lens despite the frame.
+- Corrections: a hand fix now says move it from this side of the picture to that side, into the other hand, leaving the first hand empty. Every correction must be visibly made; returning the same picture is not acceptable.

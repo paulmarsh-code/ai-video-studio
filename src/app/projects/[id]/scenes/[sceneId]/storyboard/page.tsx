@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getDb } from "@/db/client";
 import * as repo from "@/lib/repo";
 import * as studio from "@/lib/studioRepo";
-import { panelPrompt } from "@/lib/domain/imagePrompts";
+import { heldConflicts, panelPrompt } from "@/lib/domain/imagePrompts";
 import { getImageProvider, getTextProvider } from "@/lib/providers/images";
 import { GENRE_PROFILES } from "@/lib/domain/genre";
 import { StoryWizard } from "@/components/StoryWizard";
@@ -14,6 +14,7 @@ import { asStaging, propMoves, propsFromFurniture, stagingPrompt } from "@/lib/d
 import { LAYOUT_RULES } from "@/lib/domain/director";
 import { PanelEditor } from "@/components/PanelEditor";
 import { hasRing } from "@/lib/backgroundImage";
+import { ensureHeldItems } from "@/lib/heldItemsServer";
 import { suggestShots } from "@/lib/domain/shotSuggest";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +28,9 @@ export default async function StoryboardPage({ params, searchParams }: { params:
   if (!project || !s || s.scene.projectId !== id) notFound();
   const cast = repo.getCast(db, id);
   const chars = studio.listCharacters(db, id);
+  // Which hand holds what, read once from each reference picture (D34), so the storyboard can
+  // warn where a description disagrees before anything is drawn.
+  await ensureHeldItems(db, id);
   const profiles = studio.getApprovedProfiles(db, id);
   const brief = project.brief as { aspect?: string; style?: string };
   const genre = repo.getProjectGenre(db, id);
@@ -99,6 +103,7 @@ export default async function StoryboardPage({ params, searchParams }: { params:
 
       {part === "board" && <div className="mt-5">
         <StoryboardBoard canCheck={!!getTextProvider()} locks={{ positions: !!locks.positions, cameras: !!locks.cameras }}
+          heldWarnings={cast.filter((c) => (s.scene.cast as string[] | undefined)?.length ? (s.scene.cast as string[]).includes(c.id) : true).flatMap((c) => heldConflicts(c.name, profiles[c.id], c.pronoun))}
           propMoves={s.panels.flatMap((p) => { const m = propMoves(p.description, (s.plan?.data.furniture ?? []).map((f) => f.name)); return m.length ? [`${p.code} moves the ${m.join(" and the ")}`] : []; })}
           outdated={!!s.plan && (!!locks.positions || s.plan.data.cameras.length > 0) && (s.plan.data.rules ?? 0) < LAYOUT_RULES} plan={s.plan?.data} planHref={`/projects/${id}/scenes/${sceneId}/plan`}
           names={Object.fromEntries(cast.map((c) => [c.id, c.name]))} settingEmpty={!asStaging(s.scene.staging).spot && !asStaging(s.scene.staging).crowd} projectId={id} sceneId={sceneId} designHref={`/projects/${id}/scenes/${sceneId}/design`} baseCode={base} size={portrait ? "portrait" : "landscape"} canGenerate={canGenerate}

@@ -350,6 +350,25 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     // like a group photo. Each person's distance from the camera and which way they face come
     // from the floor plan.
     const placed = order.filter((a) => a.characterId !== fgId);
+    // Walking (D34b): which way across the picture and whether away from or towards the camera,
+    // in words as well as the frame's arrow. GPT turned an arriving walker to face the lens.
+    if (shotPlan && i.plan) {
+      const f0 = { x: cam.lookAt.x - cam.position.x, y: cam.lookAt.y - cam.position.y };
+      const fl0 = Math.hypot(f0.x, f0.y) || 1;
+      const fw = { x: f0.x / fl0, y: f0.y / fl0 }, rt = { x: fw.y, y: -fw.x };
+      for (const [id, mark] of Object.entries(shot.at ?? {})) {
+        if (!["arriving", "crossing", "approaching"].includes(mark) || !order.some((a) => a.characterId === id)) continue;
+        const from = shotPlan.actors.find((x) => x.characterId === id)?.position;
+        const to = i.plan.actors.find((x) => x.characterId === id)?.position;
+        if (!from || !to) continue;
+        const d = { x: to.x - from.x, y: to.y - from.y };
+        const dl = Math.hypot(d.x, d.y) || 1;
+        const across = (d.x * rt.x + d.y * rt.y) / dl, away = (d.x * fw.x + d.y * fw.y) / dl;
+        const parts = [Math.abs(across) > 0.3 ? `towards the ${across > 0 ? "right" : "left"} of the picture` : "", away > 0.3 ? "away from the camera" : away < -0.3 ? "towards the camera" : ""].filter(Boolean);
+        const seen = away > 0.5 ? "we see their back" : away < -0.5 ? "we see their front" : `we see their ${across > 0 ? "left" : "right"} side and the side of their face, not their face full-on`;
+        lines.push(`Walking: ${name(id)} is mid-stride, walking ${parts.join(" and ") || "on"}, heading for the group along the orange arrow; ${seen}. Body, feet and eyes all point the way they walk, never at the camera.`);
+      }
+    }
     if (placed.length && shotPlan) {
       const parts = placed.map((a) => {
         const pos = shotPlan.actors.find((x) => x.characterId === a.characterId)?.position;
@@ -455,8 +474,13 @@ export function carriedItems(p: CharacterProfile | undefined): { side: "left" | 
   // Only a current reading of the current picture (older readings could mix up left and right).
   if (read?.items && read.ref === p?.refs?.front && (read.v ?? 1) >= 2) {
     // The same kind of thing counts once (a "satchel" in the description is the "handbag" in
-    // the picture): what the description says wins.
-    for (const it of read.items) if (!out.some((o) => itemGroup(o.what) === itemGroup(it.what))) out.push(it);
+    // the picture). The reference picture wins on which side (D34b): it is what GPT copies,
+    // and a description easily gives the side of the picture instead of the person's own hand.
+    for (const it of read.items) {
+      const k = out.findIndex((o) => itemGroup(o.what) === itemGroup(it.what));
+      if (k < 0) out.push(it);
+      else out[k] = { ...out[k], side: it.side, where: it.where };
+    }
   }
   return out.filter((o) => !/^(?:hand|arm|shoulder|wrist|hip|side|her|his|their)$/.test(o.what));
 }
@@ -500,4 +524,20 @@ const ITEM_GROUPS: [RegExp, string][] = [
 export function itemGroup(what: string): string {
   const n = itemNoun(what);
   return ITEM_GROUPS.find(([re]) => re.test(n))?.[1] ?? n;
+}
+
+/**
+ * Where a character's description and their reference picture disagree about which side
+ * something is on (D34b), in plain words for the user. Pictures follow the reference.
+ */
+export function heldConflicts(name: string, p: CharacterProfile | undefined, pronoun: "she" | "he" | "they" = "they"): string[] {
+  const read = (p as { held?: { ref?: string; v?: number; items?: { side: "left" | "right"; what: string; where: string }[] } } | undefined)?.held;
+  if (!read?.items || read.ref !== p?.refs?.front || (read.v ?? 1) < 2) return [];
+  const poss = pronoun === "she" ? "her" : pronoun === "he" ? "his" : "their";
+  const desc = carriedItems({ ...p, held: undefined } as CharacterProfile);
+  return desc.flatMap((d) => {
+    const r = read.items!.find((x) => itemGroup(x.what) === itemGroup(d.what));
+    if (!r || r.side === d.side) return [];
+    return [`${name}: the description says the ${itemNoun(d.what)} is in ${poss} ${d.side} ${d.where}, but the reference picture shows it in ${poss} ${r.side} ${r.where} (on the ${r.side === "left" ? "right" : "left"} of the picture, as ${pronoun === "they" ? "they face" : `${pronoun} faces`} us). Pictures follow the reference; correct the description to match.`];
+  });
 }

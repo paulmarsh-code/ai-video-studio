@@ -64,10 +64,11 @@ describe("Held items and corrections (D34)", () => {
       { what: "tan satchel", side: "left", where: "hand" }, { what: "phone", side: "right", where: "hand" }]);
     expect(parseHeldItems("no json")).toEqual([]);
   });
-  it("the same kind of item counts once, and the description wins (Paul, 10 Nov: satchel vs handbag)", async () => {
-    const { carriedItems } = await import("../src/lib/domain/imagePrompts");
+  it("the same kind of item counts once, the reference picture wins on the side, and the clash is explained (Paul, 11 Nov)", async () => {
+    const { carriedItems, heldConflicts } = await import("../src/lib/domain/imagePrompts");
     const p = { wardrobe: "Carries a tan leather satchel with a brass clasp in her left hand.", refs: { front: "f1" }, held: { ref: "f1", v: 2, items: [{ what: "tan leather handbag", side: "right", where: "hand" }, { what: "silver watch", side: "left", where: "wrist" }] } };
-    expect(carriedItems(p as never)).toEqual([{ side: "left", what: "tan leather satchel", where: "hand" }, { what: "silver watch", side: "left", where: "wrist" }]);
+    expect(carriedItems(p as never)).toEqual([{ side: "right", what: "tan leather satchel", where: "hand" }, { what: "silver watch", side: "left", where: "wrist" }]);
+    expect(heldConflicts("Jade", p as never, "she")[0]).toContain("the reference picture shows it in her right hand (on the left of the picture, as she faces us)");
     // An older reading (before positions were used) is ignored.
     expect(carriedItems({ refs: { front: "f1" }, held: { ref: "f1", items: [{ what: "bag", side: "right", where: "hand" }] } } as never)).toEqual([]);
   });
@@ -75,7 +76,7 @@ describe("Held items and corrections (D34)", () => {
     const e = { order: ["Ava"], props: [], crowd: "none" as const, held: [{ name: "Ava", item: "satchel", side: "left" as const }] };
     const bad = judgePicture(e, JSON.stringify({ left_to_right: ["Ava"], held: [{ name: "Ava", item: "tan satchel", picture_side: "right" }] }));
     expect(bad.pass).toBe(false);
-    expect(bad.problems.join(" ")).toContain("Ava's satchel is on the right of the picture; it belongs on the left");
+    expect(bad.problems.join(" ")).toContain("Ava's satchel is on the right of the picture; move it to the left side of the picture");
     expect(judgePicture(e, JSON.stringify({ left_to_right: ["Ava"], held: [{ name: "Ava", item: "satchel", picture_side: "left" }] })).pass).toBe(true);
   });
   it("a correction edits the picture, fixing only what's listed", () => {

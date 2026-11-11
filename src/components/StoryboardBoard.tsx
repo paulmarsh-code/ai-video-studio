@@ -59,6 +59,8 @@ export interface StoryboardBoardProps {
   locks: { positions: boolean; cameras: boolean };
   /** The positions or cameras were made under older layout rules (D19c). */
   outdated?: boolean;
+  /** A description and a reference picture disagree about which hand holds something (D34b). */
+  heldWarnings?: string[];
   /** Panels whose text moves a prop (D20), e.g. "P5 moves the cocktail table". */
   propMoves?: string[];
   /** For the top-down view of positions. */
@@ -283,6 +285,12 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
                 return r;
               }} />
           </div>
+        </div>
+      )}
+      {!!b.heldWarnings?.length && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm" data-testid="held-warnings">
+          <p className="font-semibold">Which hand holds what</p>
+          {b.heldWarnings.map((w) => <p key={w} className="mt-1 text-neutral-800">{w}</p>)}
         </div>
       )}
       <div className="grid gap-3 md:grid-cols-2">

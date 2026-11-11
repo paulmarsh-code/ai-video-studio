@@ -122,7 +122,7 @@ export function judgePicture(e: PictureExpectation, reply: string): PictureCheck
     // Matched by kind of thing: the check may call the satchel a handbag.
     const want = e.held?.find((x) => first(x.name) === first(String(h.name ?? "")) && itemGroup(String(h.item ?? "")) === itemGroup(x.item));
     const side = String(h.picture_side ?? "").toLowerCase();
-    if (want && /^(left|right)$/.test(side) && side !== want.side) problems.push(`${want.name}'s ${want.item} is on the ${side} of the picture; it belongs on the ${want.side}, in the other hand, as in the reference.`);
+    if (want && /^(left|right)$/.test(side) && side !== want.side) problems.push(`${want.name}'s ${want.item} is on the ${side} of the picture; move it to the ${want.side} side of the picture, into ${want.name}'s other hand, as in the reference. The hand on the ${side} side is then empty and relaxed.`);
   }
   // Nobody looks into the lens (D21b).
   const lookers = list(seen.looking_at_camera).filter((n) => expected.includes(first(n)));
@@ -144,7 +144,7 @@ export function fixLine(problems: string[]): string {
  */
 export function correctionPrompt(problems: string[], withBlocking: boolean): string {
   return [
-    "Edit image 1. It is nearly right; fix ONLY these problems and change nothing else:",
+    "Edit image 1. It is nearly right; fix ONLY these problems and change nothing else. Each fix must be clearly visible in the new picture; returning the same picture is not acceptable:",
     ...problems.map((p) => `- ${p}`),
     withBlocking
       ? "Image 2 is the approved shot: who stands where, which way each person faces, the yellow tags for held items, the orange arrows for walking, and the background. Make image 1 match image 2 on the points above. Do not copy image 2's outlines, labels, arrows or tags into the picture."
