@@ -833,3 +833,11 @@ D38 test: an arrival from the wrong direction is a visible failure; the fixes re
 - **Words**: "Jade approaches the group from the left" (and "approaches Ben from the right") is understood.
 - **When words change nothing**, the planner now says "Nothing changed. The app couldn't tell who should go where from …", and offers wording that works with the names used (e.g. "Jade comes in from the right", "Jade approaches the group from the left") as buttons that apply it.
 - Tests: suggestions are all understood words (`tests/changeWords.d39.test.ts`); browser test on a copy of Jade's Entrance: Paul's words → "Nothing changed" with suggestions → suggestion applied → path drawn → app places the camera → saved as panel 1's own camera with Jade in view.
+
+### D45: The path you can see, and nobody drops out unnoticed (2026-11-11)
+
+On Paul's real panel 1 the orange path was drawn but he couldn't see it: thin, dashed, and running along the dashed amber line of action. Chase dropped out of the redrawn picture because the camera Paul moved left him just outside the frame; panel 1's "in frame" list is only Jade, so nothing kept or flagged him, and the check passed.
+
+- **A path you can see**: arrivals' paths and walks are now a bold solid orange arrow ("Jade's path to the group"), and the line of action isn't drawn on a panel's planner, only on the scene plan.
+- **Nobody drops out unnoticed**: if someone who was in the panel's original shot isn't in the picture with the camera as it is now (moved by you, or turned), the planner says so: "Chase was in this panel's original shot but isn't in the picture with this camera. Use “Let the app place the camera”, or move the camera so they're in the blue area."
+- On Paul's own data, "Let the app place the camera" for his positions gives a wide shot with Chase, Marcus and Nina on the left and Jade on the right walking to them; the warning then goes. Browser test on a copy of his scene.

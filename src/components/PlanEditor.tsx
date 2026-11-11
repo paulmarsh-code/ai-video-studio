@@ -137,6 +137,14 @@ export function PlanEditor(props: {
     setCamNote(`Placed by the app: ${opt.kind}.${opt.reasons[0] ? ` ${opt.reasons[0].replace(/^R-[A-Z-]+:\s*/, "")}.` : ""} Not saved yet.`);
   };
   const panelCam = pspec?.cameraId ? shown.cameras.find((c) => c.id === pspec.cameraId) : undefined;
+  // Who was in this panel's original shot but isn't in the picture with the camera as it is
+  // now (D45), e.g. after moving the camera: said, so nobody drops out unnoticed.
+  const origCam = cam0 ? plan.cameras.find((c) => c.id === cam0.id.split("~")[0]) : undefined;
+  const lost = origCam && panelCam && pspec ? (() => {
+    const was = readCamera(shown, origCam).actors.filter((a) => a.inView && !a.partial).map((a) => a.characterId);
+    const now = readCamera(shown, panelCam).actors.filter((a) => a.inView).map((a) => a.characterId);
+    return was.filter((id) => !now.includes(id) && (pspec.presentIds ?? []).concat(pspec.visibleIds ?? []).includes(id));
+  })() : [];
   const changedPanels = Object.entries(edits).filter(([, e]) => Object.keys(e).length);
   const curEntry = (key: string): BlockEntry => {
     const bl = pspec?.blocking?.[key];
@@ -290,7 +298,7 @@ export function PlanEditor(props: {
             })}
 
             {/* Line of action */}
-            {loa && loa[0] && loa[1] && (() => {
+            {!panelMode && loa && loa[0] && loa[1] && (() => {
               const a = toPx(loa[0]!), c = toPx(loa[1]!);
               const dx = c.x - a.x, dy = c.y - a.y, k = 4;
               return <Line points={[a.x - dx * k, a.y - dy * k, c.x + dx * k, c.y + dy * k]} stroke="#f59e0b" strokeWidth={1.5} dash={[8, 6]} listening={false} />;
@@ -369,8 +377,8 @@ export function PlanEditor(props: {
               const s0 = toPx(a.position), e0 = toPx(home);
               return (
                 <Group key={`arrive-${a.characterId}`} listening={false}>
-                  <Arrow points={[s0.x, s0.y, e0.x, e0.y]} stroke="#ea580c" fill="#ea580c" strokeWidth={2} dash={[7, 5]} pointerLength={9} pointerWidth={9} />
-                  <Text text={`${name(a.characterId).split(" ")[0]} walks to the group`} fontSize={10} fill="#9a3412" x={(s0.x + e0.x) / 2 + 6} y={(s0.y + e0.y) / 2 - 12} />
+                  <Arrow points={[s0.x, s0.y, e0.x, e0.y]} stroke="#ea580c" fill="#ea580c" strokeWidth={4} pointerLength={14} pointerWidth={14} opacity={0.9} />
+                  <Text text={`${name(a.characterId).split(" ")[0]}'s path to the group`} fontSize={12} fontStyle="bold" fill="#9a3412" x={(s0.x + e0.x) / 2 + 8} y={(s0.y + e0.y) / 2 - 18} />
                 </Group>
               );
             })}
@@ -381,7 +389,7 @@ export function PlanEditor(props: {
               const onEnd = (e: { target: { x(): number; y(): number } }) => setEntry(a.characterId, { to: toM(e.target.x(), e.target.y()) });
               return (
                 <Group key={`walk-${a.characterId}`}>
-                  <Arrow points={[s0.x, s0.y, e0.x, e0.y]} stroke="#ea580c" fill="#ea580c" strokeWidth={2} dash={[7, 5]} pointerLength={9} pointerWidth={9} listening={false} />
+                  <Arrow points={[s0.x, s0.y, e0.x, e0.y]} stroke="#ea580c" fill="#ea580c" strokeWidth={4} pointerLength={14} pointerWidth={14} opacity={0.9} listening={false} />
                   <Circle x={e0.x} y={e0.y} radius={10} fill="rgba(255,255,255,0.85)" stroke={colour(a.characterId)} strokeWidth={3} draggable data-testid={`walk-end-${a.characterId}`}
                     onDragStart={pushEdit} onDragMove={onEnd} onDragEnd={onEnd} onMouseDown={() => setSelActor(a.characterId)} />
                   <Text text={`${name(a.characterId)} ends here`} fontSize={10} fill="#9a3412" x={e0.x + 12} y={e0.y - 5} listening={false} />
@@ -483,6 +491,11 @@ export function PlanEditor(props: {
               {cam0 && aimed && aimed !== cam0 && (
                 <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900" data-testid="panel-camera-turned">
                   {outOfView.length ? `${outOfView.map(name).map((n) => n.split(" ")[0]).join(" and ")} ${outOfView.length === 1 ? "is" : "are"} outside the camera's view here, so this panel's camera turns` : "Not everyone fits the frame here, so this panel's camera turns"}{aimed && aimed.fovDeg !== cam0.fovDeg ? " and widens" : ""} to keep everyone in the picture. Other panels&apos; cameras stay as they are. To keep the camera, move them back into the blue area instead.
+                </p>
+              )}
+              {lost.length > 0 && (
+                <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900" data-testid="panel-lost">
+                  {lost.map((id) => name(id).split(" ")[0]).join(" and ")} {lost.length === 1 ? "was" : "were"} in this panel&apos;s original shot but {lost.length === 1 ? "isn't" : "aren't"} in the picture with this camera. Use &ldquo;Let the app place the camera&rdquo;, or move the camera so {lost.length === 1 ? "they're" : "they're all"} in the blue area.
                 </p>
               )}
               {panelCam && (
