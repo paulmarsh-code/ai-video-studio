@@ -230,7 +230,9 @@ export async function backgroundForFrame(db: DB, shotId: string, W: number, Hf: 
 
 /** The loose furniture in a background that isn't the plan's (D56): standing on the floor, below the horizon, and nowhere near a planned prop of its kind. */
 export function looseFurniture(things: Thing[], spots: { kind: string; x: number; baseY: number }[], horizon: number): Thing[] {
-  return things.filter((t) => t.y1 > horizon + 0.03 && !spots.some((s) => s.kind === t.kind && s.x >= t.x0 - 0.05 && s.x <= t.x1 + 0.05 && Math.abs(s.baseY - t.y1) < 0.1));
+  return things.filter((t) => t.kind !== "tv" // a screen is part of the room, not loose furniture
+    && t.x1 - t.x0 <= 0.35 && t.y1 - t.y0 <= 0.35 // nothing big enough to take a piece of the room with it
+    && t.y1 > horizon + 0.03 && !spots.some((s) => s.kind === t.kind && s.x >= t.x0 - 0.05 && s.x <= t.x1 + 0.05 && Math.abs(s.baseY - t.y1) < 0.1));
 }
 
 async function clearLooseFurniture(bg: Buffer, spots: { kind: string; x: number; baseY: number }[], horizon: number): Promise<Buffer> {

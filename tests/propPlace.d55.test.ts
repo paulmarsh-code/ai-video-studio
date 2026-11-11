@@ -64,6 +64,8 @@ describe("Image 1 shows only the plan's furniture (D56)", () => {
       { kind: "chair", score: 0.4, x0: 0.1, y0: 0.75, x1: 0.2, y1: 0.9 },
     ];
     expect(looseFurniture(things, spots, 0.5).map((t) => [t.kind, t.x0])).toEqual([["dining table", 0.44], ["chair", 0.1]]);
+    // A screen low on the wall, and anything big enough to take a piece of the room with it, stay.
+    expect(looseFurniture([{ kind: "tv", score: 0.6, x0: 0.6, y0: 0.4, x1: 0.9, y1: 0.7 }, { kind: "couch", score: 0.5, x0: 0.1, y0: 0.55, x1: 0.6, y1: 0.8 }], spots, 0.5)).toEqual([]);
   });
 });
 
