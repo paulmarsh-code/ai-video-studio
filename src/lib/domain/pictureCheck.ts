@@ -4,6 +4,8 @@
 // and the background people. The vision model only reports what it sees; the pass or fail
 // is decided here, by rule.
 
+import { itemGroup } from "./imagePrompts";
+
 export interface PictureExpectation {
   /** Main characters the camera sees, left to right, from the approved floor plan. */
   order: string[];
@@ -117,7 +119,8 @@ export function judgePicture(e: PictureExpectation, reply: string): PictureCheck
   // Held items on the right side of the picture (D34): decided here from the floor plan and
   // the reference, not left to the model's sense of left and right.
   for (const h of objs((seen as { held?: unknown }).held)) {
-    const want = e.held?.find((x) => first(x.name) === first(String(h.name ?? "")) && norm(String(h.item ?? "")).includes(norm(x.item).slice(-5)));
+    // Matched by kind of thing: the check may call the satchel a handbag.
+    const want = e.held?.find((x) => first(x.name) === first(String(h.name ?? "")) && itemGroup(String(h.item ?? "")) === itemGroup(x.item));
     const side = String(h.picture_side ?? "").toLowerCase();
     if (want && /^(left|right)$/.test(side) && side !== want.side) problems.push(`${want.name}'s ${want.item} is on the ${side} of the picture; it belongs on the ${want.side}, in the other hand, as in the reference.`);
   }

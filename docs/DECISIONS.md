@@ -694,3 +694,12 @@ Paul: positions, direction of travel, held items (which hand) and the 360° back
 6. All of this is general: geometry from the floor plan and camera, words from the venue, characters and panels. Without a 360° view (fewer than two venue pictures) the app falls back to the layout sketch as before. Tests: `tests/blocking.d34.test.ts`; the browser test now expects edit-based corrections.
 
 Honest limit: an image model still can't be forced. This gives it the composition as a picture to keep rather than words to interpret, and catches and corrects what slips through.
+
+### D34a — Held items: one answer per item, sides from positions (2026-11-11)
+
+Paul's panel 1 still had Jade's bag in the wrong hand. The reading of her reference picture had said "tan leather handbag, right hand" (the model mixed up its own left and right), while her description says "satchel … in her left hand". Because the two names differed, both were kept, so the frame had tags on both sides and the check passed either way.
+- Different words for the same kind of thing (bag/handbag/satchel/purse…, phone/smartphone, glass/flute/drink, watch/wristwatch…) now count as one item, and the description wins (`itemGroup`).
+- The reference reading no longer asks for left or right. It asks for positions across the image (the item's and the face's, 0–100), and the character's own side is worked out by rule.
+- Readings made the old way are ignored and redone (`HELD_READ_VERSION` 2).
+- The check matches held items by kind of thing, so "handbag" on the wrong side fails a "satchel" expectation.
+

@@ -58,10 +58,18 @@ describe("Blocking frame (D34)", () => {
 });
 
 describe("Held items and corrections (D34)", () => {
-  it("reads held items from a front picture as picture sides and mirrors them to the character's own side", () => {
-    expect(parseHeldItems('{"items":[{"what":"tan satchel","picture_side":"right","where":"hand"},{"what":"phone","picture_side":"left","where":"hand"}]}')).toEqual([
+  it("reads held items as positions across a front picture; the character's own side is worked out by rule", () => {
+    // The satchel is right of her face in the picture: her LEFT hand. The phone is left of it: her right.
+    expect(parseHeldItems('{"face_x": 50, "items":[{"what":"tan satchel","item_x":72,"where":"hand"},{"what":"phone","item_x":31,"where":"hand"}]}')).toEqual([
       { what: "tan satchel", side: "left", where: "hand" }, { what: "phone", side: "right", where: "hand" }]);
     expect(parseHeldItems("no json")).toEqual([]);
+  });
+  it("the same kind of item counts once, and the description wins (Paul, 10 Nov: satchel vs handbag)", async () => {
+    const { carriedItems } = await import("../src/lib/domain/imagePrompts");
+    const p = { wardrobe: "Carries a tan leather satchel with a brass clasp in her left hand.", refs: { front: "f1" }, held: { ref: "f1", v: 2, items: [{ what: "tan leather handbag", side: "right", where: "hand" }, { what: "silver watch", side: "left", where: "wrist" }] } };
+    expect(carriedItems(p as never)).toEqual([{ side: "left", what: "tan leather satchel", where: "hand" }, { what: "silver watch", side: "left", where: "wrist" }]);
+    // An older reading (before positions were used) is ignored.
+    expect(carriedItems({ refs: { front: "f1" }, held: { ref: "f1", items: [{ what: "bag", side: "right", where: "hand" }] } } as never)).toEqual([]);
   });
   it("judges a held item on the wrong side of the picture", () => {
     const e = { order: ["Ava"], props: [], crowd: "none" as const, held: [{ name: "Ava", item: "satchel", side: "left" as const }] };
@@ -75,5 +83,13 @@ describe("Held items and corrections (D34)", () => {
     expect(t).toMatch(/^Edit image 1/);
     expect(t).toContain("Image 2 is the approved shot");
     expect(t).toContain("change nothing else");
+  });
+});
+
+describe("The check matches held items by kind (D34)", () => {
+  it("a satchel reported as a handbag on the wrong side still fails", () => {
+    const e = { order: ["Jade"], props: [], crowd: "none" as const, held: [{ name: "Jade", item: "satchel", side: "left" as const }] };
+    const r = judgePicture(e, JSON.stringify({ left_to_right: ["Jade"], held: [{ name: "Jade", item: "brown handbag", picture_side: "right" }] }));
+    expect(r.pass).toBe(false);
   });
 });

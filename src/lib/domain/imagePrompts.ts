@@ -431,7 +431,7 @@ export function carriedItems(p: CharacterProfile | undefined): { side: "left" | 
     const k = words.findIndex((x) => ITEM_NOUNS.test(x));
     if (k < 0) return;
     const w = words.slice(Math.max(0, k - 3), k + 1).filter((x) => !/^(?:a|an|the|her|his|their|and|with|always|usually|consistently|often|held|carried|worn)$/.test(x)).join(" ");
-    if (!w || out.some((o) => itemNoun(o.what) === itemNoun(w))) return;
+    if (!w || out.some((o) => itemGroup(o.what) === itemGroup(w))) return;
     out.push({ side: side.toLowerCase() as "left" | "right", what: w, where: where.toLowerCase() });
   };
   const SIDE = String.raw`(?:in|on|over|across|under)\s+(?:her|his|their|the)\s+(left|right)\s+(hand|arm|shoulder|wrist|hip|side)`;
@@ -451,16 +451,18 @@ export function carriedItems(p: CharacterProfile | undefined): { side: "left" | 
   for (const m of text.matchAll(new RegExp(String.raw`${SIDE}\s*,?\s+(?:she|he|they)?\s*(?:holds|carries|wears|has)?\s*((?:a|an|the)\s+(?:[\w'-]+\s+){0,4}[\w'-]+)`, "gi"))) add(m[3], m[1], m[2]);
   // What the reference picture itself shows (D34), read once and kept with the character; the
   // description wins where both name the same thing.
-  const read = (p as { held?: { ref?: string; items?: { side: "left" | "right"; what: string; where: string }[] } } | undefined)?.held;
-  if (read?.items && read.ref === p?.refs?.front) {
-    const last = (w: string) => w.split(/\s+/).slice(-1)[0];
-    for (const it of read.items) if (!out.some((o) => last(o.what) === last(it.what))) out.push(it);
+  const read = (p as { held?: { ref?: string; v?: number; items?: { side: "left" | "right"; what: string; where: string }[] } } | undefined)?.held;
+  // Only a current reading of the current picture (older readings could mix up left and right).
+  if (read?.items && read.ref === p?.refs?.front && (read.v ?? 1) >= 2) {
+    // The same kind of thing counts once (a "satchel" in the description is the "handbag" in
+    // the picture): what the description says wins.
+    for (const it of read.items) if (!out.some((o) => itemGroup(o.what) === itemGroup(it.what))) out.push(it);
   }
   return out.filter((o) => !/^(?:hand|arm|shoulder|wrist|hip|side|her|his|their)$/.test(o.what));
 }
 
 /** Things people hold, carry or wear on one side (D34), for picking the item out of a phrase. */
-const ITEM_NOUNS = /^(?:bag|bags|handbag|satchel|clutch|purse|tote|briefcase|backpack|rucksack|holdall|suitcase|case|phone|smartphone|mobile|tablet|laptop|book|notebook|folder|clipboard|file|envelope|letter|card|cards|ticket|tickets|glass|flute|drink|cup|mug|coffee|bottle|can|cigarette|cigar|vape|umbrella|cane|stick|keys|key|lanyard|camera|microphone|mic|pen|watch|bracelet|bracelets|bangle|ring|rings|glove|guitar|flowers|bouquet|gift|box|tray|plate|newspaper|magazine|map|sword|gun|torch|lantern|leash|lead|dog|baby|child|coat|jacket|scarf|hat)$/;
+const ITEM_NOUNS = /^(?:wristwatch|bag|bags|handbag|satchel|clutch|purse|tote|briefcase|backpack|rucksack|holdall|suitcase|case|phone|smartphone|mobile|tablet|laptop|book|notebook|folder|clipboard|file|envelope|letter|card|cards|ticket|tickets|glass|flute|drink|cup|mug|coffee|bottle|can|cigarette|cigar|vape|umbrella|cane|stick|keys|key|lanyard|camera|microphone|mic|pen|watch|bracelet|bracelets|bangle|ring|rings|glove|guitar|flowers|bouquet|gift|box|tray|plate|newspaper|magazine|map|sword|gun|torch|lantern|leash|lead|dog|baby|child|coat|jacket|scarf|hat)$/;
 /** The thing an item phrase names: "tan leather satchel" → "satchel". */
 export function itemNoun(what: string): string {
   const words = what.toLowerCase().split(/\s+/);
@@ -484,4 +486,18 @@ export function blockingInstruction(refLabels: string[]): string {
     "- Remove every stand-in outline, label, arrow and tag: none of them appear in the finished picture.",
     refLabels.length ? `The other attached images are reference pictures (${refLabels.join(", ")}): use them only for how each character and prop looks, never for where anyone stands or what is behind them.` : "",
   ].filter(Boolean).join("\n");
+}
+
+/** Kinds of carried thing (D34): different words for the same thing count as one item. */
+const ITEM_GROUPS: [RegExp, string][] = [
+  [/^(?:bag|bags|handbag|satchel|clutch|purse|tote|briefcase|backpack|rucksack|holdall|suitcase|case)$/, "bag"],
+  [/^(?:phone|smartphone|mobile)$/, "phone"],
+  [/^(?:glass|flute|drink|cup|mug|coffee|bottle|can)$/, "drink"],
+  [/^(?:watch|wristwatch)$/, "watch"],
+  [/^(?:bracelet|bracelets|bangle)$/, "bracelet"],
+  [/^(?:book|notebook|folder|clipboard|file|tablet|laptop)$/, "document"],
+];
+export function itemGroup(what: string): string {
+  const n = itemNoun(what);
+  return ITEM_GROUPS.find(([re]) => re.test(n))?.[1] ?? n;
 }

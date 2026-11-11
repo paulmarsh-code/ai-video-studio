@@ -819,6 +819,8 @@ export function setVenueRoom(db: DB, venueId: string, room: RoomSize | null): nu
 // ---------- Held items read from reference pictures (D34) ----------
 
 export type HeldItem = { side: "left" | "right"; what: string; where: string };
+/** Bumped when the way held items are read changes, so older readings are redone (D34). */
+export const HELD_READ_VERSION = 2;
 
 /**
  * What a character holds or wears on one side, read once from their approved front reference
@@ -835,9 +837,9 @@ export function characterHeldItems(db: DB, projectId: string, slug: string): Hel
 export function charactersNeedingHeldRead(db: DB, projectId: string): { slug: string; versionId: string; frontAssetId: string; name: string }[] {
   const out: { slug: string; versionId: string; frontAssetId: string; name: string }[] = [];
   for (const c of listCharacters(db, projectId)) {
-    const prof = c.approved?.profile as (CharacterProfile & { held?: { ref: string } }) | undefined;
+    const prof = c.approved?.profile as (CharacterProfile & { held?: { ref: string; v?: number } }) | undefined;
     const front = prof?.refs?.front;
-    if (!c.approved || !front || prof?.held?.ref === front) continue;
+    if (!c.approved || !front || (prof?.held?.ref === front && prof.held.v === HELD_READ_VERSION)) continue;
     out.push({ slug: c.slug, versionId: c.approved.id, frontAssetId: front, name: c.name });
   }
   return out;
@@ -846,6 +848,6 @@ export function charactersNeedingHeldRead(db: DB, projectId: string): { slug: st
 export function saveCharacterHeldItems(db: DB, versionId: string, frontAssetId: string, items: HeldItem[]) {
   const v = db.select().from(t.characterVersions).where(eq(t.characterVersions.id, versionId)).get();
   if (!v) return;
-  db.update(t.characterVersions).set({ profile: { ...(v.profile as object), held: { ref: frontAssetId, items } } }).where(eq(t.characterVersions.id, versionId)).run();
+  db.update(t.characterVersions).set({ profile: { ...(v.profile as object), held: { ref: frontAssetId, v: HELD_READ_VERSION, items } } }).where(eq(t.characterVersions.id, versionId)).run();
   persist(db);
 }

@@ -15,23 +15,31 @@ import * as studio from "./studioRepo";
 export function heldItemsPrompt(name: string): string {
   return [
     `This is a reference picture of ${name}, standing and facing the camera.`,
-    "List everything they hold, carry or wear on ONE side of the body only: a bag in one hand or on one shoulder, a phone, a drink, a watch or bracelet on one wrist, an umbrella, a folder.",
-    "For each, say which side OF THE PICTURE it is on, as you look at it (left or right of the image), and where on the body (hand, shoulder, wrist, arm or hip).",
-    "Leave out things worn on both sides or in the middle (a necklace, a belt, both earrings).",
-    'Reply with JSON only: {"items": [{"what": "short name, e.g. tan leather satchel", "picture_side": "left | right", "where": "hand | shoulder | wrist | arm | hip"}]}',
+    "Find everything they hold, carry or wear on ONE side of the body only: a bag in one hand or on one shoulder, a phone, a drink, a watch or bracelet on one wrist, an umbrella, a folder. Leave out things worn on both sides or in the middle.",
+    "Do not use the words left and right. Instead give positions across the image as numbers: 0 is the image's left edge, 100 its right edge.",
+    "For each item give: item_x, how far across the image the item is; and the person's face_x, how far across the image the middle of their face is.",
+    'Reply with JSON only: {"face_x": 50, "items": [{"what": "short name, e.g. tan leather satchel", "item_x": 30, "where": "hand | shoulder | wrist | arm | hip"}]}',
   ].join("\n");
 }
 
-/** Turn the model's picture sides into the character's own sides (a front view is a mirror). */
+/**
+ * Turn positions across the picture into the character's own side (D34). Left and right are
+ * worked out here, never by the model: in a front picture, an item left of the face in the
+ * image is in the person's RIGHT hand.
+ */
 export function parseHeldItems(reply: string): studio.HeldItem[] {
   try {
-    const o = JSON.parse(reply.match(/\{[\s\S]*\}/)?.[0] ?? "") as { items?: { what?: unknown; picture_side?: unknown; where?: unknown }[] };
+    const o = JSON.parse(reply.match(/\{[\s\S]*\}/)?.[0] ?? "") as { face_x?: unknown; items?: { what?: unknown; item_x?: unknown; picture_side?: unknown; where?: unknown }[] };
+    const face = Number(o.face_x);
     return (o.items ?? []).flatMap((x) => {
       const what = String(x.what ?? "").trim().toLowerCase();
-      const ps = String(x.picture_side ?? "").toLowerCase();
       const where = String(x.where ?? "hand").toLowerCase();
-      if (!what || !/^(left|right)$/.test(ps)) return [];
-      return [{ what, side: ps === "left" ? "right" as const : "left" as const, where: /^(hand|shoulder|wrist|arm|hip)$/.test(where) ? where : "hand" }];
+      const ix = Number(x.item_x);
+      let pictureSide: "left" | "right" | undefined;
+      if (Number.isFinite(ix) && Number.isFinite(face) && Math.abs(ix - face) >= 3) pictureSide = ix < face ? "left" : "right";
+      else if (/^(left|right)$/i.test(String(x.picture_side ?? ""))) pictureSide = String(x.picture_side).toLowerCase() as "left" | "right";
+      if (!what || !pictureSide) return [];
+      return [{ what, side: pictureSide === "left" ? "right" as const : "left" as const, where: /^(hand|shoulder|wrist|arm|hip)$/.test(where) ? where : "hand" }];
     });
   } catch { return []; }
 }
