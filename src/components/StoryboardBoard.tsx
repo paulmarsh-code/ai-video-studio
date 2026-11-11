@@ -15,7 +15,7 @@ import type { GeometryPlanData } from "@/lib/domain/types";
 import { PlanThumb } from "./PlanThumb";
 import { uploadBlob } from "@/lib/clientUpload";
 import { imageChangePrompt } from "@/lib/domain/imagePrompts";
-import { correctionPrompt } from "@/lib/domain/pictureCheck";
+import { correctionPrompt, correctionRefs } from "@/lib/domain/pictureCheck";
 import { ActionButton, DoneBadge } from "./ActionButton";
 import { ChangeRequest, type SubmittedChange } from "./ChangeRequest";
 import { SHOT_CHOICES, splitShot } from "@/lib/domain/shotSuggest";
@@ -207,29 +207,52 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
   }
 
   /**
-   * Draw a picture, then check it against the approved layout (D19). If it doesn't match, redraw
-   * once with the problems spelled out; if it still doesn't, keep it and show why on the panel.
+   * Draw a picture, then check it against the approved layout (D19). If it doesn't match, fix
+   * it once automatically (D41); if it still doesn't, keep it and show why on the panel, with
+   * a button to try one more fix.
    */
   async function drawChecked(p: BoardPanel, prompt: string, refs: string[]) {
     const layoutShotId = p.hasCamera ? p.shotId : undefined;
     const backgroundShotId = p.attach.some((a) => a.href?.startsWith("/api/background/")) ? p.shotId : undefined;
     const blockingShotId = p.attach.some((a) => a.href?.startsWith("/api/blocking/")) ? p.shotId : undefined;
-    let id = await drawPicture({ projectId: b.projectId, baseCode: codeOf(p), prompt, refs, size: b.size, layoutShotId, backgroundShotId, blockingShotId });
-    let r = await setPanelImageAction(p.id, id, fingerprint(p));
+    const id = await drawPicture({ projectId: b.projectId, baseCode: codeOf(p), prompt, refs, size: b.size, layoutShotId, backgroundShotId, blockingShotId });
+    const r = await setPanelImageAction(p.id, id, fingerprint(p));
     if (!r.ok) throw new Error(r.error);
     if (!b.canCheck || !layoutShotId) return;
     setDrawing((x) => ({ ...x, [p.id]: "Checking against the layout…" }));
-    let result = await checkPicture(p.id, id);
-    // Targeted corrections (D34): a picture that doesn't match is edited to fix just what's
-    // wrong (a hand, a missing person, the background), keeping everything that's right,
-    // rather than drawn again from scratch. Up to twice; then it's shown with what's still off.
-    for (let attempt = 1; attempt <= 2 && result && !result.pass; attempt++) {
-      setDrawing((x) => ({ ...x, [p.id]: `Fixing: ${result!.problems[0]?.slice(0, 60) ?? "doesn't match"}…` }));
-      id = await drawPicture({ projectId: b.projectId, baseCode: codeOf(p), prompt: correctionPrompt(result.problems, !!blockingShotId), refs, size: b.size, layoutShotId: blockingShotId ? undefined : layoutShotId, blockingShotId, baseAssetId: id });
-      r = await setPanelImageAction(p.id, id, fingerprint(p));
-      if (!r.ok) throw new Error(r.error);
-      setDrawing((x) => ({ ...x, [p.id]: "Checking again…" }));
-      result = await checkPicture(p.id, id);
+    const result = await checkPicture(p.id, id);
+    // One automatic correction (D41); a second only when asked for, from the panel.
+    if (result && !result.pass) await correctOnce(p, id, result.problems);
+  }
+
+  /**
+   * A targeted correction (D34): the picture is edited to fix just what's wrong, keeping
+   * everything that's right. Only the references of the people and props the problems name
+   * are sent with it (D41), then it's checked again.
+   */
+  async function correctOnce(p: BoardPanel, imageId: string, problems: string[]) {
+    const layoutShotId = p.hasCamera ? p.shotId : undefined;
+    const blockingShotId = p.attach.some((a) => a.href?.startsWith("/api/blocking/")) ? p.shotId : undefined;
+    setDrawing((x) => ({ ...x, [p.id]: `Fixing: ${problems[0]?.slice(0, 60) ?? "doesn't match"}…` }));
+    const id = await drawPicture({ projectId: b.projectId, baseCode: codeOf(p), prompt: correctionPrompt(problems, !!blockingShotId), refs: correctionRefs(problems, p.attach), size: b.size, layoutShotId: blockingShotId ? undefined : layoutShotId, blockingShotId, baseAssetId: imageId });
+    const r = await setPanelImageAction(p.id, id, fingerprint(p));
+    if (!r.ok) throw new Error(r.error);
+    if (!b.canCheck || !layoutShotId) return;
+    setDrawing((x) => ({ ...x, [p.id]: "Checking again…" }));
+    await checkPicture(p.id, id);
+  }
+
+  /** "Try one more fix" on a panel whose picture still doesn't match (D41). */
+  async function fixAgain(p: BoardPanel) {
+    if (!p.imageAssetId || !p.check || p.check.pass) return;
+    setFailed((x) => { const y = { ...x }; delete y[p.id]; return y; });
+    try {
+      await correctOnce(p, p.imageAssetId, p.check.problems);
+    } catch (e) {
+      setFailed((x) => ({ ...x, [p.id]: e instanceof Error ? e.message : String(e) }));
+    } finally {
+      setDrawing((x) => { const y = { ...x }; delete y[p.id]; return y; });
+      router.refresh();
     }
   }
 
@@ -416,7 +439,13 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
             {p.imageAssetId && p.check?.keptApproved && p.status === "approved" ? <p className="mt-1 text-xs text-neutral-600" data-testid={`board-${p.code}-check`}>Approved by you on an earlier layout and kept. Redraw it only if it no longer fits.</p>
               : p.imageAssetId && p.check && (p.check.pass
               ? <p className="mt-1 text-xs text-green-700" data-testid={`board-${p.code}-check`}>✓ Matches the approved layout</p>
-              : <p className="mt-1 text-xs text-amber-700" data-testid={`board-${p.code}-check`}>⚠ Doesn&apos;t match the approved layout: {p.check.problems.join(" ")} Redraw it, or change it below.</p>)}
+              : <div className="mt-1 text-xs text-amber-700" data-testid={`board-${p.code}-check`}>
+                  <p>⚠ Doesn&apos;t match the approved layout: {p.check.problems.join(" ")}</p>
+                  {b.canGenerate && b.canCheck && !drawing[p.id] && <p className="mt-1">
+                    <button type="button" className="rounded border border-amber-400 bg-white px-2 py-0.5 text-amber-900 hover:bg-amber-50" data-testid={`board-${p.code}-fix-again`} onClick={() => void fixAgain(p)}>Try one more fix</button>
+                    <span className="ml-2 text-neutral-600">about 7p · or redraw it, or change it below</span>
+                  </p>}
+                </div>)}
             {failed[p.id] && <p className="mt-1 text-xs text-red-700" role="alert" data-testid={`board-${p.code}-failed`}>GPT couldn&apos;t draw this one. {plainReason(failed[p.id])}</p>}
 
             <div className="mt-3 space-y-2">

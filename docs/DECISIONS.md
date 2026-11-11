@@ -788,3 +788,13 @@ D38 test: words the app can't read leave people, postures, props or cameras wron
 - **The ⓘ** (`WordsHelp`): a small "i" beside the box's label; click for the note, Escape or clicking elsewhere closes it. Only on boxes the app itself reads, not on free-text changes that go straight to GPT, and not on the shot picker (fixed choices).
 - **GPT writes panels in these words too**: the story-to-panels request now asks for plain wording of who moves, sits, lies down, gets up, turns or leaves, naming them each time, with examples, so panels made from a story are read correctly.
 - Also: "put Ava on the sofa" now means sitting on it.
+
+### D41: Fewer and lighter corrections (2026-11-11)
+
+Paul's OpenAI spend was about $0.088 (7p) a picture and about 2.2 pictures a panel: a full run of Jade's Entrance cost around £1.60 rather than the 50p it used to. His week: image output 47% of spend, the reference pictures sent in 37%, prompt text 12%, checks 5%. The picture check and its automatic corrections (D34) made each panel up to three full-price image calls, each sending the blocking frame and every reference again.
+
+- **One automatic correction**, not two. If the picture still doesn't match, the panel shows what's wrong with a **"Try one more fix"** button (about 7p); otherwise redraw it or change it.
+- **A correction sends only what it needs**: the picture to fix, the blocking frame, and the references of the people and props its problems name (`correctionRefs`). "Jade's satchel is in the wrong hand" sends Jade's references; "the room is the wrong way round" sends none. The picture being fixed already shows everyone else correctly.
+- Consistency: unchanged for anything the check finds. The check still runs after every picture and every fix, and the problem's own people still get their references.
+- Expected saving, in Paul's numbers: a panel that fails its check now costs at most two pictures automatically instead of three, and each fix sends 2 to 3 pictures instead of 7 to 8. Roughly a third off a full run.
+- Tests: `tests/corrections.d41.test.ts`; browser test: wrong once → one automatic fix sending 2 pictures instead of 4; wrong twice → stops at 2 pictures and offers "Try one more fix", which fixes it.

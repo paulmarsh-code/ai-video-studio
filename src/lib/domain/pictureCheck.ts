@@ -147,6 +147,23 @@ export function fixLine(problems: string[]): string {
 }
 
 /**
+ * The reference pictures a correction needs (D41): only those of the people and props its
+ * problems name. The picture being fixed already shows everyone else as they should be, so
+ * sending every reference again only adds cost. Views and earlier approved pictures aren't sent.
+ */
+export function correctionRefs(problems: string[], attach: { label: string; assetId: string; href?: string }[]): string[] {
+  const text = problems.join(" ").toLowerCase();
+  const named = (w: string) => w.length > 2 && new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(text);
+  return attach.filter((a) => !a.href && a.assetId).filter((a) => {
+    const m = /^(.*?)\s+(reference|back|picture)$/i.exec(a.label);
+    if (!m) return false;
+    const words = m[1].toLowerCase().split(/\s+/);
+    // People by first name ("Chase" for Chase Whitmore); props by full name or last word ("table").
+    return m[2].toLowerCase() === "picture" ? named(m[1].toLowerCase()) || named(words[words.length - 1]) : named(words[0]);
+  }).map((a) => a.assetId);
+}
+
+/**
  * A targeted correction (D34): image 1 is the picture that didn't match; it is edited to fix
  * only what the check found, keeping everything else. With a blocking frame, image 2 is the
  * approved shot to match.
