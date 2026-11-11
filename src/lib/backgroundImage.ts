@@ -7,7 +7,9 @@ import { eq } from "drizzle-orm";
 import sharp from "sharp";
 import { persist, type DB } from "@/db/client";
 import * as t from "@/db/schema";
-import { planForShot } from "./domain/geometry";
+import { pictureXY, planForShot } from "./domain/geometry";
+import { detectorKind, type Thing } from "./domain/peopleDetect";
+import { detectPeople } from "./peopleDetector";
 import { calibrationPrompt, horizonOf, readCalibration, ringSectors, roomCentre, viewScale, viewSlice, wallDistance, type ViewCalibration } from "./domain/panorama";
 import { getTextProvider } from "./providers/images";
 import * as repo from "./repo";
@@ -215,5 +217,39 @@ export async function backgroundForFrame(db: DB, shotId: string, W: number, Hf: 
   const visH = Math.min(ringH - cutTop, Hf - visTop);
   if (visH <= 0) return under;
   const part = await sharp(strip).extract({ left: 0, top: cutTop, width: W, height: visH }).png().toBuffer();
-  return sharp(under).composite([{ input: part, left: 0, top: visTop }]).png().toBuffer();
+  const framed = await sharp(under).composite([{ input: part, left: 0, top: visTop }]).png().toBuffer();
+  // Furniture standing in the venue pictures that the plan doesn't have (D56): GPT copied a real
+  // table from the bar view instead of the plan's cocktail table among the group. The plan's own
+  // props stay; the rest are softened into the room, as the floor beyond the views already is.
+  const spots = (plan.furniture ?? []).flatMap((f) => {
+    const kind = detectorKind(f.name), foot = kind ? pictureXY(plan, cam, f.position, 0) : undefined;
+    return kind && foot ? [{ kind, x: foot.x, baseY: foot.y }] : [];
+  });
+  return clearLooseFurniture(framed, spots, horizon / Hf).catch(() => framed);
+}
+
+/** The loose furniture in a background that isn't the plan's (D56): standing on the floor, below the horizon, and nowhere near a planned prop of its kind. */
+export function looseFurniture(things: Thing[], spots: { kind: string; x: number; baseY: number }[], horizon: number): Thing[] {
+  return things.filter((t) => t.y1 > horizon + 0.03 && !spots.some((s) => s.kind === t.kind && s.x >= t.x0 - 0.05 && s.x <= t.x1 + 0.05 && Math.abs(s.baseY - t.y1) < 0.1));
+}
+
+async function clearLooseFurniture(bg: Buffer, spots: { kind: string; x: number; baseY: number }[], horizon: number): Promise<Buffer> {
+  const found = await detectPeople(bg, { thingScore: 0.25 });
+  const loose = looseFurniture(found.things, spots, horizon);
+  if (!loose.length) return bg;
+  const { width: W, height: Hf } = found;
+  const soft = await sharp(bg).blur(40).png().toBuffer();
+  const patches = await Promise.all(loose.map(async (t) => {
+    // What stands on it (glasses, flowers) goes too: half its height again above it.
+    const x0 = Math.max(0, Math.floor((t.x0 - 0.03) * W)), x1 = Math.min(W, Math.ceil((t.x1 + 0.03) * W));
+    const y0 = Math.max(0, Math.floor((t.y0 - 0.5 * (t.y1 - t.y0)) * Hf)), y1 = Math.min(Hf, Math.ceil((Math.min(t.y1, 1) + 0.02) * Hf));
+    const w = x1 - x0, h = y1 - y0;
+    if (w < 8 || h < 8) return undefined;
+    const r = Math.max(4, Math.round(Math.min(w, h) * 0.12));
+    const mask = await sharp(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><defs><filter id="f"><feGaussianBlur stdDeviation="${r / 2}"/></filter></defs><rect x="${r}" y="${r}" width="${w - 2 * r}" height="${h - 2 * r}" fill="#fff" filter="url(#f)"/></svg>`)).resize(w, h).extractChannel(0).toBuffer();
+    const piece = await sharp(soft).extract({ left: x0, top: y0, width: w, height: h }).removeAlpha().joinChannel(mask).png().toBuffer();
+    return { input: piece, left: x0, top: y0 };
+  }));
+  const cover = patches.filter((x): x is NonNullable<typeof x> => !!x);
+  return cover.length ? sharp(bg).composite(cover).png().toBuffer() : bg;
 }

@@ -52,3 +52,17 @@ describe("A prop's place against the plan (D55)", () => {
     expect(r.areas!.room.problems).toEqual([]);
   });
 });
+
+describe("Image 1 shows only the plan's furniture (D56)", () => {
+  it("clears tables and chairs standing in the venue picture, but keeps the plan's own and anything up on the walls", async () => {
+    const { looseFurniture } = await import("../src/lib/backgroundImage");
+    const spots = [{ kind: "dining table", x: 0.3, baseY: 0.67 }];
+    const things = [
+      { kind: "dining table", score: 0.33, x0: 0.44, y0: 0.67, x1: 0.74, y1: 0.79 }, // the venue picture's own, front centre
+      { kind: "dining table", score: 0.4, x0: 0.22, y0: 0.6, x1: 0.4, y1: 0.7 }, // where the plan's table stands
+      { kind: "tv", score: 0.5, x0: 0.6, y0: 0.2, x1: 0.8, y1: 0.4 }, // above the horizon: part of the room
+      { kind: "chair", score: 0.4, x0: 0.1, y0: 0.75, x1: 0.2, y1: 0.9 },
+    ];
+    expect(looseFurniture(things, spots, 0.5).map((t) => [t.kind, t.x0])).toEqual([["dining table", 0.44], ["chair", 0.1]]);
+  });
+});

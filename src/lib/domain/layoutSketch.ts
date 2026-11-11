@@ -163,10 +163,13 @@ export function layoutSketchSvg(i: {
     if (kind === "table") {
       const rx = (fu.radiusM / c.depth) * focal;
       const ry = Math.max(4, rx * Math.min(0.5, Math.abs(EYE_HEIGHT - h) / c.depth));
+      // A solid, draped stand-in from top to floor (D56), as plain to see as the people: a thin
+      // outline and pole lost out to a real table standing in the venue picture.
+      const fx = rx * 1.08;
       items.push({
         depth: c.depth,
-        svg: `<g><rect x="${(c.x - rx * 0.12).toFixed(1)}" y="${c.y.toFixed(1)}" width="${(rx * 0.24).toFixed(1)}" height="${Math.max(0, floor.y - c.y).toFixed(1)}" fill="#a3a3a3"/>`
-          + `<ellipse cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" rx="${rx.toFixed(1)}" ry="${ry.toFixed(1)}" fill="#e5e5e5" fill-opacity="${OV ? 0.75 : 1}" stroke="#525252" stroke-width="3"/>${label}</g>`,
+        svg: `<g><path d="M ${(c.x - rx).toFixed(1)} ${c.y.toFixed(1)} L ${(c.x - fx).toFixed(1)} ${floor.y.toFixed(1)} Q ${c.x.toFixed(1)} ${(floor.y + ry).toFixed(1)} ${(c.x + fx).toFixed(1)} ${floor.y.toFixed(1)} L ${(c.x + rx).toFixed(1)} ${c.y.toFixed(1)} Z" fill="#ece8df" fill-opacity="${OV ? 0.92 : 1}" stroke="#525252" stroke-width="3"/>`
+          + `<ellipse cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" rx="${rx.toFixed(1)}" ry="${ry.toFixed(1)}" fill="#f7f5f0" fill-opacity="${OV ? 0.95 : 1}" stroke="#525252" stroke-width="3"/>${label}</g>`,
       });
     } else {
       // Flat things and columns: an upright block at their real width and height.

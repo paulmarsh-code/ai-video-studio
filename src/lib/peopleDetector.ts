@@ -40,7 +40,7 @@ async function modelFile(): Promise<string> {
  * Everyone the detector finds in the picture, with the picture's size. Throws when the detector
  * can't run, so the caller can fall back.
  */
-export async function detectPeople(picture: Buffer): Promise<{ people: Person[]; things: Thing[]; width: number; height: number }> {
+export async function detectPeople(picture: Buffer, opts: { thingScore?: number } = {}): Promise<{ people: Person[]; things: Thing[]; width: number; height: number }> {
   if (!session) {
     session = (async () => {
       // Loaded when the check runs, not when the app is built, so a computer without the package
@@ -63,5 +63,5 @@ export async function detectPeople(picture: Buffer): Promise<{ people: Person[];
   const plane = DETECT_SIZE * DETECT_SIZE, data = new Float32Array(3 * plane);
   for (let i = 0; i < plane; i++) { data[i] = rgb[i * 3 + 2]; data[plane + i] = rgb[i * 3 + 1]; data[2 * plane + i] = rgb[i * 3]; }
   const out = (await s.run({ [s.inputNames[0]]: new tensor!("float32", data, [1, 3, DETECT_SIZE, DETECT_SIZE]) }))[s.outputNames[0]];
-  return { people: decodePeople(out.data, out.dims[2], scale, width, height), things: decodeThings(out.data, out.dims[2], scale, width, height), width, height };
+  return { people: decodePeople(out.data, out.dims[2], scale, width, height), things: decodeThings(out.data, out.dims[2], scale, width, height, opts.thingScore), width, height };
 }
