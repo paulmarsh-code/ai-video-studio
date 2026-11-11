@@ -13,6 +13,7 @@
     "drizzle-orm": "0.44.5",
     "konva": "9.3.22",
     "next": "15.5.29",
+    "onnxruntime-node": "^1.31.1",
     "react": "19.2.9",
     "react-dom": "19.2.9",
     "react-konva": "19.0.10",

@@ -1007,3 +1007,28 @@ Paul ran D51's "Check again" on panel 1. Only Jade was flagged (2× too tall). T
   - The `eye_level` column in `results.csv` reads, for example, "above: heads 19% down, planned 48%".
 - **Tested.** This ran on a copy of Paul's scene with his real panel 1 picture and a stand-in answer like the one expected. The panel failed Chase and Nina at about twice their height and failed the camera with the head heights. It didn't fail Jade, listed Marcus (hidden) under "Couldn't judge", and offered "Redraw it from the layout". The real model's answer waits on Paul's run.
 - **Next.** Paul pulls, restarts in test mode and clicks "Check again" (about 1p). If the verdict matches what he sees, T1 to T3 follow. If the heads come back wrong, `check.json` shows the model's numbers, and a stronger check model (`OPENAI_CHECK_MODEL`) is the next thing to try.
+
+### D53: A person detector measures; the vision model only says who is who (2026-11-11)
+
+Paul ran D52's "Check again". It caught the camera fault, but on numbers the model had made up. It put the group's heads 34–36% down the picture; the run before it said about 22%, and the real figure is about 20%. It also called a group twice its planned size "about the same". Four runs in a row, asked four different ways, the vision model guessed positions and sizes. Rewording won't make it measure.
+
+- **Failure fixed (D38).** The check passed pictures whose people are twice their planned size. It also judged the eye level from numbers that change from run to run. It reaches generation through the picture check, whose verdict and wording go into the redraw.
+- **The detector.** YOLOX-S (Apache 2.0, free for commercial use) runs through `onnxruntime-node` (MIT) on Paul's computer.
+  - It costs nothing per picture and takes about a second.
+  - Its 36 MB file is fetched from the YOLOX release the first time a check runs. It is checked against its SHA-256 fingerprint and kept in `data/models` (`PEOPLE_MODEL` can point elsewhere).
+  - On Paul's panel 1 it outlined everyone exactly: Chase with his head 19% down and feet 58%; Nina 21% to 56%; Marcus cut off by the table; Jade 16% to 91%; the crowd's heads all about 23% down.
+- **Who is who.** Everyone found is outlined and numbered left to right on a copy of the picture (`withMarks`). The vision model is asked only which number is each main character, with the one-line look from D52. Matching people is something it does well. A number can belong to one person only.
+- **Measured by rule.** For each main character:
+  - **Place across.** It fails when the outline's centre is further from the planned place than the larger of their planned width and 15% of the picture.
+  - **Hidden.** An outline less than 1.9 times as tall as it is wide, and not cut by the bottom edge, is someone partly hidden (behind a table or another person). Their size isn't measured, and that is said.
+  - **Size.** It is the outline's height against the planned height. 1.5× or more is too close, two-thirds or less too far. Someone the plan cuts at the bottom edge but who is shown whole means the camera has pulled back.
+  - **Eye level.** It uses the middle of the head differences, 8% either way, as in D52.
+  - Each problem carries the measured figures: "Chase Whitmore is drawn about 2.3 times the planned height (39% of the picture's height, planned 17%)".
+- **Fallback.** If the detector can't run (no file and no internet, say), the check uses the D52 estimate. `measuredBy` in the result says which was used: "detector" or "estimate".
+- **Test records.**
+  - `check_people_found.png` is what the model was shown.
+  - `check_plan_overlay.png` now shows each person's measured outline (solid) next to their planned box (dashed), in the same colour.
+  - `check.json` has each person's outline number, head and place.
+- **Paul's eye-level question.** The white line comes from the plan's camera (1.6 m, level), which puts every standing head on the middle line, near or far. GPT's picture points the camera about 30° down. Paul can keep the level camera, so this picture is redrawn. Or he can tilt that camera down in the layout to keep GPT's framing, and image 1, the request and the check all follow. The plan decides.
+- **Tested.** Unit tests cover the detector's output decoding, keeping the surest guess, numbering, and the measured judgement on the detector's real outlines from Paul's picture. In the browser, in test mode, on a copy of Paul's scene with his real picture, the detector fetched and verified itself. The whole check took about 10 seconds. It failed Chase (2.3×) and Nina (1.9×), failed the camera (heads 19% down, planned 48%), passed Jade (1.4×, a little left but within her place), and listed Marcus as partly hidden.
+- **On Paul's machine.** `git pull`, then `npm install` (adds onnxruntime-node; on Windows nothing extra downloads at install), then restart in test mode and click "Check again". The first check fetches the detector.

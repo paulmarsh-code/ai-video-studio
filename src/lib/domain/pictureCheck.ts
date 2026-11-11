@@ -5,6 +5,10 @@
 // is decided here, by rule.
 
 import { itemGroup } from "./imagePrompts";
+import type { Person } from "./peopleDetect";
+
+/** The plan check measured (D53): everyone the detector found, numbered, and which number the model says is whom. */
+export interface MeasuredPlan { people: Person[]; reply: string; /** The picture's height over its width. */ aspect: number }
 
 export interface PictureExpectation {
   /** Main characters the camera sees, left to right, from the approved floor plan. */
@@ -58,7 +62,9 @@ export interface PictureCheck {
   /** Blocking, the characters' look, and the room and props, each passed or failed on its own (B1). */
   areas?: Record<CheckArea, AreaResult>;
   /** Each person against their planned box (D51, D52): the model's comparison, roughly how many times the planned height, and where their head is (0 top, 1 bottom) against where the plan puts it. */
-  measured?: { name: string; fit?: string; heightRatio?: number; headY?: number; plannedHeadY?: number }[];
+  measured?: { name: string; fit?: string; heightRatio?: number; headY?: number; plannedHeadY?: number; x?: number; plannedX?: number; /** The detector's outline number (D53). */ box?: number }[];
+  /** How sizes and heads were found (D53): measured by the detector, or the vision model's estimate. */
+  measuredBy?: "detector" | "estimate";
   /** Heads against the planned eye level (D52): "on", "above" or "below", read from where the heads are. */
   eyeLevel?: string;
 }
@@ -116,6 +122,27 @@ export function planPrompt(e: PictureExpectation, who: Who[]): string {
 }
 
 /**
+ * Which outline is whom (D53). The detector has outlined and numbered everyone; the model only
+ * matches the main characters to numbers, which it does well. All measuring is done by rule.
+ */
+export function marksPrompt(e: PictureExpectation, who: Who[], count: number): string {
+  const names = (e.figures ?? []).map((f) => f.name);
+  return [
+    "You are matching people in a storyboard picture. Report only what you actually see.",
+    "",
+    `Image 1 is the picture with every person found in it outlined and numbered 1 to ${count}, left to right.`,
+    "",
+    `The main characters, expected left to right: ${names.join(", ")}. How to recognise them:`,
+    ...who.filter((w) => names.includes(w.name)).map((w) => `- ${w.name}: ${w.look}`),
+    "",
+    "For each main character, give the number of the outline around them. Use 0 if they aren't in the picture or have no outline of their own. A number belongs to one person only.",
+    "",
+    "Reply with JSON only, no other text:",
+    '{"people": [{"name": "character", "box": 1}]}',
+  ].join("\n");
+}
+
+/**
  * One line on how to recognise a character (D52): the first sentence of their clothes that names
  * a colour (a general opening like "smart-casual style" tells the model nothing), else the
  * first sentence, else their first anchor; cut at a word near 110 characters.
@@ -130,7 +157,7 @@ export function lookLine(wardrobe: string, anchors: string[] = []): string {
 }
 
 /** Decide pass or fail from what the model saw, by rule. */
-export function judgePicture(e: PictureExpectation, reply: string, planReply?: string): PictureCheck {
+export function judgePicture(e: PictureExpectation, reply: string, plan?: string | MeasuredPlan): PictureCheck {
   // The answer is JSON, possibly inside a code fence: take the object itself.
   const json = reply.match(/\{[\s\S]*\}/)?.[0];
   let seen: { left_to_right?: unknown; props_seen?: unknown; background_people?: unknown; notes?: unknown; clothes?: unknown; props?: unknown; background_left?: unknown; background_right?: unknown; looking_at_camera?: unknown };
@@ -209,19 +236,53 @@ export function judgePicture(e: PictureExpectation, reply: string, planReply?: s
   const bg = String(seen.background_people ?? "").toLowerCase();
   if (e.crowd !== "none" && /none/.test(bg)) add("room", "No background people, but the scene has them.");
 
-  // Eye level, sizes and places against the plan (B1, D51, D52), from the separate plan check.
+  // Eye level, sizes and places against the plan (B1, D51 to D53), from the separate plan check.
   // Anything it couldn't see is "couldn't judge", never a pass.
   const measured: NonNullable<PictureCheck["measured"]> = [];
   let eyeLevel: string | undefined;
-  if (planReply !== undefined && e.figures?.length) {
-    let plan: { people?: unknown } = {};
-    try { plan = JSON.parse(planReply.match(/\{[\s\S]*\}/)?.[0] ?? ""); } catch { /* judged as unread below */ }
-    const got = objs(plan.people);
-    const pct = (y: number) => `${Math.round(y * 100)}%`;
-    const offsets: { head: number; planned: number }[] = [];
-    for (const want of e.figures) {
-      if (want.headY < 0.02 || want.feetY - want.headY >= 0.85) continue; // a close-up: its box would fill the picture
-      if (missing.some((m) => first(m) === first(want.name))) continue;
+  let measuredBy: PictureCheck["measuredBy"];
+  const pct = (y: number) => `${Math.round(y * 100)}%`;
+  const offsets: { head: number; planned: number }[] = [];
+  const parsePlan = (text: string) => { try { return objs((JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] ?? "") as { people?: unknown }).people); } catch { return []; } };
+  const judged = (e.figures ?? []).filter((want) => !(want.headY < 0.02 || want.feetY - want.headY >= 0.85) && !missing.some((m) => first(m) === first(want.name)));
+
+  if (typeof plan === "object" && e.figures?.length) {
+    // Measured (D53): the detector's outline for each person, matched by the model.
+    measuredBy = "detector";
+    const picks = parsePlan(plan.reply);
+    const used = new Set<number>();
+    for (const want of judged) {
+      const n = Math.round(Number(picks.find((f) => first(String(f.name ?? "")) === first(want.name))?.box));
+      const box = Number.isFinite(n) && n > 0 && !used.has(n) ? plan.people.find((p) => p.n === n) : undefined;
+      if (!box) { unmeasured.blocking.push(`${want.name}: not matched to anyone found, not measured`); continue; }
+      used.add(n);
+      const cx = (box.x0 + box.x1) / 2;
+      const m: (typeof measured)[number] = { name: want.name, box: n, headY: +box.y0.toFixed(3), plannedHeadY: want.headY, x: +cx.toFixed(3), plannedX: want.x };
+      measured.push(m);
+      offsets.push({ head: box.y0, planned: want.headY });
+      // Place across: off by more than their own planned width, and at least 15% of the picture.
+      const plannedTall = Math.min(want.feetY, 1) - want.headY;
+      if (Math.abs(cx - want.x) > Math.max(0.15, 0.28 * plannedTall * plan.aspect)) {
+        m.fit = "elsewhere";
+        add("blocking", `${want.name} is about ${pct(cx)} of the way across the picture; image 1 has them about ${pct(want.x)} across.`, true);
+        continue;
+      }
+      if (!want.standing || plannedTall < 0.03) continue; // a seated or kneeling body's height can't be judged the same way
+      // An outline much less than twice as tall as it is wide, not cut by the bottom edge, is
+      // someone partly behind something (a table, another person): their height isn't theirs.
+      const atEdge = box.y1 > 0.97;
+      if (!atEdge && ((box.y1 - box.y0) * plan.aspect) / Math.max(0.001, box.x1 - box.x0) < 1.9) { unmeasured.blocking.push(`${want.name}: partly hidden, size not measured`); continue; }
+      const tall = Math.min(box.y1, 1) - box.y0, ratio = tall / plannedTall;
+      m.heightRatio = +ratio.toFixed(2);
+      m.fit = ratio >= 1.5 ? "bigger" : ratio <= 0.67 ? "smaller" : "fits";
+      if (m.fit === "bigger") add("blocking", `${want.name} is drawn about ${ratio.toFixed(1)} times the planned height (${pct(tall)} of the picture's height, planned ${pct(plannedTall)}), so too close to the camera; in image 1 they are much smaller and further back.`, true);
+      if (m.fit === "smaller") add("blocking", `${want.name} is drawn at about ${pct(tall)} of the picture's height, planned ${pct(plannedTall)}${want.feetY > 1.05 && !atEdge ? ": the camera has moved back to show the whole body, but image 1 cuts them at the bottom edge" : ", so too far away"}.`, true);
+    }
+  } else if (typeof plan === "string" && e.figures?.length) {
+    // The vision model's estimate (D52), when the detector can't run.
+    measuredBy = "estimate";
+    const got = parsePlan(plan);
+    for (const want of judged) {
       const g = got.find((f) => first(String(f.name ?? "")) === first(want.name));
       const vs = String(g?.vs_box ?? "").toLowerCase().trim();
       const t = Number(g?.times), h = Number(g?.head_top);
@@ -234,7 +295,7 @@ export function judgePicture(e: PictureExpectation, reply: string, planReply?: s
       m.fit = /same/.test(vs) ? "fits" : /taller/.test(vs) ? "bigger" : /shorter/.test(vs) ? "smaller" : "elsewhere";
       if (times !== undefined) m.heightRatio = +times.toFixed(2);
       if (m.fit === "elsewhere") { add("blocking", `${want.name} isn't where image 1 puts them: they stand clearly away from their place.`, true); continue; }
-      if (!want.standing || m.fit === "fits") continue; // a seated or kneeling body's height can't be judged the same way
+      if (!want.standing || m.fit === "fits") continue;
       // Someone the plan cuts at the bottom edge shows as much of themselves as their head's
       // height allows, so their size is the eye level's; only pulling back to show more counts.
       const cut = want.feetY > 0.98;
@@ -245,6 +306,8 @@ export function judgePicture(e: PictureExpectation, reply: string, planReply?: s
         add("blocking", `${want.name} is drawn ${times !== undefined ? `about ${(1 / times).toFixed(1)} times` : "clearly"} shorter than planned${cut ? ": the camera has moved back to show the whole body, but image 1 cuts them at the bottom edge" : ", so too far away"}.`, true);
       }
     }
+  }
+  if (plan !== undefined && e.figures?.length) {
     // Eye level: where the heads are against where the plan puts them. The middle of the
     // differences, so one misread head doesn't decide it; a level camera at eye height keeps
     // standing heads on the eye-level line, near or far.
@@ -263,7 +326,7 @@ export function judgePicture(e: PictureExpectation, reply: string, planReply?: s
     return [a, { pass: ps.length === 0, problems: ps, unmeasured: unmeasured[a] }];
   })) as Record<CheckArea, AreaResult>;
   const problems = issues.map((x) => x.text);
-  return { pass: problems.length === 0, problems, areas, ...(issues.some((x) => x.redraw) ? { redraw: true } : {}), ...(measured.length ? { measured } : {}), ...(eyeLevel ? { eyeLevel } : {}) };
+  return { pass: problems.length === 0, problems, areas, ...(issues.some((x) => x.redraw) ? { redraw: true } : {}), ...(measured.length ? { measured } : {}), ...(eyeLevel ? { eyeLevel } : {}), ...(measuredBy ? { measuredBy } : {}) };
 }
 
 /** The extra instruction for the one automatic redraw. */
