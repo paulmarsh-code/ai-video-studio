@@ -273,7 +273,7 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
       {b.outdated && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm" data-testid="layout-outdated">
           <p className="font-semibold">The app&apos;s layout rules have improved since this layout was made</p>
-          <p className="mt-1 text-neutral-700">Update it to get them: everyone keeps their approved place, arrival spots are added where the story has someone arriving, prop sizes are read again from their descriptions, and the app chooses the cameras again for you to check and approve. Pictures already drawn will be marked to redraw.</p>
+          <p className="mt-1 text-neutral-700">Update it to get them: everyone keeps their approved place, arrival spots are added where the story has someone arriving, each panel&apos;s words set who moves, turns, leaves or picks something up from panel to panel, prop sizes are read again from their descriptions, and the app chooses the cameras again for you to check and approve. Pictures already drawn will be marked to redraw.</p>
           <div className="mt-2">
             <ActionButton label="Update the layout" busyLabel="Updating…" doneLabel="Updated" testId="update-layout"
               onAction={async () => {

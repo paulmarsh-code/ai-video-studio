@@ -152,6 +152,7 @@ export function layoutSketchSvg(i: {
   }
 
   for (const fu of i.plan.furniture ?? []) {
+    if (fu.heldBy) continue; // in someone's hand (D36): it's tagged on them instead
     const text = `${fu.name} ${fu.detail ?? ""}`;
     const kind = propKind(text, fu.name);
     const h = fu.heightM ?? TABLE_HEIGHT;

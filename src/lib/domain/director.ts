@@ -300,6 +300,15 @@ function score(
       if (depth > 0 && depth < Math.min(1.8, nearest - 0.3) && Math.abs(rel.x * f.y - rel.y * f.x) < fu.radiusM + depth * 0.6) clutter += 3;
     }
   }
+  // Nobody walks into the lens (D36): a camera standing on, or just beside, the path of
+  // someone walking during the panel is not used.
+  for (const a of plan.actors) {
+    if (!a.to) continue;
+    const v = sub(a.to, a.position), l2 = v.x * v.x + v.y * v.y;
+    if (l2 < 0.04) continue;
+    const t = Math.max(0, Math.min(1, ((cam.position.x - a.position.x) * v.x + (cam.position.y - a.position.y) * v.y) / l2));
+    if (Math.hypot(cam.position.x - (a.position.x + v.x * t), cam.position.y - (a.position.y + v.y * t)) < 0.9) return { ok: false, score: 0, reasons: [] };
+  }
 
   let s = -facingCost - clutter;
   const reasons: string[] = ["R-180: on the scene's side of the line of action"];
@@ -796,9 +805,10 @@ export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (i
  * 3 = faces, approach shots from behind the walker (D19c/D19d); 4 = nobody standing with the
  * group drops out of frame, arrivals filmed from further back (D19e); 5 = start and finish
  * positions for anyone moving (D20); 6 = movement marks worked out afresh, props seen across
- * their real extent (D21b); 7 = high and low cameras for looking down or up (D25).
+ * their real extent (D21b); 7 = high and low cameras for looking down or up (D25);
+ * 14 = positions per panel from the words: walking off, going places, turning, props in hand (D36).
  */
-export const LAYOUT_RULES = 13;
+export const LAYOUT_RULES = 14;
 
 export function applyDesign(plan: GeometryPlanData, choices: { shotId: string; shotCode: string; option: CameraOption }[], line?: [string, string]) {
   const cameras: PlanCamera[] = [];

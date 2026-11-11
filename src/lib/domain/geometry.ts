@@ -339,18 +339,34 @@ export function planForShot(plan: GeometryPlanData, shot?: { at?: Record<string,
   const at = shot?.at;
   const bl = shot?.blocking;
   if ((!at || !Object.keys(at).length) && (!bl || !Object.keys(bl).length)) return plan;
+  // Someone who has left (D36) isn't in the panel at all.
+  const actors = plan.actors.filter((a) => !bl?.[a.characterId]?.gone).map((a) => {
+    // Positions set for this panel (D35) come first; then marks from the panel's words.
+    const b = bl?.[a.characterId];
+    if (b) return { ...a, position: b.at, ...(b.to ? { to: b.to } : {}), ...(b.facingDeg !== undefined ? { facingDeg: b.facingDeg } : {}) };
+    const m = at?.[a.characterId] && a.marks?.find((x) => x.id === at[a.characterId]);
+    return m ? { ...a, position: m.position } : a;
+  });
+  // A prop in someone's hands is where they are (D36), a little in front of them.
+  const holder = (id: string): Point | undefined => {
+    const a = actors.find((x) => x.characterId === id);
+    if (!a) return undefined;
+    const f = a.facingDeg !== undefined ? { x: Math.cos((a.facingDeg * Math.PI) / 180), y: Math.sin((a.facingDeg * Math.PI) / 180) } : a.to ? norm(sub(a.to, a.position)) : { x: 0, y: 0 };
+    return { x: +(a.position.x + f.x * 0.25).toFixed(2), y: +(a.position.y + f.y * 0.25).toFixed(2) };
+  };
   return {
     ...plan,
-    actors: plan.actors.map((a) => {
-      // Positions set for this panel (D35) come first; then marks from the panel's words.
-      const b = bl?.[a.characterId];
-      if (b) return { ...a, position: b.at, ...(b.to ? { to: b.to } : {}), ...(b.facingDeg !== undefined ? { facingDeg: b.facingDeg } : {}) };
-      const m = at?.[a.characterId] && a.marks?.find((x) => x.id === at[a.characterId]);
-      return m ? { ...a, position: m.position } : a;
-    }),
-    // Props moved or taken away on a panel (D35).
+    actors,
+    // Props moved, taken away or picked up on a panel (D35, D36).
     ...(plan.furniture && bl && Object.keys(bl).some((k) => k.startsWith("prop:"))
-      ? { furniture: plan.furniture.filter((f) => !bl[`prop:${f.id}`]?.gone).map((f) => (bl[`prop:${f.id}`] ? { ...f, position: bl[`prop:${f.id}`].at } : f)) }
+      ? {
+          furniture: plan.furniture.filter((f) => { const e = bl[`prop:${f.id}`]; return !e?.gone && !(e?.with && !holder(e.with)); }).map((f) => {
+            const e = bl[`prop:${f.id}`];
+            if (!e) return f;
+            if (e.with) return { ...f, position: holder(e.with)!, heldBy: e.with };
+            return { ...f, position: e.at };
+          }),
+        }
       : {}),
   };
 }

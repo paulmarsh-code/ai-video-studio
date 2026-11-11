@@ -10,7 +10,7 @@ import type { DB } from "@/db/client";
 import { planForShot, readCamera } from "./domain/geometry";
 import { layoutSketchSvg } from "./domain/layoutSketch";
 import { mainSubjectId } from "./domain/composer";
-import { carriedItems } from "./domain/imagePrompts";
+import { carriedItems, heldProps } from "./domain/imagePrompts";
 import { WALK_OFF } from "./domain/gestures";
 import { backgroundForFrame } from "./backgroundImage";
 import * as repo from "./repo";
@@ -57,7 +57,7 @@ export async function renderBlockingForShot(db: DB, shotId: string, extraHeld?: 
   const text = `${panel?.description ?? ""} ${shot.spec.actions ?? ""}`;
   const held: Record<string, { side: "left" | "right"; what: string; where: string }[]> = {};
   for (const a of plan.actors) {
-    const items = [...carriedItems(profiles[a.characterId]), ...(extraHeld?.[a.characterId] ?? [])];
+    const items = [...carriedItems(profiles[a.characterId]), ...heldProps(plan, a.characterId, profiles[a.characterId]), ...(extraHeld?.[a.characterId] ?? [])];
     const seen = new Set<string>();
     held[a.characterId] = items.filter((x) => { const k = `${x.what.split(/\s+/).slice(-1)[0]}`; if (seen.has(k)) return false; seen.add(k); return true; });
   }

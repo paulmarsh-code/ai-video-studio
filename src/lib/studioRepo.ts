@@ -19,6 +19,7 @@ import { addMovementMarks, asStaging, planProps, propHeight, propsFromFurniture,
 import { LAYOUT_RULES } from "./domain/director";
 import { applyRoom, boundsFor, groupCentre, roomFor, roomOf, type RoomSize } from "./domain/room";
 import { carryBlocking, type BlockEntry } from "./domain/blocking";
+import { blockingFromWords } from "./domain/panelWords";
 import { levelsFromWords } from "./domain/levels";
 import { getAnimatic, getCast, saveAnimatic, type AnimaticTimeline } from "./repo";
 
@@ -324,6 +325,8 @@ export function updatePanel(db: DB, panelId: string, input: PanelInput): PanelCh
     }
   }
   persist(db);
+  // New words, new positions (D36), while the positions aren't approved yet.
+  if (changed && !sceneLocks(db, panel.sceneId).positions) applyMovementMarks(db, panel.sceneId);
   return { dialogueChanged, animaticMarked, shotUpdated };
 }
 
@@ -771,8 +774,11 @@ export function applyMovementMarks(db: DB, sceneId: string) {
     changed = true;
     db.update(t.shots).set({ spec: { ...sh.spec, at: at[i], from: from[i], cameraId: undefined } }).where(eq(t.shots.id, sh.id)).run();
   });
-  if (changed) { recarry(db, sceneId); persist(db); } // a mark ends what was carried (D35)
-  return changed;
+  // Per-panel positions from the words (D36), then what carries on; a mark ends what was carried (D35).
+  const words = applyPanelWords(db, sceneId);
+  if (changed && !words) recarry(db, sceneId);
+  if (changed || words) persist(db);
+  return changed || words;
 }
 
 // ---------- Room size and levels (D29) ----------
@@ -894,9 +900,42 @@ export function savePanelBlocking(db: DB, changes: { shotId: string; entries: Re
     }
     db.update(t.shots).set({ spec: { ...spec, blocking } }).where(eq(t.shots.id, shot.id)).run();
   }
-  recarry(db, sceneId);
+  // What the app reads in the words is worked out again around what you set (D36).
+  if (!applyPanelWords(db, sceneId)) recarry(db, sceneId);
   persist(db);
   return { sceneId };
+}
+
+/**
+ * Positions from the panels' words (D36): walking off, going somewhere, sitting or lying on
+ * something, turning to someone, picking up or putting down a prop. Set as the app's
+ * placements on each panel (by "app"), worked out again every time, around anything the user
+ * has set; then what carries on. Returns whether anything changed.
+ */
+export function applyPanelWords(db: DB, sceneId: string): boolean {
+  const plan = latestPlan(db, sceneId);
+  const scene = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();
+  if (!plan || !scene) return false;
+  const people = getCast(db, scene.projectId).map((c) => ({ id: c.id, name: c.name }));
+  const shots = panelsOf(db, sceneId).map((p) => ({ p, sh: shotForPanel(db, p.id) })).filter((x): x is { p: typeof x.p; sh: NonNullable<typeof x.sh> } => !!x.sh);
+  const mine = (sp: ShotSpec) => Object.fromEntries(Object.entries(sp.blocking ?? {}).filter(([, b]) => b.by === "you"));
+  const app = blockingFromWords(plan.data, shots.map(({ p, sh }) => ({
+    action: p.description, subjectId: sh.spec.subjectId ?? sh.spec.speakerId ?? sh.spec.visibleIds[0], visibleIds: sh.spec.visibleIds, at: sh.spec.at, own: mine(sh.spec),
+  })), people);
+  let changed = false;
+  shots.forEach(({ sh }, k) => {
+    const own = mine(sh.spec);
+    const set = Object.fromEntries(Object.entries(sh.spec.blocking ?? {}).filter(([, b]) => b.by !== "carried"));
+    const next: Record<string, PanelBlock> = { ...own };
+    for (const [key, e] of Object.entries(app[k])) if (!own[key]) next[key] = e;
+    if (JSON.stringify(set) === JSON.stringify(next)) return;
+    changed = true;
+    const spec: ShotSpec = { ...sh.spec, blocking: next };
+    if (!Object.keys(next).length) delete spec.blocking;
+    db.update(t.shots).set({ spec }).where(eq(t.shots.id, sh.id)).run();
+  });
+  const carried = recarry(db, sceneId);
+  return changed || carried;
 }
 
 /** Recompute what carries on from panel to panel across a scene, in panel order (D35). */

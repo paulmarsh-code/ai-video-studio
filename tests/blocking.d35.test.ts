@@ -50,7 +50,7 @@ describe("Carrying positions from panel to panel (D35)", () => {
   it("unsaved edits lay over a panel, and the source of each placement is told", () => {
     const specs = carryBlocking([{ spec: withEdits(spec(), { ben: { at: { x: -3, y: 6 } } }) }, { spec: spec() }, { spec: spec({ at: { ava: "arriving" } }) }]);
     expect(blockSource(specs, 0, "ben")).toEqual({ kind: "here" });
-    expect(blockSource(specs, 1, "ben")).toEqual({ kind: "carried", from: 0 });
+    expect(blockSource(specs, 1, "ben")).toEqual({ kind: "carried", from: 0, fromApp: false });
     expect(blockSource(specs, 2, "ava")).toEqual({ kind: "mark" });
     expect(blockSource(specs, 1, "ava")).toEqual({ kind: "plan" });
     expect(withEdits(specs[0], { ben: null }).blocking?.ben).toBeUndefined();

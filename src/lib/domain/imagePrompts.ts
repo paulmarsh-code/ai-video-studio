@@ -398,12 +398,19 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
         const facing = /facing the camera/.test(p.face);
         const pr = byId(p.id)?.pronoun;
         const poss = pr === "she" ? "her" : pr === "he" ? "his" : "their";
-        return carriedItems(i.profiles[p.id]).map((it) => {
+        return [...carriedItems(i.profiles[p.id]), ...heldProps(shotPlan, p.id, i.profiles[p.id])].map((it) => {
           const side = facing ? (it.side === "left" ? "right" : "left") : it.side;
           return `${name(p.id)}'s ${it.what} is ${it.where === "hand" ? "in" : "on"} ${poss} ${it.side} ${it.where}, so it shows on the ${side} of the picture (${facing ? "facing us, mirror-wise" : "seen from behind"})`;
         });
       });
       if (bags.length) lines.push(`Carried: ${bags.join("; ")}. Never swap hands between pictures.`);
+      // Picked up in this moment (D36): whoever has the prop holds it, whichever way they face.
+      const holding = parts.flatMap((p) => heldProps(shotPlan, p.id, i.profiles[p.id]).map((it) => {
+        const f = shotPlan.furniture?.find((x) => x.heldBy === p.id && x.name === it.what);
+        const pr = byId(p.id)?.pronoun;
+        return `${name(p.id)} has the ${it.what}${f?.detail ? ` (${stripQuotes(f.detail).replace(/[.]$/, "")})` : ""} in ${pr === "she" ? "her" : pr === "he" ? "his" : "their"} ${it.side} hand`;
+      }));
+      if (holding.length) lines.push(`Holding: ${holding.join("; ")}. It is in their hand, not on any table or surface.`);
       lines.push(`Distance and direction: ${parts.map((p) => p.text).join("; ")}.${far >= near * 1.6 && parts.length > 1 ? ` Keep these distances: whoever is further away is smaller and further back in the room, not lined up beside ${parts.find((p) => p.d === near) ? name(parts.find((p) => p.d === near)!.id) : "the nearer people"}.` : ""}`);
     }
     if (layout) lines.push("Use the attached layout sketch, drawn from the floor plan through this camera, for where each person stands in the frame, how big they appear, the camera angle and the table's height and place. It is only a guide made of labelled shapes: draw real people in the real room and copy nothing of its style, shapes, colours or text.");
@@ -448,6 +455,19 @@ export function lightingOf(text: string): string {
  * (D33): "a satchel in her left hand", "phone in his right hand", "a guitar over her left
  * shoulder", "a watch on his left wrist". Any item, any character.
  */
+/**
+ * Props someone has picked up in this panel (D36), as held items: in the free hand, the right
+ * unless the right already holds something they always carry. The same answer for the blocking
+ * frame, the picture prompt and the check.
+ */
+export function heldProps(plan: Pick<GeometryPlanData, "furniture"> | undefined, id: string, p: CharacterProfile | undefined): { side: "left" | "right"; what: string; where: string }[] {
+  const mine = (plan?.furniture ?? []).filter((f) => f.heldBy === id);
+  if (!mine.length) return [];
+  const busy = new Set(carriedItems(p).filter((x) => x.where === "hand").map((x) => x.side));
+  const sides: ("left" | "right")[] = ["right", "left"].filter((x) => !busy.has(x as "left" | "right")) as ("left" | "right")[];
+  return mine.map((f, k) => ({ side: sides[k] ?? (k % 2 ? "left" : "right"), what: f.name, where: "hand" }));
+}
+
 export function carriedItems(p: CharacterProfile | undefined): { side: "left" | "right"; what: string; where: string }[] {
   const text = `${p?.wardrobe ?? ""}. ${p?.appearance ?? ""}. ${(p?.anchors ?? []).join(". ")}`.replace(/\s+/g, " ");
   const out: { side: "left" | "right"; what: string; where: string }[] = [];

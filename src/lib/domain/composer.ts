@@ -105,8 +105,13 @@ export function composeKlingPrompt(
     const bx = bodyEffect(shot.actions ?? "", subjectId ? byId(subjectId)?.name ?? "they" : "they");
     if (bx) s.scene += ` Body and angle: ${bx}.`;
   }
-  // A prop taken away on this panel or an earlier one (D35) isn't listed.
+  // A prop taken away on this panel or an earlier one (D35) isn't listed; one in someone's hands (D36) is said.
   const goneProps = new Set((plan?.furniture ?? []).filter((f) => shot.blocking?.[`prop:${f.id}`]?.gone).map((f) => f.name));
+  for (const f of plan?.furniture ?? []) {
+    const holder = shot.blocking?.[`prop:${f.id}`]?.with;
+    if (!holder || shot.blocking?.[holder]?.gone) continue;
+    s.scene += ` ${byId(holder)?.name ?? holder} has the ${f.name}${f.detail ? ` (${stripQuotes(f.detail).replace(/[.]$/, "")})` : ""} in hand throughout.`;
+  }
   const keptProps = (shot.props ?? []).filter((p) => !goneProps.has(p.name));
   if (keptProps.length) s.scene += ` Key props, unchanged in every clip: ${keptProps.map((p) => `${p.name}${p.detail ? ` (${stripQuotes(p.detail).replace(/[.]$/, "")})` : ""}`).join("; ")}.`;
 

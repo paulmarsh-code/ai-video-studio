@@ -15,21 +15,22 @@ export type BlockEntry = Omit<PanelBlock, "by">;
  * removing a placement removes what it carried.
  */
 export function carryBlocking<T extends { spec: ShotSpec }>(shots: T[]): ShotSpec[] {
-  const state = new Map<string, { at: Point; facingDeg?: number; gone?: boolean }>();
+  const state = new Map<string, { at: Point; facingDeg?: number; gone?: boolean; with?: string }>();
   return shots.map((sh) => {
-    const mine = Object.fromEntries(Object.entries(sh.spec.blocking ?? {}).filter(([, b]) => b.by === "you"));
+    // Set on this panel, by you or by the app from the words (D36); everything else is worked out again.
+    const mine = Object.fromEntries(Object.entries(sh.spec.blocking ?? {}).filter(([, b]) => b.by !== "carried"));
     const out: Record<string, PanelBlock> = { ...mine };
     for (const [id, st] of state) {
       if (mine[id]) continue;
       if (sh.spec.at?.[id]) { state.delete(id); continue; } // the words move them: those win
-      out[id] = { at: st.at, ...(st.facingDeg !== undefined ? { facingDeg: st.facingDeg } : {}), ...(st.gone ? { gone: true } : {}), by: "carried" };
+      out[id] = { at: st.at, ...(st.facingDeg !== undefined ? { facingDeg: st.facingDeg } : {}), ...(st.gone ? { gone: true } : {}), ...(st.with ? { with: st.with } : {}), by: "carried" };
     }
     for (const [id, b] of Object.entries(mine)) {
       if (b.only) continue;
       const end = b.to ?? b.at;
       // A way to face carries on if it was set; after a walk they face the others again as usual.
       const facing = b.to ? undefined : b.facingDeg;
-      state.set(id, { at: end, ...(facing !== undefined ? { facingDeg: Math.round(facing) } : {}), ...(b.gone ? { gone: true } : {}) });
+      state.set(id, { at: end, ...(facing !== undefined ? { facingDeg: Math.round(facing) } : {}), ...(b.gone ? { gone: true } : {}), ...(b.with ? { with: b.with } : {}) });
     }
     const spec = { ...sh.spec };
     if (Object.keys(out).length) spec.blocking = out; else delete spec.blocking;
@@ -49,11 +50,12 @@ export function withEdits(spec: ShotSpec, edits?: Record<string, BlockEntry | nu
 }
 
 /** Where someone's placement on a panel comes from, in words for the panel stepper. */
-export function blockSource(specs: ShotSpec[], k: number, id: string): { kind: "here" | "carried" | "mark" | "plan"; from?: number } {
+export function blockSource(specs: ShotSpec[], k: number, id: string): { kind: "here" | "app" | "carried" | "mark" | "plan"; from?: number; fromApp?: boolean } {
   const b = specs[k]?.blocking?.[id];
   if (b?.by === "you") return { kind: "here" };
+  if (b?.by === "app") return { kind: "app" };
   if (b?.by === "carried") {
-    for (let j = k - 1; j >= 0; j--) if (specs[j].blocking?.[id]?.by === "you") return { kind: "carried", from: j };
+    for (let j = k - 1; j >= 0; j--) { const e = specs[j].blocking?.[id]; if (e && e.by !== "carried") return { kind: "carried", from: j, fromApp: e.by === "app" }; }
     return { kind: "carried" };
   }
   if (specs[k]?.at?.[id]) return { kind: "mark" };

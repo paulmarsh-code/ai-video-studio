@@ -724,3 +724,20 @@ The scene's floor plan says where everyone starts, but a scene moves: someone wa
 - General for any scene: nothing here knows about any one story. Tests: `tests/blocking.d35.test.ts`; browser test: stepping, walk off, a prop taken away, carry to the next panel, save, storyboard links.
 
 A different place is a different scene: the kitchen, the stairs and the bedroom are each a scene with its own venue, floor plan and props, and the characters' references keep them the same across all of them.
+
+### D36 — The app sets each panel's positions from its words (2026-11-11)
+
+Paul: the app does the heavy lifting. The user describes the scene; the app reads it and builds the storyboard, using the same scene planners the user can then adjust. And these tools only matter if they make the pictures consistent.
+
+So the per-panel positions (D35) are now filled in by the app from each panel's words, the same way a user would set them on the panel stepper (`panelWords.ts`, `blockingFromWords`):
+- **Leaving**: "walks off", "storms out", "leaves the kitchen", "heads for the door", "goes upstairs", "turns to leave". They walk to the venue's way out (a view named entrance, exit, door, hall, stairs…, or the one named: "heads for the stairs"), and are gone from later panels (not drawn, not in the frame, not in the prompts) until a panel shows them again.
+- **Going somewhere**: "walks over to the window", "crosses to the sofa": a walk to beside the prop, or to near that wall of the room. "Walks over to Mia", "joins Ben": a walk to beside them. "Steps closer": half a metre towards their partner.
+- **Being somewhere**: "sits on the sofa", "lies on his bed", "gets into bed" puts them on it; "stands by the window", "waits at the bar" beside it.
+- **Turning**: "turns to Chase", "facing Chase", "turns to the window", "turns away (from Ben)". A walk always faces the way it goes.
+- **Props in hand**: "picks up the glass", "takes out his phone" puts the prop in their hands: it goes where they go, in the frame, and the picture prompt says "has the phone in his right hand" (the free hand: the right, unless the right already holds something they always carry). "Puts it down on the bar" sets it down there.
+- **Who does it**: the name just before the verb ("as Aron walks off"), else the name starting the sentence or clause ("Jade, fuming, gives Chase the finger and turns away": Jade), else whoever did the last thing (she, he, and).
+- **Your changes win.** The app's placements (`by: "app"`, with what it read in `why`) are worked out again whenever the words change, the storyboard is saved, the positions are approved, or a panel's positions are saved, around anything you've set. On the floor plan they show with a teal ring and "from the words: walks off"; "Not this: keep them where they were" makes it yours. Arrival marks (D19b) still handle arriving.
+- **Cameras**: no camera stands on, or within 0.9 m of, the path of someone walking during the panel, so nobody walks into the lens.
+- **Existing scenes**: layout rules 14. The storyboard offers "Update the layout", which reads the words, approves the positions where they are and chooses the cameras again.
+
+Everything feeds the blocking frame (D34): where each person stands, which way they face, the walk arrow, who isn't there, and what's in whose hand are drawn into image 1 for GPT to finish, and checked afterwards. That's how the plan makes the pictures consistent rather than just describing them. All rules are general; tests use made-up scenes (`tests/panelWords.d36.test.ts`), replayed on Paul's Jade's Entrance: Jade faces Chase in panel 4, steps closer in 7, walks off to the entrance in 11.

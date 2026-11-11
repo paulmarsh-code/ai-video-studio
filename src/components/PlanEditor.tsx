@@ -102,6 +102,12 @@ export function PlanEditor(props: {
     if (!panel) return;
     setEdits((e) => ({ ...e, [panel.shotId]: { ...(e[panel.shotId] ?? {}), [key]: null } }));
   };
+  /** Where someone was at the end of the panel before (or on the scene plan): for "keep them where they were". */
+  const prevPos = (id: string): Point => {
+    const before = pk > 0 ? planForShot(plan, effSpecs[pk - 1]).actors.find((a) => a.characterId === id) : undefined;
+    return before ? (before.to ?? before.position) : (plan.actors.find((a) => a.characterId === id)?.position ?? { x: 0, y: 0 });
+  };
+  const SRC_RING: Record<string, string> = { here: "#111827", app: "#0d9488", mark: "#d97706" };
 
   const b = plan.bounds ?? { minX: -5, maxX: 5, minY: 0, maxY: 10 };
   // A big room or open ground is drawn smaller so it fits on the screen (D29).
@@ -249,8 +255,9 @@ export function PlanEditor(props: {
               // On a panel (D35): where it is in this panel, or a faint outline if it's been taken away.
               const key = `prop:${f0.id}`;
               const pb = pspec?.blocking?.[key];
-              const gone = !!pb?.gone;
-              const f = pb && !gone ? { ...f0, position: pb.at } : f0;
+              const sf = panelMode ? shown.furniture?.find((x) => x.id === f0.id) : f0;
+              const gone = !sf;
+              const f = sf ?? (pb ? { ...f0, position: pb.at } : f0);
               const p = toPx(f.position);
               // Drawn by kind (D21): a backdrop or screen is a long thin panel facing the group,
               // a long counter a long block, a table or stand a circle.
@@ -268,7 +275,7 @@ export function PlanEditor(props: {
                   {long
                     ? <Rect rotation={facingDeg + 90} x={0} y={0} offsetX={f.radiusM * SCALE} offsetY={(kind === "flat" ? 0.12 : 0.5) * SCALE / 2} width={f.radiusM * 2 * SCALE} height={(kind === "flat" ? 0.12 : 0.5) * SCALE} fill={gone ? undefined : kind === "flat" ? "#ede9fe" : "#e5e5e5"} stroke={stroke} strokeWidth={sw} dash={dash} />
                     : <Circle radius={f.radiusM * SCALE} fill={gone ? undefined : "#e5e5e5"} stroke={stroke} strokeWidth={sw} dash={dash} />}
-                  <Text text={gone ? `${f.name} (taken away)` : f.name} fontSize={10} fill="#525252" x={-50} y={-5} width={100} align="center" />
+                  <Text text={gone ? `${f.name} (taken away)` : sf?.heldBy ? `${f.name} (${name(sf.heldBy).split(" ")[0]} has it)` : f.name} fontSize={10} fill="#525252" x={-50} y={-5} width={100} align="center" />
                 </Group>
               );
             })}
@@ -308,6 +315,17 @@ export function PlanEditor(props: {
               );
             })}
 
+            {/* People who have left by this panel (D36): a faint outline where they went. */}
+            {panelMode && plan.actors.filter((a) => pspec?.blocking?.[a.characterId]?.gone).map((a) => {
+              const g = toPx(pspec!.blocking![a.characterId].at);
+              return (
+                <Group key={`gone-${a.characterId}`} x={g.x} y={g.y} opacity={0.4} listening={false}>
+                  <Circle radius={11} stroke={colour(a.characterId)} strokeWidth={2} dash={[3, 3]} />
+                  <Text text={`${name(a.characterId)} (has left)`} fontSize={10} fill="#525252" x={13} y={-5} />
+                </Group>
+              );
+            })}
+
             {/* Characters */}
             {shown.actors.map((a) => {
               const p = toPx(a.position);
@@ -325,7 +343,7 @@ export function PlanEditor(props: {
                   <Group x={p.x} y={p.y} opacity={inPic ? 1 : 0.45} draggable onDragStart={panelMode ? pushEdit : pushHistory} onDragMove={onMove} onDragEnd={onMove}
                     onMouseDown={() => panelMode && setSelActor(id)} onTouchStart={() => panelMode && setSelActor(id)}>
                     {fwd && <Line points={[0, 0, fwd.x * 22, -fwd.y * 22]} stroke={colour(id)} strokeWidth={4} lineCap="round" />}
-                    <Circle radius={11} fill={colour(id)} stroke={src?.kind === "here" ? "#111827" : src?.kind === "mark" ? "#d97706" : "#fff"} strokeWidth={src && src.kind !== "plan" ? 3 : 2} dash={src?.kind === "carried" ? [4, 3] : undefined} />
+                    <Circle radius={11} fill={colour(id)} stroke={src ? SRC_RING[src.kind] ?? (src.kind === "carried" ? (src.fromApp ? "#0d9488" : "#111827") : "#fff") : "#fff"} strokeWidth={src && src.kind !== "plan" ? 3 : 2} dash={src?.kind === "carried" ? [4, 3] : undefined} />
                     {sel && <Circle radius={16} stroke="#2563eb" strokeWidth={2} dash={[3, 3]} />}
                     <Text text={name(id).charAt(0)} fontSize={12} fontStyle="bold" fill="#fff" x={-5} y={-6} />
                     <Text text={name(id)} fontSize={11} fill="#171717" x={13} y={-6} />
@@ -350,7 +368,7 @@ export function PlanEditor(props: {
         </Stage>
         <p className="px-2 pb-1 text-xs text-neutral-500" style={{ maxWidth: Math.max(width, 420) }}>
           {panelMode
-            ? <>Panel {step}: drag anyone to where they are in this panel; click someone to turn them with the blue handle. Black ring: set on this panel. Dashed ring: carried on from an earlier panel. Amber ring: moved by the panel&apos;s words. Faded: in the room but not in this picture. Drag a prop to move it for this panel. Scale: {SCALE}px = 1 m.</>
+            ? <>Panel {step}: drag anyone to where they are in this panel; click someone to turn them with the blue handle. Teal ring: placed by the app from this panel&apos;s words. Black ring: set by you. Dashed ring: carried on from an earlier panel. Amber ring: arriving, from the words. Faded: in the room but not in this picture. Drag a prop to move it for this panel. Scale: {SCALE}px = 1 m.</>
             : <>Drag people, furniture and cameras. Select a camera, then drag its white handle to aim it. Dashed amber line: the 180° line of action. Scale: {SCALE}px = 1 m.</>}
         </p>
       </div>
@@ -373,6 +391,17 @@ export function PlanEditor(props: {
 
               <h3 className="mt-4 font-semibold">People</h3>
               <ul className="mt-1 space-y-2">
+                {plan.actors.filter((a) => pspec.blocking?.[a.characterId]?.gone).map((a) => {
+                  const id = a.characterId;
+                  const e = pspec.blocking![id];
+                  return (
+                    <li key={id} className="rounded-lg border border-dashed border-neutral-300 p-2 text-xs" data-testid={`panel-person-${id}`}>
+                      <span className="font-semibold" style={{ color: colour(id) }}>{name(id)}</span>{" "}
+                      <span className="text-neutral-600" data-testid={`panel-person-${id}-source`}>has left{e.by === "app" ? " (from the words)" : e.by === "carried" ? " (earlier)" : ""}: not in this panel.</span>{" "}
+                      <button type="button" className="underline" data-testid={`panel-person-${id}-keep`} onClick={() => { pushEdit(); setEntry(id, { at: prevPos(id), gone: undefined, to: undefined, facingDeg: undefined }); }}>Keep them here</button>
+                    </li>
+                  );
+                })}
                 {shown.actors.map((a) => {
                   const id = a.characterId;
                   const src = blockSource(effSpecs, pk, id);
@@ -387,7 +416,8 @@ export function PlanEditor(props: {
                         <span className="font-semibold" style={{ color: colour(id) }}>{name(id)}</span>
                         <span className="text-xs text-neutral-600" data-testid={`panel-person-${id}-source`}>
                           {src.kind === "here" ? (own?.only ? "set on this panel only" : "set on this panel, carries on to later panels")
-                            : src.kind === "carried" ? `carried on from panel ${(src.from ?? 0) + 1}`
+                            : src.kind === "app" ? `from the words: ${pspec.blocking?.[id]?.why ?? "placed by the app"}`
+                            : src.kind === "carried" ? `carried on from panel ${(src.from ?? 0) + 1}${src.fromApp ? ` (${effSpecs[src.from ?? 0]?.blocking?.[id]?.why ?? "from the words"})` : ""}`
                             : src.kind === "mark" ? "moved by this panel's words"
                             : "where the scene plan puts them"}
                           {inPic ? " · in the picture" : " · in the room, not in the picture"}
@@ -415,7 +445,8 @@ export function PlanEditor(props: {
                         </button>
                         {own && <label><input type="checkbox" checked={!!own.only} data-testid={`panel-person-${id}-only`} onChange={(e) => { pushEdit(); setEntry(id, { only: e.target.checked || undefined }); }} /> This panel only</label>}
                         {own && <button type="button" className="text-red-700 underline" data-testid={`panel-person-${id}-clear`} onClick={() => { pushEdit(); clearEntry(id); }}>Clear this panel&apos;s change</button>}
-                        {!own && src.kind !== "plan" && base && <button type="button" className="underline" onClick={() => { pushEdit(); setEntry(id, { at: base, to: undefined, facingDeg: undefined }); }}>Back to the scene plan from here</button>}
+                        {src.kind === "app" && <button type="button" className="underline" data-testid={`panel-person-${id}-undo-app`} title="Keeps them where they were in the panel before" onClick={() => { pushEdit(); setEntry(id, { at: prevPos(id), to: undefined, facingDeg: undefined }); }}>Not this: keep them where they were</button>}
+                        {!own && src.kind !== "plan" && src.kind !== "app" && base && <button type="button" className="underline" onClick={() => { pushEdit(); setEntry(id, { at: base, to: undefined, facingDeg: undefined }); }}>Back to the scene plan from here</button>}
                       </div>
                       {a.to && <p className="mt-1 text-xs text-orange-800">Walks about {Math.round(Math.hypot(a.to.x - a.position.x, a.to.y - a.position.y) * 2) / 2} m: drag the ring at the end of the orange arrow to change where.</p>}
                     </li>
@@ -435,7 +466,7 @@ export function PlanEditor(props: {
                       return (
                         <li key={f.id} className="flex flex-wrap items-center gap-2" data-testid={`panel-prop-${f.id}`}>
                           <span className="font-medium">{f.name}</span>
-                          <span className="text-neutral-600">{pb?.gone ? "taken away" : pb ? "moved" : "in its place on the scene plan"}{pb?.by === "carried" ? ` (from panel ${(from ?? 0) + 1})` : own ? (own.only ? " on this panel only" : " from this panel on") : ""}</span>
+                          <span className="text-neutral-600">{pb?.gone ? "taken away" : pb?.with ? `in ${name(pb.with).split(" ")[0]}'s hands` : pb ? "moved" : "in its place on the scene plan"}{pb?.by === "app" ? ` (from the words: ${pb.why ?? ""})` : ""}{pb?.by === "carried" ? ` (from panel ${(from ?? 0) + 1})` : own ? (own.only ? " on this panel only" : " from this panel on") : ""}</span>
                           {pb?.gone
                             ? <button type="button" className="underline" onClick={() => { pushEdit(); if (own) clearEntry(key); else setEntry(key, { at: f.position, gone: undefined }); }}>Bring back</button>
                             : <button type="button" className="underline" data-testid={`panel-prop-${f.id}-remove`} onClick={() => { pushEdit(); setEntry(key, { gone: true }); }}>Take away from here</button>}

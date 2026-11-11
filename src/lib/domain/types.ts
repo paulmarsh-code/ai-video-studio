@@ -50,11 +50,16 @@ export interface PanelBlock {
   at: Point;
   to?: Point;
   facingDeg?: number;
-  by: "you" | "carried";
+  /** "you" set it on this panel; "app" worked it out from the panel's words (D36); "carried" follows on. */
+  by: "you" | "app" | "carried";
   /** Set on this panel only: later panels go back to where they were before. */
   only?: boolean;
-  /** A prop taken away from this panel on (or for this panel only). */
+  /** A prop taken away, or a person who has left, from this panel on (or for this panel only). */
   gone?: boolean;
+  /** A prop someone has in their hands (D36): the character's id. It goes where they go. */
+  with?: string;
+  /** What the app read in the panel's words to set it (D36), for the floor plan to show. */
+  why?: string;
 }
 
 export interface PlanCamera {
@@ -95,6 +100,8 @@ export interface PlanFurniture {
   detail?: string;
   /** A reference picture of the prop (D19c): sent with every panel picture it appears in. */
   imageAssetId?: string;
+  /** In a panel's plan only (D36): the character holding it. */
+  heldBy?: string;
 }
 
 /**
