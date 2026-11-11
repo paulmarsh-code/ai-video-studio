@@ -1,6 +1,7 @@
 // Changing a panel in words (D39): "move Jade closer to Nina and have Marcus walk off to the right".
 import { describe, expect, it } from "vitest";
 import { changeFromWords } from "../src/lib/domain/changeWords";
+import { aimToInclude, horizontalFov, readCamera } from "../src/lib/domain/geometry";
 import type { GeometryPlanData, PlanCamera } from "../src/lib/domain/types";
 
 const people = [{ id: "ava", name: "Ava Stone" }, { id: "ben", name: "Ben" }, { id: "cal", name: "Cal" }, { id: "dee", name: "Dee" }];
@@ -51,5 +52,40 @@ describe("Two people in one instruction (D39)", () => {
     const r = changeFromWords("Cal and Dee walk off to the left", plan, cam, people);
     expect(r.entries.cal.to!.x).toBeLessThan(-1);
     expect(r.entries.dee.to!.x).toBeLessThan(-1);
+  });
+});
+
+describe("Keeping people in the picture (D42)", () => {
+  it("'comes in from the right' starts them well over on the right, inside the frame", () => {
+    const r = changeFromWords("Ava comes in from the right", plan, cam, people);
+    expect(r.understood).toEqual(["Ava: comes in from the right of the picture"]);
+    expect(r.entries.ava.at.x).toBeGreaterThan(0.8);
+    expect(r.entries.ava.at.y).toBeCloseTo(6, 1);
+  });
+  it("a big move to the left stops at the edge of the frame", () => {
+    const r = changeFromWords("move Ben a lot to the left", plan, cam, people);
+    const depth = r.entries.ben.at.y - 1.5, half = depth * Math.tan((horizontalFov(plan, cam) * Math.PI) / 360);
+    expect(r.entries.ben.at.x).toBeGreaterThanOrEqual(-0.81 * half);
+  });
+  it("a camera turns to take in someone moved out of its view, and stays put when all fit", () => {
+    const away = { ...plan, actors: plan.actors.map((a) => (a.characterId === "ava" ? { ...a, position: { x: 4.5, y: 4 } } : a)) };
+    const turned = aimToInclude(away, cam, ["ava", "ben"]);
+    expect(turned).not.toBe(cam);
+    expect(turned.position).toEqual(cam.position);
+    expect(readCamera(away, turned).actors.find((a) => a.characterId === "ava")?.inView).toBe(true);
+    expect(readCamera(away, turned).actors.find((a) => a.characterId === "ben")?.inView).toBe(true);
+    expect(aimToInclude(plan, cam, ["ben", "cal"])).toBe(cam);
+  });
+});
+
+describe("The camera turns as little as it can (D42)", () => {
+  it("someone just out of frame on the right: a small turn right that keeps the others", () => {
+    const right = { ...plan, actors: plan.actors.map((a) => (a.characterId === "dee" ? { ...a, position: { x: 3.4, y: 7 } } : a)) };
+    const before = readCamera(right, cam).actors.find((a) => a.characterId === "dee");
+    expect(before?.inView && !before.partial).toBe(false);
+    const turned = aimToInclude(right, cam, ["dee"]);
+    const r = readCamera(right, turned).actors;
+    expect(r.find((a) => a.characterId === "dee")?.inView).toBe(true);
+    expect(r.filter((a) => a.inView).length).toBeGreaterThanOrEqual(3); // the others still in shot
   });
 });

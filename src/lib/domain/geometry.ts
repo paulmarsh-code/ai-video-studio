@@ -90,6 +90,55 @@ export function horizontalFov(plan: Pick<GeometryPlanData, "aspect">, cam: PlanC
   return (2 * Math.atan(Math.tan((long * Math.PI) / 360) * (9 / 16)) * 180) / Math.PI;
 }
 
+/**
+ * Turn a camera so everyone who must be in the picture is (D42): it keeps where it stands,
+ * its height and its tilt, turns only as far as needed, and widens the lens only if they still
+ * don't fit. Returns the same camera when they're all in the picture already.
+ */
+export function aimToInclude(plan: GeometryPlanData, cam: PlanCamera, ids: string[]): PlanCamera {
+  if (!ids.some((id) => plan.actors.some((a) => a.characterId === id))) return cam;
+  // Only when someone is actually out of the picture or cut by its edge: near the edge is fine.
+  const seen = readCamera(plan, cam).actors;
+  const fine = (id: string) => { const a = seen.find((x) => x.characterId === id); return !!a && a.inView && !a.partial; };
+  if (ids.every((id) => fine(id) || !plan.actors.some((a) => a.characterId === id))) return cam;
+  const f = sub(cam.lookAt, cam.position);
+  const dist = Math.hypot(f.x, f.y) || 1;
+  const fwdDeg = (Math.atan2(f.y, f.x) * 180) / Math.PI;
+  const wrap = (d: number) => ((d + 540) % 360) - 180;
+  const half = horizontalFov(plan, cam) / 2;
+  const room = half * 0.92;
+  // Each person's bearing from the lens, with room for their shoulders either side.
+  const spread = (who: string[]) => {
+    const spans = who.map((id) => plan.actors.find((a) => a.characterId === id)?.position).filter((p): p is Point => !!p).map((p) => {
+      const v = sub(p, cam.position), d = Math.hypot(v.x, v.y) || 0.1;
+      const off = wrap((Math.atan2(v.y, v.x) * 180) / Math.PI - fwdDeg), m = (Math.atan(0.35 / d) * 180) / Math.PI;
+      return { lo: off - m, hi: off + m };
+    });
+    return { lo: Math.min(...spans.map((s) => s.lo)), hi: Math.max(...spans.map((s) => s.hi)) };
+  };
+  const at = (shift: number) => {
+    const turned = ((fwdDeg + shift) * Math.PI) / 180;
+    return { x: +(cam.position.x + Math.cos(turned) * dist).toFixed(2), y: +(cam.position.y + Math.sin(turned) * dist).toFixed(2) };
+  };
+  const widen = (need: number) => {
+    const h = Math.min(110, (need / 0.92) * 2);
+    const long = plan.aspect === "9:16" ? (2 * Math.atan(Math.tan((h * Math.PI) / 360) / (9 / 16)) * 180) / Math.PI : h;
+    return +Math.min(120, long).toFixed(1);
+  };
+  // First try to keep everyone still in the shot as well: the least turn that fits them all,
+  // or a somewhat wider lens (up to 60° across) if that's what it takes.
+  const keep = [...new Set([...ids, ...seen.filter((a) => a.inView && !a.partial).map((a) => a.characterId)])];
+  const all = spread(keep);
+  const needAll = (all.hi - all.lo) / 2;
+  if (needAll <= room) return { ...cam, lookAt: at(all.hi > room ? all.hi - room : all.lo < -room ? all.lo + room : 0) };
+  if (needAll <= 30 * 0.92) return { ...cam, lookAt: at((all.lo + all.hi) / 2), fovDeg: widen(needAll) };
+  // Otherwise just those who must be in it: as little turn as will do, wider only if needed.
+  const { lo, hi } = spread(ids);
+  const need = (hi - lo) / 2;
+  if (need <= room) return { ...cam, lookAt: at(hi > room ? hi - room : lo < -room ? lo + room : 0) };
+  return { ...cam, lookAt: at((lo + hi) / 2), fovDeg: widen(need) };
+}
+
 export function readCamera(plan: GeometryPlanData, cam: PlanCamera): CameraReading {
   const fov = horizontalFov(plan, cam);
   const half = fov / 2;

@@ -124,9 +124,14 @@ describe("Saving positions per panel (D35)", () => {
     db.update((await import("../src/db/schema")).scenes).set({ locks: { positions: 1, cameras: 1 } }).run();
     const who = shots[0].spec.visibleIds[0];
     const cam = repo.getShot(db, shots[0].id)!.spec.cameraId;
+    const camBefore = repo.getScene(db, sceneId)!.plan!.data.cameras.find((c) => c.id === cam);
     studio.savePanelBlocking(db, [{ shotId: shots[0].id, entries: { [who]: { at: { x: 0, y: 3 } } } }]);
     expect(repo.getShot(db, shots[0].id)!.spec.blocking?.[who]?.at).toEqual({ x: 0, y: 3 });
-    expect(repo.getShot(db, shots[0].id)!.spec.cameraId).toBe(cam);
+    // The approved camera is untouched; if the move took someone out of its view, this panel
+    // has its own turned camera instead (D42).
+    expect(repo.getScene(db, sceneId)!.plan!.data.cameras.find((c) => c.id === cam)).toEqual(camBefore);
+    const now = repo.getShot(db, shots[0].id)!.spec.cameraId!;
+    expect(now === cam || now.startsWith(`${cam}~`)).toBe(true);
     expect(studio.sceneLocks(db, sceneId).cameras).toBe(1);
   });
 });

@@ -20,6 +20,7 @@ import { LAYOUT_RULES } from "./domain/director";
 import { applyRoom, boundsFor, groupCentre, roomFor, roomOf, type RoomSize } from "./domain/room";
 import { carryBlocking, type BlockEntry } from "./domain/blocking";
 import { blockingFromWords, posturesFromWords, startPose } from "./domain/panelWords";
+import { aimToInclude, planForShot, readCamera } from "./domain/geometry";
 import { levelsFromWords } from "./domain/levels";
 import { getAnimatic, getCast, saveAnimatic, type AnimaticTimeline } from "./repo";
 
@@ -882,7 +883,7 @@ export function saveCharacterHeldItems(db: DB, versionId: string, frontAssetId: 
  * worked out again for the whole scene. The cameras stay as they are, approved or not (D39):
  * fixing one picture never moves another panel's camera.
  */
-export function savePanelBlocking(db: DB, changes: { shotId: string; entries: Record<string, BlockEntry | null> }[]): { sceneId: string } {
+export function savePanelBlocking(db: DB, changes: { shotId: string; entries: Record<string, BlockEntry | null> }[]): { sceneId: string; turned: { code: string; who: string[] }[] } {
   if (!changes.length) throw new Error("Nothing to save.");
   const round = (p: Point) => ({ x: +p.x.toFixed(2), y: +p.y.toFixed(2) });
   let sceneId = "";
@@ -903,8 +904,44 @@ export function savePanelBlocking(db: DB, changes: { shotId: string; entries: Re
   }
   // What the app reads in the words is worked out again around what you set (D36).
   if (!applyPanelWords(db, sceneId)) recarry(db, sceneId);
+  // Anyone who must be in the picture but has been moved out of its camera's view (D42).
+  const turned = aimPanelCameras(db, sceneId, changes.map((c) => c.shotId));
   persist(db);
-  return { sceneId };
+  return { sceneId, turned };
+}
+
+/**
+ * Keep everyone who must be in a panel's picture in its camera's view (D42). When a change
+ * moves someone out of it, that panel gets its own camera, turned (and widened only if
+ * needed) to take them in; other panels' cameras, approved or not, are never touched.
+ */
+export function aimPanelCameras(db: DB, sceneId: string, shotIds: string[]): { code: string; who: string[] }[] {
+  const out: { code: string; who: string[] }[] = [];
+  const cast = getCast(db, db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get()?.projectId ?? "");
+  for (const shotId of shotIds) {
+    const plan = latestPlan(db, sceneId);
+    const sh = db.select().from(t.shots).where(eq(t.shots.id, shotId)).get();
+    if (!plan || !sh) continue;
+    const spec = sh.spec as ShotSpec;
+    const sp = planForShot(plan.data, spec);
+    const cam = sp.cameras.find((c) => c.id === spec.cameraId);
+    if (!cam) continue;
+    const ids = spec.visibleIds.filter((id) => id !== cam.povId && sp.actors.some((a) => a.characterId === id));
+    const aimed = aimToInclude(sp, cam, ids);
+    if (aimed === cam) continue;
+    const before = readCamera(sp, cam).actors;
+    const who = ids.filter((id) => !before.find((a) => a.characterId === id)?.inView).map((id) => cast.find((c) => c.id === id)?.name.split(/\s+/)[0] ?? id);
+    // This panel's own camera: reuse one made for it before, or add one beside the shared one.
+    const shared = db.select().from(t.shots).where(eq(t.shots.sceneId, sceneId)).all().some((x) => x.id !== shotId && (x.spec as ShotSpec).cameraId === cam.id);
+    const own = !shared && cam.id.includes("~");
+    const id = own ? cam.id : `${cam.id.split("~")[0]}~${shotId.slice(0, 6)}`;
+    const camera = { ...aimed, id, name: own ? cam.name : `${cam.name.replace(/, turned$/, "")}, turned` };
+    const cameras = own ? plan.data.cameras.map((c) => (c.id === id ? camera : c)) : [...plan.data.cameras.filter((c) => c.id !== id), camera];
+    db.insert(t.plans).values({ id: randomUUID(), sceneId, name: plan.name, version: plan.version + 1, data: { ...plan.data, cameras } }).run();
+    db.update(t.shots).set({ spec: { ...spec, cameraId: id } }).where(eq(t.shots.id, shotId)).run();
+    out.push({ code: spec.code.split("_").pop() ?? spec.code, who });
+  }
+  return out;
 }
 
 /**

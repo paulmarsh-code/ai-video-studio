@@ -35,6 +35,21 @@ export function changeFromWords(text: string, plan: GeometryPlanData, cam: PlanC
   const fl = Math.hypot(f0.x, f0.y) || 1;
   const fwd = { x: f0.x / fl, y: f0.y / fl }, right = { x: fwd.y, y: -fwd.x };
   const place = (id: string, at: Point, why: string) => { const p = clamp(at); entries[id] = { ...(entries[id] ?? {}), at: p }; delete entries[id].to; pos.set(id, p); understood.push(`${first(id)}: ${why}`); };
+  // Where a point is in the picture: how far in front of the lens, how far right, and how far
+  // right the edge of the frame is at that distance.
+  const inPicture = (p: Point) => {
+    if (!cam) return undefined;
+    const depth = (p.x - cam.position.x) * fwd.x + (p.y - cam.position.y) * fwd.y;
+    const lat = (p.x - cam.position.x) * right.x + (p.y - cam.position.y) * right.y;
+    return { depth, lat, half: Math.max(0.3, depth) * Math.tan((horizontalFov(plan, cam) * Math.PI) / 360) };
+  };
+  /** A sideways move that stays inside the picture (D42): left and right never push someone out of it. */
+  const sideways = (p: Point, by: number): Point => {
+    const f = inPicture(p);
+    if (!f || f.depth <= 0) return { x: p.x + right.x * by, y: p.y + right.y * by };
+    const lat = Math.max(-0.8 * f.half, Math.min(0.8 * f.half, f.lat + by));
+    return { x: p.x + right.x * (lat - f.lat), y: p.y + right.y * (lat - f.lat) };
+  };
   const amount = (s: string) => (/\b(bit|little|slightly|touch|fraction)\b/i.test(s) ? 0.4 : /\b(lot|much|well|far)\b/i.test(s) ? 1.6 : 0.8);
 
   // Clauses: split at "and"/"then"/commas that start a new instruction.
@@ -86,7 +101,7 @@ export function changeFromWords(text: string, plan: GeometryPlanData, cam: PlanC
       }
       if ((n = /\b(?:to\s+the\s+|more\s+to\s+the\s+|over\s+to\s+the\s+|)(left|right)\b/i.exec(rest)) && !/\bof\s+the\s+(?!picture|frame|shot|screen)/i.test(rest)) {
         const s = n[1].toLowerCase() === "right" ? 1 : -1, d = amount(rest);
-        place(id, { x: here.x + right.x * s * d, y: here.y + right.y * s * d }, `${d < 0.6 ? "a little " : ""}to the ${n[1].toLowerCase()} of the picture`);
+        place(id, sideways(here, s * d), `${d < 0.6 ? "a little " : ""}to the ${n[1].toLowerCase()} of the picture`);
         continue;
       }
       if (/\b(?:closer\s+to|nearer|towards)\s+(?:the\s+)?(?:camera|lens|front)|\bforward\b|\bto\s+the\s+front\b/i.test(rest)) {
@@ -104,6 +119,16 @@ export function changeFromWords(text: string, plan: GeometryPlanData, cam: PlanC
     if ((m = new RegExp(String.raw`^${NAME}\s+(?:should\s+be|needs\s+to\s+be|must\s+be|is|to\s+be)\s+(sitting|seated|lying(?:\s+down)?|standing|kneeling|crouching)\b(.*)$`).exec(c))) {
       const who = byFirst(m[1]);
       if (who) { entries[`pose:${who.id}`] = { at: { x: 0, y: 0 }, pose: POSES[m[2].toLowerCase()] }; understood.push(`${first(who.id)}: ${POSES[m[2].toLowerCase()]}`); if (!m[3].trim()) continue; c = `${m[1]} ${m[2]}${m[3]}`; }
+    }
+    // Coming in from one side of the picture (D42): "Jade comes in from the right". They start
+    // well over on that side, inside the frame, at the same distance from the camera.
+    if ((m = new RegExp(String.raw`^${NAME}\s+(?:should\s+)?(?:comes?|coming|walks?|walking|approach(?:es|ing)?|enters?|entering|arrives?|arriving|heads?)\s+(?:in\s+|over\s+|up\s+)?from\s+(?:the\s+)?(left|right)\b`, "i").exec(c))) {
+      const who = byFirst(m[1]); const here = who && pos.get(who.id); const f = here && inPicture(here);
+      if (who && here && f) {
+        const s = m[2].toLowerCase() === "right" ? 1 : -1, by = s * 0.78 * f.half - f.lat;
+        place(who.id, { x: here.x + right.x * by, y: here.y + right.y * by }, `comes in from the ${m[2].toLowerCase()} of the picture`);
+        continue;
+      }
     }
     // Walking off to one side of the picture: past the edge of the frame on that side.
     if ((m = new RegExp(String.raw`^${NAME}\s+(?:walks?|walking|heads?|goes|go|storms?|strides?|leaves?|exits?)\s+(?:off|out|away)?\s*(?:to(?:wards)?\s+the\s+|out\s+of\s+(?:the\s+)?(?:picture|frame|shot)\s+(?:on\s+the\s+|to\s+the\s+)?)(left|right)\b`, "i").exec(c))) {

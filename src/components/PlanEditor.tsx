@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
 import { Arrow, Circle, Group, Layer, Line, Rect, Stage, Text, Wedge } from "react-konva";
 import { savePlanAction, addPlanToLibraryAction } from "@/app/actions";
 import { savePanelBlockingAction } from "@/app/studioActions";
-import { checkLineOfAction, describeFrame, facingOf, planForShot, PRESET_FOV, readCamera } from "@/lib/domain/geometry";
+import { aimToInclude, checkLineOfAction, describeFrame, facingOf, planForShot, PRESET_FOV, readCamera } from "@/lib/domain/geometry";
 import { blockSource, carryBlocking, withEdits, type BlockEntry } from "@/lib/domain/blocking";
 import { posturesFromWords } from "@/lib/domain/panelWords";
 import { changeFromWords } from "@/lib/domain/changeWords";
@@ -100,7 +100,14 @@ export function PlanEditor(props: {
     }), cast.map((c) => ({ id: c.id, name: c.name })), props.scenePose),
     [plan, panels, effSpecs, cast, props.scenePose],
   );
-  const shown = pspec ? planForShot(plan, { ...pspec, posture: poses[pk] }) : plan;
+  const shown0 = pspec ? planForShot(plan, { ...pspec, posture: poses[pk] }) : plan;
+  const cam0 = pspec?.cameraId ? shown0.cameras.find((c) => c.id === pspec.cameraId) : undefined;
+  // Anyone who must be in the picture but is out of the camera's view: the camera turns to
+  // take them in (D42), shown here as it will be saved.
+  const mustSee = cam0 && pspec ? (pspec.visibleIds ?? []).filter((id) => id !== cam0.povId && shown0.actors.some((a) => a.characterId === id)) : [];
+  const aimed = cam0 ? aimToInclude(shown0, cam0, mustSee) : undefined;
+  const outOfView = cam0 && aimed !== cam0 ? mustSee.filter((id) => !readCamera(shown0, cam0).actors.find((a) => a.characterId === id)?.inView) : [];
+  const shown = cam0 && aimed && aimed !== cam0 ? { ...shown0, cameras: shown0.cameras.map((c) => (c.id === cam0.id ? aimed : c)) } : shown0;
   const panelCam = pspec?.cameraId ? shown.cameras.find((c) => c.id === pspec.cameraId) : undefined;
   const changedPanels = Object.entries(edits).filter(([, e]) => Object.keys(e).length);
   const curEntry = (key: string): BlockEntry => {
@@ -127,7 +134,7 @@ export function PlanEditor(props: {
   const SRC_RING: Record<string, string> = { here: "#111827", app: "#0d9488", mark: "#d97706" };
   const applyWords = (text: string) => {
     if (!panel || !text.trim()) return;
-    const r = changeFromWords(text, shown, panelCam, cast.map((c) => ({ id: c.id, name: c.name })));
+    const r = changeFromWords(text, shown0, cam0, cast.map((c) => ({ id: c.id, name: c.name })));
     setRead({ understood: r.understood, unclear: r.unclear });
     if (!Object.keys(r.entries).length) return;
     pushEdit();
@@ -418,6 +425,11 @@ export function PlanEditor(props: {
                 )}
                 <p className="mt-1 text-xs text-neutral-500">Left and right are as the picture shows them. Or drag people on the plan; click someone to turn them.</p>
               </div>
+              {cam0 && aimed !== cam0 && (
+                <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900" data-testid="panel-camera-turned">
+                  {outOfView.length ? `${outOfView.map(name).map((n) => n.split(" ")[0]).join(" and ")} ${outOfView.length === 1 ? "is" : "are"} outside the camera's view here, so this panel's camera turns` : "Not everyone fits the frame here, so this panel's camera turns"}{aimed && aimed.fovDeg !== cam0.fovDeg ? " and widens" : ""} to keep everyone in the picture. Other panels' cameras stay as they are. To keep the camera, move them back into the blue area instead.
+                </p>
+              )}
               {panelCam && (
                 <div className="mt-3">
                   <p className="mb-1 font-medium">This panel&apos;s camera view{props.ring ? ", with the venue's 360° view behind" : ""}</p>

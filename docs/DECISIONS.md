@@ -798,3 +798,14 @@ Paul's OpenAI spend was about $0.088 (7p) a picture and about 2.2 pictures a pan
 - Consistency: unchanged for anything the check finds. The check still runs after every picture and every fix, and the problem's own people still get their references.
 - Expected saving, in Paul's numbers: a panel that fails its check now costs at most two pictures automatically instead of three, and each fix sends 2 to 3 pictures instead of 7 to 8. Roughly a third off a full run.
 - Tests: `tests/corrections.d41.test.ts`; browser test: wrong once → one automatic fix sending 2 pictures instead of 4; wrong twice → stops at 2 pictures and offers "Try one more fix", which fixes it.
+
+### D42: Nobody who belongs in the picture is moved out of it (2026-11-11)
+
+Paul moved Jade to the right on panel 1's planner (via "Need to change something?"), and the redraw put her on the left. Cause: the drag took her out of the panel's camera view. The blocking frame had no stand-in for her, but the prompt still said she was in the picture, so GPT placed her where it liked, and the check passed because it only checks who the camera sees. His words, "direction wrong with jades approach", weren't understood.
+
+D38 test: the visible failure was Jade on the wrong side; the fix reaches the camera choice and so the blocking frame.
+
+- **The camera follows** (`aimToInclude`, `aimPanelCameras`): when a change leaves someone who must be in the picture outside the camera's view, or cut by its edge, that panel gets its own camera ("Wide (P1), turned"). It stays where it stands at the same height and tilt, and turns as little as will bring them in, keeping everyone still in the shot. If that can't be done, it uses a somewhat wider lens (up to 60° across). If even that isn't enough, it keeps just those who must be in the picture. Other panels' cameras, approved or not, are never touched. Someone near the edge but inside the frame doesn't move the camera.
+- **You see it before saving**: the planner shows the turned camera and the camera view, and says "Jade is outside the camera's view here, so this panel's camera turns to keep everyone in the picture… To keep the camera, move them back into the blue area instead."
+- **Words**: "Jade comes in from the right" (or left) places her well over on that side of the picture, inside the frame, at the same distance. "Move Ben to the left/right" now stops at the edge of the frame instead of pushing someone out. Changes are read against the panel's own camera, the one the picture was drawn with.
+- Added to the ⓘ guide; tests in `tests/changeWords.d39.test.ts` and `tests/aim.d42.test.ts`; browser test of Paul's case on a copy of Jade's Entrance: drag out of view → warning and turned camera → saved with Jade in view, no warning after.
