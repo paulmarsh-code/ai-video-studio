@@ -61,7 +61,7 @@ const csvCell = (v: unknown) => { const t = String(v ?? ""); return /[",\n]/.tes
  * Save a check with its picture's record (B4), or in a record of its own for a picture checked
  * again, and add a line to data/tests/results.csv for comparing runs.
  */
-export function recordCheck(r: { panelCode: string; assetId: string; picture?: Buffer; check: PictureCheck; expected?: unknown }): void {
+export function recordCheck(r: { panelCode: string; assetId: string; picture?: Buffer; overlay?: Buffer; check: PictureCheck; expected?: unknown }): void {
   try {
     fs.mkdirSync(root(), { recursive: true });
     const t = tag(r.assetId);
@@ -75,17 +75,20 @@ export function recordCheck(r: { panelCode: string; assetId: string; picture?: B
     }
     const n = fs.readdirSync(path.join(root(), dir)).filter((f) => /^check(_\d+)?\.json$/.test(f)).length;
     fs.writeFileSync(path.join(root(), dir, n ? `check_${n + 1}.json` : "check.json"), JSON.stringify({ ...r.check, expected: r.expected, at: new Date().toISOString() }, null, 2));
+    // What the check model was shown (D51): the picture with the plan's boxes and eye level drawn on.
+    if (r.overlay) fs.writeFileSync(path.join(root(), dir, n ? `check_${n + 1}_plan_overlay.png` : "check_plan_overlay.png"), r.overlay);
     let settings: Record<string, unknown> = {};
     try { settings = JSON.parse(fs.readFileSync(path.join(root(), dir, "settings.json"), "utf8")); } catch { /* a re-checked picture has none */ }
     const a = r.check.areas;
-    const ratios = (r.check.measured ?? []).filter((m) => m.heightRatio !== undefined).map((m) => `${m.name.split(" ")[0]} ${m.heightRatio}`).join("; ");
-    const heads = (r.check.measured ?? []).map((m) => m.headShift).filter((v): v is number => v !== undefined).sort((x, y) => x - y);
+    const ratios = (r.check.measured ?? []).map((m) => `${m.name.split(" ")[0]} ${m.fit ?? ""}${m.heightRatio !== undefined ? ` x${m.heightRatio}` : ""}`.trim()).join("; ");
     const csv = path.join(root(), "results.csv");
-    if (!fs.existsSync(csv)) fs.writeFileSync(csv, "time,panel,picture,kind,request,model,request_chars,pass,blocking,characters_look,room_and_props,redraw,size_vs_plan,eye_level_shift,not_measured,problems,folder\n");
+    // An older file with other columns is kept aside, not mixed with this one.
+    if (fs.existsSync(csv) && !fs.readFileSync(csv, "utf8").startsWith("time,panel,picture,kind,request,model,request_chars,pass,blocking,characters_look,room_and_props,redraw,size_vs_plan,eye_level,")) fs.renameSync(csv, path.join(root(), `results_before_${stamp()}.csv`));
+    if (!fs.existsSync(csv)) fs.writeFileSync(csv, "time,panel,picture,kind,request,model,request_chars,pass,blocking,characters_look,room_and_props,redraw,size_vs_plan,eye_level,not_measured,problems,folder\n");
     fs.appendFileSync(csv, [
       new Date().toISOString(), r.panelCode, t, kind, settings.requestVersion ?? "", settings.model ?? "", settings.requestCharacters ?? "",
       r.check.pass ? "pass" : "fail", a ? (a.blocking.pass ? "pass" : "fail") : "", a ? (a.look.pass ? "pass" : "fail") : "", a ? (a.room.pass ? "pass" : "fail") : "",
-      r.check.redraw ? "yes" : "", ratios, heads.length ? heads[Math.floor(heads.length / 2)] : "",
+      r.check.redraw ? "yes" : "", ratios, r.check.eyeLevel ?? "",
       a ? [...a.blocking.unmeasured, ...a.look.unmeasured, ...a.room.unmeasured].join("; ") : "", r.check.problems.join(" "), dir,
     ].map(csvCell).join(",") + "\n");
   } catch (e) {

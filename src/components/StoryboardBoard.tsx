@@ -193,7 +193,7 @@ function CheckAreas({ c }: { c: NonNullable<BoardPanel["check"]> }) {
           {c.areas![a].pass ? "✓" : "✗"} {AREA_LABEL[a]}{c.areas![a].pass ? "" : `: ${c.areas![a].problems.join(" ")}`}
         </p>
       ))}
-      {unmeasured.length > 0 && <p className="text-neutral-500" data-testid="check-unmeasured">Not measured: {unmeasured.join("; ")}.</p>}
+      {unmeasured.length > 0 && <p className="text-neutral-500" data-testid="check-unmeasured">Couldn&apos;t judge: {unmeasured.join("; ")}.</p>}
     </div>
   );
 }

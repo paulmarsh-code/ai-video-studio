@@ -957,3 +957,32 @@ Paul ran "Check again" on panel 1's latest picture on his own machine. The check
   - The ordinary fit is back. `RING_CALIBRATION=1` turns the measured scale on again for testing.
   - Kept from D48: sizes in words, and the ankle-cut framing line.
 - Next: Paul runs "Check again" once more (about 1p) to see that the grid brings the numbers close to a careful reading: Chase about 37%, Nina about 35%, Jade about 78%, heads about 20% from the top. Then T1 to T3.
+
+### D51: Compare the picture with the plan drawn on it, instead of measuring (2026-11-11)
+
+Paul ran "Check again" after D50. The verdict was right again (fails on blocking), but the grid didn't fix the numbers: the model put Chase at 66% of the picture's height (about 37% in fact) and Jade at 62% across (about 70%). The vision model can't be trusted to read exact positions. A check that mismeasures can pass a wrong picture or fail a right one. The check is what decides a redraw from the layout and what the redraw request says, and it is the score for tests T1 to T5.
+
+- **Failure fixed (D38).** Panel 1's group is drawn about twice the planned size, with the camera tilted down. The check must say so reliably, and must not fail a correct picture. It reaches generation through the picture check: its verdict and wording go into the redraw.
+- **The plan is drawn on the picture (`withPlan`, replacing `withGrid`).** Each main person gets a dashed, named box. The box runs from their planned head height to their planned feet, at their planned place across. A white dashed line marks the planned eye level, where the camera's height falls in the picture. When people stand close, the names are staggered so they don't overlap.
+- **What the check asks.** It sends the picture, then the same picture with the plan drawn on it (image 2), then the approved shot (image 3), then the references. For each person the model answers one of:
+  - fits;
+  - bigger (with how many times taller);
+  - smaller;
+  - elsewhere;
+  - hidden.
+  It also says whether heads are on the line, well above it or well below it. Comparing a person with a box drawn beside them is a judgement the model can make; reading an exact percentage was not.
+- **How the answers are judged.**
+  - For a standing person, "bigger", "smaller" or "elsewhere" fails blocking and calls for a redraw.
+  - Heads well above or below the line fail blocking.
+  - Close-ups and people not in the shot are skipped.
+  - "Hidden", or no answer, is listed under "Couldn't judge" and is never counted as a pass.
+- **`OPENAI_CHECK_MODEL`.** This sets the model for the check alone. The default is unchanged (the text model, else gpt-5-mini). If the judgements still wobble, a stronger vision model can be tried on the check alone, at a higher cost per check.
+- **Test records.**
+  - Each check saves `check_plan_overlay.png`, so you can see what the model was comparing.
+  - `results.csv` now has `size_vs_plan` (fit and times, for example "Chase bigger x2.1") and `eye_level`.
+  - An older `results.csv` with different columns is kept as `results_before_<time>.csv`, not mixed in.
+- **Tested.** This ran on a copy of Paul's scene with his real panel 1 picture.
+  - The boxes and eye line sit where the plan puts the group: small, at the table, heads on the eye line. The drawn group is plainly about twice that height, with heads far above the line.
+  - With a stand-in reply, the panel says Chase and Nina are about twice their planned height, heads are well above the planned eye level, and Marcus couldn't be judged. It offers "Redraw it from the layout".
+  - The real model's judgement waits on Paul's run.
+- **Next.** Paul pulls, restarts in test mode and clicks "Check again" (about 1p). He expects Chase and Nina "bigger" (about 2×), heads "well above", and Marcus probably hidden. Jade is drawn left of her box and taller, so "elsewhere" or "bigger" would be right for her. If the judgements match what can be seen, T1 to T3 follow.

@@ -138,3 +138,9 @@ export function getTextProvider(): TextProvider | null {
   const key = process.env.OPENAI_API_KEY;
   return key ? openAITextProvider(key) : null;
 }
+
+/** The model for the picture check (D51): OPENAI_CHECK_MODEL, else the text model. */
+export function getCheckProvider(): TextProvider | null {
+  const key = process.env.OPENAI_API_KEY;
+  return key ? openAITextProvider(key, process.env.OPENAI_CHECK_MODEL || process.env.OPENAI_TEXT_MODEL || "gpt-5-mini") : null;
+}

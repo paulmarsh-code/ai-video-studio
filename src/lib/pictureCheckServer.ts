@@ -7,19 +7,20 @@ import sharp from "sharp";
 import type { DB } from "@/db/client";
 import { mainSubjectId } from "./domain/composer";
 import { facingOf, pictureXY, planForShot, readCamera, readProps } from "./domain/geometry";
+import { cameraZ, floorZ } from "./domain/levels";
 import { ringSectors, viewSlice, viewsInSlice } from "./domain/panorama";
 import { checkPrompt, judgePicture, type Figure, type PictureCheck, type PictureExpectation } from "./domain/pictureCheck";
 import { crowdLevelOf } from "./domain/story";
 import { renderLayoutForShot } from "./layoutImage";
 import { renderBlockingForShot } from "./blockingImage";
 import { carriedItems, heldProps, itemNoun } from "./domain/imagePrompts";
-import { getTextProvider } from "./providers/images";
+import { getCheckProvider } from "./providers/images";
 import * as repo from "./repo";
 import * as studio from "./studioRepo";
 import { recordCheck, testMode } from "./testRecords";
 
 /** Who the approved camera shows, left to right, and which key props. */
-export function expectationFor(db: DB, shotId: string): { expect: PictureExpectation; ids: string[]; projectId: string } | null {
+export function expectationFor(db: DB, shotId: string): { expect: PictureExpectation; ids: string[]; projectId: string; eyeY?: number } | null {
   const shot = repo.getShot(db, shotId);
   if (!shot?.spec.cameraId) return null;
   const scene = repo.getScene(db, shot.sceneId);
@@ -66,8 +67,10 @@ export function expectationFor(db: DB, shotId: string): { expect: PictureExpecta
     if (!head || !feet || !mid) return [];
     return [{ name: name(id), x: +mid.x.toFixed(3), headY: +head.y.toFixed(3), feetY: +feet.y.toFixed(3), standing: pose === "standing" }];
   });
+  // The planned eye level (D51): where the camera's own height falls in the picture.
+  const eye = pictureXY(plan, cam, cam.lookAt, cameraZ(plan, cam) - floorZ(plan, cam.lookAt));
   return {
-    ids, projectId: scene.scene.projectId,
+    ids, projectId: scene.scene.projectId, eyeY: eye ? +eye.y.toFixed(3) : undefined,
     expect: {
       held,
       figures,
@@ -98,29 +101,52 @@ export function expectationFor(db: DB, shotId: string): { expect: PictureExpecta
   };
 }
 
-/** A copy of the picture with a numbered measuring grid (D50): lines every 5% down and every 10% across. */
-export async function withGrid(picture: Buffer): Promise<Buffer> {
+/**
+ * A copy of the picture with the plan drawn over it (D51): a dashed, named box for each main
+ * person at their planned place and height (as wide as a person that tall), and the planned eye
+ * level. The vision model compares each person with their box, which it does far better than
+ * reading positions off the picture (D50 put far-off feet a quarter of the picture too low).
+ */
+export async function withPlan(picture: Buffer, figures: Figure[], eyeY?: number): Promise<Buffer> {
   const meta = await sharp(picture).metadata();
   const W = meta.width ?? 1024, H = meta.height ?? 1536;
-  const fs0 = Math.round(Math.min(W, H) / 45);
+  const fs0 = Math.round(Math.min(W, H) / 42);
+  const colours = ["#ff3b30", "#34c759", "#af52de", "#0a84ff", "#ff9f0a", "#ffd60a"];
+  const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const parts: string[] = [];
-  for (let k = 1; k < 20; k++) {
-    const y = Math.round((H * k) / 20), major = k % 2 === 0;
-    parts.push(`<line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="${major ? "#00ffff" : "#ffff00"}" stroke-opacity="0.75" stroke-width="${major ? 2 : 1}"/>`);
-    const label = (k / 20).toFixed(2);
-    for (const x of [4, W - fs0 * 2.6]) parts.push(`<text x="${x}" y="${y - 3}" font-family="sans-serif" font-size="${fs0}" font-weight="bold" fill="#ffff00" stroke="#000" stroke-width="0.6">${label}</text>`);
+  // Names of people standing close would print over each other: each label moves up a line
+  // until it is clear of the ones already placed.
+  const placed: { x0: number; x1: number; y0: number; y1: number }[] = [];
+  const clear = (x0: number, x1: number, base: number) => !placed.some((r) => x0 < r.x1 && x1 > r.x0 && base - fs0 < r.y1 && base > r.y0);
+  const labelAt = (centre: number, base: number, text: string) => {
+    const half = (text.length * fs0 * 0.62) / 2 + 4;
+    const x0 = Math.max(0, Math.min(W - 2 * half, centre - half));
+    let y = Math.max(fs0, base);
+    for (let n = 0; n < figures.length + 2 && !clear(x0, x0 + 2 * half, y); n++) y = y - fs0 - 4 < fs0 ? y + 3 * (fs0 + 4) : y - fs0 - 4;
+    placed.push({ x0, x1: x0 + 2 * half, y0: y - fs0, y1: y + 4 });
+    return { x: x0 + half, y };
+  };
+  if (eyeY !== undefined && eyeY > 0 && eyeY < 1) {
+    const y = Math.round(eyeY * H);
+    parts.push(`<line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="#ffffff" stroke-width="3" stroke-dasharray="18 10"/>`);
+    const t = "planned eye level", half = (t.length * fs0 * 0.62) / 2 + 4;
+    placed.push({ x0: 0, x1: 8 + 2 * half, y0: y - 8 - fs0, y1: y - 4 });
+    parts.push(`<text x="8" y="${y - 8}" font-family="sans-serif" font-size="${fs0}" font-weight="bold" fill="#ffffff" stroke="#000" stroke-width="1">${t}</text>`);
   }
-  for (let k = 1; k < 10; k++) {
-    const x = Math.round((W * k) / 10);
-    parts.push(`<line x1="${x}" y1="0" x2="${x}" y2="${H}" stroke="#ff00ff" stroke-opacity="0.6" stroke-width="1"/>`);
-    for (const y of [fs0 + 2, H - 6]) parts.push(`<text x="${x + 3}" y="${y}" font-family="sans-serif" font-size="${fs0}" font-weight="bold" fill="#ff66ff" stroke="#000" stroke-width="0.6">${(k / 10).toFixed(1)}</text>`);
-  }
+  figures.forEach((f, k) => {
+    const top = f.headY * H, bottom = f.feetY * H, h = bottom - top;
+    if (h <= 4) return;
+    const w = h * 0.28, x = f.x * W - w / 2, c = colours[k % colours.length];
+    parts.push(`<rect x="${x.toFixed(1)}" y="${top.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="none" stroke="${c}" stroke-width="3" stroke-dasharray="12 7"/>`);
+    const name = f.name.split(" ")[0], at = labelAt(x + w / 2, top - 6, name);
+    parts.push(`<text x="${at.x.toFixed(1)}" y="${at.y.toFixed(1)}" text-anchor="middle" font-family="sans-serif" font-size="${fs0}" font-weight="bold" fill="${c}" stroke="#000" stroke-width="1">${esc(name)}</text>`);
+  });
   const svg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">${parts.join("")}</svg>`);
   return sharp(picture).composite([{ input: svg, left: 0, top: 0 }]).png().toBuffer();
 }
 
 export async function checkPanelPicture(db: DB, panelId: string, assetId: string): Promise<PictureCheck | null> {
-  const text = getTextProvider();
+  const text = getCheckProvider();
   if (!text) return null;
   const panelShot = studio.shotIdForPanel(db, panelId);
   if (!panelShot) return null;
@@ -148,13 +174,12 @@ export async function checkPanelPicture(db: DB, panelId: string, assetId: string
     if (f.imageAssetId && e.expect.props.includes(f.name)) refs.push({ label: `the ${f.name} (prop)`, asset: repo.getAsset(db, f.imageAssetId) });
   }
   const usable = refs.filter((r) => r.asset && fs.existsSync(r.asset.path));
-  // A measuring grid over a copy of the picture (D50): without it the model read the heads well
-  // but put far-off people's feet about a quarter of the picture too low.
-  const grid = e.expect.figures?.length ? await withGrid(fs.readFileSync(pic.path)).catch(() => undefined) : undefined;
-  if (grid) e.expect.grid = true;
+  // The plan drawn over a copy of the picture (D51), for the model to compare against.
+  const overlay = e.expect.figures?.length ? await withPlan(fs.readFileSync(pic.path), e.expect.figures, e.eyeY).catch(() => undefined) : undefined;
+  if (overlay) e.expect.overlay = true;
   const images = [
     { data: fs.readFileSync(pic.path), mime: pic.mime },
-    ...(grid ? [{ data: grid, mime: "image/png" }] : []),
+    ...(overlay ? [{ data: overlay, mime: "image/png" }] : []),
     ...(layout ? [{ data: Buffer.from(layout), mime: "image/png" }] : []),
     ...usable.map((r) => ({ data: fs.readFileSync(r.asset!.path), mime: r.asset!.mime })),
   ];
@@ -164,7 +189,7 @@ export async function checkPanelPicture(db: DB, panelId: string, assetId: string
   // Test mode (B4): the check goes with its picture's record, and a line into results.csv.
   if (testMode()) {
     const code = repo.getShot(db, panelShot)?.spec.code ?? panelId;
-    recordCheck({ panelCode: code.replace(/^.*_(P\d+)$/i, "$1"), assetId, picture: fs.readFileSync(pic.path), check: result, expected: { order: e.expect.order, figures: e.expect.figures } });
+    recordCheck({ panelCode: code.replace(/^.*_(P\d+)$/i, "$1"), assetId, picture: fs.readFileSync(pic.path), overlay, check: result, expected: { order: e.expect.order, figures: e.expect.figures, eyeY: e.eyeY } });
   }
   return result;
 }
