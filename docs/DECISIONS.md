@@ -759,3 +759,7 @@ Paul: "Aron is lying on his bed… picks up his phone… re-reads the text." Nex
   - the floor plan's viewfinder draws seated and lying people;
   - the picture check asks each person's posture and a wrong one becomes a correction ("Aron is standing; Aron must be lying on the single bed").
 - General for any scene; tests use Paul's two examples with made-up names (`tests/posture.d37.test.ts`).
+
+### D38: Only what improves consistency, continuity or the finished video (2026-11-11)
+
+Paul: "I want to be careful not to build complexity into the app that is not needed. We only want to add enhancements that improve consistency and continuity and improve the viewing experience of the end product." This is now the test for every change, written into `CLAUDE.md`. Each change must name the visible failure it fixes and how it reaches the generation: the blocking frame, a prompt line, the camera choice or the picture check.
