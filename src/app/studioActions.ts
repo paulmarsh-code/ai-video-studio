@@ -203,7 +203,7 @@ export async function setShotChoiceAction(shotId: string, words: string) {
  * carries on to later panels until they're placed again (unless "this panel only"). The
  * cameras are kept: a change to one panel's positions never re-chooses the others' cameras.
  */
-export async function savePanelBlockingAction(changes: { shotId: string; entries: Record<string, { at: { x: number; y: number }; to?: { x: number; y: number }; facingDeg?: number; only?: boolean; gone?: boolean; pose?: "standing" | "sitting" | "lying" | "kneeling" | "crouching" } | null> }[]) {
+export async function savePanelBlockingAction(changes: { shotId: string; entries: Record<string, { at: { x: number; y: number }; to?: { x: number; y: number }; facingDeg?: number; only?: boolean; gone?: boolean; pose?: "standing" | "sitting" | "lying" | "kneeling" | "crouching" } | null>; camera?: { position: { x: number; y: number }; lookAt: { x: number; y: number } } }[]) {
   return run((db) => studio.savePanelBlocking(db, changes));
 }
 

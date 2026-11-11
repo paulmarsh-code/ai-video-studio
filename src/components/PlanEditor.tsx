@@ -101,13 +101,22 @@ export function PlanEditor(props: {
     [plan, panels, effSpecs, cast, props.scenePose],
   );
   const shown0 = pspec ? planForShot(plan, { ...pspec, posture: poses[pk] }) : plan;
-  const cam0 = pspec?.cameraId ? shown0.cameras.find((c) => c.id === pspec.cameraId) : undefined;
+  // This panel's camera, as moved here if it has been (D43): the "@camera" edit.
+  const camMoved = panel ? edits[panel.shotId]?.["@camera"] : undefined;
+  const camSaved = pspec?.cameraId ? shown0.cameras.find((c) => c.id === pspec.cameraId) : undefined;
+  const cam0 = camSaved && camMoved ? { ...camSaved, position: camMoved.at, lookAt: camMoved.to ?? camSaved.lookAt } : camSaved;
   // Anyone who must be in the picture but is out of the camera's view: the camera turns to
   // take them in (D42), shown here as it will be saved.
   const mustSee = cam0 && pspec ? (pspec.visibleIds ?? []).filter((id) => id !== cam0.povId && shown0.actors.some((a) => a.characterId === id)) : [];
   const aimed = cam0 ? aimToInclude(shown0, cam0, mustSee) : undefined;
   const outOfView = cam0 && aimed !== cam0 ? mustSee.filter((id) => !readCamera(shown0, cam0).actors.find((a) => a.characterId === id)?.inView) : [];
-  const shown = cam0 && aimed && aimed !== cam0 ? { ...shown0, cameras: shown0.cameras.map((c) => (c.id === cam0.id ? aimed : c)) } : shown0;
+  const shown = cam0 && aimed && aimed !== camSaved ? { ...shown0, cameras: shown0.cameras.map((c) => (c.id === cam0.id ? aimed : c)) } : shown0;
+  /** Move or aim this panel's camera (D43): kept as an edit until saved. */
+  const moveThisCam = (patch: { position?: Point; lookAt?: Point }) => {
+    if (!panel || !cam0) return;
+    const cur = shown.cameras.find((c) => c.id === cam0.id) ?? cam0;
+    setEdits((e) => ({ ...e, [panel.shotId]: { ...(e[panel.shotId] ?? {}), "@camera": { at: patch.position ?? cur.position, to: patch.lookAt ?? cur.lookAt } } }));
+  };
   const panelCam = pspec?.cameraId ? shown.cameras.find((c) => c.id === pspec.cameraId) : undefined;
   const changedPanels = Object.entries(edits).filter(([, e]) => Object.keys(e).length);
   const curEntry = (key: string): BlockEntry => {
@@ -310,7 +319,7 @@ export function PlanEditor(props: {
               );
             })}
 
-            {/* Cameras: body + aim handle. On a panel, only that panel's camera, fixed (D35). */}
+            {/* Cameras: body + aim handle. On a panel, only that panel's camera, moved for it alone (D43). */}
             {(panelMode ? (panelCam ? [panelCam] : []) : plan.cameras).map((c) => {
               const p = toPx(c.position);
               const t = toPx(c.lookAt);
@@ -318,14 +327,16 @@ export function PlanEditor(props: {
               return (
                 <Group key={c.id}>
                   <Arrow points={[p.x, p.y, t.x, t.y]} stroke={sel ? "#2563eb" : "#a3a3a3"} fill={sel ? "#2563eb" : "#a3a3a3"} strokeWidth={1} pointerLength={6} pointerWidth={6} listening={false} />
-                  <Group x={p.x} y={p.y} draggable={!panelMode} listening={!panelMode} onDragStart={pushHistory} onMouseDown={() => setSelectedCam(c.id)} onTouchStart={() => setSelectedCam(c.id)}
-                    onDragMove={(e) => moveCam(c.id, { position: toM(e.target.x(), e.target.y()) })} onDragEnd={(e) => moveCam(c.id, { position: toM(e.target.x(), e.target.y()) })}>
+                  <Group x={p.x} y={p.y} draggable onDragStart={panelMode ? pushEdit : pushHistory} onMouseDown={() => setSelectedCam(c.id)} onTouchStart={() => setSelectedCam(c.id)} data-testid="plan-camera"
+                    onDragMove={(e) => (panelMode ? moveThisCam({ position: toM(e.target.x(), e.target.y()) }) : moveCam(c.id, { position: toM(e.target.x(), e.target.y()) }))}
+                    onDragEnd={(e) => (panelMode ? moveThisCam({ position: toM(e.target.x(), e.target.y()) }) : moveCam(c.id, { position: toM(e.target.x(), e.target.y()) }))}>
                     <Rect x={-9} y={-7} width={18} height={14} cornerRadius={3} fill={sel ? "#1d4ed8" : "#404040"} />
                     <Text text={c.name} fontSize={11} fontStyle="bold" fill={sel ? "#1d4ed8" : "#404040"} x={-50} y={10} width={100} align="center" />
                   </Group>
-                  {sel && !panelMode && (
-                    <Circle x={t.x} y={t.y} radius={7} fill="#fff" stroke="#2563eb" strokeWidth={2} draggable onDragStart={pushHistory}
-                      onDragMove={(e) => moveCam(c.id, { lookAt: toM(e.target.x(), e.target.y()) })} onDragEnd={(e) => moveCam(c.id, { lookAt: toM(e.target.x(), e.target.y()) })} />
+                  {sel && (
+                    <Circle x={t.x} y={t.y} radius={7} fill="#fff" stroke="#2563eb" strokeWidth={2} draggable onDragStart={panelMode ? pushEdit : pushHistory}
+                      onDragMove={(e) => (panelMode ? moveThisCam({ lookAt: toM(e.target.x(), e.target.y()) }) : moveCam(c.id, { lookAt: toM(e.target.x(), e.target.y()) }))}
+                      onDragEnd={(e) => (panelMode ? moveThisCam({ lookAt: toM(e.target.x(), e.target.y()) }) : moveCam(c.id, { lookAt: toM(e.target.x(), e.target.y()) }))} />
                   )}
                 </Group>
               );
@@ -409,7 +420,7 @@ export function PlanEditor(props: {
             <div className="rounded-xl border border-blue-200 bg-white p-5 text-sm" data-testid="panel-positions">
               <h2 className="text-lg font-semibold">Positions in panel {step}</h2>
               {!props.focus && <p className="mt-1 text-neutral-700">{panel.description}</p>}
-              <p className="mt-1 text-xs text-neutral-500">{pspec.shot ? `Shot: ${pspec.shot}. ` : ""}{panelCam ? `Camera: ${panelCam.name}.` : "No camera chosen for this panel yet: approve the positions on the storyboard and the app chooses one."}</p>
+              <p className="mt-1 text-xs text-neutral-500">{pspec.shot ? `Shot: ${pspec.shot}. ` : ""}{panelCam ? `Camera: ${panelCam.name}. Drag the camera to move it, or its white handle to aim it: for this panel only, other panels keep theirs.` : "No camera chosen for this panel yet: approve the positions on the storyboard and the app chooses one."}{camMoved ? " (moved, not saved yet)" : ""}</p>
               <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/40 p-3" data-testid="panel-words">
                 <label className="block font-medium">What should change in this panel?<WordsHelp guide="change" />
                   <textarea className="mt-1 w-full rounded border border-neutral-300 bg-white px-2 py-1" rows={2} value={words} data-testid="panel-words-input"
@@ -425,9 +436,9 @@ export function PlanEditor(props: {
                 )}
                 <p className="mt-1 text-xs text-neutral-500">Left and right are as the picture shows them. Or drag people on the plan; click someone to turn them.</p>
               </div>
-              {cam0 && aimed !== cam0 && (
+              {cam0 && aimed && aimed !== cam0 && (
                 <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900" data-testid="panel-camera-turned">
-                  {outOfView.length ? `${outOfView.map(name).map((n) => n.split(" ")[0]).join(" and ")} ${outOfView.length === 1 ? "is" : "are"} outside the camera's view here, so this panel's camera turns` : "Not everyone fits the frame here, so this panel's camera turns"}{aimed && aimed.fovDeg !== cam0.fovDeg ? " and widens" : ""} to keep everyone in the picture. Other panels' cameras stay as they are. To keep the camera, move them back into the blue area instead.
+                  {outOfView.length ? `${outOfView.map(name).map((n) => n.split(" ")[0]).join(" and ")} ${outOfView.length === 1 ? "is" : "are"} outside the camera's view here, so this panel's camera turns` : "Not everyone fits the frame here, so this panel's camera turns"}{aimed && aimed.fovDeg !== cam0.fovDeg ? " and widens" : ""} to keep everyone in the picture. Other panels&apos; cameras stay as they are. To keep the camera, move them back into the blue area instead.
                 </p>
               )}
               {panelCam && (
@@ -533,7 +544,10 @@ export function PlanEditor(props: {
                 disabled={!changedPanels.length || dirty} resetKey={edits}
                 title={dirty ? "Save the scene plan first" : ""}
                 onAction={async () => {
-                  const r = await savePanelBlockingAction(changedPanels.map(([shotId, entries]) => ({ shotId, entries })));
+                  const r = await savePanelBlockingAction(changedPanels.map(([shotId, entries]) => {
+                    const { "@camera": cam, ...rest } = entries;
+                    return { shotId, entries: rest, ...(cam ? { camera: { position: cam.at, lookAt: cam.to ?? cam.at } } : {}) };
+                  }));
                   if (!r.ok) { setPanelStatus(r.error); return false; }
                   setEdits({}); setEditHistory([]);
                   if (props.focus) { props.focus.onDone(true); return; }

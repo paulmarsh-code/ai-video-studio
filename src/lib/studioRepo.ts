@@ -13,7 +13,7 @@ import type { CharacterProfile, RefView } from "./domain/imagePrompts";
 import { approvalProblems } from "./domain/approval";
 import { deriveDuration } from "./domain/duration";
 import { hasQuotes } from "./domain/text";
-import type { GeometryPlanData, PanelBlock, PlanView, Point, Pronoun, ShotSpec } from "./domain/types";
+import type { GeometryPlanData, PanelBlock, PlanCamera, PlanView, Point, Pronoun, ShotSpec } from "./domain/types";
 import { asGenre, type Genre } from "./domain/genre";
 import { addMovementMarks, asStaging, planProps, propHeight, propsFromFurniture, propKind, propWidth, checkStoryboard, defaultPlan, panelSeconds, shotSpecFor, type DraftPanel, type SceneStaging } from "./domain/story";
 import { LAYOUT_RULES } from "./domain/director";
@@ -883,7 +883,7 @@ export function saveCharacterHeldItems(db: DB, versionId: string, frontAssetId: 
  * worked out again for the whole scene. The cameras stay as they are, approved or not (D39):
  * fixing one picture never moves another panel's camera.
  */
-export function savePanelBlocking(db: DB, changes: { shotId: string; entries: Record<string, BlockEntry | null> }[]): { sceneId: string; turned: { code: string; who: string[] }[] } {
+export function savePanelBlocking(db: DB, changes: { shotId: string; entries: Record<string, BlockEntry | null>; camera?: { position: Point; lookAt: Point } }[]): { sceneId: string; turned: { code: string; who: string[] }[] } {
   if (!changes.length) throw new Error("Nothing to save.");
   const round = (p: Point) => ({ x: +p.x.toFixed(2), y: +p.y.toFixed(2) });
   let sceneId = "";
@@ -904,6 +904,8 @@ export function savePanelBlocking(db: DB, changes: { shotId: string; entries: Re
   }
   // What the app reads in the words is worked out again around what you set (D36).
   if (!applyPanelWords(db, sceneId)) recarry(db, sceneId);
+  // A camera moved for a panel (D43): that panel's own camera; the others stay as they are.
+  for (const ch of changes) if (ch.camera) panelCamera(db, sceneId, ch.shotId, (c) => ({ ...c, position: round(ch.camera!.position), lookAt: round(ch.camera!.lookAt) }));
   // Anyone who must be in the picture but has been moved out of its camera's view (D42).
   const turned = aimPanelCameras(db, sceneId, changes.map((c) => c.shotId));
   persist(db);
@@ -931,17 +933,33 @@ export function aimPanelCameras(db: DB, sceneId: string, shotIds: string[]): { c
     if (aimed === cam) continue;
     const before = readCamera(sp, cam).actors;
     const who = ids.filter((id) => !before.find((a) => a.characterId === id)?.inView).map((id) => cast.find((c) => c.id === id)?.name.split(/\s+/)[0] ?? id);
-    // This panel's own camera: reuse one made for it before, or add one beside the shared one.
-    const shared = db.select().from(t.shots).where(eq(t.shots.sceneId, sceneId)).all().some((x) => x.id !== shotId && (x.spec as ShotSpec).cameraId === cam.id);
-    const own = !shared && cam.id.includes("~");
-    const id = own ? cam.id : `${cam.id.split("~")[0]}~${shotId.slice(0, 6)}`;
-    const camera = { ...aimed, id, name: own ? cam.name : `${cam.name.replace(/, turned$/, "")}, turned` };
-    const cameras = own ? plan.data.cameras.map((c) => (c.id === id ? camera : c)) : [...plan.data.cameras.filter((c) => c.id !== id), camera];
-    db.insert(t.plans).values({ id: randomUUID(), sceneId, name: plan.name, version: plan.version + 1, data: { ...plan.data, cameras } }).run();
-    db.update(t.shots).set({ spec: { ...spec, cameraId: id } }).where(eq(t.shots.id, shotId)).run();
+    panelCamera(db, sceneId, shotId, () => aimed);
     out.push({ code: spec.code.split("_").pop() ?? spec.code, who });
   }
   return out;
+}
+
+/**
+ * Change one panel's camera without touching any other panel's (D42, D43): a camera made for
+ * this panel before is changed in place; a camera it shares (or one that's approved) is left
+ * as it is and this panel gets its own copy, "<name>, for this panel".
+ */
+function panelCamera(db: DB, sceneId: string, shotId: string, change: (cam: PlanCamera) => PlanCamera) {
+  const plan = latestPlan(db, sceneId);
+  const sh = db.select().from(t.shots).where(eq(t.shots.id, shotId)).get();
+  if (!plan || !sh) return;
+  const spec = sh.spec as ShotSpec;
+  const cam = plan.data.cameras.find((c) => c.id === spec.cameraId);
+  if (!cam) return;
+  const next = change(cam);
+  if (JSON.stringify(next) === JSON.stringify(cam)) return;
+  const shared = db.select().from(t.shots).where(eq(t.shots.sceneId, sceneId)).all().some((x) => x.id !== shotId && (x.spec as ShotSpec).cameraId === cam.id);
+  const own = !shared && cam.id.includes("~");
+  const id = own ? cam.id : `${cam.id.split("~")[0]}~${shotId.slice(0, 6)}`;
+  const camera = { ...next, id, name: own ? cam.name : `${cam.name.replace(/, (turned|for this panel)$/, "")}, for this panel` };
+  const cameras = own ? plan.data.cameras.map((c) => (c.id === id ? camera : c)) : [...plan.data.cameras.filter((c) => c.id !== id), camera];
+  db.insert(t.plans).values({ id: randomUUID(), sceneId, name: plan.name, version: plan.version + 1, data: { ...plan.data, cameras } }).run();
+  db.update(t.shots).set({ spec: { ...spec, cameraId: id } }).where(eq(t.shots.id, shotId)).run();
 }
 
 /**

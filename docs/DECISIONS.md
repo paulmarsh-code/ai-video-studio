@@ -809,3 +809,15 @@ D38 test: the visible failure was Jade on the wrong side; the fix reaches the ca
 - **You see it before saving**: the planner shows the turned camera and the camera view, and says "Jade is outside the camera's view here, so this panel's camera turns to keep everyone in the picture… To keep the camera, move them back into the blue area instead."
 - **Words**: "Jade comes in from the right" (or left) places her well over on that side of the picture, inside the frame, at the same distance. "Move Ben to the left/right" now stops at the edge of the frame instead of pushing someone out. Changes are read against the panel's own camera, the one the picture was drawn with.
 - Added to the ⓘ guide; tests in `tests/changeWords.d39.test.ts` and `tests/aim.d42.test.ts`; browser test of Paul's case on a copy of Jade's Entrance: drag out of view → warning and turned camera → saved with Jade in view, no warning after.
+
+### D43: Move one panel's camera from its planner (2026-11-11)
+
+Paul tried to move the camera in a panel's planner and couldn't: it was fixed, and the only way was the whole scene's cameras after "Change cameras", which unlocks every panel's camera at once.
+
+D38 test: a camera in the wrong place for one picture is a visible failure; the fix reaches the camera and so the blocking frame.
+
+- In a panel's planner (from "Need to change something?" or the floor plan's panel stepper), drag the camera to move it, or its white handle to aim it. The camera view follows as you drag. "(moved, not saved yet)" shows until it's saved.
+- It's for this panel only: saving gives the panel its own camera ("Wide (P1), for this panel"), or changes the one it already has. A shared or approved camera is left exactly as it was, and no other panel changes (`panelCamera`, shared with D42's turned cameras).
+- Anyone who must be in the picture is still kept in view (D42): if the moved camera leaves them out, it turns just enough, and the planner says so.
+- The whole scene's cameras are still set on the floor plan page after "Change cameras", for re-shooting the scene.
+- Tests: `tests/aim.d42.test.ts` (own camera where you put it; shared camera and other panels untouched; moving again reuses it); browser test on a copy of Jade's Entrance: drag panel 1's camera, view updates, saved as its own camera, panel 2 unchanged.

@@ -43,6 +43,7 @@ export function withEdits(spec: ShotSpec, edits?: Record<string, BlockEntry | nu
   if (!edits || !Object.keys(edits).length) return spec;
   const blocking: Record<string, PanelBlock> = { ...(spec.blocking ?? {}) };
   for (const [id, e] of Object.entries(edits)) {
+    if (id.startsWith("@")) continue; // "@camera": this panel's camera (D43), not a placement
     if (!e) delete blocking[id];
     else blocking[id] = { ...e, by: "you" };
   }
