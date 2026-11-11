@@ -58,10 +58,13 @@ export interface ImageProvider {
   generate(prompt: string, refs: { data: Buffer; mime: string; name: string }[], size: "portrait" | "landscape" | "square"): Promise<GeneratedImage>;
 }
 
-const SIZES = { portrait: "1024x1536", landscape: "1536x1024", square: "1024x1024" } as const;
+export const SIZES = { portrait: "1024x1536", landscape: "1536x1024", square: "1024x1024" } as const;
+
+/** The image model and quality in use (OPENAI_IMAGE_MODEL, OPENAI_IMAGE_QUALITY), for test records (B4). */
+export const imageSettings = () => ({ model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-2", quality: process.env.OPENAI_IMAGE_QUALITY || "medium" });
 
 /** OpenAI Images API (generations, or edits when reference images are given). */
-export function openAIProvider(apiKey: string, model = process.env.OPENAI_IMAGE_MODEL || "gpt-image-2", quality = process.env.OPENAI_IMAGE_QUALITY || "medium"): ImageProvider {
+export function openAIProvider(apiKey: string, model = imageSettings().model, quality = imageSettings().quality): ImageProvider {
   return {
     id: "openai",
     label: `OpenAI ${model}`,

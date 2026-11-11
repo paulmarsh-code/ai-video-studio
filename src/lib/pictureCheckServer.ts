@@ -5,9 +5,9 @@
 import fs from "node:fs";
 import type { DB } from "@/db/client";
 import { mainSubjectId } from "./domain/composer";
-import { facingOf, planForShot, readCamera, readProps } from "./domain/geometry";
+import { facingOf, pictureXY, planForShot, readCamera, readProps } from "./domain/geometry";
 import { ringSectors, viewSlice, viewsInSlice } from "./domain/panorama";
-import { checkPrompt, judgePicture, type PictureCheck, type PictureExpectation } from "./domain/pictureCheck";
+import { checkPrompt, judgePicture, type Figure, type PictureCheck, type PictureExpectation } from "./domain/pictureCheck";
 import { crowdLevelOf } from "./domain/story";
 import { renderLayoutForShot } from "./layoutImage";
 import { renderBlockingForShot } from "./blockingImage";
@@ -15,6 +15,7 @@ import { carriedItems, heldProps, itemNoun } from "./domain/imagePrompts";
 import { getTextProvider } from "./providers/images";
 import * as repo from "./repo";
 import * as studio from "./studioRepo";
+import { recordCheck, testMode } from "./testRecords";
 
 /** Who the approved camera shows, left to right, and which key props. */
 export function expectationFor(db: DB, shotId: string): { expect: PictureExpectation; ids: string[]; projectId: string } | null {
@@ -53,10 +54,22 @@ export function expectationFor(db: DB, shotId: string): { expect: PictureExpecta
       name: name(id), item: itemNoun(it.what), side: (c > 0.5 ? (it.side === "left" ? "right" : "left") : it.side) as "left" | "right",
     }));
   });
+  // Where each of them should be in the picture (B1): the same projection as the blocking frame.
+  // Head height by posture; someone lying down has no head-to-feet height to measure.
+  const HEAD: Record<string, number> = { standing: 1.72, sitting: 1.3, kneeling: 1.25, crouching: 1.0 };
+  const figures: Figure[] = ids.flatMap((id) => {
+    const a = plan.actors.find((x) => x.characterId === id);
+    const pose = shot.spec.posture?.[id]?.pose ?? a?.pose ?? "standing";
+    if (!a || !(pose in HEAD)) return [];
+    const head = pictureXY(plan, cam, a.position, HEAD[pose]), feet = pictureXY(plan, cam, a.position, 0), mid = pictureXY(plan, cam, a.position, 0.9);
+    if (!head || !feet || !mid) return [];
+    return [{ name: name(id), x: +mid.x.toFixed(3), headY: +head.y.toFixed(3), feetY: +feet.y.toFixed(3), standing: pose === "standing" }];
+  });
   return {
     ids, projectId: scene.scene.projectId,
     expect: {
       held,
+      figures,
       // Posture (D37): anyone not simply standing, or who has just got up.
       postures: ids.flatMap((id) => { const pe = shot.spec.posture?.[id]; return pe && (pe.pose !== "standing" || pe.from) ? [{ name: name(id), pose: pe.pose, ...(pe.on ? { on: pe.on } : {}) }] : []; }),
       order: ids.map(name), props: readProps(plan, cam).filter((p) => p.inView).map((p) => p.name), crowd: crowdLevelOf(shot.spec.crowd ?? ""),
@@ -121,5 +134,10 @@ export async function checkPanelPicture(db: DB, panelId: string, assetId: string
   const reply = await text.describe(checkPrompt(e.expect, usable.map((r) => r.label)), images);
   const result = judgePicture(e.expect, reply);
   studio.setPanelCheck(db, panelId, result);
+  // Test mode (B4): the check goes with its picture's record, and a line into results.csv.
+  if (testMode()) {
+    const code = repo.getShot(db, panelShot)?.spec.code ?? panelId;
+    recordCheck({ panelCode: code.replace(/^.*_(P\d+)$/i, "$1"), assetId, picture: fs.readFileSync(pic.path), check: result, expected: { order: e.expect.order, figures: e.expect.figures } });
+  }
   return result;
 }

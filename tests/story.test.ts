@@ -352,7 +352,7 @@ describe("Group scenes (D18d): blocking, close-ups and people at the edge of fra
     ];
     const chase = shotSpecFor(panels[2], { code: "P3", venueName: "v", castIds: ids, staging });
     const two = panelPrompt({ description: "Chase shrugs", shot: { ...chase, cameraId: "two" }, cast, profiles: {}, plan, venueName: "v" });
-    expect(two.text).toMatch(/Exactly 4 people in this picture, from left to right: /);
+    expect(two.text).toMatch(/Exactly 4 main characters in this picture, from left to right: /);
     expect(two.text).toMatch(/Marcus and Nina are clearly in the picture, standing in their places with the others and listening, less prominent than Chase but never left out/);
     expect(two.text).toContain("Exactly one of each person: Chase, Jade, Marcus and Nina.");
     const cu = panelPrompt({ description: "Chase waves her off", shot: { ...chase, cameraId: "cu" }, cast, profiles: {}, plan, venueName: "v" });
@@ -476,7 +476,7 @@ describe("Picture check against the approved layout (D19)", () => {
     expect(p).toContain("Expected main characters, left to right: Nina, Chase Whitmore, Marcus, Jade.");
     expect(p).toContain("Reply with JSON only");
     const ok = judgePicture(e, '{"left_to_right": ["Nina", "Chase", "Marcus", "Jade"], "props_seen": ["round cocktail table"], "background_people": "busy", "notes": ""}');
-    expect(ok).toEqual({ pass: true, problems: [] });
+    expect(ok).toMatchObject({ pass: true, problems: [] });
     const swapped = judgePicture(e, '```json\n{"left_to_right": ["Marcus", "Chase", "Nina", "Jade"], "props_seen": ["table"], "background_people": "few"}\n```');
     expect(swapped.pass).toBe(false);
     expect(swapped.problems[0]).toMatch(/Wrong order: expected Nina, Chase Whitmore, Marcus, Jade/);
@@ -726,7 +726,7 @@ describe("The automatic check enforces characters, props and the room (D21)", ()
     };
     expect(checkPrompt(e, ["Jade (front)", "Jade (back)", "the cocktail table (prop)"])).toContain("a bag in the other hand");
     const good = judgePicture(e, JSON.stringify({ left_to_right: ["Chase", "Jade"], clothes: [{ name: "Jade", matches_reference: true }], props: [{ name: "cocktail table", side: "centre", depth: "among the people", matches_picture: true }, { name: "display plinth", side: "right", depth: "behind everyone" }], props_seen: ["cocktail table", "display plinth"], background_left: "bar", background_right: "lounge seating", background_people: "busy" }));
-    expect(good).toEqual({ pass: true, problems: [] });
+    expect(good).toMatchObject({ pass: true, problems: [] });
     const bad = judgePicture(e, JSON.stringify({ left_to_right: ["Chase", "Jade"], clothes: [{ name: "Jade", matches_reference: false, difference: "skirt has no orange panel" }], props: [{ name: "cocktail table", side: "centre", depth: "among the people", matches_picture: false, difference: "no white cloth" }, { name: "display plinth", side: "left", depth: "among the people" }], props_seen: ["cocktail table", "display plinth"], background_left: "lounge seating", background_right: "bar", background_people: "busy" }));
     expect(bad.pass).toBe(false);
     expect(bad.problems.join(" ")).toContain("Jade's clothes differ from the reference: skirt has no orange panel");

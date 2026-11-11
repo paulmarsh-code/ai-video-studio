@@ -5,7 +5,8 @@ import fs from "node:fs";
 import { NextResponse } from "next/server";
 import { getDb } from "@/db/client";
 import { cleanBaseCode, storeAsset } from "@/lib/assetStore";
-import { getImageProvider } from "@/lib/providers/images";
+import { getImageProvider, imageSettings, SIZES } from "@/lib/providers/images";
+import { recordDraw, testMode } from "@/lib/testRecords";
 import { renderLayoutForShot } from "@/lib/layoutImage";
 import { renderBackgroundForShot } from "@/lib/backgroundImage";
 import { renderBlockingForShot } from "@/lib/blockingImage";
@@ -15,7 +16,7 @@ import * as repo from "@/lib/repo";
 export async function POST(req: Request) {
   const provider = getImageProvider();
   if (!provider) return NextResponse.json({ error: "No image provider is connected. Copy the prompt into ChatGPT and upload the image." }, { status: 501 });
-  const body = (await req.json()) as { projectId?: string; baseCode?: string; kind?: string; prompt?: string; refAssetIds?: string[]; size?: "portrait" | "landscape" | "square"; layoutShotId?: string; backgroundShotId?: string; blockingShotId?: string; baseAssetId?: string };
+  const body = (await req.json()) as { projectId?: string; baseCode?: string; kind?: string; prompt?: string; refAssetIds?: string[]; size?: "portrait" | "landscape" | "square"; layoutShotId?: string; backgroundShotId?: string; blockingShotId?: string; baseAssetId?: string; test?: { panelCode: string; kind: "draw" | "correction" | "redraw"; variant: string; conflicts?: string[] } };
   if (!body.projectId || !body.baseCode || !body.prompt) return NextResponse.json({ error: "projectId, baseCode and prompt are required" }, { status: 400 });
   const db = await getDb();
   const refs: { data: Buffer; mime: string; name: string }[] = (body.refAssetIds ?? []).map((id) => repo.getAsset(db, id)).filter((a) => a && fs.existsSync(a.path))
@@ -52,6 +53,17 @@ export async function POST(req: Request) {
     const saved = storeAsset(db, {
       projectId: body.projectId, baseCode: cleanBaseCode(body.baseCode), kind: body.kind ?? "image", ext: "png", mime: img.mime, data: img.data, note: img.providerNote,
     });
+    // Test mode (B4): keep exactly what this picture was drawn from.
+    if (testMode() && body.test) {
+      const s = imageSettings();
+      const ids = [...(body.baseAssetId ? [body.baseAssetId] : []), ...(body.refAssetIds ?? [])];
+      recordDraw({
+        panelCode: body.test.panelCode, kind: body.test.kind, variant: body.test.variant, prompt: body.prompt, conflicts: body.test.conflicts,
+        inputs: refs.map((r) => { const a = ids.map((id) => repo.getAsset(db, id)).find((x) => x?.assetCode === r.name); return { name: r.name, data: r.data, mime: r.mime, assetId: a?.id, assetCode: a?.assetCode }; }),
+        model: s.model, quality: s.quality, size: SIZES[body.size ?? "portrait"], endpoint: refs.length ? "images/edits" : "images/generations",
+        output: { assetId: saved.id, data: img.data, note: img.providerNote },
+      });
+    }
     return NextResponse.json(saved);
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e);

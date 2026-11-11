@@ -17,7 +17,7 @@ export interface PanelRow {
   durationSec: number;
   imageAssetId: string | null;
   /** The automatic check against the approved layout (D19). */
-  check: { pass?: boolean; problems?: string[]; keptApproved?: boolean; drawnFrom?: string };
+  check: { pass?: boolean; problems?: string[]; keptApproved?: boolean; drawnFrom?: string; redraw?: boolean; areas?: import("./domain/pictureCheck").PictureCheck["areas"]; measured?: import("./domain/pictureCheck").PictureCheck["measured"] };
   status: string;
   version: number;
 }

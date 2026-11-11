@@ -59,7 +59,7 @@ describe("GPT image prompts", () => {
     const shot = { code: "C2a", venueName: "v", sceneContext: "", presentIds: CAST.map((c) => c.id), visibleIds: ["chase", "jade"], excludedIds: ["marcus", "nina"], speakerId: "jade", dialogue: "Hi everyone.", actions: "Jade places her glass on the table.", durationSec: 4, audioMode: "native-on" as const, cameraId: "main" };
     const { text, attach } = panelPrompt({ description: "Jade joins the group", emotion: "warm", shot, cast: CAST, profiles: { jade }, plan: SCENE1_PLAN, venueName: "launch venue", genre: "comedy" });
     expect(text).toContain("Over-the-shoulder");
-    expect(text).toMatch(/Exactly 2 people in this picture, from left to right: .*Jade.*Keep this left-to-right order/);
+    expect(text).toMatch(/Exactly 2 main characters in this picture, from left to right: .*Jade.*Keep this left-to-right order/);
     expect(text).toContain("Exactly one of each person: Chase and Jade");
     expect(text).not.toContain("Marcus");
     expect(text).not.toMatch(/["“”]/); // the line is not drawn; no quotes reach the image prompt

@@ -10,7 +10,7 @@ import { aimDetail, exitFrom, gestureDetail } from "./gestures";
 import { propMoves } from "./story";
 import { gazeFor, gazeLine, shotEffect } from "./gaze";
 import { bodyEffect, verticalOf } from "./vertical";
-import { namedShot, shotLines, withSize } from "./shotLanguage";
+import { namedShot, shotLines, withoutMove, withSize } from "./shotLanguage";
 import { levelAt, levelLines } from "./levels";
 import { joinNames, stripQuotes } from "./text";
 import { postureWords } from "./panelWords";
@@ -125,6 +125,11 @@ export interface PanelPromptInput {
 
 export interface PanelPrompt {
   text: string;
+  /**
+   * The same request, short (B3): built in the same pass from the same values, so the two can be
+   * compared on equal terms. Only when image 1 is a blocking frame; otherwise the full request.
+   */
+  short?: string;
   /** Reference images to attach in ChatGPT, in order. A generated one has an href instead of an asset. */
   attach: { label: string; assetId: string; href?: string }[];
 }
@@ -168,6 +173,13 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     const vx = cam.position.x - a.position.x, vy = cam.position.y - a.position.y, l = Math.hypot(vx, vy) || 1;
     if ((fwd.x * vx + fwd.y * vy) / l < -0.35) fromBehind.add(a.characterId);
   }
+  // Anyone walking in this panel (D20, D35): an arrival from the words, or a walk set on the plan.
+  const walkerIds = shot && shotPlan ? [
+    ...Object.entries(shot.at ?? {}).filter(([id, mark]) => ["arriving", "crossing", "approaching"].includes(mark) && !shotPlan.actors.find((x) => x.characterId === id)?.to).map(([id]) => id),
+    ...shotPlan.actors.filter((x) => x.to).map((x) => x.characterId),
+  ] : [];
+  // The short request (B3), filled as the same values are worked out below.
+  const S: Record<string, string[]> = { refs: [], people: [], props: [], moment: [], camera: [], keep: [] };
   const attach: PanelPrompt["attach"] = [];
   for (const c of [...visible, ...edge]) {
     const refs = i.profiles[c.id]?.refs ?? {};
@@ -205,8 +217,11 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   lines.push(`${(i.style ?? "photorealistic").replace(/^./, (m) => m.toUpperCase())} storyboard frame for a ${i.aspect ?? "9:16"} video, set in the ${i.venueName}.`);
   if (blocking) lines.push(blockingInstruction(attach.slice(1).map((a) => a.label)));
   const people = attach.slice(peopleFrom, peopleFrom + peopleCount);
-  if (people.length) lines.push(`Use the attached reference images for ${joinNames([...new Set(people.map((a) => a.label.replace(/ (reference|back)$/, "")))])}; keep their faces, hair and clothes identical, every pattern, stripe and colour block included. Bags and anything carried stay exactly as in the reference, in the same hand or on the same shoulder. Mind the mirror (D31): a bag in someone's left hand is on the right of the picture when they face the camera, and on the left of the picture when they are seen from behind.`);
+  if (people.length) lines.push(`Use the attached reference images for ${joinNames([...new Set(people.map((a) => a.label.replace(/ (reference|back)$/, "")))])}; keep their faces, hair and clothes identical, every pattern, stripe and colour block included. Bags and anything carried stay exactly as in the reference, in the same hand or on the same shoulder. Mind the mirror: a bag in someone's left hand is on the right of the picture when they face the camera, and on the left of the picture when they are seen from behind.`);
   const backs = people.filter((a) => a.label.endsWith(" back")).map((a) => a.label.replace(/ back$/, ""));
+  if (blocking) S.refs.push(`The other images show only how people and props look (${attach.slice(1).map((a) => a.label).join(", ")}): copy faces, hair, clothes, carried things and props exactly; never take positions or background from them.`);
+  if (backs.length) S.refs.push(`${joinNames(backs)} ${backs.length === 1 ? "is" : "are"} seen from behind: copy the back of the clothes, hair and bag from the back ${backs.length === 1 ? "image" : "images"}.`);
+  if (i.continuity) S.refs.push(`The ${i.continuity.label} shows how the room, light and clothes look; never copy its framing or positions.`);
   if (backs.length) lines.push(`${joinNames(backs)} ${backs.length === 1 ? "is" : "are"} seen from behind: copy the back of their clothes, hair and bag exactly from the attached back ${backs.length === 1 ? "image" : "images"}.`);
   if (ring) lines.push(`Use the attached background picture as the room behind the characters: it is cut from the venue's 360° view for exactly this camera position, angle and lens, so what is on its left stays on the left and what is on its right stays on the right. Same place, layout and light, seen across the room several metres behind them.${shot?.crowd?.trim() ? " Fill it with the background guests described below." : ""}`);
   if (bgImage) lines.push(`Use the attached ${bgView} image as the background, seen across the room several metres behind the characters: same place, layout and light.${shot?.crowd?.trim() ? " It shows the room empty; fill it with the background guests described below." : ""}`);
@@ -222,11 +237,15 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   if (light) lines.push(`Lighting, identical in every picture of this scene: ${light} Same brightness, colour and mood as the other pictures of the scene; not darker, not brighter.`);
   // Posture (D37): anyone not simply standing is said, so no one stands who should be lying.
   const posed = Object.entries(shot?.posture ?? {}).filter(([, e]) => e.pose !== "standing" || e.from);
-  if (spot) lines.push(`Where: ${sentence(spot)} Keep it in the picture wherever the camera would see it, always the same height and size. Everyone keeps their own place and posture around it${/\b(sit|sits|sitting|seated|sofa|couch|bench|lie|lies|lying|bed)\b/i.test(spot) || posed.length ? "" : ", standing upright"}; no one leans on it or on the bar unless the moment says so.`);
+  // Someone walking in isn't at the spot yet (B3): "everyone around the table" contradicted it.
+  const walkingIn = walkerIds.filter((id) => shownIds.includes(id)).map(name);
+  if (spot) lines.push(`Where: ${sentence(spot)} Keep it in the picture wherever the camera would see it, always the same height and size. ${walkingIn.length ? `Everyone else keeps their own place and posture around it (${joinNames(walkingIn)} ${walkingIn.length === 1 ? "is" : "are"} walking in, not there yet)` : "Everyone keeps their own place and posture around it"}${/\b(sit|sits|sitting|seated|sofa|couch|bench|lie|lies|lying|bed)\b/i.test(spot) || posed.length ? "" : ", standing upright"}; no one leans on it or on the bar unless the moment says so.`);
   // The floor plan's props are the approved list (D19a); the shot's copy is the fallback.
-  const planProps = ((shotPlan ?? i.plan)?.furniture ?? []).map((f) => ({ name: f.name, detail: f.detail ?? "" }));
-  const props = planProps.length ? planProps : shot?.props ?? [];
-  if (props.length) lines.push(`Key props, identical in every picture of this scene: ${props.map((p) => `${p.name}${p.detail ? ` (${stripQuotes(p.detail).replace(/[.]$/, "")})` : ""}`).join("; ")}. Show each exactly as described, every time, with nothing extra on or around it.`);
+  const planProps = ((shotPlan ?? i.plan)?.furniture ?? []).map((f) => ({ name: f.name, detail: f.detail ?? "", pic: !!f.imageAssetId }));
+  const props = planProps.length ? planProps : (shot?.props ?? []).map((p) => ({ ...p, pic: false }));
+  // A prop with a picture is described by its picture alone (B3): its words had disagreed with it.
+  const propWords = (p: { name: string; detail?: string; pic?: boolean }) => p.pic ? `${p.name} (exactly as in its picture)` : `${p.name}${p.detail ? ` (${stripQuotes(p.detail).replace(/[.]$/, "")})` : ""}`;
+  if (props.length) lines.push(`Key props, identical in every picture of this scene: ${props.map(propWords).join("; ")}. Show each exactly as described, every time, with nothing extra on or around it.`);
   if (propPics.length) lines.push(`Use the attached ${joinNames(propPics.map((f) => `${f.name} picture`))} for exactly how ${propPics.length === 1 ? "it looks" : "they look"}: same shape, colours, materials and everything on ${propPics.length === 1 ? "it" : "them"}. Only its place and size in the frame come from the layout.`);
   if (cam && i.plan) {
     // Where each prop is, including how far away (D19c): without a distance, a display stand
@@ -244,11 +263,13 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
       const s0 = pictureShare(sp, cam, f.position, f.heightM!, p.depthM);
       return s0.share < 0.85 ? `, about ${Math.round(s0.share * 100)}% of the picture's height` : "";
     };
+    if (seen.length) S.props.push(`Props, each where and as big as its outline in image 1: ${joinNames(seen.map((p) => { const pp = props.find((x) => x.name === p.name); const size = tall(p).replace(/^, /, ""); const w = pp ? propWords(pp) : p.name; return `the ${size ? (w.endsWith(")") ? `${w.slice(0, -1)}, ${size})` : `${w} (${size})`) : w}`; }))}. Nothing else like them anywhere in the picture.`);
     if (seen.length) lines.push(`In this picture: ${joinNames(seen.map((p) => `the ${p.name} (${p.frame === "centre" ? "centre" : p.frame.replace("frame-", "")}, about ${Math.max(1, Math.round(p.depthM))} m from the camera${where(p)}${tall(p)})`))}. ${seen.length === 1 ? "It must be" : "They must be"} clearly visible, at exactly that distance; nothing else like ${seen.length === 1 ? "it" : "them"} anywhere else in the picture.`);
   }
   if (posed.length) {
     const ws = posed.filter(([id]) => shownIds.includes(id) || !shot?.visibleIds?.length).map(([id, e]) => postureWords(name(id), e, byId(id)?.pronoun as "she" | "he" | "they" | undefined)).filter(Boolean);
     if (ws.length) lines.push(`Posture: ${ws.join("; ")}. Show exactly this; the body stays as it was unless this says it changed.`);
+    if (ws.length) S.people.push(`Posture: ${ws.join("; ")}.`);
   }
   // Someone on a mark (D19b): say where they are, so the picture doesn't put them with the group.
   for (const [id, markId] of Object.entries(shot?.at ?? {})) {
@@ -294,27 +315,39 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   }
   // The cast up on a stage or balcony (D29): the crowd stays down on the main floor.
   const castUp = i.plan?.levels?.length ? i.plan.levels.find((l) => l.heightM > 0 && i.plan!.actors.some((a) => levelAt(i.plan!, a.position) === l)) : undefined;
+  if (crowd) S.people.push(`Background: ${sentence(crowd).split(/(?<=[.!?])\s+/)[0]} Out of focus, smaller than the main characters, never looking at the camera, none like them.`);
   if (crowd) lines.push(`Background: ${sentence(crowd)}${castUp ? ` They are down on the main floor, not up on ${castUp.name} with the characters.` : ""}${layout ? " The grey figures in the layout sketch show where they stand." : ""} Background guests are out of focus, smaller than the main characters and never look at the camera; none of them look like the main characters.`);
   for (const c of visible) {
     const p = i.profiles[c.id];
-    const parts = [p?.appearance, p?.wardrobe ? `wearing ${p.wardrobe}` : ""].filter(Boolean).map((x) => stripQuotes(x!).replace(/[.!?]+$/, ""));
+    const parts = [p?.appearance, p?.wardrobe ? `wearing ${p.wardrobe}` : ""].filter(Boolean).map((x) => sceneDescription(stripQuotes(x!)).replace(/[.!?]+$/, "")).filter(Boolean);
     if (parts.length) lines.push(`${c.name}: ${parts.join("; ")}.`);
-    if (p?.anchors?.length) lines.push(`${c.name} must keep: ${p.anchors.map(stripQuotes).join("; ")}.`);
+    if (p?.anchors?.length) lines.push(`${c.name} must keep: ${p.anchors.map((a) => sceneDescription(stripQuotes(a))).join("; ")}.`);
   }
   for (const c of edge) {
     const p = i.profiles[c.id];
-    if (p?.anchors?.length) lines.push(`${c.name} must keep: ${p.anchors.map(stripQuotes).join("; ")}.`);
+    if (p?.anchors?.length) lines.push(`${c.name} must keep: ${p.anchors.map((a) => sceneDescription(stripQuotes(a))).join("; ")}.`);
+  }
+  // In the short request, only the "must keep" of anyone whose face we see (B3).
+  for (const c of [...visible, ...edge]) {
+    const a = i.profiles[c.id]?.anchors;
+    if (a?.length && !fromBehind.has(c.id)) S.keep.push(`${c.name}: ${a.map((x) => sceneDescription(stripQuotes(x))).join("; ")}`);
   }
   lines.push(`Moment: ${sentence(i.description)}`);
   if (i.emotion) lines.push(`Emotion: ${sentence(i.emotion)}`);
-  if (shot?.actions) lines.push(sentence(shot.actions));
-  lines.push(...gestureDetail(i.description, shot?.actions));
+  // The panel's actions are often its description again (B3): said once.
+  const sameWords = (a: string, b: string) => a.toLowerCase().replace(/[^a-z]/g, "") === b.toLowerCase().replace(/[^a-z]/g, "");
+  if (shot?.actions && !sameWords(shot.actions, i.description)) lines.push(sentence(shot.actions));
+  S.moment.push(`Moment: ${sentence(i.description)}${i.emotion ? ` Emotion: ${sentence(i.emotion)}` : ""}${shot?.actions && !sameWords(shot.actions, i.description) ? ` ${sentence(shot.actions)}` : ""}`);
+  const gestures = gestureDetail(i.description, shot?.actions);
+  lines.push(...gestures);
+  S.moment.push(...gestures);
   // Who looks at whom (D21b), for everyone in the picture.
   if (shot) {
     const inPic = reading ? reading.actors.filter((a) => a.inView && [...shownIds, ...edgeIds].includes(a.characterId) && a.characterId !== fgId).map((a) => a.characterId) : [...shownIds];
     const gz = gazeFor({ shot, description: i.description, people: i.cast.map((c) => ({ id: c.id, name: c.name })), line: (shotPlan ?? i.plan)?.lineOfAction });
     const gl = gazeLine(gz, name, inPic);
     if (gl) lines.push(gl);
+    if (gl) S.people.push(gl);
     // Eye lines in the frame (D31): "looks at Jade" alone let GPT turn faces to the lens. Which
     // side of the picture each look goes to comes from the floor plan.
     if (reading) {
@@ -334,16 +367,19 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     // Looking through something has its own look (D25): binoculars, keyhole, mirror, window…
     const fx = shotEffect(gz, shot.speakerId ?? shot.subjectId ?? shot.visibleIds[0]);
     if (fx) lines.push(`Shot effect: ${fx}.`);
+    if (fx) S.moment.push(`Shot effect: ${fx}.`);
     // Gestures aimed at the person they look at; walking away while looking back (D30).
     const mainId0 = shot.speakerId ?? shot.subjectId ?? shot.visibleIds[0];
     const tgt = gz.find((g) => g.id === mainId0)?.at;
     // The gaze names people by first name.
     const tgtPerson = tgt ? i.cast.find((c) => c.name === tgt || c.name.split(/\s+/)[0] === tgt) : undefined;
+    if (mainId0 && tgtPerson) S.moment.push(...aimDetail(`${i.description} ${shot.actions ?? ""}`, name(mainId0), tgtPerson.name.split(/\s+/)[0], reading && i.plan ? exitFrom(i.plan.views, reading.forwardDeg) : undefined));
     if (mainId0 && tgtPerson) lines.push(...aimDetail(`${i.description} ${shot.actions ?? ""}`, name(mainId0), tgtPerson.name.split(/\s+/)[0], reading && i.plan ? exitFrom(i.plan.views, reading.forwardDeg) : undefined));
     // Lying down, falling, free fall (D26): how the body and the drop look.
     const mainId = shot.speakerId ?? shot.subjectId ?? shot.visibleIds[0];
     const bx = bodyEffect(`${i.description} ${shot.actions ?? ""}`, mainId ? name(mainId) : "they");
     if (bx) lines.push(`Body and angle: ${bx}.`);
+    if (bx) S.moment.push(`Body and angle: ${bx}.`);
   }
 
   if (cam && reading && shot) {
@@ -357,17 +393,25 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     // Only just cut (at the ankles): still a full shot, said as the picture shows it; cut higher: named for what it is.
     const fix = cutFull && framed!.bottomM > 0.3 ? framed!.size : undefined;
     const camW = fix ? { ...cam, size: fix } : cam;
-    lines.push(presetText(camW).replace(", static camera", "").replace(" static camera,", ""));
-    if (shot.shot?.trim()) lines.push(`Shot: ${fix ? withSize(shot.shot.trim(), fix) : shot.shot.trim()}.`);
+    const preset = presetText(camW).replace(", static camera", "").replace(" static camera,", "");
+    lines.push(preset);
+    // A still has no camera move (B3): "tracking shot" is for the video, not the picture.
+    const shotWords = withoutMove(fix ? withSize(shot.shot?.trim() ?? "", fix) : shot.shot?.trim() ?? "");
+    if (shotWords) lines.push(`Shot: ${shotWords}.`);
     // Shot size, named framing, lens, point of view and what the angle means (D27).
-    lines.push(...shotLines({ cam: camW, kind: verticalOf(cam).kind, fovDeg: cam.fovDeg ?? PRESET_FOV[cam.preset], text: `${i.description} ${shot.actions ?? ""} ${fix ? withSize(shot.shot ?? "", fix) : shot.shot ?? ""}`, name })
-      .map((l) => (cutFull && !fix && l.startsWith("Framing:") ? `Framing: full shot, but the bottom edge cuts ${name(subjectId!)} at the ankles, exactly as in the layout; do not move the camera back or tilt it down to show the feet.` : l)));
+    const camLines = shotLines({ cam: camW, kind: verticalOf(cam).kind, fovDeg: cam.fovDeg ?? PRESET_FOV[cam.preset], text: withoutMove(`${i.description} ${shot.actions ?? ""} ${shotWords}`), name })
+      .map((l) => (cutFull && !fix && l.startsWith("Framing:") ? `Framing: full shot, but the bottom edge cuts ${name(subjectId!)} at the ankles, exactly as in the layout; do not move the camera back or tilt it down to show the feet.` : l));
+    lines.push(...camLines);
+    S.camera.push(preset, ...camLines.filter((l) => /^(Framing|Lens|Point of view|Angle):/.test(l)), "A level camera at image 1's height and angle: don't move, tilt or zoom it.");
     // Raised and lowered floors (D29): who is above or below the camera, and any drop in view.
     lines.push(...levelLines(shotPlan ?? i.plan!, cam, reading.actors.filter((a) => a.inView && [...shownIds, ...edgeIds].includes(a.characterId)).map((a) => a.characterId), name));
     // A strict left-to-right order and head count (D18e): looser wording let GPT swap people or drop them.
     const order = reading.actors.filter((a) => a.inView && [...shownIds, ...edgeIds].includes(a.characterId)).sort((a, b) => a.angleDeg - b.angleDeg);
     if (order.length > 1) {
-      lines.push(`Exactly ${order.length} people in this picture, from left to right: ${joinNames(order.map((a) => `${name(a.characterId)}${a.characterId === fgId ? " (in the foreground, seen from behind over the shoulder)" : a.partial ? ` (only partly in the picture, cut by the ${a.angleDeg < 0 ? "left" : "right"} edge: a shoulder, arm and part of the face or back)` : ""}`))}. Keep this left-to-right order; do not swap anyone, and do not leave anyone out.`);
+      const who = joinNames(order.map((a) => `${name(a.characterId)}${a.characterId === fgId ? " (in the foreground, seen from behind over the shoulder)" : a.partial ? ` (only partly in the picture, cut by the ${a.angleDeg < 0 ? "left" : "right"} edge: a shoulder, arm and part of the face or back)` : ""}`));
+      // "Main characters", not "people" (B3): the background guests are people too.
+      lines.push(`Exactly ${order.length} main characters in this picture, from left to right: ${who}. Keep this left-to-right order; do not swap anyone, and do not leave anyone out.`);
+      S.people.unshift(`Exactly ${order.length} main characters, left to right: ${who}; background guests apart.`);
       if (reading.backgroundView && subjectId) lines.push(`Behind ${name(subjectId)}, across the room several metres away: the ${reading.backgroundView}. Nothing stands right behind them.`);
     } else {
       const frame = describeFrame(reading, i.cast, [...shownIds, ...edgeIds], subjectId);
@@ -401,6 +445,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
         const parts = [Math.abs(across) > 0.3 ? `towards the ${across > 0 ? "right" : "left"} of the picture` : "", away > 0.3 ? "away from the camera" : away < -0.3 ? "towards the camera" : ""].filter(Boolean);
         const seen = away > 0.5 ? "we see their back" : away < -0.5 ? "we see their front" : `we see their ${across > 0 ? "left" : "right"} side and the side of their face, not their face full-on`;
         lines.push(`Walking: ${name(id)} is mid-stride, walking ${parts.join(" and ") || "on"}, ${me?.to ? "along the orange arrow" : "heading for the group along the orange arrow"}; ${seen}. Body, feet and eyes all point the way they walk, never at the camera.`);
+        S.people.push(`${name(id)} walks ${parts.join(" and ") || "on"} along the orange arrow, mid-stride; ${seen}; body, feet and eyes the way they walk.`);
       }
     }
     if (placed.length && shotPlan) {
@@ -418,7 +463,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
         const me = shotPlan.actors.find((x) => x.characterId === a.characterId);
         const big = pos && (!me?.pose || me.pose === "standing") ? pictureShare(shotPlan, cam, pos, 1.72, a.depthM) : undefined;
         const size = !big || big.share >= 0.85 ? "" : big.cut ? `, from the head down past the bottom edge of the picture` : `, head to toe about ${Math.round(big.share * 100)}% of the picture's height`;
-        return { id: a.characterId, d, face, text: `${name(a.characterId)} about ${d} m from the camera${face}${size}` };
+        return { id: a.characterId, d, face, size, text: `${name(a.characterId)} about ${d} m from the camera${face}${size}` };
       });
       const near = Math.min(...parts.map((p) => p.d)), far = Math.max(...parts.map((p) => p.d));
       // Which side of the picture a carried bag is on (D33), when the character's description
@@ -434,6 +479,15 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
         });
       });
       if (bags.length) lines.push(`Carried: ${bags.join("; ")}. Never swap hands between pictures.`);
+      // Short request: what's carried in a hand or on a shoulder (wrist things are too small to matter).
+      const bagsShort = parts.flatMap((p) => {
+        if (!/facing the camera|seen from behind/.test(p.face)) return [];
+        const facing = /facing the camera/.test(p.face);
+        const pr = byId(p.id)?.pronoun;
+        const poss = pr === "she" ? "her" : pr === "he" ? "his" : "their";
+        return carriedItems(i.profiles[p.id]).filter((it) => it.where !== "wrist").map((it) => `${name(p.id)}'s ${itemNoun(it.what)} ${it.where === "hand" ? "in" : "on"} ${poss} ${it.side} ${it.where} (${facing ? (it.side === "left" ? "right" : "left") : it.side} of the picture)`);
+      });
+      if (bagsShort.length) S.people.push(`Carried: ${bagsShort.join("; ")}.`);
       // Picked up in this moment (D36): whoever has the prop holds it, whichever way they face.
       const holding = parts.flatMap((p) => heldProps(shotPlan, p.id, i.profiles[p.id]).map((it) => {
         const f = shotPlan.furniture?.find((x) => x.heldBy === p.id && x.name === it.what);
@@ -441,19 +495,39 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
         return `${name(p.id)} has the ${it.what}${f?.detail ? ` (${stripQuotes(f.detail).replace(/[.]$/, "")})` : ""} in ${pr === "she" ? "her" : pr === "he" ? "his" : "their"} ${it.side} hand`;
       }));
       if (holding.length) lines.push(`Holding: ${holding.join("; ")}. It is in their hand, not on any table or surface.`);
+      if (holding.length) S.people.push(`Holding: ${holding.join("; ")}.`);
+      S.people.push(`Sizes: ${parts.map((p) => `${name(p.id)} about ${p.d} m from the camera${p.size}`).join("; ")}.`);
       lines.push(`Distance and direction: ${parts.map((p) => p.text).join("; ")}.${far >= near * 1.6 && parts.length > 1 ? ` Keep these distances: whoever is further away is smaller and further back in the room, not lined up beside ${parts.find((p) => p.d === near) ? name(parts.find((p) => p.d === near)!.id) : "the nearer people"}.` : ""}`);
     }
     if (layout) lines.push("Use the attached layout sketch, drawn from the floor plan through this camera, for where each person stands in the frame, how big they appear, the camera angle and the table's height and place. It is only a guide made of labelled shapes: draw real people in the real room and copy nothing of its style, shapes, colours or text.");
     if (edge.length) lines.push(`${joinNames(edge.map((c) => c.name))} ${edge.length === 1 ? "is" : "are"} clearly in the picture, standing in ${edge.length === 1 ? "their place" : "their places"} with the others and listening, less prominent than ${subjectId ? name(subjectId) : "the main characters"} but never left out.`);
     if (closeUp && (shot.visibleIds.length > 1)) lines.push(`Close on ${name(subjectId!)}; the others are out of frame.`);
+    if (closeUp && (shot.visibleIds.length > 1)) S.camera.push(`Close on ${name(subjectId!)}; the others are out of frame.`);
   }
-  lines.push(`Look: ${GENRE_PROFILES[genre].look}.`);
+  // One light (B3): the venue's lighting wins; the genre's look keeps only what isn't lighting.
+  const look = light ? GENRE_PROFILES[genre].look.split(/,\s*/).filter((x) => !/\blight/i.test(x)) : [GENRE_PROFILES[genre].look];
+  if (look.length && (look.length > 1 || /\s/.test(look[0]))) lines.push(`Look: ${look.join(", ")}.`);
   if (visible.length === 1 && edge.length) lines.push(`Exactly one of each person: ${joinNames([...visible, ...edge].map((c) => c.name))}. ${visible[0].name} is the main subject.`);
   else if (visible.length === 1) lines.push(crowd ? `Only ${visible[0].name} in the foreground; other guests only in the background.` : `Only ${visible[0].name} in frame.`);
   else if (visible.length > 1) lines.push(`Exactly one of each person: ${joinNames([...visible, ...edge].map((c) => c.name))}. No other people in the foreground.`);
   // A logo or sign that is part of the scene is the one exception (D47).
-  lines.push(noTextRule(props, ["no speech bubbles", "no watermark"], propPics.map((f) => f.name)));
-  return { text: lines.join("\n"), attach };
+  const noText = noTextRule(props, ["no speech bubbles", "no watermark"], propPics.map((f) => f.name));
+  lines.push(noText);
+  // The short request (B3): image 1 holds where everything is, the pictures how it looks; the
+  // words say only what neither shows. Same values as above, so the two never disagree.
+  const short = blocking ? [
+    lines[0],
+    blockingShort(),
+    ...S.refs,
+    ...S.people,
+    ...S.props,
+    ...(S.keep.length ? [`Keep: ${S.keep.join("; ")}.`] : []),
+    ...S.moment,
+    ...S.camera,
+    ...(light ? [`Light, the same in every picture of this scene: ${light.split(/(?<=[.!?])\s+/).slice(0, 2).join(" ")}`] : []),
+    noText,
+  ].filter(Boolean).join("\n") : undefined;
+  return { text: lines.join("\n"), attach, ...(short ? { short } : {}) };
 }
 
 /**
@@ -569,6 +643,51 @@ export function blockingInstruction(refLabels: string[]): string {
     "- Remove every stand-in outline, label, arrow and tag: none of them appear in the finished picture.",
     refLabels.length ? `The other attached images are reference pictures (${refLabels.join(", ")}): use them only for how each character and prop looks, never for where anyone stands or what is behind them.` : "",
   ].filter(Boolean).join("\n");
+}
+
+/** Image 1's instruction in the short request (B3): the same meaning as `blockingInstruction`, said once. */
+export function blockingShort(): string {
+  return "Image 1 is this exact shot: keep its framing, eye level, perspective, positions and the size of everyone and everything in it. Each pale stand-in becomes the person named on it, turned as its label says; an orange arrow is a walk; a yellow tag marks something held, on that side of the picture; an outline is the named prop. Remove every label, outline, arrow and tag.";
+}
+
+/**
+ * A character's description as a scene picture needs it (B3). Which hand holds what is said once,
+ * from the reference picture (D34b), so the description's own "in her left hand" goes; and
+ * instructions written for making the reference sheets ("the facial close-up must…", "across
+ * front, rear and facial reference views") mean nothing in a scene and go too.
+ */
+export function sceneDescription(text: string): string {
+  const t = text.replace(/\.\s*,\s*/g, ". ")
+    .replace(/,?\s*(?:held\s+|carried\s+|worn\s+)?(?:in|on|over|across)\s+(?:her|his|their|the)\s+(?:left|right)\s+(?:hand|shoulder|arm|wrist|hip)\b/gi, "");
+  return t.split(/(?<=[.!?;])\s+/)
+    .filter((x) => !/\b(?:reference|references)\b|\bfront,\s*rear\b|\brear and facial\b|\bfacial close-up\b|\bclose-up must\b/i.test(x))
+    .join(" ").replace(/\s{2,}/g, " ").trim();
+}
+
+/**
+ * Contradictions left in a request (B3), checked before it is sent: a hand stated both ways for
+ * the same thing, the same line twice, an internal note, "no logos" beside a logo, "head to toe"
+ * beside a cut at the bottom edge, or two lighting looks. Empty when it is consistent.
+ */
+export function requestConflicts(text: string): string[] {
+  const out: string[] = [];
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const dup = lines.filter((l, k) => l.length > 20 && lines.indexOf(l) !== k);
+  if (dup.length) out.push(`A line is repeated: "${dup[0].slice(0, 60)}…"`);
+  if (/\(D\d+[a-z]?\)/.test(text)) out.push("An internal decision number is in the request.");
+  if (/\bNo text, no logos\b/.test(text) && /\blogo\b/i.test(text.replace(/No text, no logos/g, ""))) out.push("It asks for a logo and also says \"no logos\".");
+  if (/whole body head to toe/.test(text) && /(past the bottom edge|cuts \w[\w ]* at the ankles)/.test(text)) out.push("It says \"head to toe\" but the frame cuts the feet.");
+  if (/^Look:.*\blight/im.test(text) && /^(Lighting|Light)\b/im.test(text)) out.push("It gives two different lighting looks.");
+  // The same carried thing in both hands.
+  for (const m of text.matchAll(/\b([A-Z][a-z]+)'s ([a-z][a-z -]*?) (?:is )?(?:in|on) (?:her|his|their) (left|right) (hand|shoulder)/g)) {
+    const other = m[3] === "left" ? "right" : "left";
+    const noun = m[2].trim().split(/\s+/).pop()!;
+    if (new RegExp(`\\b${m[1]}[^.\\n]*\\b${noun}\\b[^.\\n]*\\bin (?:her|his|their) ${other} ${m[4]}`, "i").test(text) || new RegExp(`\\b${noun}\\b[^.\\n]{0,60}\\bin (?:her|his|their) ${other} ${m[4]}`, "i").test(text)) {
+      out.push(`${m[1]}'s ${noun} is said to be in both hands.`);
+      break;
+    }
+  }
+  return out;
 }
 
 /** Kinds of carried thing (D34): different words for the same thing count as one item. */

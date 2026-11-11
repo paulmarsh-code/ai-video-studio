@@ -15,7 +15,7 @@ import type { GeometryPlanData } from "@/lib/domain/types";
 import { PlanThumb } from "./PlanThumb";
 import { uploadBlob } from "@/lib/clientUpload";
 import { imageChangePrompt } from "@/lib/domain/imagePrompts";
-import { correctionPrompt, correctionRefs } from "@/lib/domain/pictureCheck";
+import { AREA_LABEL, correctionPrompt, correctionRefs, type CheckArea, type PictureCheck } from "@/lib/domain/pictureCheck";
 import { ActionButton, DoneBadge } from "./ActionButton";
 import { ChangeRequest, type SubmittedChange } from "./ChangeRequest";
 import { SHOT_CHOICES, splitShot } from "@/lib/domain/shotSuggest";
@@ -36,8 +36,10 @@ export interface BoardPanel {
   shotId?: string;
   /** The shot in film words (D28): the app's suggestion, the user's choice, or named in the panel. */
   shot?: { words: string; by: "app" | "you" | "panel"; why?: string };
-  /** The automatic check against the approved layout (D19). */
-  check?: { pass: boolean; problems: string[]; keptApproved?: boolean };
+  /** The automatic check against the approved layout (D19), by area (B1). */
+  check?: { pass: boolean; problems: string[]; keptApproved?: boolean; redraw?: boolean; areas?: PictureCheck["areas"] };
+  /** Contradictions found in the request before it is sent (B3). */
+  conflicts?: string[];
   /** Fingerprint of what the picture was drawn from (D24). */
   drawnFrom?: string;
   /** The GPT picture request, built from the camera, characters and venue. */
@@ -54,6 +56,10 @@ export interface StoryboardBoardProps {
   canGenerate: boolean;
   /** A GPT text model is set up, so pictures are checked against the layout. */
   canCheck?: boolean;
+  /** Test mode (B4): no automatic correction, a record of every draw, and "Check again". */
+  testMode?: boolean;
+  /** Which request is sent (B3): the full one or the short one. */
+  requestVariant?: "full" | "short";
   panels: BoardPanel[];
   /** The scene setting is empty: pictures won't know where they are or who else is there. */
   settingEmpty?: boolean;
@@ -94,21 +100,23 @@ export function fingerprint(p: { prompt: string; attach: { assetId: string; href
 
 const assetIds = (attach: BoardPanel["attach"]) => attach.filter((a) => !a.href && a.assetId).map((a) => a.assetId);
 
-async function drawPicture(p: { projectId: string; baseCode: string; prompt: string; refs: string[]; size: "portrait" | "landscape"; layoutShotId?: string; backgroundShotId?: string; blockingShotId?: string; baseAssetId?: string }) {
+type TestMeta = { panelCode: string; kind: "draw" | "correction" | "redraw"; variant: string; conflicts?: string[] };
+
+async function drawPicture(p: { projectId: string; baseCode: string; prompt: string; refs: string[]; size: "portrait" | "landscape"; layoutShotId?: string; backgroundShotId?: string; blockingShotId?: string; baseAssetId?: string; test?: TestMeta }) {
   const res = await fetch("/api/images/generate", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ projectId: p.projectId, baseCode: p.baseCode, kind: "panel", prompt: p.prompt, refAssetIds: p.refs, size: p.size, layoutShotId: p.layoutShotId, backgroundShotId: p.backgroundShotId, blockingShotId: p.blockingShotId, baseAssetId: p.baseAssetId }),
+    body: JSON.stringify({ projectId: p.projectId, baseCode: p.baseCode, kind: "panel", prompt: p.prompt, refAssetIds: p.refs, size: p.size, layoutShotId: p.layoutShotId, backgroundShotId: p.backgroundShotId, blockingShotId: p.blockingShotId, baseAssetId: p.baseAssetId, test: p.test }),
   });
   const body = (await res.json()) as { id?: string; error?: string };
   if (!res.ok || !body.id) throw new Error(body.error ?? "GPT didn't return a picture.");
   return body.id;
 }
 
-async function checkPicture(panelId: string, assetId: string): Promise<{ pass: boolean; problems: string[] } | null> {
+async function checkPicture(panelId: string, assetId: string): Promise<{ pass: boolean; problems: string[]; redraw?: boolean } | null> {
   try {
     const res = await fetch("/api/images/check", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ panelId, assetId }) });
-    const body = (await res.json()) as { pass?: boolean; problems?: string[]; skipped?: boolean };
-    return res.ok && typeof body.pass === "boolean" ? { pass: body.pass, problems: body.problems ?? [] } : null;
+    const body = (await res.json()) as { pass?: boolean; problems?: string[]; redraw?: boolean; skipped?: boolean };
+    return res.ok && typeof body.pass === "boolean" ? { pass: body.pass, problems: body.problems ?? [], redraw: body.redraw } : null;
   } catch { return null; }
 }
 
@@ -174,6 +182,22 @@ function ByHand({ p, prompt, attach, projectId, baseCode, onUploaded }: { p: Boa
   );
 }
 
+/** The check by area (B1): blocking, the characters' look, the room and props, and what couldn't be measured. */
+function CheckAreas({ c }: { c: NonNullable<BoardPanel["check"]> }) {
+  if (!c.areas) return null;
+  const unmeasured = (Object.keys(AREA_LABEL) as CheckArea[]).flatMap((a) => c.areas![a].unmeasured);
+  return (
+    <div className="mt-0.5 space-y-0.5" data-testid="check-areas">
+      {(Object.keys(AREA_LABEL) as CheckArea[]).map((a) => (
+        <p key={a} className={c.areas![a].pass ? "text-green-700" : "text-amber-800"} data-testid={`check-area-${a}`}>
+          {c.areas![a].pass ? "✓" : "✗"} {AREA_LABEL[a]}{c.areas![a].pass ? "" : `: ${c.areas![a].problems.join(" ")}`}
+        </p>
+      ))}
+      {unmeasured.length > 0 && <p className="text-neutral-500" data-testid="check-unmeasured">Not measured: {unmeasured.join("; ")}.</p>}
+    </div>
+  );
+}
+
 export function StoryboardBoard(b: StoryboardBoardProps) {
   const router = useRouter();
   const [drawing, setDrawing] = useState<Record<string, string>>({}); // panel id → "Drawing…" / "Redrawing…"
@@ -228,26 +252,34 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
     const layoutShotId = p.hasCamera ? p.shotId : undefined;
     const backgroundShotId = p.attach.some((a) => a.href?.startsWith("/api/background/")) ? p.shotId : undefined;
     const blockingShotId = p.attach.some((a) => a.href?.startsWith("/api/blocking/")) ? p.shotId : undefined;
-    const id = await drawPicture({ projectId: b.projectId, baseCode: codeOf(p), prompt, refs, size: b.size, layoutShotId, backgroundShotId, blockingShotId });
+    const id = await drawPicture({ projectId: b.projectId, baseCode: codeOf(p), prompt, refs, size: b.size, layoutShotId, backgroundShotId, blockingShotId, test: testMeta(p, "draw") });
     const r = await setPanelImageAction(p.id, id, fingerprint(p));
     if (!r.ok) throw new Error(r.error);
     if (!b.canCheck || !layoutShotId) return;
     setDrawing((x) => ({ ...x, [p.id]: "Checking against the layout…" }));
     const result = await checkPicture(p.id, id);
-    // One automatic correction (D41); a second only when asked for, from the panel.
-    if (result && !result.pass) await correctOnce(p, id, result.problems);
+    // One automatic correction (D41); a second only when asked for, from the panel. In test mode
+    // none (B4): the first picture is the one scored.
+    if (result && !result.pass && !b.testMode) await correctOnce(p, id, result.problems, result.redraw);
   }
+
+  const testMeta = (p: BoardPanel, kind: TestMeta["kind"]): TestMeta | undefined => b.testMode ? { panelCode: p.code, kind, variant: b.requestVariant ?? "full", conflicts: p.conflicts } : undefined;
 
   /**
    * A targeted correction (D34): the picture is edited to fix just what's wrong, keeping
    * everything that's right. Only the references of the people and props the problems name
    * are sent with it (D41), then it's checked again.
    */
-  async function correctOnce(p: BoardPanel, imageId: string, problems: string[]) {
+  async function correctOnce(p: BoardPanel, imageId: string, problems: string[], redraw?: boolean) {
     const layoutShotId = p.hasCamera ? p.shotId : undefined;
     const blockingShotId = p.attach.some((a) => a.href?.startsWith("/api/blocking/")) ? p.shotId : undefined;
-    setDrawing((x) => ({ ...x, [p.id]: `Fixing: ${problems[0]?.slice(0, 60) ?? "doesn't match"}…` }));
-    const id = await drawPicture({ projectId: b.projectId, baseCode: codeOf(p), prompt: correctionPrompt(problems, !!blockingShotId), refs: correctionRefs(problems, p.attach), size: b.size, layoutShotId: blockingShotId ? undefined : layoutShotId, blockingShotId, baseAssetId: imageId });
+    const backgroundShotId = p.attach.some((a) => a.href?.startsWith("/api/background/")) ? p.shotId : undefined;
+    // A wrong composition (B2): people the wrong size, the camera tilted or moved. Editing the
+    // picture keeps its composition, so it's drawn again from image 1 instead, told what went wrong.
+    setDrawing((x) => ({ ...x, [p.id]: `${redraw ? "Redrawing" : "Fixing"}: ${problems[0]?.slice(0, 60) ?? "doesn't match"}…` }));
+    const id = redraw
+      ? await drawPicture({ projectId: b.projectId, baseCode: codeOf(p), prompt: `${p.prompt}\nThe last attempt didn't follow image 1: ${problems.join(" ")} Follow image 1 exactly for where everyone is, how big they are and where the camera is.`, refs: assetIds(p.attach), size: b.size, layoutShotId, backgroundShotId, blockingShotId, test: testMeta(p, "redraw") })
+      : await drawPicture({ projectId: b.projectId, baseCode: codeOf(p), prompt: correctionPrompt(problems, !!blockingShotId), refs: correctionRefs(problems, p.attach), size: b.size, layoutShotId: blockingShotId ? undefined : layoutShotId, blockingShotId, baseAssetId: imageId, test: testMeta(p, "correction") });
     const r = await setPanelImageAction(p.id, id, fingerprint(p));
     if (!r.ok) throw new Error(r.error);
     if (!b.canCheck || !layoutShotId) return;
@@ -260,7 +292,7 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
     if (!p.imageAssetId || !p.check || p.check.pass) return;
     setFailed((x) => { const y = { ...x }; delete y[p.id]; return y; });
     try {
-      await correctOnce(p, p.imageAssetId, p.check.problems);
+      await correctOnce(p, p.imageAssetId, p.check.problems, p.check.redraw);
     } catch (e) {
       setFailed((x) => ({ ...x, [p.id]: e instanceof Error ? e.message : String(e) }));
     } finally {
@@ -455,15 +487,23 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
             {p.shot && p.shotId && <ShotPicker p={p} shotId={p.shotId} locked={b.locks.cameras} onDone={(text, ok) => { setMsg({ ok, text }); router.refresh(); }} />}
             {p.imageAssetId && p.check?.keptApproved && p.status === "approved" ? <p className="mt-1 text-xs text-neutral-600" data-testid={`board-${p.code}-check`}>Approved by you on an earlier layout and kept. Redraw it only if it no longer fits.</p>
               : p.imageAssetId && p.check && (p.check.pass
-              ? <p className="mt-1 text-xs text-green-700" data-testid={`board-${p.code}-check`}>✓ Matches the approved layout</p>
+              ? <div className="mt-1 text-xs text-green-700" data-testid={`board-${p.code}-check`}><p>✓ Matches the approved layout</p><CheckAreas c={p.check} /></div>
               : <div className="mt-1 text-xs text-amber-700" data-testid={`board-${p.code}-check`}>
-                  <p>⚠ Doesn&apos;t match the approved layout: {p.check.problems.join(" ")}</p>
+                  {p.check.areas ? <><p>⚠ Doesn&apos;t match the approved layout</p><CheckAreas c={p.check} /></> : <p>⚠ Doesn&apos;t match the approved layout: {p.check.problems.join(" ")}</p>}
                   {b.canGenerate && b.canCheck && !drawing[p.id] && <p className="mt-1">
-                    <button type="button" className="rounded border border-amber-400 bg-white px-2 py-0.5 text-amber-900 hover:bg-amber-50" data-testid={`board-${p.code}-fix-again`} onClick={() => void fixAgain(p)}>Try one more fix</button>
+                    <button type="button" className="rounded border border-amber-400 bg-white px-2 py-0.5 text-amber-900 hover:bg-amber-50" data-testid={`board-${p.code}-fix-again`} onClick={() => void fixAgain(p)}>{p.check.redraw ? "Redraw it from the layout" : "Try one more fix"}</button>
                     <span className="ml-2 text-neutral-600">about 7p · or redraw it, or change it below</span>
                   </p>}
                 </div>)}
             {camNotes[p.id] && <p className="mt-1 text-xs text-amber-800" data-testid={`board-${p.code}-camnote`}>{camNotes[p.id]}</p>}
+            {b.testMode && <div className="mt-1 rounded border border-dashed border-neutral-300 px-2 py-1 text-xs text-neutral-600" data-testid={`board-${p.code}-test`}>
+              <p>Test mode: {b.requestVariant === "short" ? "short" : "full"} request, {p.prompt.length.toLocaleString()} characters; no automatic fix; recorded in data/tests.</p>
+              {!!p.conflicts?.length && <p className="text-red-700" data-testid={`board-${p.code}-conflicts`}>Contradictions in the request: {p.conflicts.join(" ")}</p>}
+              {b.canGenerate && p.hasCamera && !drawing[p.id] && <button type="button" className="mt-1 mr-2 rounded border border-neutral-400 bg-white px-2 py-0.5 text-neutral-800 hover:bg-neutral-50" data-testid={`board-${p.code}-drawagain`}
+                onClick={async () => { setFailed((x) => { const y = { ...x }; delete y[p.id]; return y; }); setDrawing((x) => ({ ...x, [p.id]: "Drawing…" })); try { await drawChecked(p, p.prompt, assetIds(p.attach)); } catch (e) { setFailed((x) => ({ ...x, [p.id]: e instanceof Error ? e.message : String(e) })); } finally { setDrawing((x) => { const y = { ...x }; delete y[p.id]; return y; }); router.refresh(); } }}>Draw again from the layout (about 7p)</button>}
+              {p.imageAssetId && b.canCheck && p.hasCamera && !drawing[p.id] && <button type="button" className="mt-1 rounded border border-neutral-400 bg-white px-2 py-0.5 text-neutral-800 hover:bg-neutral-50" data-testid={`board-${p.code}-recheck`}
+                onClick={async () => { setDrawing((x) => ({ ...x, [p.id]: "Checking against the layout…" })); try { await checkPicture(p.id, p.imageAssetId!); } finally { setDrawing((x) => { const y = { ...x }; delete y[p.id]; return y; }); router.refresh(); } }}>Check again (about 1p)</button>}
+            </div>}
             {failed[p.id] && <p className="mt-1 text-xs text-red-700" role="alert" data-testid={`board-${p.code}-failed`}>GPT couldn&apos;t draw this one. {plainReason(failed[p.id])}</p>}
 
             <div className="mt-3 space-y-2">

@@ -203,6 +203,26 @@ export function pictureShare(plan: GeometryPlanData, cam: PlanCamera, at: Point,
 }
 
 /**
+ * Where a point at height `zM` above its floor lands in the storyboard picture (B1), as
+ * fractions of its width (0 = left) and height (0 = top); undefined behind the camera. The
+ * same projection as the blocking frame, so the check can measure a picture against the plan.
+ */
+export function pictureXY(plan: GeometryPlanData, cam: PlanCamera, at: Point, zM: number): { x: number; y: number; depth: number } | undefined {
+  const f = sub(cam.lookAt, cam.position);
+  const fl = Math.hypot(f.x, f.y) || 1;
+  const fw = { x: f.x / fl, y: f.y / fl }, rt = { x: fw.y, y: -fw.x };
+  const v = sub(at, cam.position);
+  const depth = v.x * fw.x + v.y * fw.y, lateral = v.x * rt.x + v.y * rt.y;
+  if (depth <= 0.1) return undefined;
+  const portrait = plan.aspect === "9:16";
+  const tanH = Math.tan((horizontalFov(plan, cam) * Math.PI) / 360);
+  const focalOverW = 1 / (2 * tanH), focalOverH = (portrait ? 2 / 3 : 3 / 2) / (2 * tanH);
+  const tilt = ((cam.tiltDeg ?? 0) * Math.PI) / 180;
+  const up = Math.atan2(floorZ(plan, at) + zM - cameraZ(plan, cam), depth) - tilt;
+  return { x: 0.5 + (lateral / depth) * focalOverW, y: 0.5 - Math.tan(up) * focalOverH, depth };
+}
+
+/**
  * The shot size the storyboard picture really gives someone standing `depthM` away (D48), from
  * how much of their body is between its top and bottom edges; undefined when their head is out
  * of it. A camera moved after the app named the shot (or a 9:16 full shot drawn as a 2:3

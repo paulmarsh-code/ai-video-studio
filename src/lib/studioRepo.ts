@@ -722,7 +722,7 @@ export function shotIdForPanel(db: DB, panelId: string): string | undefined {
   return db.select().from(t.shots).where(eq(t.shots.panelId, panelId)).get()?.id;
 }
 
-export function setPanelCheck(db: DB, panelId: string, check: { pass: boolean; problems: string[] }) {
+export function setPanelCheck(db: DB, panelId: string, check: import("./domain/pictureCheck").PictureCheck) {
   const old = (db.select().from(t.panels).where(eq(t.panels.id, panelId)).get()?.check ?? {}) as Record<string, unknown>;
   db.update(t.panels).set({ check: { drawnOnPlan: old.drawnOnPlan, ...(old.drawnFrom ? { drawnFrom: old.drawnFrom } : {}), ...check, at: new Date().toISOString() } }).where(eq(t.panels.id, panelId)).run();
   persist(db);

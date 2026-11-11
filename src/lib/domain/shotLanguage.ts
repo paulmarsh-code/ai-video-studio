@@ -113,6 +113,13 @@ export function namedShot(text: string): NamedShot {
   return out;
 }
 
+/** The words without any camera move (B3): a still picture has no "tracking shot"; the video keeps it. */
+export function withoutMove(text: string): string {
+  let t = text.replace(/\b(?:slow\s+)?push(?:es|ing)?[-\s](?:in|out)\b/gi, "");
+  for (const [re] of MOVE_WORDS) t = t.replace(new RegExp(re.source, re.flags.includes("g") ? re.flags : `${re.flags}g`), "");
+  return t.replace(/\s*,(\s*,)+/g, ",").replace(/^[\s,]+|[\s,]+$/g, "").replace(/\s{2,}/g, " ");
+}
+
 /** The words with any named shot size changed to another (D48), e.g. "full shot, tracking shot" → "medium long shot, tracking shot". */
 export function withSize(text: string, size: ShotSize): string {
   for (const [re, s] of SIZE_WORDS) {

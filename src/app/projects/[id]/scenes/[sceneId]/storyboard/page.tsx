@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { getDb } from "@/db/client";
 import * as repo from "@/lib/repo";
 import * as studio from "@/lib/studioRepo";
-import { heldConflicts, panelPrompt } from "@/lib/domain/imagePrompts";
+import { heldConflicts, panelPrompt, requestConflicts } from "@/lib/domain/imagePrompts";
+import { requestVariant, testMode } from "@/lib/testRecords";
 import { getImageProvider, getTextProvider } from "@/lib/providers/images";
 import { GENRE_PROFILES } from "@/lib/domain/genre";
 import { StoryWizard } from "@/components/StoryWizard";
@@ -103,7 +104,7 @@ export default async function StoryboardPage({ params, searchParams }: { params:
       </div>}
 
       {part === "board" && <div className="mt-5">
-        <StoryboardBoard canCheck={!!getTextProvider()} locks={{ positions: !!locks.positions, cameras: !!locks.cameras }}
+        <StoryboardBoard canCheck={!!getTextProvider()} testMode={testMode()} requestVariant={requestVariant()} locks={{ positions: !!locks.positions, cameras: !!locks.cameras }}
           heldWarnings={cast.filter((c) => (s.scene.cast as string[] | undefined)?.length ? (s.scene.cast as string[]).includes(c.id) : true).flatMap((c) => heldConflicts(c.name, profiles[c.id], c.pronoun))}
           signsNoPicture={signsWithoutPicture(s.plan?.data.furniture?.length ? s.plan.data.furniture : asStaging(s.scene.staging).props)} settingHref="?part=setting"
           propMoves={s.panels.flatMap((p) => { const m = propMoves(p.description, (s.plan?.data.furniture ?? []).map((f) => f.name)); return m.length ? [`${p.code} moves the ${m.join(" and the ")}`] : []; })}
@@ -132,7 +133,10 @@ export default async function StoryboardPage({ params, searchParams }: { params:
               speaker: d ? cast.find((c) => c.id === d.characterId)?.name : undefined, line: d?.text,
               hasCamera: !!shot?.spec.cameraId, shotId: shot?.id, shot: shotInfo,
               drawnFrom: p.check?.drawnFrom,
-              check: p.check?.keptApproved ? { pass: p.check.pass ?? true, problems: [], keptApproved: true } : p.check?.pass === undefined ? undefined : { pass: p.check.pass, problems: p.check.problems ?? [] }, prompt: prompt.text, attach: prompt.attach,
+              check: p.check?.keptApproved ? { pass: p.check.pass ?? true, problems: [], keptApproved: true } : p.check?.pass === undefined ? undefined : { pass: p.check.pass, problems: p.check.problems ?? [], ...(p.check.areas ? { areas: p.check.areas } : {}), ...(p.check.redraw ? { redraw: true } : {}) },
+              // The full or short request (B3), chosen by a setting, and anything contradictory left in it.
+              prompt: requestVariant() === "short" ? prompt.short ?? prompt.text : prompt.text, attach: prompt.attach,
+              conflicts: requestConflicts(requestVariant() === "short" ? prompt.short ?? prompt.text : prompt.text),
             };
           })} />
       </div>}

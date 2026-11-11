@@ -901,3 +901,47 @@ D38 test: things at the wrong distance are a visible failure in any scene with a
   - the request carries the sizes and the ankle-cut framing;
   - D47's browser test still passes.
 - Still to judge on a real picture: whether GPT now keeps the depth. If not, the next step is to make the 2:3 picture show the full height of the 9:16 frame, rather than adding more words.
+
+### D49: Measure the picture, one set of facts, and a way to test (2026-11-11)
+
+An independent ChatGPT review of the picture pipeline (pack v1.1, `video-production/review`) concluded: keep all five consistency tools; give them an order of authority (plan and camera, then image 1, then references, then the room pictures, then words); stop the request contradicting itself; and make the app measure whether a picture matches the plan rather than adding instructions. Paul approved test plan v0.1 (B1 to B4) with ChatGPT's four refinements. D38 test: panel 1 was drawn with the group about 2.5 times too big and still passed as "matches the layout", and its request contradicted itself on the bag hand, the lighting and the logo. The fixes reach the picture check, the request text and the correction.
+
+- **B1, a measured check.**
+  - The vision model now also reports, for each main person, a box round their visible body, the top of their head, and their feet (or "hidden" or "below the bottom edge"). It also says whether the room's upright lines lean.
+  - The app projects where each person should be from the plan, using the same geometry as image 1 (`pictureXY`), and compares:
+    - **size:** head-to-feet height between 0.67 and 1.5 times the plan, for standing people whose whole height should show;
+    - **place across:** within 20% of the picture's width;
+    - **eye level:** everyone's heads shifted together by more than 10% of the height (6% if the upright lines lean) means the camera was tilted or moved;
+    - **framing:** feet shown when the plan cuts them at the bottom edge means the camera moved back.
+  - Anything it can't see (feet hidden, no heads) is listed as "not measured", never counted as a pass.
+  - Results are given in three areas, **blocking**, **characters' look** and **room and props**, each passed or failed on its own. A geometry failure fails the picture however good it looks.
+  - Replaying panel 1's oversized picture with measurements read off it, the check fails it. It finds Chase about 2.9 times too big, Nina 2.5 times, and heads 29% too high. A picture that follows the plan passes.
+- **B2, a wrong composition is redrawn, not edited.** Size, eye level, framing and place-across failures are drawn again from image 1, with what went wrong added to the request. Edits stay for local things: a bag, clothes or a missing prop. The panel's button then says "Redraw it from the layout".
+- **B3, one set of facts, a full or short request.**
+  - The full and short requests are built in the same pass from the same values (`panelPrompt` returns both; the short one only when image 1 is a blocking frame).
+  - The short one has image 1's job, what the references are for, who and in what order, walking, held items, sizes, props, what to keep, the moment, the camera, one light and the text rule. Panel 1's full request is about 10,200 characters; the short one about 4,000.
+  - The setting `STORYBOARD_REQUEST=short` chooses the short one; full is the default.
+  - Contradictions removed from both, by the order of authority:
+    - which hand holds what is said once, from the reference picture, so the description's own "in her left hand" goes (`sceneDescription`);
+    - instructions written for reference sheets go;
+    - a prop with a picture is described by its picture alone;
+    - the venue's lighting wins over the genre's "even lighting";
+    - the moment is said once;
+    - a still has no "tracking shot" (`withoutMove`);
+    - "Exactly 4 main characters" rather than "people", since the guests are people too;
+    - someone walking in isn't "around the table" yet;
+    - no internal decision numbers.
+  - `requestConflicts` scans each request before it's sent. Panel 1's full and short requests show none.
+- **B4, test mode.** With `STORYBOARD_TEST=1`:
+  - the automatic correction is off, so the first picture is the one scored;
+  - each panel shows the request version, its length and any contradictions found;
+  - each panel gets **Draw again from the layout** (about 7p) and **Check again** (about 1p);
+  - every draw is saved in `data/tests/<time>_<panel>_<kind>_<picture>/`: the exact request, every input picture in the order sent (image 1 first), the model, quality, size and endpoint, the result and the check. The images API takes no seed, and the record says so;
+  - every check adds a line to `data/tests/results.csv`: pass or fail by area, size against the plan per person, the eye-level shift, and what wasn't measured.
+- Not done, as agreed: a 3D room, logo compositing, more locks, a compulsory second pass.
+- Tests: `tests/measuredCheck.d49.test.ts`. Browser tests on a copy of Paul's scene, in test mode:
+  - "Check again" fails the oversized panel 1 picture by area, with Marcus's size "not measured";
+  - "Redraw it from the layout" draws fresh, not an edit, and records everything;
+  - a draw from the change form with the short request makes no automatic fix;
+  - D46's and D47's browser tests still pass.
+- Next: Paul confirms the real check rejects panel 1's current picture ("Check again"), then runs T1 to T3 (test plan v0.2).
