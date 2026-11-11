@@ -33,12 +33,10 @@ export interface PictureExpectation {
   postures?: { name: string; pose: "standing" | "sitting" | "lying" | "kneeling" | "crouching"; on?: string }[];
   /** Where each main person should be in the picture (B1), projected from the plan. */
   figures?: Figure[];
-  /**
-   * Image 2 is the same picture with the plan drawn over it (D51): a box for each main person
-   * at their planned place and height, and the planned eye level. The model compares; it doesn't measure.
-   */
-  overlay?: boolean;
 }
+
+/** Who a main character is, for the plan check (D52): their name and one line on how to recognise them. */
+export interface Who { name: string; look: string }
 
 /**
  * Where a main person should be in the storyboard picture (B1), as fractions of its width and
@@ -59,9 +57,9 @@ export interface PictureCheck {
   redraw?: boolean;
   /** Blocking, the characters' look, and the room and props, each passed or failed on its own (B1). */
   areas?: Record<CheckArea, AreaResult>;
-  /** Each person against their planned box (B1, D51): fits, bigger, smaller, elsewhere or hidden, and roughly how many times the planned height. */
-  measured?: { name: string; fit?: string; heightRatio?: number }[];
-  /** Standing people's heads against the planned eye level (D51): on, above or below it. */
+  /** Each person against their planned box (D51, D52): the model's comparison, roughly how many times the planned height, and where their head is (0 top, 1 bottom) against where the plan puts it. */
+  measured?: { name: string; fit?: string; heightRatio?: number; headY?: number; plannedHeadY?: number }[];
+  /** Heads against the planned eye level (D52): "on", "above" or "below", read from where the heads are. */
   eyeLevel?: string;
 }
 
@@ -69,10 +67,10 @@ export function checkPrompt(e: PictureExpectation, refNames: string[]): string {
   return [
     "You are checking a storyboard picture against its approved layout. Report only what you actually see.",
     "",
-    `Image 1 is the picture to check.${e.overlay ? " Image 2 is the same picture with the plan drawn over it: a dashed box for each main character, named, showing where they should stand and how tall they should look (the top of the box is the top of their head, the bottom is their feet, and it may run off the bottom edge when the plan cuts them there), and a dashed line for the planned eye level." : ""}`,
+    "Image 1 is the picture to check.",
     e.blocking
-      ? `Image ${e.overlay ? 3 : 2} is the approved shot: the real room from this camera with labelled stand-ins showing who stands where and which way they face, orange arrows for walking and yellow tags for held items.`
-      : `Image ${e.overlay ? 3 : 2} is the layout sketch: simple labelled shapes showing who stands where and what the camera sees.`,
+      ? "Image 2 is the approved shot: the real room from this camera with labelled stand-ins showing who stands where and which way they face, orange arrows for walking and yellow tags for held items."
+      : "Image 2 is the layout sketch: simple labelled shapes showing who stands where and what the camera sees.",
     ...(refNames.length ? [`The next images are reference pictures, in this order: ${refNames.join(", ")}. Use the character ones to tell who is who and to check their clothes; use the prop ones to check how each prop looks.`] : []),
     "",
     `Expected main characters, left to right: ${e.order.length ? e.order.join(", ") : "none"}.${e.shoulder?.length ? ` ${e.shoulder.join(" and ")} may also be seen from behind in the foreground; don't list them.` : ""}`,
@@ -84,22 +82,58 @@ export function checkPrompt(e: PictureExpectation, refNames: string[]): string {
     "",
     ...(e.venueAreas?.length ? [`The venue's areas are: ${e.venueAreas.join(", ")}.`] : []),
     "",
-    ...(e.overlay && e.figures?.length ? [
-      "Compare each main character with their dashed box in image 2. fit = \"fits\" when their body stands in or right by the box and is about as tall as it; \"bigger\" when they are clearly taller than the box (head well above its top, or feet well below its bottom); \"smaller\" when clearly shorter; \"elsewhere\" when they stand clearly away from their box; \"hidden\" when you can't see enough of them to tell. times = roughly how many times the box's height they are (2 means twice as tall; 0.5 half). Be strict: a person filling twice the box's height is \"bigger\", not \"fits\".",
-      "Then say where the standing main characters' heads are against the dashed eye-level line: \"on the line\" (at it or just above), \"well above the line\" or \"well below the line\".",
-      "",
-    ] : []),
     "Ignore style, lighting and small differences in pose or expression. Do check clothes, accessories, carried items and props against their reference pictures: a missing stripe or panel, a different colour, a bag in the other hand, or a table without its cloth is a real difference.",
     "Reply with JSON only, no other text:",
-    `{"left_to_right": ["the main characters you see, left to right, by name; use \\"unknown\\" for anyone you cannot match"], "clothes": [{"name": "character", "matches_reference": true, "difference": "what differs, or empty"}], "props": [{"name": "key prop", "side": "left | centre | right", "depth": "among the people | behind everyone | in front of everyone", "matches_picture": true, "difference": "what differs from its reference picture, or empty"}], "props_seen": ["key props you can see"], "background_left": "which venue area is at the left of the background, or none", "background_right": "which venue area is at the right of the background, or none", "background_people": "none | few | busy", "looking_at_camera": ["main characters looking straight into the camera, or empty"], "held": [{"name": "character", "item": "the item", "picture_side": "left | right | not visible"}], "postures": [{"name": "character", "pose": "standing | sitting | lying | kneeling | crouching"}], ${e.overlay && e.figures?.length ? '"plan_fit": [{"name": "character", "fit": "fits | bigger | smaller | elsewhere | hidden", "times": 1}], "heads": "on the line | well above the line | well below the line | can\'t tell", ' : ""}"notes": "one short sentence on anything clearly wrong, or empty"}`,
+    `{"left_to_right": ["the main characters you see, left to right, by name; use \\"unknown\\" for anyone you cannot match"], "clothes": [{"name": "character", "matches_reference": true, "difference": "what differs, or empty"}], "props": [{"name": "key prop", "side": "left | centre | right", "depth": "among the people | behind everyone | in front of everyone", "matches_picture": true, "difference": "what differs from its reference picture, or empty"}], "props_seen": ["key props you can see"], "background_left": "which venue area is at the left of the background, or none", "background_right": "which venue area is at the right of the background, or none", "background_people": "none | few | busy", "looking_at_camera": ["main characters looking straight into the camera, or empty"], "held": [{"name": "character", "item": "the item", "picture_side": "left | right | not visible"}], "postures": [{"name": "character", "pose": "standing | sitting | lying | kneeling | crouching"}], "notes": "one short sentence on anything clearly wrong, or empty"}`,
   ].join("\n");
 }
 
+/**
+ * The plan check (D52), asked on its own so it gets the model's full attention: the picture,
+ * then the same picture with the plan drawn on it. Heads are read as numbers, which the model
+ * reads well; size is a comparison with the box, which it can make. Who is who comes from a line
+ * on how each person looks, because the boxes sit where people should be, not where they are.
+ */
+export function planPrompt(e: PictureExpectation, who: Who[]): string {
+  const names = (e.figures ?? []).map((f) => f.name);
+  return [
+    "You are checking where people are in a storyboard picture against its plan. Report only what you actually see.",
+    "",
+    "Image 1 is the picture. Image 2 is the same picture with the plan drawn on it: a dashed, named box for each main character showing where they should be and how tall they should look (the top of the box is the top of their head, the bottom is their feet; a box can run off the bottom edge), and a white dashed line for the planned eye level.",
+    "",
+    `The main characters, expected left to right: ${names.join(", ")}. How to recognise them:`,
+    ...who.filter((w) => names.includes(w.name)).map((w) => `- ${w.name}: ${w.look}`),
+    "Find each person in image 1 by how they look. The boxes in image 2 are where they should be, not where they are.",
+    "",
+    "For each main character:",
+    "- head_top: how far down the picture the top of their head (hair included) is, from 0 at the top edge to 1 at the bottom edge, to two decimals. Read it from image 1.",
+    "- vs_box: their whole body compared with their box in image 2: \"about the same\", \"taller\", \"shorter\", \"away from it\" (they stand clearly somewhere else), or \"hidden\" (you can't see enough of them).",
+    "- times: roughly how many times the box's height they are (2 means twice as tall, 0.5 half as tall).",
+    "",
+    "Reply with JSON only, no other text:",
+    '{"people": [{"name": "character", "head_top": 0.5, "vs_box": "about the same | taller | shorter | away from it | hidden", "times": 1}]}',
+  ].join("\n");
+}
+
+/**
+ * One line on how to recognise a character (D52): the first sentence of their clothes that names
+ * a colour (a general opening like "smart-casual style" tells the model nothing), else the
+ * first sentence, else their first anchor; cut at a word near 110 characters.
+ */
+export function lookLine(wardrobe: string, anchors: string[] = []): string {
+  const colour = /\b(black|white|grey|gray|navy|blue|green|red|orange|tangerine|yellow|gold|pink|purple|lilac|lavender|violet|brown|tan|cream|ivory|beige|burgundy|maroon|teal|silver|khaki|olive|denim)\b/i;
+  const sentences = wardrobe.split(/(?<=[.!?])\s+|\n+/).map((x) => x.trim()).filter(Boolean);
+  const pick = sentences.find((x) => colour.test(x)) ?? sentences[0] ?? anchors[0] ?? "";
+  if (pick.length <= 110) return pick.replace(/\.$/, "");
+  const cut = pick.slice(0, 110);
+  return cut.slice(0, cut.lastIndexOf(" ") > 60 ? cut.lastIndexOf(" ") : 110).replace(/[,;:]$/, "") + "…";
+}
+
 /** Decide pass or fail from what the model saw, by rule. */
-export function judgePicture(e: PictureExpectation, reply: string): PictureCheck {
+export function judgePicture(e: PictureExpectation, reply: string, planReply?: string): PictureCheck {
   // The answer is JSON, possibly inside a code fence: take the object itself.
   const json = reply.match(/\{[\s\S]*\}/)?.[0];
-  let seen: { left_to_right?: unknown; props_seen?: unknown; background_people?: unknown; notes?: unknown; clothes?: unknown; props?: unknown; background_left?: unknown; background_right?: unknown; looking_at_camera?: unknown; plan_fit?: unknown; heads?: unknown };
+  let seen: { left_to_right?: unknown; props_seen?: unknown; background_people?: unknown; notes?: unknown; clothes?: unknown; props?: unknown; background_left?: unknown; background_right?: unknown; looking_at_camera?: unknown };
   try {
     seen = JSON.parse(json ?? "");
   } catch {
@@ -175,42 +209,53 @@ export function judgePicture(e: PictureExpectation, reply: string): PictureCheck
   const bg = String(seen.background_people ?? "").toLowerCase();
   if (e.crowd !== "none" && /none/.test(bg)) add("room", "No background people, but the scene has them.");
 
-  // Sizes, places and eye level against the plan (B1, D51): each person against the box image 2
-  // draws for them. The model compares, which it does well; it misread positions when asked to
-  // measure them. Anything it couldn't see is "not judged", never a pass.
+  // Eye level, sizes and places against the plan (B1, D51, D52), from the separate plan check.
+  // Anything it couldn't see is "couldn't judge", never a pass.
   const measured: NonNullable<PictureCheck["measured"]> = [];
   let eyeLevel: string | undefined;
-  if (e.overlay && e.figures?.length) {
-    const fits = objs(seen.plan_fit);
+  if (planReply !== undefined && e.figures?.length) {
+    let plan: { people?: unknown } = {};
+    try { plan = JSON.parse(planReply.match(/\{[\s\S]*\}/)?.[0] ?? ""); } catch { /* judged as unread below */ }
+    const got = objs(plan.people);
+    const pct = (y: number) => `${Math.round(y * 100)}%`;
+    const offsets: { head: number; planned: number }[] = [];
     for (const want of e.figures) {
       if (want.headY < 0.02 || want.feetY - want.headY >= 0.85) continue; // a close-up: its box would fill the picture
       if (missing.some((m) => first(m) === first(want.name))) continue;
-      const got = fits.find((f) => first(String(f.name ?? "")) === first(want.name));
-      const fit = String(got?.fit ?? "").toLowerCase().trim();
-      const t = Number(got?.times);
+      const g = got.find((f) => first(String(f.name ?? "")) === first(want.name));
+      const vs = String(g?.vs_box ?? "").toLowerCase().trim();
+      const t = Number(g?.times), h = Number(g?.head_top);
       const times = Number.isFinite(t) && t > 0 && t < 20 ? t : undefined;
-      if (!/^(fits|bigger|smaller|elsewhere)$/.test(fit)) { unmeasured.blocking.push(`${want.name}: ${fit === "hidden" ? "hidden, size not judged" : "not judged"}`); continue; }
-      const m: (typeof measured)[number] = { name: want.name, fit };
+      const head = Number.isFinite(h) && h >= 0 && h <= 1 && g?.head_top !== null && g?.head_top !== "" ? h : undefined;
+      const m: (typeof measured)[number] = { name: want.name, plannedHeadY: want.headY };
+      if (head !== undefined) { m.headY = +head.toFixed(2); offsets.push({ head, planned: want.headY }); }
       measured.push(m);
-      if (fit === "fits") { m.heightRatio = times && times > 0.7 && times < 1.4 ? +times.toFixed(2) : 1; continue; }
-      if (fit === "elsewhere") { add("blocking", `${want.name} isn't where image 1 puts them: they stand clearly away from their place.`, true); continue; }
-      if (!want.standing) continue; // a seated or kneeling body's height can't be judged the same way
-      if (fit === "bigger") {
-        m.heightRatio = times && times >= 1 ? +times.toFixed(2) : undefined;
-        add("blocking", `${want.name} is drawn ${times && times >= 1.4 ? `about ${times.toFixed(1)} times` : "clearly"} taller than planned, so too close to the camera; in image 1 they are much smaller and further back.`, true);
-      } else {
-        m.heightRatio = times && times <= 1 ? +times.toFixed(2) : undefined;
-        add("blocking", `${want.name} is drawn ${times && times <= 0.7 ? `about ${(1 / times).toFixed(1)} times` : "clearly"} shorter than planned${want.feetY > 1.02 ? ": the camera has moved back to show the whole body, but image 1 cuts them at the bottom edge" : ", so too far away"}.`, true);
+      if (/hidden/.test(vs) || !/same|taller|shorter|away/.test(vs)) { unmeasured.blocking.push(`${want.name}: ${/hidden/.test(vs) ? "hidden, size not judged" : "size not judged"}`); continue; }
+      m.fit = /same/.test(vs) ? "fits" : /taller/.test(vs) ? "bigger" : /shorter/.test(vs) ? "smaller" : "elsewhere";
+      if (times !== undefined) m.heightRatio = +times.toFixed(2);
+      if (m.fit === "elsewhere") { add("blocking", `${want.name} isn't where image 1 puts them: they stand clearly away from their place.`, true); continue; }
+      if (!want.standing || m.fit === "fits") continue; // a seated or kneeling body's height can't be judged the same way
+      // Someone the plan cuts at the bottom edge shows as much of themselves as their head's
+      // height allows, so their size is the eye level's; only pulling back to show more counts.
+      const cut = want.feetY > 0.98;
+      if (m.fit === "bigger" && !cut && (times === undefined || times >= 1.5)) {
+        add("blocking", `${want.name} is drawn ${times !== undefined ? `about ${times.toFixed(1)} times` : "clearly"} taller than planned, so too close to the camera; in image 1 they are much smaller and further back.`, true);
+      }
+      if (m.fit === "smaller" && (times === undefined || times <= 0.67)) {
+        add("blocking", `${want.name} is drawn ${times !== undefined ? `about ${(1 / times).toFixed(1)} times` : "clearly"} shorter than planned${cut ? ": the camera has moved back to show the whole body, but image 1 cuts them at the bottom edge" : ", so too far away"}.`, true);
       }
     }
-    // Everyone's heads off the planned eye level together: the camera was tilted or moved.
-    const heads = String(seen.heads ?? "").toLowerCase();
-    if (e.figures.some((f) => f.standing)) {
-      if (/well above/.test(heads)) { eyeLevel = "above"; add("blocking", "Heads are well above the planned eye level: the camera has been tilted down or moved. Keep it level, at image 1's height and angle.", true); }
-      else if (/well below/.test(heads)) { eyeLevel = "below"; add("blocking", "Heads are well below the planned eye level: the camera has been tilted up or raised. Keep it level, at image 1's height and angle.", true); }
-      else if (/on the line/.test(heads)) eyeLevel = "on";
-      else unmeasured.blocking.push("eye level: not judged");
-    }
+    // Eye level: where the heads are against where the plan puts them. The middle of the
+    // differences, so one misread head doesn't decide it; a level camera at eye height keeps
+    // standing heads on the eye-level line, near or far.
+    if (offsets.length) {
+      const d = offsets.map((o) => o.head - o.planned).sort((a, b) => a - b);
+      const mid = d.length % 2 ? d[(d.length - 1) / 2] : (d[d.length / 2 - 1] + d[d.length / 2]) / 2;
+      const avg = (k: "head" | "planned") => offsets.reduce((a, o) => a + o[k], 0) / offsets.length;
+      if (mid < -0.08) { eyeLevel = "above"; add("blocking", `The camera is too high or tilted down: heads are about ${pct(avg("head"))} of the way down the picture, but image 1 has them about ${pct(avg("planned"))} down, on the eye-level line. Keep the camera level at image 1's height, so heads sit where they are in image 1.`, true); }
+      else if (mid > 0.08) { eyeLevel = "below"; add("blocking", `The camera is too low or tilted up: heads are about ${pct(avg("head"))} of the way down the picture, but image 1 has them about ${pct(avg("planned"))} down, on the eye-level line. Keep the camera level at image 1's height, so heads sit where they are in image 1.`, true); }
+      else eyeLevel = "on";
+    } else unmeasured.blocking.push("eye level: not judged");
   }
 
   const areas = Object.fromEntries((["blocking", "look", "room"] as CheckArea[]).map((a) => {

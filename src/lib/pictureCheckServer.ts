@@ -9,7 +9,7 @@ import { mainSubjectId } from "./domain/composer";
 import { facingOf, pictureXY, planForShot, readCamera, readProps } from "./domain/geometry";
 import { cameraZ, floorZ } from "./domain/levels";
 import { ringSectors, viewSlice, viewsInSlice } from "./domain/panorama";
-import { checkPrompt, judgePicture, type Figure, type PictureCheck, type PictureExpectation } from "./domain/pictureCheck";
+import { checkPrompt, judgePicture, lookLine, planPrompt, type Figure, type PictureCheck, type PictureExpectation } from "./domain/pictureCheck";
 import { crowdLevelOf } from "./domain/story";
 import { renderLayoutForShot } from "./layoutImage";
 import { renderBlockingForShot } from "./blockingImage";
@@ -174,22 +174,26 @@ export async function checkPanelPicture(db: DB, panelId: string, assetId: string
     if (f.imageAssetId && e.expect.props.includes(f.name)) refs.push({ label: `the ${f.name} (prop)`, asset: repo.getAsset(db, f.imageAssetId) });
   }
   const usable = refs.filter((r) => r.asset && fs.existsSync(r.asset.path));
-  // The plan drawn over a copy of the picture (D51), for the model to compare against.
-  const overlay = e.expect.figures?.length ? await withPlan(fs.readFileSync(pic.path), e.expect.figures, e.eyeY).catch(() => undefined) : undefined;
-  if (overlay) e.expect.overlay = true;
+  const picture = fs.readFileSync(pic.path);
   const images = [
-    { data: fs.readFileSync(pic.path), mime: pic.mime },
-    ...(overlay ? [{ data: overlay, mime: "image/png" }] : []),
+    { data: picture, mime: pic.mime },
     ...(layout ? [{ data: Buffer.from(layout), mime: "image/png" }] : []),
     ...usable.map((r) => ({ data: fs.readFileSync(r.asset!.path), mime: r.asset!.mime })),
   ];
-  const reply = await text.describe(checkPrompt(e.expect, usable.map((r) => r.label)), images);
-  const result = judgePicture(e.expect, reply);
+  // The plan check (D52), asked separately and at the same time: the picture and the same
+  // picture with the plan drawn on it (D51), with a line on how to recognise each person.
+  const overlay = e.expect.figures?.length ? await withPlan(picture, e.expect.figures, e.eyeY).catch(() => undefined) : undefined;
+  const who = e.ids.map((id) => ({ name: nameOf(id), look: lookLine(profiles[id]?.wardrobe ?? "", profiles[id]?.anchors ?? []) }));
+  const [reply, planReply] = await Promise.all([
+    text.describe(checkPrompt(e.expect, usable.map((r) => r.label)), images),
+    overlay ? text.describe(planPrompt(e.expect, who), [{ data: picture, mime: pic.mime }, { data: overlay, mime: "image/png" }]).catch(() => "") : Promise.resolve(undefined),
+  ]);
+  const result = judgePicture(e.expect, reply, planReply);
   studio.setPanelCheck(db, panelId, result);
   // Test mode (B4): the check goes with its picture's record, and a line into results.csv.
   if (testMode()) {
     const code = repo.getShot(db, panelShot)?.spec.code ?? panelId;
-    recordCheck({ panelCode: code.replace(/^.*_(P\d+)$/i, "$1"), assetId, picture: fs.readFileSync(pic.path), overlay, check: result, expected: { order: e.expect.order, figures: e.expect.figures, eyeY: e.eyeY } });
+    recordCheck({ panelCode: code.replace(/^.*_(P\d+)$/i, "$1"), assetId, picture, overlay, check: result, expected: { order: e.expect.order, figures: e.expect.figures, eyeY: e.eyeY }, replies: { check: reply, plan: planReply } });
   }
   return result;
 }

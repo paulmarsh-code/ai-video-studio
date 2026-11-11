@@ -986,3 +986,24 @@ Paul ran "Check again" after D50. The verdict was right again (fails on blocking
   - With a stand-in reply, the panel says Chase and Nina are about twice their planned height, heads are well above the planned eye level, and Marcus couldn't be judged. It offers "Redraw it from the layout".
   - The real model's judgement waits on Paul's run.
 - **Next.** Paul pulls, restarts in test mode and clicks "Check again" (about 1p). He expects Chase and Nina "bigger" (about 2×), heads "well above", and Marcus probably hidden. Jade is drawn left of her box and taller, so "elsewhere" or "bigger" would be right for her. If the judgements match what can be seen, T1 to T3 follow.
+
+### D52: The plan check is its own short request; heads read as numbers; a margin on size (2026-11-11)
+
+Paul ran D51's "Check again" on panel 1. Only Jade was flagged (2× too tall). The model said Chase, Marcus and Nina "fit" their boxes and that heads were "on the line". Both were plainly wrong: the group is about twice its boxes, and everyone's heads are about a fifth of the way down the picture, where the plan has them halfway down. Paul saw the eye level was all wrong at a glance. He also pointed out that Jade, in the foreground, should look big. The dashed boxes, whose tops sit on the eye-level line, most likely led the model to judge the boxes instead of the people. The plan questions were also buried in one long request, with 8 pictures and a dozen other questions.
+
+- **Failure fixed (D38).** A picture with the camera raised and tilted down, and the far group twice too big, passed on eye level and on the group's size. It reaches generation through the picture check, whose verdict and wording go into the redraw.
+- **Its own request.** The plan questions are asked separately, at the same time as the main check. The request carries just the picture and the same picture with the plan drawn on it (D51). It names each main character with one line on how to recognise them: the first sentence of their clothes that names a colour (`lookLine`). It says the boxes are where people should be, not where they are. The main check no longer carries the plan. This adds well under 1p per check.
+- **Heads as numbers, eye level decided here.**
+  - The model gives the top of each person's head as a fraction of the picture's height. It read heads well before D51 (about 20% on panel 1, which is right); feet were the problem.
+  - The eye level is judged by rule. It takes the middle of the differences between where the heads are and where the plan puts them, so one misread head doesn't decide it.
+  - More than 8% of the picture's height above or below fails, with the numbers. On panel 1 that reads: "The camera is too high or tilted down: heads are about 19% of the way down the picture, but image 1 has them about 48% down, on the eye-level line."
+  - The rule behind it: with a level camera at eye height, every standing person's head is on the eye-level line, near or far.
+- **Size, with a margin.**
+  - Each person is compared with their box: about the same, taller, shorter, away from it, or hidden.
+  - Taller fails only at 1.5× or more; shorter only at two-thirds or less; away from it always fails.
+  - Someone the plan cuts at the bottom edge (Jade here) isn't failed for looking taller. Their visible height runs from their head to the edge, so it follows where their head is, which the eye level already covers. Being shown whole when the plan cuts them still fails, because the camera has pulled back.
+- **Test records.**
+  - `check.json` keeps both raw answers (`replies.check`, `replies.plan`), so a wrong verdict can be traced to what the model actually said.
+  - The `eye_level` column in `results.csv` reads, for example, "above: heads 19% down, planned 48%".
+- **Tested.** This ran on a copy of Paul's scene with his real panel 1 picture and a stand-in answer like the one expected. The panel failed Chase and Nina at about twice their height and failed the camera with the head heights. It didn't fail Jade, listed Marcus (hidden) under "Couldn't judge", and offered "Redraw it from the layout". The real model's answer waits on Paul's run.
+- **Next.** Paul pulls, restarts in test mode and clicks "Check again" (about 1p). If the verdict matches what he sees, T1 to T3 follow. If the heads come back wrong, `check.json` shows the model's numbers, and a stronger check model (`OPENAI_CHECK_MODEL`) is the next thing to try.

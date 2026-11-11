@@ -61,7 +61,7 @@ const csvCell = (v: unknown) => { const t = String(v ?? ""); return /[",\n]/.tes
  * Save a check with its picture's record (B4), or in a record of its own for a picture checked
  * again, and add a line to data/tests/results.csv for comparing runs.
  */
-export function recordCheck(r: { panelCode: string; assetId: string; picture?: Buffer; overlay?: Buffer; check: PictureCheck; expected?: unknown }): void {
+export function recordCheck(r: { panelCode: string; assetId: string; picture?: Buffer; overlay?: Buffer; check: PictureCheck; expected?: unknown; replies?: { check?: string; plan?: string } }): void {
   try {
     fs.mkdirSync(root(), { recursive: true });
     const t = tag(r.assetId);
@@ -74,12 +74,16 @@ export function recordCheck(r: { panelCode: string; assetId: string; picture?: B
       kind = "recheck";
     }
     const n = fs.readdirSync(path.join(root(), dir)).filter((f) => /^check(_\d+)?\.json$/.test(f)).length;
-    fs.writeFileSync(path.join(root(), dir, n ? `check_${n + 1}.json` : "check.json"), JSON.stringify({ ...r.check, expected: r.expected, at: new Date().toISOString() }, null, 2));
+    fs.writeFileSync(path.join(root(), dir, n ? `check_${n + 1}.json` : "check.json"), JSON.stringify({ ...r.check, expected: r.expected, replies: r.replies, at: new Date().toISOString() }, null, 2));
     // What the check model was shown (D51): the picture with the plan's boxes and eye level drawn on.
     if (r.overlay) fs.writeFileSync(path.join(root(), dir, n ? `check_${n + 1}_plan_overlay.png` : "check_plan_overlay.png"), r.overlay);
     let settings: Record<string, unknown> = {};
     try { settings = JSON.parse(fs.readFileSync(path.join(root(), dir, "settings.json"), "utf8")); } catch { /* a re-checked picture has none */ }
     const a = r.check.areas;
+    // Eye level with the heads behind it (D52): "above: heads 20% down, planned 49%".
+    const heads = (r.check.measured ?? []).filter((m) => m.headY !== undefined && m.plannedHeadY !== undefined);
+    const mean = (k: "headY" | "plannedHeadY") => Math.round((heads.reduce((a, m) => a + (m[k] ?? 0), 0) / heads.length) * 100);
+    const eye = r.check.eyeLevel ? `${r.check.eyeLevel}${heads.length ? `: heads ${mean("headY")}% down, planned ${mean("plannedHeadY")}%` : ""}` : "";
     const ratios = (r.check.measured ?? []).map((m) => `${m.name.split(" ")[0]} ${m.fit ?? ""}${m.heightRatio !== undefined ? ` x${m.heightRatio}` : ""}`.trim()).join("; ");
     const csv = path.join(root(), "results.csv");
     // An older file with other columns is kept aside, not mixed with this one.
@@ -88,7 +92,7 @@ export function recordCheck(r: { panelCode: string; assetId: string; picture?: B
     fs.appendFileSync(csv, [
       new Date().toISOString(), r.panelCode, t, kind, settings.requestVersion ?? "", settings.model ?? "", settings.requestCharacters ?? "",
       r.check.pass ? "pass" : "fail", a ? (a.blocking.pass ? "pass" : "fail") : "", a ? (a.look.pass ? "pass" : "fail") : "", a ? (a.room.pass ? "pass" : "fail") : "",
-      r.check.redraw ? "yes" : "", ratios, r.check.eyeLevel ?? "",
+      r.check.redraw ? "yes" : "", ratios, eye,
       a ? [...a.blocking.unmeasured, ...a.look.unmeasured, ...a.room.unmeasured].join("; ") : "", r.check.problems.join(" "), dir,
     ].map(csvCell).join(",") + "\n");
   } catch (e) {

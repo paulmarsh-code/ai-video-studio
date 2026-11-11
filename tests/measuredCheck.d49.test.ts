@@ -1,61 +1,94 @@
-// D49: any scene, made-up names. The check measures each main person's size, place across and
-// eye level against the plan, and judges blocking, the characters' look and the room and props
+// D49, D52: any scene, made-up names. The check reads where each main person's head is and
+// compares their size with the plan, and judges blocking, the characters' look and the room and props
 // separately; a wrong composition is redrawn, not edited. The request is built once, full or
 // short, from the same values, with the contradictions taken out and scanned for before sending.
 import { describe, expect, it } from "vitest";
-import { judgePicture, type PictureExpectation } from "../src/lib/domain/pictureCheck";
+import { checkPrompt, judgePicture, lookLine, planPrompt, type PictureExpectation } from "../src/lib/domain/pictureCheck";
 import { pictureXY } from "../src/lib/domain/geometry";
 import { panelPrompt, requestConflicts, sceneDescription } from "../src/lib/domain/imagePrompts";
 import { withoutMove } from "../src/lib/domain/shotLanguage";
 import type { GeometryPlanData, PlanCamera, ShotSpec } from "../src/lib/domain/types";
 
+// Panel 1 as Paul's real check saw it (D52): the plan has the group small at the table with heads
+// on the eye-level line, and Jade in the foreground cut at the bottom edge.
 const expect0: PictureExpectation = {
-  order: ["Ava", "Ben", "Cleo"], props: [], crowd: "busy", overlay: true,
+  order: ["Ava Stone", "Ben", "Cleo", "Dee"], props: [], crowd: "busy",
   figures: [
-    { name: "Ava", x: 0.25, headY: 0.49, feetY: 0.66, standing: true },
-    { name: "Ben", x: 0.4, headY: 0.49, feetY: 0.66, standing: true },
-    { name: "Cleo", x: 0.85, headY: 0.46, feetY: 1.08, standing: true },
+    { name: "Ava Stone", x: 0.274, headY: 0.488, feetY: 0.655, standing: true },
+    { name: "Ben", x: 0.338, headY: 0.488, feetY: 0.66, standing: true },
+    { name: "Cleo", x: 0.389, headY: 0.487, feetY: 0.668, standing: true },
+    { name: "Dee", x: 0.858, headY: 0.461, feetY: 1.02, standing: true },
   ],
 };
-const reply = (plan_fit: unknown[], extra: Record<string, unknown> = {}) => JSON.stringify({ left_to_right: ["Ava", "Ben", "Cleo"], props_seen: [], background_people: "busy", plan_fit, heads: "on the line", ...extra });
+const main = JSON.stringify({ left_to_right: ["Ava Stone", "Ben", "Cleo", "Dee"], props_seen: [], background_people: "busy" });
+const planOf = (people: unknown[]) => JSON.stringify({ people });
 
-describe("The check compares the picture with the plan drawn over it (D49, D51)", () => {
-  it("fails a picture whose far group is far taller than their boxes and whose camera tilted down, and says to redraw", () => {
-    const r = judgePicture(expect0, reply([
-      { name: "Ava", fit: "bigger", times: 2.2 },
-      { name: "Ben", fit: "hidden" },
-      { name: "Cleo", fit: "smaller", times: 0.8 },
-    ], { heads: "well above the line" }));
+describe("The plan check reads heads and compares sizes with the plan (D49, D51, D52)", () => {
+  it("fails the group drawn twice too big and the camera tilted down, but not the foreground person the plan cuts at the bottom", () => {
+    const r = judgePicture(expect0, main, planOf([
+      { name: "Ava Stone", head_top: 0.2, vs_box: "taller", times: 2.1 },
+      { name: "Ben", head_top: null, vs_box: "hidden" },
+      { name: "Cleo", head_top: 0.21, vs_box: "taller", times: 2 },
+      { name: "Dee", head_top: 0.16, vs_box: "taller", times: 2 },
+    ]));
     expect(r.pass).toBe(false);
     expect(r.redraw).toBe(true);
-    expect(r.areas!.blocking.pass).toBe(false);
     expect(r.areas!.look.pass).toBe(true);
-    expect(r.problems.join(" ")).toMatch(/Ava is drawn about 2\.2 times taller than planned/);
-    expect(r.problems.join(" ")).toMatch(/Cleo is drawn clearly shorter than planned: the camera has moved back to show the whole body/);
-    expect(r.problems.join(" ")).toMatch(/Heads are well above the planned eye level/);
+    const all = r.problems.join(" ");
+    expect(all).toMatch(/Ava Stone is drawn about 2\.1 times taller than planned/);
+    expect(all).toMatch(/Cleo is drawn about 2\.0 times taller than planned/);
+    // Dee runs off the bottom edge in the plan: her size goes with where her head is, which the eye level covers.
+    expect(all).not.toMatch(/Dee is drawn/);
+    expect(all).toMatch(/The camera is too high or tilted down: heads are about 19% of the way down the picture, but image 1 has them about 48% down/);
     expect(r.eyeLevel).toBe("above");
-    // What couldn't be seen is said, not passed.
     expect(r.areas!.blocking.unmeasured).toEqual(["Ben: hidden, size not judged"]);
+    expect(r.measured?.find((m) => m.name === "Ava Stone")).toEqual({ name: "Ava Stone", plannedHeadY: 0.488, headY: 0.2, fit: "bigger", heightRatio: 2.1 });
   });
 
-  it("passes a picture whose people fit their boxes", () => {
-    const r = judgePicture(expect0, reply([{ name: "Ava", fit: "fits", times: 1.1 }, { name: "Ben", fit: "fits", times: 1 }, { name: "Cleo", fit: "fits" }]));
+  it("passes a picture whose heads are where the plan puts them and whose people are about their box's size", () => {
+    const r = judgePicture(expect0, main, planOf([
+      { name: "Ava Stone", head_top: 0.47, vs_box: "about the same", times: 1 },
+      { name: "Ben", head_top: 0.49, vs_box: "about the same" },
+      { name: "Cleo", head_top: 0.5, vs_box: "taller", times: 1.3 }, // within the margin
+      { name: "Dee", head_top: 0.44, vs_box: "about the same" },
+    ]));
     expect(r).toMatchObject({ pass: true, problems: [], eyeLevel: "on" });
     expect(r.redraw).toBeUndefined();
-    expect(r.measured?.find((m) => m.name === "Ava")).toEqual({ name: "Ava", fit: "fits", heightRatio: 1.1 });
   });
 
-  it("someone away from their box fails blocking, even when the right size", () => {
-    const r = judgePicture(expect0, reply([{ name: "Ava", fit: "elsewhere" }, { name: "Ben", fit: "fits" }, { name: "Cleo", fit: "fits" }]));
-    expect(r.problems.join(" ")).toMatch(/Ava isn't where image 1 puts them/);
+  it("one misread head doesn't decide the eye level", () => {
+    const r = judgePicture(expect0, main, planOf([
+      { name: "Ava Stone", head_top: 0.48, vs_box: "about the same" },
+      { name: "Ben", head_top: 0.49, vs_box: "about the same" },
+      { name: "Cleo", head_top: 0.1, vs_box: "about the same" },
+    ]));
+    expect(r.eyeLevel).toBe("on");
   });
 
-  it("keeps the areas apart: look problems don't touch blocking, and an unjudged person isn't a pass", () => {
-    const r = judgePicture(expect0, reply([], { clothes: [{ name: "Ben", matches_reference: false, difference: "jacket is blue" }], heads: "" }));
+  it("heads well below the plan: the camera is too low or tilted up", () => {
+    const r = judgePicture(expect0, main, planOf([{ name: "Ava Stone", head_top: 0.7, vs_box: "about the same" }, { name: "Ben", head_top: 0.72, vs_box: "about the same" }]));
+    expect(r.eyeLevel).toBe("below");
+    expect(r.problems.join(" ")).toMatch(/too low or tilted up/);
+  });
+
+  it("someone away from their place fails blocking; someone the plan cuts who is shown whole fails as pulled back", () => {
+    const r = judgePicture(expect0, main, planOf([
+      { name: "Ava Stone", head_top: 0.48, vs_box: "away from it" },
+      { name: "Dee", head_top: 0.46, vs_box: "shorter", times: 0.6 },
+    ]));
+    expect(r.problems.join(" ")).toMatch(/Ava Stone isn't where image 1 puts them/);
+    expect(r.problems.join(" ")).toMatch(/Dee is drawn about 1\.7 times shorter than planned: the camera has moved back to show the whole body/);
+  });
+
+  it("keeps the areas apart, and an unread plan check is never a pass on blocking", () => {
+    const look = JSON.stringify({ left_to_right: ["Ava Stone", "Ben", "Cleo", "Dee"], props_seen: [], background_people: "busy", clothes: [{ name: "Ben", matches_reference: false, difference: "jacket is blue" }] });
+    const r = judgePicture(expect0, look, "");
     expect(r.areas!.look.pass).toBe(false);
     expect(r.areas!.blocking.pass).toBe(true);
     expect(r.redraw).toBeUndefined();
-    expect(r.areas!.blocking.unmeasured).toEqual(["Ava: not judged", "Ben: not judged", "Cleo: not judged", "eye level: not judged"]);
+    expect(r.areas!.blocking.unmeasured).toEqual(["Ava Stone: size not judged", "Ben: size not judged", "Cleo: size not judged", "Dee: size not judged", "eye level: not judged"]);
+    // Without a plan check (no figures sent) nothing is said about it.
+    expect(judgePicture(expect0, main).areas!.blocking.unmeasured).toEqual([]);
   });
 });
 
@@ -127,16 +160,24 @@ describe("One request, full or short, without contradictions (D49, B3)", () => {
   });
 });
 
-describe("The plan drawn over the picture (D51)", () => {
-  it("image 2 is the picture with the plan's boxes and eye level, and the approved shot moves to image 3", async () => {
-    const { checkPrompt } = await import("../src/lib/domain/pictureCheck");
-    const t = checkPrompt({ ...expect0, blocking: true }, []);
-    expect(t).toMatch(/Image 2 is the same picture with the plan drawn over it/);
-    expect(t).toMatch(/Image 3 is the approved shot/);
-    expect(t).toMatch(/Compare each main character with their dashed box in image 2/);
-    expect(t).toMatch(/"plan_fit"/);
-    const t0 = checkPrompt({ ...expect0, overlay: false, blocking: true }, []);
-    expect(t0).toMatch(/Image 2 is the approved shot/);
-    expect(t0).not.toMatch(/plan_fit/);
+describe("The plan check is its own short request (D52)", () => {
+  it("sends the picture and the plan drawn on it, says who is who, and asks for heads as numbers", () => {
+    const t = planPrompt(expect0, [{ name: "Ava Stone", look: "navy suit" }, { name: "Dee", look: "orange and cream mini dress" }, { name: "Zed", look: "not in this shot" }]);
+    expect(t).toMatch(/Image 2 is the same picture with the plan drawn on it/);
+    expect(t).toMatch(/- Ava Stone: navy suit/);
+    expect(t).not.toMatch(/Zed/);
+    expect(t).toMatch(/The boxes in image 2 are where they should be, not where they are/);
+    expect(t).toMatch(/"head_top"/);
+    // The main check no longer carries it.
+    const c = checkPrompt({ ...expect0, blocking: true }, []);
+    expect(c).toMatch(/Image 2 is the approved shot/);
+    expect(c).not.toMatch(/plan_fit|head_top|dashed box/);
+  });
+
+  it("recognises each person by the part of their clothes that names a colour", () => {
+    const l = lookLine("Contemporary, expensive-looking British smart-casual executive style. Beautifully tailored deep midnight-navy two-piece suit with a fitted single-breasted jacket, notch lapels and two buttons, worn open over a crisp white shirt.");
+    expect(l.startsWith("Beautifully tailored deep midnight-navy two-piece suit")).toBe(true);
+    expect(l.length).toBeLessThanOrEqual(111);
+    expect(lookLine("", ["Closely buzzed hair"])).toBe("Closely buzzed hair");
   });
 });
