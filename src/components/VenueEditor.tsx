@@ -5,7 +5,7 @@ import { useState, type ReactNode } from "react";
 import { approveVenueAction, saveVenueAction } from "@/app/studioActions";
 import { uploadBlob } from "@/lib/clientUpload";
 import type { VenueView } from "@/lib/studioRepo";
-import { EMPTY_FLOOR_CHANGE, VENUE_SHEET, venueChangePrompt, venueFillFromReply, venueSheetRequest } from "@/lib/domain/describe";
+import { VENUE_SHEET, venueChangePrompt, venueFillFromReply, venueSheetRequest } from "@/lib/domain/describe";
 import { ChangeRequest, type SubmittedChange } from "./ChangeRequest";
 import { CreateStep } from "./CreateStep";
 import { downloadBoard } from "@/lib/board";
@@ -168,13 +168,6 @@ export function VenueEditor({ venue, projectId, baseCode, images, canAuto }: { p
     <div className="space-y-3 self-start">
       {images}
       <ChangeRequest what="place" projectId={projectId} baseCode={baseCode} onSubmit={(ch) => setChanging({ text: ch.text, refs: ch.refs })} />
-      {venue.views.some((v) => v.imageAssetId) && (
-        <div className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm" data-testid="empty-floor">
-          <p className="font-medium">Empty the floor</p>
-          <p className="mt-1 text-neutral-600">Tables, chairs and people standing in these pictures can end up in your shots instead of the furniture you place in each scene. This makes the views again with the floor empty and everything built in kept as it is: one picture, about 7p.</p>
-          <button type="button" className="mt-2 rounded border border-neutral-300 bg-white px-3 py-1" data-testid="empty-floor-start" onClick={() => setChanging({ text: EMPTY_FLOOR_CHANGE, refs: [] })}>Empty the floor</button>
-        </div>
-      )}
     </div>
     </div>
   );
