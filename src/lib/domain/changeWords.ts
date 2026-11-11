@@ -96,7 +96,9 @@ export function changeFromWords(text: string, plan: GeometryPlanData, cam: PlanC
         const d = amount(rest); place(id, { x: here.x + fwd.x * d, y: here.y + fwd.y * d }, "further from the camera"); continue;
       }
       // Anything else ("next to the bar", "onto the sofa"): as a statement for the panel readers.
-      c = `${lead.name.split(/\s+/)[0]} ${/^(sit|seat)$/.test(verb) ? "sits" : /^(lie|lay)$/.test(verb) ? "lies" : "stands"} ${rest}`;
+      // "Put Ava on the sofa" means sitting on it.
+      const seat = /^(?:on|onto|in)\s+(?:(?:the|her|his|their|a)\s+)?(?:\w+\s+)?(?:sofa|couch|settee|chair|armchair|bench|stool|seat|bed)\b/i.test(rest);
+      c = `${lead.name.split(/\s+/)[0]} ${/^(sit|seat)$/.test(verb) || (seat && !/^stand$/.test(verb)) ? "sits" : /^(lie|lay)$/.test(verb) ? "lies" : "stands"} ${rest}`;
     }
     // "Jade should be sitting (on the sofa)", "Marcus is lying down".
     if ((m = new RegExp(String.raw`^${NAME}\s+(?:should\s+be|needs\s+to\s+be|must\s+be|is|to\s+be)\s+(sitting|seated|lying(?:\s+down)?|standing|kneeling|crouching)\b(.*)$`).exec(c))) {

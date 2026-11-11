@@ -17,6 +17,7 @@ import {
 } from "@/lib/domain/story";
 import { StagingFields } from "./SceneSettingCard";
 import { ActionButton } from "./ActionButton";
+import { WordsHelp } from "./WordsHelp";
 
 const field = "mt-1 w-full rounded border border-neutral-300 px-2 py-1.5 text-sm";
 const TARGETS = [15, 30, 60, 90];
@@ -130,6 +131,7 @@ export function StoryWizard(p: StoryWizardProps) {
             <div>
               <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
                 <span>Scene length:</span>
+                <span className="ml-auto text-xs text-neutral-600">How to describe movement<WordsHelp guide="panel" /></span>
                 {TARGETS.map((s) => <button key={s} type="button" className={chip(target === s)} onClick={() => setTarget(s)} data-testid={`story-target-${s}`}>{s} s</button>)}
               </div>
               <textarea className={field} rows={16} value={story} onChange={(e) => setStory(e.target.value)} data-testid="story-text"
@@ -223,7 +225,7 @@ export function StoryWizard(p: StoryWizardProps) {
                       <button type="button" onClick={() => setPanels((xs) => xs.filter((_, k) => k !== i))} className="px-2 text-xs text-red-700 underline" data-testid={`draft-${i + 1}-delete`}>Delete</button>
                     </span>
                   </div>
-                  <label className="block text-sm">What we see
+                  <label className="block text-sm">What we see<WordsHelp guide="panel" />
                     <textarea className={field} rows={2} value={x.action} onChange={(e) => update(i, { action: e.target.value })} data-testid={`draft-${i + 1}-action`} />
                   </label>
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">

@@ -11,6 +11,7 @@ import { CreateStep } from "./CreateStep";
 import { downloadBoard } from "@/lib/board";
 import { gptCreate } from "@/lib/gptClient";
 import { ActionButton, DoneBadge } from "./ActionButton";
+import { WordsHelp } from "./WordsHelp";
 
 // Directions are as seen from the main viewpoint (where scenes here usually start).
 const DIRECTIONS = [
@@ -133,7 +134,7 @@ export function VenueEditor({ venue, projectId, baseCode, images, canAuto }: { p
           <option value="exterior">Outdoors (a street, park, beach, pitch…)</option>
         </select>
       </label>
-      <label className="block text-sm">Description <span className="text-neutral-500">(what the place is, its layout, materials, time of day and light; used in every venue and panel prompt)</span>
+      <label className="block text-sm">Description<WordsHelp guide="venue" /> <span className="text-neutral-500">(what the place is, its layout, materials, time of day and light; used in every venue and panel prompt)</span>
         <textarea className={field} rows={3} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} data-testid="venue-description" />
       </label>
       <div>

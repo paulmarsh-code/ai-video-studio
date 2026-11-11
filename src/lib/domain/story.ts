@@ -172,6 +172,7 @@ export function storyPrompt(i: { story: string; characters: StoryCharacter[]; ve
     "- Keep the story's order and do not add new plot.",
     "- Give no camera directions; the app chooses the cameras.",
     "- Describe gestures precisely: which hand, which way the palm faces and how it moves (for example: flicks the back of his hand outwards to shoo her away, not just a dismissive wave).",
+    "- Say plainly who moves, sits, lies down, gets up, turns or leaves, naming them each time, in everyday words (D40): for example, Ava walks over to the bar; Ben sits on the sofa; Ava lies on her bed; Ben gets up; Ava turns to Ben; Ben walks off; Ava picks up the phone; Ben puts it down on the table. The app places everyone from these words, and they stay put until a panel says they move.",
     `- ${CROWD_RULE}`,
     "",
     "Reply with plain text only, with no drawings or code, in exactly this format. First the scene setting, which stays the same in every panel:",

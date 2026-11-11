@@ -776,3 +776,15 @@ The D38 test: the visible failure is a person in the wrong place, facing the wro
 - **Cameras stay as they are**: saving a panel's positions no longer re-chooses cameras and works while the cameras are approved, so fixing one picture never moves another panel's camera.
 - **Simpler card** (D38): on each person, only "This panel only", "Undo this change" and, for the app's own placements, "Not this". The facing slider, walk checkbox and walk-off button are gone; words, dragging and the turn handle do those. The floor plan page keeps its panel stepper, with the same words box.
 - Tests: `tests/changeWords.d39.test.ts`; browser test on a copy of Jade's Entrance: the change opens panel 5's plan with both changes applied, a second typed change, save, the picture redrawn, positions saved.
+
+### D40: An ⓘ beside every box whose words the app reads (2026-11-11)
+
+Paul: where the user writes something to get a result, put an information icon that shows the words the app recognises, so the words used are read correctly.
+
+D38 test: words the app can't read leave people, postures, props or cameras wrong in the picture; the guides help the words reach the floor plan, and so the blocking frame and prompts.
+
+- **The guides** live in one file (`wordGuides.ts`): who stands where (the change request and the planner's box), what happens in a panel (panel words, the draft panels and the story box), where they are (scene setting), describing a prop (sizes and kinds), describing the venue (kind of place for room size, light, balcony or stage, the way out) and which hand or shoulder (wardrobe). Each lists example phrases by group and a short tip.
+- **Always true**: `tests/wordGuides.d40.test.ts` runs every example through the part of the app that reads it (the change reader, panel words, arrival marks, postures, gaze, gestures, camera words, setting levels, prop sizes, room kinds, lighting, exits, held items), plus phrases each check must reject. Change a reader and a guide that no longer matches fails the build.
+- **The ⓘ** (`WordsHelp`): a small "i" beside the box's label; click for the note, Escape or clicking elsewhere closes it. Only on boxes the app itself reads, not on free-text changes that go straight to GPT, and not on the shot picker (fixed choices).
+- **GPT writes panels in these words too**: the story-to-panels request now asks for plain wording of who moves, sits, lies down, gets up, turns or leaves, naming them each time, with examples, so panels made from a story are read correctly.
+- Also: "put Ava on the sofa" now means sitting on it.

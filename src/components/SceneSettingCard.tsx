@@ -10,6 +10,7 @@ import { saveSceneStagingAction } from "@/app/studioActions";
 import { mergeSuggestion, parseStaging, type CrowdLevel, type KeyProp, type SceneStaging } from "@/lib/domain/story";
 import { uploadBlob } from "@/lib/clientUpload";
 import { ActionButton } from "./ActionButton";
+import { WordsHelp } from "./WordsHelp";
 
 const field = "mt-1 w-full rounded border border-neutral-300 px-2 py-1.5 text-sm";
 
@@ -34,12 +35,12 @@ export function StagingFields({ value, onChange, propsLocked, projectId }: {
   const levels: { v: CrowdLevel; label: string }[] = [{ v: "none", label: "No one else" }, { v: "few", label: "A few" }, { v: "busy", label: "Busy" }];
   return (
     <div className="space-y-3">
-      <label className="block text-sm">Where are they, and do they stand or sit?
+      <label className="block text-sm">Where are they, and do they stand or sit?<WordsHelp guide="setting" />
         <input className={field} value={value.spot} onChange={(e) => onChange({ ...value, spot: e.target.value })} data-testid="staging-spot"
           placeholder="e.g. standing around the cocktail table, near the bar" />
       </label>
       <div className="text-sm">
-        <p>Key props <span className="text-neutral-500">· {propsLocked ? "where they stand is locked with the positions; you can still rename them, correct how they look (including what's on them) or remove one that shouldn't be there" : "objects that matter, drawn the same in every shot, including what's on them"}</span></p>
+        <p>Key props<WordsHelp guide="props" /> <span className="text-neutral-500">· {propsLocked ? "where they stand is locked with the positions; you can still rename them, correct how they look (including what's on them) or remove one that shouldn't be there" : "objects that matter, drawn the same in every shot, including what's on them"}</span></p>
         {value.props.map((p, k) => (
           <div key={k} className="mt-1 grid items-start gap-2 sm:grid-cols-[12rem_1fr_auto]" data-testid={`staging-prop-${k}`}>
             <input className={field} value={p.name} title={propsLocked ? "Renaming keeps it where it stands on the floor plan" : undefined}

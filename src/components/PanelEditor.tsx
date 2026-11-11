@@ -6,6 +6,7 @@ import { addPanelAction, approvePanelAction, deletePanelAction, movePanelAction,
 import { countWords, deriveDuration } from "@/lib/domain/duration";
 import { hasQuotes } from "@/lib/domain/text";
 import { ActionButton, DoneBadge } from "./ActionButton";
+import { WordsHelp } from "./WordsHelp";
 
 export interface PanelEditorProps {
   panel?: { id: string; code: string; description: string; emotion: string; speakerId?: string; line?: string; durationSec: number; status: string; version: number; hasImage: boolean };
@@ -58,7 +59,7 @@ export function PanelEditor({ panel, sceneId, cast, first, last, suggestedCode }
         <label className="text-sm">Code<input className={field} value={f.code} onChange={(e) => setF({ ...f, code: e.target.value })} /></label>
         <label className="text-sm">Emotion<input className={field} value={f.emotion} onChange={(e) => setF({ ...f, emotion: e.target.value })} placeholder="e.g. smug" /></label>
       </div>
-      <label className="block text-sm">What happens
+      <label className="block text-sm">What happens<WordsHelp guide="panel" />
         <textarea className={field} rows={2} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} data-testid="panel-description" />
       </label>
       <div className="grid grid-cols-[9rem_1fr] gap-2">

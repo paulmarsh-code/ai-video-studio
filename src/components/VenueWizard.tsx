@@ -17,6 +17,7 @@ import { ActionButton } from "./ActionButton";
 import { CreateStep } from "./CreateStep";
 import { gptCreate } from "@/lib/gptClient";
 import { goTo } from "@/lib/nav";
+import { WordsHelp } from "./WordsHelp";
 
 type Source = "picture" | "idea";
 
@@ -132,7 +133,7 @@ export function VenueWizard({ projectId, projectCode, existing, canAuto }: Venue
           </div>
           {source === "idea" ? (
             <div className="mt-4 space-y-2">
-              <label className="block text-sm">Describe {shown} in a sentence
+              <label className="block text-sm">Describe {shown} in a sentence<WordsHelp guide="venue" />
                 <input className={field} value={idea} onChange={(e) => setIdea(e.target.value)} data-testid="vwiz-idea" placeholder="e.g. a rooftop bar in London at dusk" />
               </label>
               <ActionButton label="Next" doneLabel="Saved" disabled={!name.trim() || !idea.trim()} onAction={ideaNext} testId="vwiz-next-1" />

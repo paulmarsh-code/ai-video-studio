@@ -21,6 +21,7 @@ import { fovForSize, lensText, SHOT_SIZES, type ShotSize } from "@/lib/domain/sh
 import { propKind } from "@/lib/domain/story";
 import { FindingList } from "./FindingList";
 import { ActionButton } from "./ActionButton";
+import { WordsHelp } from "./WordsHelp";
 
 const MAX_SCALE = 66; // pixels per metre in an ordinary room; larger rooms are drawn smaller (D29)
 const PAD = 30;
@@ -403,7 +404,7 @@ export function PlanEditor(props: {
               {!props.focus && <p className="mt-1 text-neutral-700">{panel.description}</p>}
               <p className="mt-1 text-xs text-neutral-500">{pspec.shot ? `Shot: ${pspec.shot}. ` : ""}{panelCam ? `Camera: ${panelCam.name}.` : "No camera chosen for this panel yet: approve the positions on the storyboard and the app chooses one."}</p>
               <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/40 p-3" data-testid="panel-words">
-                <label className="block font-medium">What should change in this panel?
+                <label className="block font-medium">What should change in this panel?<WordsHelp guide="change" />
                   <textarea className="mt-1 w-full rounded border border-neutral-300 bg-white px-2 py-1" rows={2} value={words} data-testid="panel-words-input"
                     placeholder="e.g. move Jade closer to Nina and have Marcus walk off to the right" onChange={(e) => setWords(e.target.value)} />
                 </label>

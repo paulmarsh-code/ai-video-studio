@@ -14,6 +14,7 @@ import { CreateStep } from "./CreateStep";
 import { downloadBoard } from "@/lib/board";
 import { gptCreate } from "@/lib/gptClient";
 import { ActionButton, DoneBadge } from "./ActionButton";
+import { WordsHelp } from "./WordsHelp";
 
 export function CharacterEditor({ c, projectId, baseCode, images, canAuto }: { c: CharacterRecord; projectId: string; baseCode: string; images?: ReactNode; canAuto?: boolean }) {
   const router = useRouter();
@@ -183,7 +184,7 @@ export function CharacterEditor({ c, projectId, baseCode, images, canAuto }: { c
       <label className="block text-sm">Appearance <span className="text-neutral-500">(face, hair, age, build — used in every image prompt)</span>
         <textarea className={field} rows={2} value={f.appearance} onChange={set("appearance")} data-testid="appearance" />
       </label>
-      <label className="block text-sm">Wardrobe
+      <label className="block text-sm">Wardrobe<WordsHelp guide="character" />
         <textarea className={field} rows={2} value={f.wardrobe} onChange={set("wardrobe")} />
       </label>
       <label className="block text-sm">Identity anchors <span className="text-neutral-500">(one per line: the 3–5 features that must match in every image)</span>

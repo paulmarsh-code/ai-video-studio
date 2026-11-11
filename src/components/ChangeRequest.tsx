@@ -10,6 +10,7 @@
 import { useState } from "react";
 import { ActionButton } from "./ActionButton";
 import { uploadBlob } from "@/lib/clientUpload";
+import { WordsHelp } from "./WordsHelp";
 
 const QUESTIONS = {
   character: [
@@ -104,7 +105,7 @@ export function ChangeRequest({ what, projectId, baseCode, onSubmit }: ChangeReq
           <p>Fill in only what should change. Everything else stays the same.</p>
           {questions.map((q) => (
             <div key={q.key}>
-              <label className="block">{q.label}
+              <label className="block">{q.label}{what === "panel" && q.key === "place" && <WordsHelp guide="change" />}
                 <input className="mt-1 w-full rounded border border-neutral-300 bg-white px-2 py-1" value={parts[q.key] ?? ""} placeholder={q.hint}
                   data-testid={`change-${q.key}`} onChange={(e) => setParts((x) => ({ ...x, [q.key]: e.target.value }))} />
               </label>
