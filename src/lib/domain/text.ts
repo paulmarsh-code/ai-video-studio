@@ -12,8 +12,9 @@ export function hasQuotes(text: string | undefined): boolean {
  * Kling may speak any quoted phrase aloud, so quoted words outside the
  * spoken line are turned into plain description.
  */
-export function stripQuotes(text: string): string {
-  return text.replace(QUOTE_CHARS, "").replace(/\s{2,}/g, " ").trim();
+export function stripQuotes(text: string | null | undefined): string {
+  // Never throws on a missing text: a page must not crash over an empty field.
+  return (text ?? "").replace(QUOTE_CHARS, "").replace(/\s{2,}/g, " ").trim();
 }
 
 export function capitalise(s: string): string {
