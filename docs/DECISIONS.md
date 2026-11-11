@@ -1098,3 +1098,17 @@ Paul redrew panel 1 twice after D56. The table was better: its foot at 81% and t
 - **For Paul.** A clean, full picture of the GLOWVANE logo would replace the poor crop, in both image 1 and the reference.
 - **Tested.** Unit test: a sign with a picture is drawn as it, a table isn't, and the plain sketch has no pictures. Paul's panel 1 image 1 was rendered: the GLOWVANE sign is right of centre, behind Jade, where the plan puts it.
 - **Not measured yet.** The detector doesn't know signs, so the check still relies on the vision model's left, centre or right. If the sign keeps moving with image 1 like this, measuring its place across is the next step.
+
+### D58: A walker appears once, at their stand-in; the check catches doubles; who's who from hair and outer clothes (2026-11-11)
+
+Paul drew panel 1 three times after D57.
+- **The GLOWVANE sign** now landed where image 1 puts it every time: right of centre, behind Jade.
+- **A second Jade** appeared in the last draw. Jade walked in the middle of the picture, and another Jade stood at the right edge, where her stand-in is in image 1. The request had given her two places. "Each pale stand-in becomes the person named on it" pointed to her stand-in, close to the camera at the right edge. "An orange arrow is a walk" and "Jade walks … along the orange arrow" pointed along the arrow towards the group. GPT drew both.
+- **The close-up check said Jade was "someone else" in every draw**, even with only one Jade. Her one-line description named only her sleeveless orange dress. From behind, the close-up shows her bob and cream bouclé jacket, which the line didn't mention.
+
+- **Failure fixed (D38).** A main character drawn twice; it reaches generation through the request's wording and through the check, which now fails it and asks for a redraw. Separately, a correctly matched person was thrown out as "someone else", which reaches generation through the check.
+- **The wording.** "Each pale stand-in becomes the person named on it, exactly where it stands and turned as its label says; an orange arrow only shows which way a walker is heading from their stand-in, never a second place for them, so everyone appears once." The walking line now says they walk "from where their stand-in is, the way the orange arrow points", and the short request adds "(they appear once, at the stand-in)".
+- **Doubles caught.** The which-outline question also asks for any second copy of a main character. A double fails blocking: "Jade appears twice in the picture; everyone appears once. Draw Jade only where their stand-in is in image 1."
+- **Who's who.** The description used to match outlines and confirm close-ups is now `idLine`. It leads with the hair sentence from the character's appearance, which shows from behind, then the clothes sentences that name a colour, with what's worn on top first (a jacket before the dress under it), up to about 260 characters. For Jade it reads "Glossy, dark chocolate-brown chin-length bob … Cropped, structured cream bouclé jacket …".
+- **Seen in the same draws:** the eye level slipped in two of the three (heads 34–37% down against 49%), and the group is still drawn about 1.7–2.1×. The likely cause is the venue picture's scale against the plan (the bar looks large beside the stand-ins); it's the next thing to look at.
+- **Tested.** Unit tests cover doubles failing and being redrawn, and the who's-who line. The walking wording is checked in the short-request test.

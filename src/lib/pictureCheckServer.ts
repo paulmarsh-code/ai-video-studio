@@ -9,7 +9,7 @@ import { mainSubjectId } from "./domain/composer";
 import { facingOf, pictureXY, planForShot, readCamera, readProps } from "./domain/geometry";
 import { cameraZ, floorZ } from "./domain/levels";
 import { ringSectors, viewSlice, viewsInSlice } from "./domain/panorama";
-import { checkPrompt, gazePrompt, judgePicture, lookLine, marksPrompt, matchPeople, planPrompt, type Figure, type GazeEvidence, type PictureCheck, type PictureExpectation } from "./domain/pictureCheck";
+import { checkPrompt, gazePrompt, idLine, judgePicture, marksPrompt, matchPeople, planPrompt, type Figure, type GazeEvidence, type PictureCheck, type PictureExpectation } from "./domain/pictureCheck";
 import { detectorKind, headCrop, numberPeople, type Person } from "./domain/peopleDetect";
 import { detectPeople } from "./peopleDetector";
 import { crowdLevelOf } from "./domain/story";
@@ -236,7 +236,7 @@ export async function checkPanelPicture(db: DB, panelId: string, assetId: string
   // person. The detector measures where everyone is and the model says which outline is whom
   // (D53); if the detector can't run, the model is asked to compare with the plan drawn on the
   // picture (D52) and the check says the sizes are its estimate.
-  const who = e.ids.map((id) => ({ name: nameOf(id), look: lookLine(profiles[id]?.wardrobe ?? "", profiles[id]?.anchors ?? []) }));
+  const who = e.ids.map((id) => ({ name: nameOf(id), look: idLine(profiles[id]?.appearance ?? "", profiles[id]?.wardrobe ?? "", profiles[id]?.anchors ?? []) }));
   const figures = e.expect.figures ?? [];
   const found = figures.length ? await detectPeople(picture).catch((err) => { console.warn(`Person detector unavailable: ${String(err).slice(0, 200)}`); return undefined; }) : undefined;
   const marked = found ? numberPeople(found.people) : [];

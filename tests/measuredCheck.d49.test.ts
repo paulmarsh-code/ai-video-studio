@@ -148,7 +148,7 @@ describe("One request, full or short, without contradictions (D49, B3)", () => {
     // The facts the shot needs are all in the short one.
     expect(p.short).toMatch(/Image 1 is this exact shot/);
     expect(p.short).toMatch(/Exactly 3 main characters, left to right/);
-    expect(p.short).toMatch(/Cleo walks .* along the orange arrow/);
+    expect(p.short).toMatch(/Cleo walks .* from where their stand-in is, the way the orange arrow points \(they appear once, at the stand-in\)/);
     expect(p.short).toMatch(/the cocktail table \(exactly as in its picture/);
     expect(p.short).toMatch(/the ACME logo backdrop \(exactly as in its picture, about \d+% of the picture's height\)/);
     expect(p.short).toMatch(/Light, the same in every picture of this scene: Warm festoon lights/);

@@ -61,3 +61,21 @@ describe("The face close-ups also confirm who was matched (D54)", () => {
     expect(r.measured!.map((m) => m.name)).toEqual(["Ava Stone"]);
   });
 });
+
+describe("Nobody is drawn twice (D58)", () => {
+  it("a main character the model finds twice fails blocking and is redrawn", () => {
+    const people = numberPeople([{ x0: 0.15, y0: 0.48, x1: 0.25, y1: 0.66, score: 0.9 }, { x0: 0.5, y0: 0.3, x1: 0.7, y1: 1, score: 0.9 }, { x0: 0.8, y0: 0.4, x1: 0.9, y1: 0.7, score: 0.9 }]);
+    const r = judgePicture(e, main(), { people, aspect: 1.5, reply: JSON.stringify({ people: [{ name: "Ava Stone", box: 1, also: [] }, { name: "Cleo", box: 2, also: [3, 2, 99] }] }) });
+    expect(r.problems).toContain("Cleo appears twice in the picture; everyone appears once. Draw Cleo only where their stand-in is in image 1.");
+    expect(r.redraw).toBe(true);
+  });
+});
+
+describe("Who is who, from what a close-up can show (D58)", () => {
+  it("leads with hair, then the clothes worn on top", async () => {
+    const { idLine } = await import("../src/lib/domain/pictureCheck");
+    const l = idLine("A woman with freckles. Glossy dark brown chin-length bob with a blunt fringe.", "A sleeveless orange mini dress with ivory side panels. Cropped cream bouclé jacket with round buttons. Black patent shoes.");
+    expect(l).toBe("Glossy dark brown chin-length bob with a blunt fringe. Cropped cream bouclé jacket with round buttons. A sleeveless orange mini dress with ivory side panels. Black patent shoes");
+    expect(idLine("", "", ["Closely buzzed hair"])).toBe("Closely buzzed hair");
+  });
+});

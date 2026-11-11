@@ -444,8 +444,8 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
         const across = (d.x * rt.x + d.y * rt.y) / dl, away = (d.x * fw.x + d.y * fw.y) / dl;
         const parts = [Math.abs(across) > 0.3 ? `towards the ${across > 0 ? "right" : "left"} of the picture` : "", away > 0.3 ? "away from the camera" : away < -0.3 ? "towards the camera" : ""].filter(Boolean);
         const seen = away > 0.5 ? "we see their back" : away < -0.5 ? "we see their front" : `we see their ${across > 0 ? "left" : "right"} side and the side of their face, not their face full-on`;
-        lines.push(`Walking: ${name(id)} is mid-stride, walking ${parts.join(" and ") || "on"}, ${me?.to ? "along the orange arrow" : "heading for the group along the orange arrow"}; ${seen}. Body, feet and eyes all point the way they walk, never at the camera.`);
-        S.people.push(`${name(id)} walks ${parts.join(" and ") || "on"} along the orange arrow, mid-stride; ${seen}; body, feet and eyes the way they walk.`);
+        lines.push(`Walking: ${name(id)} is mid-stride, walking ${parts.join(" and ") || "on"}, ${me?.to ? "from where their stand-in is, the way the orange arrow points" : "from where their stand-in is, heading for the group the way the orange arrow points"}; ${seen}. Body, feet and eyes all point the way they walk, never at the camera.`);
+        S.people.push(`${name(id)} walks ${parts.join(" and ") || "on"}, mid-stride, from where their stand-in is, the way the orange arrow points (they appear once, at the stand-in); ${seen}; body, feet and eyes the way they walk.`);
       }
     }
     if (placed.length && shotPlan) {
@@ -647,7 +647,7 @@ export function blockingInstruction(refLabels: string[]): string {
 
 /** Image 1's instruction in the short request (B3): the same meaning as `blockingInstruction`, said once. */
 export function blockingShort(): string {
-  return "Image 1 is this exact shot: keep its framing, eye level, perspective, positions and the size of everyone and everything in it. Each pale stand-in becomes the person named on it, turned as its label says; an orange arrow is a walk; a yellow tag marks something held, on that side of the picture; an outline is the named prop. Remove every label, outline, arrow and tag.";
+  return "Image 1 is this exact shot: keep its framing, eye level, perspective, positions and the size of everyone and everything in it. Each pale stand-in becomes the person named on it, exactly where it stands and turned as its label says; an orange arrow only shows which way a walker is heading from their stand-in, never a second place for them, so everyone appears once; a yellow tag marks something held, on that side of the picture; an outline is the named prop. Remove every label, outline, arrow and tag.";
 }
 
 /**

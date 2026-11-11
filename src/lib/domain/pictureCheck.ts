@@ -145,9 +145,10 @@ export function marksPrompt(e: PictureExpectation, who: Who[], count: number): s
     ...who.filter((w) => names.includes(w.name)).map((w) => `- ${w.name}: ${w.look}`),
     "",
     "For each main character, give the number of the outline around them. Use 0 if they aren't in the picture or have no outline of their own. A number belongs to one person only.",
+    "If a main character appears more than once (a second copy of the same person, same face, hair or clothes), give the other copies' numbers in \"also\"; otherwise leave it empty.",
     "",
     "Reply with JSON only, no other text:",
-    '{"people": [{"name": "character", "box": 1}]}',
+    '{"people": [{"name": "character", "box": 1, "also": []}]}',
   ].join("\n");
 }
 
@@ -212,6 +213,30 @@ export interface GazeEvidence { reply: string; asked: string[]; tooSmall: string
  * a colour (a general opening like "smart-casual style" tells the model nothing), else the
  * first sentence, else their first anchor; cut at a word near 110 characters.
  */
+/**
+ * How to recognise a character in a close-up or a crowd (D58): their hair first, which shows from
+ * behind, then their clothes with what's worn on top first (a jacket over a dress), cut near 240
+ * characters. One colour sentence named Jade's sleeveless dress, so her cream jacket from behind
+ * looked like someone else.
+ */
+export function idLine(appearance: string, wardrobe: string, anchors: string[] = []): string {
+  const split = (t: string) => t.split(/(?<=[.!?])\s+|\n+/).map((x) => x.trim().replace(/\.$/, "")).filter(Boolean);
+  const hair = split(appearance).find((x) => /\b(hair|haircut|bob|fringe|braids?|ponytail|buzzed|bald|curls|locs|dreadlocks)\b/i.test(x)) ?? anchors.find((x) => /\b(hair|bob|fringe|braid|buzzed|bald)\b/i.test(x));
+  const colour = /\b(black|white|grey|gray|navy|blue|green|red|orange|tangerine|yellow|gold|pink|purple|lilac|lavender|violet|brown|tan|cream|ivory|beige|burgundy|maroon|teal|silver|khaki|olive|denim)\b/i;
+  const outer = /\b(jacket|coat|blazer|bomber|cardigan|jumper|sweater|hoodie|suit|gilet|waistcoat)\b/i;
+  const clothes = split(wardrobe).filter((x) => colour.test(x)).sort((a, b) => Number(outer.test(b)) - Number(outer.test(a)));
+  const cut = (t: string, n: number) => (t.length <= n ? t : `${t.slice(0, n).replace(/[\s,;:]+\S*$/, "")}…`);
+  const parts = hair ? [cut(hair, 100)] : [];
+  let room = 260 - (parts[0]?.length ?? 0);
+  for (const c of clothes) {
+    if (room < 40) break;
+    const piece = cut(c, Math.min(160, room - 2));
+    parts.push(piece);
+    room -= piece.length + 2;
+  }
+  return parts.length ? parts.map((x) => (/[.…]$/.test(x) ? x : `${x}.`)).join(" ").replace(/\.$/, "") : lookLine(wardrobe, anchors);
+}
+
 export function lookLine(wardrobe: string, anchors: string[] = []): string {
   const colour = /\b(black|white|grey|gray|navy|blue|green|red|orange|tangerine|yellow|gold|pink|purple|lilac|lavender|violet|brown|tan|cream|ivory|beige|burgundy|maroon|teal|silver|khaki|olive|denim)\b/i;
   const sentences = wardrobe.split(/(?<=[.!?])\s+|\n+/).map((x) => x.trim()).filter(Boolean);
@@ -327,6 +352,14 @@ export function judgePicture(e: PictureExpectation, reply: string, plan?: string
   if (typeof plan === "object" && e.figures?.length) {
     // Measured (D53): the detector's outline for each person, matched by the model.
     measuredBy = "detector";
+    // Someone drawn twice (D58): a walker at their stand-in and again along the arrow.
+    const said = replyObject(plan.reply).people;
+    for (const f of Array.isArray(said) ? said.filter((x) => x && typeof x === "object") as Record<string, unknown>[] : []) {
+      const want = e.figures.find((w) => first(w.name) === first(String(f.name ?? "")));
+      const box = Math.round(Number(f.box));
+      const also = (Array.isArray(f.also) ? f.also : []).map((n) => Math.round(Number(n))).filter((n) => Number.isFinite(n) && n > 0 && n !== box && plan.people.some((p) => p.n === n));
+      if (want && also.length) add("blocking", `${want.name} appears ${also.length === 1 ? "twice" : `${also.length + 1} times`} in the picture; everyone appears once. Draw ${want.name} only where their stand-in is in image 1.`, true);
+    }
     const matched = matchPeople(e, plan);
     const wrong = wrongMatches(gaze);
     for (const want of judged) {
