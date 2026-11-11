@@ -3,7 +3,7 @@
 
 import { verticalText } from "./vertical";
 import { cameraZ, floorZ, levelAt } from "./levels";
-import { SHOT_SIZES } from "./shotLanguage";
+import { SHOT_SIZES, type ShotSize } from "./shotLanguage";
 import type { PoseEntry, PanelBlock,
   CameraPreset,
   CastMember,
@@ -181,6 +181,47 @@ export function nearestKeeping<T extends { camera: PlanCamera }>(plan: GeometryP
   });
   const far = (c: PlanCamera) => Math.hypot(c.position.x - near.x, c.position.y - near.y);
   return options.filter((o) => whole(o.camera)).sort((a, b) => far(a.camera) - far(b.camera))[0];
+}
+
+/**
+ * How much of the picture's height something fills (D48): something `heightM` tall standing on
+ * the floor `depthM` in front of the lens, in the storyboard picture (2:3 upright for a 9:16
+ * video, 3:2 for 16:9), and whether its foot is below the bottom edge. GPT kept the people a
+ * few metres away the same size as the near ones, so the far side of the room looked close.
+ */
+export function pictureShare(plan: GeometryPlanData, cam: PlanCamera, at: Point, heightM: number, depthM: number): { share: number; cut: boolean } {
+  const portrait = plan.aspect === "9:16";
+  const tanH = Math.tan((horizontalFov(plan, cam) * Math.PI) / 360);
+  const wOverH = portrait ? 2 / 3 : 3 / 2;
+  const focalOverH = wOverH / (2 * tanH); // focal length as a share of the picture's height
+  const d = Math.max(0.3, depthM);
+  const share = (heightM / d) * focalOverH;
+  const tilt = ((cam.tiltDeg ?? 0) * Math.PI) / 180;
+  const below = Math.atan2(cameraZ(plan, cam) - floorZ(plan, at), d) + tilt; // the foot, below level
+  const footY = 0.5 + Math.tan(below) * focalOverH;
+  return { share, cut: footY > 1 };
+}
+
+/**
+ * The shot size the storyboard picture really gives someone standing `depthM` away (D48), from
+ * how much of their body is between its top and bottom edges; undefined when their head is out
+ * of it. A camera moved after the app named the shot (or a 9:16 full shot drawn as a 2:3
+ * picture, which is a little shorter) can cut the feet off a "full shot": GPT then moved the
+ * camera back to show them, and squeezed the room up behind.
+ */
+export function framedSize(plan: GeometryPlanData, cam: PlanCamera, at: Point, depthM: number): { size: ShotSize; bottomM: number } | undefined {
+  const portrait = plan.aspect === "9:16";
+  const tanH = Math.tan((horizontalFov(plan, cam) * Math.PI) / 360);
+  const focalOverH = (portrait ? 2 / 3 : 3 / 2) / (2 * tanH);
+  const edge = Math.atan(0.5 / focalOverH);
+  const tilt = ((cam.tiltDeg ?? 0) * Math.PI) / 180;
+  const d = Math.max(0.3, depthM);
+  const eye = cameraZ(plan, cam) - floorZ(plan, at);
+  const bottom = eye + d * Math.tan(tilt - edge), top = eye + d * Math.tan(tilt + edge);
+  if (top < 1.72) return undefined;
+  const r = (size: ShotSize) => ({ size, bottomM: +bottom.toFixed(2) });
+  if (bottom <= 0) return r(1.72 / (top - bottom) < 0.3 ? "ls" : "fs");
+  return r(bottom <= 0.55 ? "mls" : bottom <= 0.85 ? "cowboy" : bottom <= 1.15 ? "ms" : bottom <= 1.35 ? "mcu" : "cu");
 }
 
 export function readCamera(plan: GeometryPlanData, cam: PlanCamera): CameraReading {

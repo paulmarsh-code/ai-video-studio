@@ -877,3 +877,27 @@ D38 test: a person missing from the shot and a logo that changes between picture
   - the sign notices show on the board and in the scene setting;
   - a camera turned round on purpose is left alone, with "Keep everyone in" offered;
   - D46's form test still passes.
+
+### D48: The room at its real depth in every picture (2026-11-11)
+
+On Paul's panel 1 the GLOWVANE backdrop came out much closer than the plan puts it, with the group drawn about 2.5 times bigger than their stand-ins.
+
+What the app sent GPT, rebuilt from his data:
+- **The far wall was drawn too near.** The 360° background puts each venue view on the ring as if it spanned 90° from the middle of the room. GPT drew the bar view from a few metres away with a narrower lens. In the frame, the bar's foot was where a wall about 9 m away would be, but the plan puts it 18 m away: right behind the group (8 m). The backdrop (11 m) had nowhere to be but in front of the bar, next to the group, and the bar view's own tables and bottles set a scale that made the group grow.
+- **"Full shot" against a frame that cut her feet.** Paul's camera, about 2.5 m from Jade, cuts her at the ankles in the 2:3 picture (a 2:3 picture is a little shorter than the 9:16 frame it was designed for). The words said "the whole body head to toe", so GPT moved the camera back and tilted it down, and squeezed the room up behind her.
+
+D38 test: things at the wrong distance are a visible failure in any scene with a 360° background. The fixes reach the blocking frame and prompt lines.
+
+- **Each view measured once**: the vision model reads where each view picture's eye level is and where its floor meets the far wall (`calibrationPrompt`), kept on the venue with the picture it was measured on. This runs the first time the ring is built after a view changes, about 1p a picture.
+- **At the room's scale**: a view whose far wall is drawn nearer than the room puts it is made smaller on the ring, around its eye level, so the wall's foot lands as far below eye level as the room's size says (`viewScale`).
+  - It is only ever made smaller, never bigger (never below a third of the ordinary fit), so a doubtful reading can't blow a picture up.
+  - Around it, and over the view's own open floor and the tables standing on it, a soft continuation of its colours, so the layout's people and props stand on a plain floor.
+  - Without a GPT link, or when a reading can't be used, the ring is as before.
+- **Sizes in words**: the request says how much of the picture's height each standing person fills ("head to toe about 17% of the picture's height", or "from the head down past the bottom edge"), and each prop 1.5 m or taller ("about 19% of the picture's height"), from the same geometry as the frame (`pictureShare`).
+- **The shot the picture really gives**: when the shot is a full shot but the picture cuts the main person's feet, the request says so: "full shot, but the bottom edge cuts Jade at the ankles … do not move the camera back or tilt it down". When the picture cuts them higher, the size is named for what it is, for example "medium long shot" (`framedSize`, `withSize`). Video prompts are unchanged: the 9:16 frame does show the feet.
+- Tests: `tests/backgroundDepth.d48.test.ts`. On a copy of Paul's scene:
+  - the frame rebuilt with readings of his four views puts the bar's foot behind the backdrop, which is behind the group;
+  - the four views are measured once and kept;
+  - the request carries the sizes and the ankle-cut framing;
+  - D47's browser test still passes.
+- Still to judge on a real picture: whether GPT now keeps the depth. If not, the next step is to make the 2:3 picture show the full height of the 9:16 frame, rather than adding more words.

@@ -113,6 +113,15 @@ export function namedShot(text: string): NamedShot {
   return out;
 }
 
+/** The words with any named shot size changed to another (D48), e.g. "full shot, tracking shot" → "medium long shot, tracking shot". */
+export function withSize(text: string, size: ShotSize): string {
+  for (const [re, s] of SIZE_WORDS) {
+    if (!re.test(text)) continue;
+    return s === size ? text : text.replace(re, SHOT_SIZES[size].label.toLowerCase());
+  }
+  return text;
+}
+
 /** Full-frame focal length for this long-side angle of view (36 mm across the long side). */
 export function lensMm(fovDeg: number): number {
   return Math.round(18 / Math.tan((fovDeg * Math.PI) / 360));

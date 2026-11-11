@@ -3,10 +3,13 @@
 // nearest view, so the room keeps its order and proportion from every angle.
 
 import fs from "node:fs";
+import { eq } from "drizzle-orm";
 import sharp from "sharp";
-import type { DB } from "@/db/client";
+import { persist, type DB } from "@/db/client";
+import * as t from "@/db/schema";
 import { planForShot } from "./domain/geometry";
-import { ringSectors, viewSlice } from "./domain/panorama";
+import { calibrationPrompt, horizonOf, readCalibration, ringSectors, roomCentre, viewScale, viewSlice, wallDistance, type ViewCalibration } from "./domain/panorama";
+import { getTextProvider } from "./providers/images";
 import * as repo from "./repo";
 
 const H = 768; // ring height in pixels
@@ -14,9 +17,45 @@ const PX_PER_DEG = 1024 / 90; // a view picture spans about 90°
 
 const ringCache = new Map<string, { data: Buffer; width: number; startDeg: number }>();
 
+type RingView = { name: string; directionDeg: number; path: string; calib?: ViewCalibration; wallM?: number };
+
+/**
+ * One view picture filling its share of the ring. Measured (D48): at the room's own scale, its
+ * eye level on the ring's, and a soft continuation of its own colours around it where it's
+ * smaller than its share. Otherwise: fitted to cover its share, as before.
+ */
+async function sectorImage(v: RingView, w: number): Promise<Buffer> {
+  const buf = fs.readFileSync(v.path);
+  const cover = () => sharp(buf).resize({ width: w, height: H, fit: "cover" }).png().toBuffer();
+  if (!v.calib || !v.wallM) return cover();
+  const meta = await sharp(buf).metadata();
+  if (!meta.width || !meta.height) return cover();
+  const f = viewScale(v.calib, { width: meta.width, height: meta.height }, { width: w, height: H }, v.wallM, PX_PER_DEG);
+  if (!f) return cover();
+  const sw = Math.max(8, Math.round(meta.width * f)), sh = Math.max(8, Math.round(meta.height * f));
+  const sharpPart = await sharp(buf).resize({ width: sw, height: sh, fit: "fill" }).png().toBuffer();
+  // The open floor in front of the far wall, and whatever the picture stood on it (tables,
+  // plants), is softened: it's at the picture's own distances, not the plan's, so the people
+  // and props of the layout stand on a plain floor instead (D48).
+  const floorTop = Math.max(0, Math.min(sh - 1, Math.round(v.calib.floor * sh)));
+  const soft = await sharp(sharpPart).blur(30).modulate({ brightness: 0.95 }).png().toBuffer();
+  const fade = Math.max(4, Math.round(sh * 0.03));
+  const mask = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${sw}" height="${sh}"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="${((floorTop - fade) / sh).toFixed(4)}" stop-color="#fff"/><stop offset="${(floorTop / sh).toFixed(4)}" stop-color="#000"/><stop offset="1" stop-color="#000"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#g)"/></svg>`);
+  const alpha = await sharp(mask).resize({ width: sw, height: sh }).greyscale().raw().toBuffer();
+  const top = await sharp(sharpPart).removeAlpha().joinChannel(alpha, { raw: { width: sw, height: sh, channels: 1 } }).png().toBuffer();
+  const scaled = await sharp(soft).composite([{ input: top, left: 0, top: 0 }]).png().toBuffer();
+  const left = Math.round(w / 2 - sw / 2), top0 = Math.round(H / 2 - horizonOf(v.calib) * sh);
+  const under = await sharp(scaled).resize({ width: w, height: H, fit: "fill" }).blur(40).modulate({ brightness: 0.9 }).png().toBuffer();
+  const cl = Math.max(0, -left), ct = Math.max(0, -top0);
+  const vw = Math.min(sw - cl, w - Math.max(0, left)), vh = Math.min(sh - ct, H - Math.max(0, top0));
+  if (vw <= 0 || vh <= 0) return under;
+  const part = await sharp(scaled).extract({ left: cl, top: ct, width: vw, height: vh }).png().toBuffer();
+  return sharp(under).composite([{ input: part, left: Math.max(0, left), top: Math.max(0, top0) }]).png().toBuffer();
+}
+
 /** The ring, twice round so any slice can be cut without wrapping. x = (startDeg - angle) * PX_PER_DEG. */
-async function ringFor(views: { name: string; directionDeg: number; path: string }[]) {
-  const key = views.map((v) => `${v.name}@${v.directionDeg}:${v.path}`).join("|");
+async function ringFor(views: RingView[]) {
+  const key = views.map((v) => `${v.name}@${v.directionDeg}:${v.path}:${v.calib ? `${v.calib.horizon}/${v.calib.floor}/${v.wallM?.toFixed(2)}` : "-"}`).join("|");
   const hit = ringCache.get(key);
   if (hit) return hit;
   const sectors = ringSectors(views);
@@ -25,9 +64,8 @@ async function ringFor(views: { name: string; directionDeg: number; path: string
   for (const s of sectors) {
     const v = views.find((y) => y.name === s.name)!;
     const w = Math.max(8, Math.round((s.leftDeg - s.rightDeg) * PX_PER_DEG));
-    // The view's centre sits at the sector's centre; its picture fills the sector.
-    const img = await sharp(fs.readFileSync(v.path)).resize({ width: w, height: H, fit: "cover" }).png().toBuffer();
-    parts.push({ input: img, left: x, top: 0 });
+    // The view's centre sits at the sector's centre.
+    parts.push({ input: await sectorImage(v, w), left: x, top: 0 });
     x += w;
   }
   const width = x;
@@ -38,18 +76,63 @@ async function ringFor(views: { name: string; directionDeg: number; path: string
   return out;
 }
 
+type StoredView = { name: string; imageAssetId?: string; calib?: ViewCalibration & { assetId: string } };
+const measuring = new Map<string, Promise<void>>();
+
+/**
+ * Measure each view picture once (D48): its eye level and where its floor meets the far wall,
+ * by the vision model, kept on the venue with the picture it was measured on. Skipped without a
+ * GPT link; a picture that can't be measured is left as it was.
+ */
+export function calibrateViews(db: DB, venueId: string): Promise<void> {
+  const running = measuring.get(venueId);
+  if (running) return running;
+  const job = (async () => {
+    const text = getTextProvider();
+    const venue = db.select().from(t.venues).where(eq(t.venues.id, venueId)).get();
+    if (!text || !venue) return;
+    const views = (venue.views ?? []) as StoredView[];
+    let changed = false;
+    const next: StoredView[] = [];
+    for (const v of views) {
+      const a = v.imageAssetId ? repo.getAsset(db, v.imageAssetId) : undefined;
+      if (!a || !fs.existsSync(a.path) || v.calib?.assetId === v.imageAssetId) { next.push(v); continue; }
+      try {
+        const c = readCalibration(await text.describe(calibrationPrompt(), [{ data: fs.readFileSync(a.path), mime: a.mime }]));
+        if (c) { next.push({ ...v, calib: { ...c, assetId: v.imageAssetId! } }); changed = true; continue; }
+      } catch { /* left unmeasured: the ring uses the ordinary fit */ }
+      next.push(v);
+    }
+    if (!changed) return;
+    // Only the measurements change: anything else saved meanwhile is kept.
+    const now = db.select().from(t.venues).where(eq(t.venues.id, venueId)).get();
+    const merged = ((now?.views ?? []) as StoredView[]).map((v) => { const m = next.find((x) => x.name === v.name && x.imageAssetId === v.imageAssetId && x.calib); return m ? { ...v, calib: m.calib } : v; });
+    db.update(t.venues).set({ views: merged }).where(eq(t.venues.id, venueId)).run();
+    persist(db);
+  })().finally(() => measuring.delete(venueId));
+  measuring.set(venueId, job);
+  return job;
+}
+
 /** The scene's venue ring, or null when the venue has fewer than two view pictures. */
 export async function ringForScene(db: DB, sceneId: string) {
-  const scene = repo.getScene(db, sceneId);
+  let scene = repo.getScene(db, sceneId);
   const plan = scene?.plan?.data;
   if (!scene || !plan || !scene.venue) return null;
-  const pics = (scene.venue.views as { name: string; imageAssetId?: string }[])
+  if (((scene.venue.views ?? []) as StoredView[]).some((v) => v.imageAssetId && v.calib?.assetId !== v.imageAssetId) && getTextProvider()) {
+    await calibrateViews(db, scene.venue.id);
+    scene = repo.getScene(db, sceneId)!;
+  }
+  const centre = roomCentre(plan);
+  const pics = ((scene.venue!.views ?? []) as StoredView[])
     .map((v) => {
       const dir = plan.views.find((p) => p.name === v.name)?.directionDeg;
       const a = v.imageAssetId ? repo.getAsset(db, v.imageAssetId) : undefined;
-      return dir !== undefined && a && fs.existsSync(a.path) ? { name: v.name, directionDeg: dir, path: a.path } : undefined;
+      if (dir === undefined || !a || !fs.existsSync(a.path)) return undefined;
+      const calib = v.calib?.assetId === v.imageAssetId ? { horizon: v.calib!.horizon, floor: v.calib!.floor } : undefined;
+      return { name: v.name, directionDeg: dir, path: a.path, ...(calib ? { calib, wallM: wallDistance(plan, centre, dir) } : {}) };
     })
-    .filter((v): v is { name: string; directionDeg: number; path: string } => !!v);
+    .filter((v): v is RingView => !!v);
   if (pics.length < 2) return null; // one view: the plain view picture is used instead
   return { ...(await ringFor(pics)), height: H, pxPerDeg: PX_PER_DEG };
 }

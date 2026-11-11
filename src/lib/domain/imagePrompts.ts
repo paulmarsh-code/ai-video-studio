@@ -4,13 +4,13 @@
 // rejected); images made in GPT, not Kling (better and cheaper); no text or logos.
 
 import { mainSubjectId } from "./composer";
-import { describeFrame, facingOf, PRESET_FOV, planForShot, presetText, readCamera, readProps } from "./geometry";
+import { describeFrame, facingOf, framedSize, pictureShare, PRESET_FOV, planForShot, presetText, readCamera, readProps } from "./geometry";
 import { GENRE_PROFILES, type Genre } from "./genre";
 import { aimDetail, exitFrom, gestureDetail } from "./gestures";
 import { propMoves } from "./story";
 import { gazeFor, gazeLine, shotEffect } from "./gaze";
 import { bodyEffect, verticalOf } from "./vertical";
-import { shotLines } from "./shotLanguage";
+import { namedShot, shotLines, withSize } from "./shotLanguage";
 import { levelAt, levelLines } from "./levels";
 import { joinNames, stripQuotes } from "./text";
 import { postureWords } from "./panelWords";
@@ -237,7 +237,14 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     const groupFar = castDepths.length ? Math.max(...castDepths) : undefined;
     const groupNear = castDepths.length ? Math.min(...castDepths) : undefined;
     const where = (p: { depthM: number }) => groupFar === undefined ? "" : p.depthM > groupFar + 1 ? `, behind everyone, about ${Math.round(p.depthM - groupFar)} m further back than the furthest person` : groupNear !== undefined && p.depthM < groupNear - 0.5 ? ", in front of everyone, nearer the camera" : ", among the people";
-    if (seen.length) lines.push(`In this picture: ${joinNames(seen.map((p) => `the ${p.name} (${p.frame === "centre" ? "centre" : p.frame.replace("frame-", "")}, about ${Math.max(1, Math.round(p.depthM))} m from the camera${where(p)})`))}. ${seen.length === 1 ? "It must be" : "They must be"} clearly visible, at exactly that distance; nothing else like ${seen.length === 1 ? "it" : "them"} anywhere else in the picture.`);
+    // How big a tall prop is in the picture (D48): a backdrop well behind the group was drawn close.
+    const tall = (p: { id: string; depthM: number }) => {
+      const f = sp.furniture?.find((x) => x.id === p.id);
+      if (!f || (f.heightM ?? 0) < 1.5) return "";
+      const s0 = pictureShare(sp, cam, f.position, f.heightM!, p.depthM);
+      return s0.share < 0.85 ? `, about ${Math.round(s0.share * 100)}% of the picture's height` : "";
+    };
+    if (seen.length) lines.push(`In this picture: ${joinNames(seen.map((p) => `the ${p.name} (${p.frame === "centre" ? "centre" : p.frame.replace("frame-", "")}, about ${Math.max(1, Math.round(p.depthM))} m from the camera${where(p)}${tall(p)})`))}. ${seen.length === 1 ? "It must be" : "They must be"} clearly visible, at exactly that distance; nothing else like ${seen.length === 1 ? "it" : "them"} anywhere else in the picture.`);
   }
   if (posed.length) {
     const ws = posed.filter(([id]) => shownIds.includes(id) || !shot?.visibleIds?.length).map(([id, e]) => postureWords(name(id), e, byId(id)?.pronoun as "she" | "he" | "they" | undefined)).filter(Boolean);
@@ -340,10 +347,21 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   }
 
   if (cam && reading && shot) {
-    lines.push(presetText(cam).replace(", static camera", "").replace(" static camera,", ""));
-    if (shot.shot?.trim()) lines.push(`Shot: ${shot.shot.trim()}.`);
+    // The size the picture really gives the main person (D48): a "full shot" whose feet the
+    // picture cuts is said as what it is, so GPT doesn't move the camera back to show them.
+    const subjRead = subjectId ? reading.actors.find((a) => a.characterId === subjectId && a.inView) : undefined;
+    const subjAt = subjRead ? (shotPlan ?? i.plan!).actors.find((a) => a.characterId === subjectId)?.position : undefined;
+    const said = cam.size ?? namedShot(shot.shot ?? "").size;
+    const framed = subjAt && subjRead ? framedSize(shotPlan ?? i.plan!, cam, subjAt, subjRead.depthM) : undefined;
+    const cutFull = !!said && ["fs", "ls", "ws"].includes(said) && !!framed && framed.bottomM > 0;
+    // Only just cut (at the ankles): still a full shot, said as the picture shows it; cut higher: named for what it is.
+    const fix = cutFull && framed!.bottomM > 0.3 ? framed!.size : undefined;
+    const camW = fix ? { ...cam, size: fix } : cam;
+    lines.push(presetText(camW).replace(", static camera", "").replace(" static camera,", ""));
+    if (shot.shot?.trim()) lines.push(`Shot: ${fix ? withSize(shot.shot.trim(), fix) : shot.shot.trim()}.`);
     // Shot size, named framing, lens, point of view and what the angle means (D27).
-    lines.push(...shotLines({ cam, kind: verticalOf(cam).kind, fovDeg: cam.fovDeg ?? PRESET_FOV[cam.preset], text: `${i.description} ${shot.actions ?? ""} ${shot.shot ?? ""}`, name }));
+    lines.push(...shotLines({ cam: camW, kind: verticalOf(cam).kind, fovDeg: cam.fovDeg ?? PRESET_FOV[cam.preset], text: `${i.description} ${shot.actions ?? ""} ${fix ? withSize(shot.shot ?? "", fix) : shot.shot ?? ""}`, name })
+      .map((l) => (cutFull && !fix && l.startsWith("Framing:") ? `Framing: full shot, but the bottom edge cuts ${name(subjectId!)} at the ankles, exactly as in the layout; do not move the camera back or tilt it down to show the feet.` : l)));
     // Raised and lowered floors (D29): who is above or below the camera, and any drop in view.
     lines.push(...levelLines(shotPlan ?? i.plan!, cam, reading.actors.filter((a) => a.inView && [...shownIds, ...edgeIds].includes(a.characterId)).map((a) => a.characterId), name));
     // A strict left-to-right order and head count (D18e): looser wording let GPT swap people or drop them.
@@ -396,7 +414,11 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
           face = c > 0.5 ? ", facing the camera" : c > -0.35 ? ", seen side-on" : ", seen from behind";
         }
         const d = Math.max(0.5, Math.round(a.depthM * 2) / 2);
-        return { id: a.characterId, d, face, text: `${name(a.characterId)} about ${d} m from the camera${face}` };
+        // How big in the picture (D48), for anyone standing: in words as well as in the frame.
+        const me = shotPlan.actors.find((x) => x.characterId === a.characterId);
+        const big = pos && (!me?.pose || me.pose === "standing") ? pictureShare(shotPlan, cam, pos, 1.72, a.depthM) : undefined;
+        const size = !big || big.share >= 0.85 ? "" : big.cut ? `, from the head down past the bottom edge of the picture` : `, head to toe about ${Math.round(big.share * 100)}% of the picture's height`;
+        return { id: a.characterId, d, face, text: `${name(a.characterId)} about ${d} m from the camera${face}${size}` };
       });
       const near = Math.min(...parts.map((p) => p.d)), far = Math.max(...parts.map((p) => p.d));
       // Which side of the picture a carried bag is on (D33), when the character's description
