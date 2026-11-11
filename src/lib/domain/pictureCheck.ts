@@ -33,6 +33,8 @@ export interface PictureExpectation {
   postures?: { name: string; pose: "standing" | "sitting" | "lying" | "kneeling" | "crouching"; on?: string }[];
   /** Where each main person should be in the picture (B1), projected from the plan. */
   figures?: Figure[];
+  /** Image 2 is the same picture with a measuring grid (D50): positions are read off its lines. */
+  grid?: boolean;
 }
 
 /**
@@ -62,9 +64,10 @@ export function checkPrompt(e: PictureExpectation, refNames: string[]): string {
   return [
     "You are checking a storyboard picture against its approved layout. Report only what you actually see.",
     "",
+    `Image 1 is the picture to check.${e.grid ? " Image 2 is the same picture with a measuring grid over it: a line every 5% down the picture and every 10% across, numbered at the edges." : ""}`,
     e.blocking
-      ? "Image 1 is the picture to check. Image 2 is the approved shot: the real room from this camera with labelled stand-ins showing who stands where and which way they face, orange arrows for walking and yellow tags for held items."
-      : "Image 1 is the picture to check. Image 2 is the layout sketch: simple labelled shapes showing who stands where and what the camera sees.",
+      ? `Image ${e.grid ? 3 : 2} is the approved shot: the real room from this camera with labelled stand-ins showing who stands where and which way they face, orange arrows for walking and yellow tags for held items.`
+      : `Image ${e.grid ? 3 : 2} is the layout sketch: simple labelled shapes showing who stands where and what the camera sees.`,
     ...(refNames.length ? [`The next images are reference pictures, in this order: ${refNames.join(", ")}. Use the character ones to tell who is who and to check their clothes; use the prop ones to check how each prop looks.`] : []),
     "",
     `Expected main characters, left to right: ${e.order.length ? e.order.join(", ") : "none"}.${e.shoulder?.length ? ` ${e.shoulder.join(" and ")} may also be seen from behind in the foreground; don't list them.` : ""}`,
@@ -77,7 +80,7 @@ export function checkPrompt(e: PictureExpectation, refNames: string[]): string {
     ...(e.venueAreas?.length ? [`The venue's areas are: ${e.venueAreas.join(", ")}.`] : []),
     "",
     ...(e.figures?.length ? [
-      "Measure where each main character you list is in image 1, as fractions of the picture: 0 is the left or top edge, 1 the right or bottom edge. box = [left, top, right, bottom] around their visible body; head_y = the top of their head; feet_y = where their feet meet the floor; feet = \"visible\", \"hidden\" (behind something) or \"below the bottom edge\". When you can't see their feet, feet_y is null: never guess a number for something you can't see.",
+      `Measure where each main character you list is in image 1, as fractions of the picture: 0 is the left or top edge, 1 the right or bottom edge.${e.grid ? " Read every number off the grid in image 2: find the line just above and just below the point and estimate between them." : ""} box = [left, top, right, bottom] around their visible body; head_y = the top of their head (hair included); feet_y = the bottom of their shoes, where they touch the floor; feet = \"visible\", \"hidden\" (behind a table, a person or anything else) or \"below the bottom edge\". When you can't see their shoes, feet_y is null: never guess a number for something you can't see. Someone further back in the room has their feet higher up the picture than someone near the camera.`,
       "Also say whether the upright lines of the room (pillars, door frames, wall corners) stand upright and parallel, or lean in closer together at the bottom or at the top.",
       "",
     ] : []),

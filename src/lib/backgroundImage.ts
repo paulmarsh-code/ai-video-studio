@@ -119,7 +119,11 @@ export async function ringForScene(db: DB, sceneId: string) {
   let scene = repo.getScene(db, sceneId);
   const plan = scene?.plan?.data;
   if (!scene || !plan || !scene.venue) return null;
-  if (((scene.venue.views ?? []) as StoredView[]).some((v) => v.imageAssetId && v.calib?.assetId !== v.imageAssetId) && getTextProvider()) {
+  // Off unless asked for (D49): on Paul's venue the vision model read eye level far too high, the
+  // views were shrunk to about 40-55% and image 1 became mostly blur, while GPT still drew the
+  // group too big. The ordinary fit is kept; RING_CALIBRATION=1 turns the measured scale back on.
+  const calibrate = /^(1|true|on|yes)$/i.test(process.env.RING_CALIBRATION ?? "");
+  if (calibrate && ((scene.venue.views ?? []) as StoredView[]).some((v) => v.imageAssetId && v.calib?.assetId !== v.imageAssetId) && getTextProvider()) {
     await calibrateViews(db, scene.venue.id);
     scene = repo.getScene(db, sceneId)!;
   }
@@ -129,7 +133,7 @@ export async function ringForScene(db: DB, sceneId: string) {
       const dir = plan.views.find((p) => p.name === v.name)?.directionDeg;
       const a = v.imageAssetId ? repo.getAsset(db, v.imageAssetId) : undefined;
       if (dir === undefined || !a || !fs.existsSync(a.path)) return undefined;
-      const calib = v.calib?.assetId === v.imageAssetId ? { horizon: v.calib!.horizon, floor: v.calib!.floor } : undefined;
+      const calib = calibrate && v.calib?.assetId === v.imageAssetId ? { horizon: v.calib!.horizon, floor: v.calib!.floor } : undefined;
       return { name: v.name, directionDeg: dir, path: a.path, ...(calib ? { calib, wallM: wallDistance(plan, centre, dir) } : {}) };
     })
     .filter((v): v is RingView => !!v);

@@ -3,6 +3,7 @@
 // and judge the answer by rule.
 
 import fs from "node:fs";
+import sharp from "sharp";
 import type { DB } from "@/db/client";
 import { mainSubjectId } from "./domain/composer";
 import { facingOf, pictureXY, planForShot, readCamera, readProps } from "./domain/geometry";
@@ -97,6 +98,27 @@ export function expectationFor(db: DB, shotId: string): { expect: PictureExpecta
   };
 }
 
+/** A copy of the picture with a numbered measuring grid (D50): lines every 5% down and every 10% across. */
+export async function withGrid(picture: Buffer): Promise<Buffer> {
+  const meta = await sharp(picture).metadata();
+  const W = meta.width ?? 1024, H = meta.height ?? 1536;
+  const fs0 = Math.round(Math.min(W, H) / 45);
+  const parts: string[] = [];
+  for (let k = 1; k < 20; k++) {
+    const y = Math.round((H * k) / 20), major = k % 2 === 0;
+    parts.push(`<line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="${major ? "#00ffff" : "#ffff00"}" stroke-opacity="0.75" stroke-width="${major ? 2 : 1}"/>`);
+    const label = (k / 20).toFixed(2);
+    for (const x of [4, W - fs0 * 2.6]) parts.push(`<text x="${x}" y="${y - 3}" font-family="sans-serif" font-size="${fs0}" font-weight="bold" fill="#ffff00" stroke="#000" stroke-width="0.6">${label}</text>`);
+  }
+  for (let k = 1; k < 10; k++) {
+    const x = Math.round((W * k) / 10);
+    parts.push(`<line x1="${x}" y1="0" x2="${x}" y2="${H}" stroke="#ff00ff" stroke-opacity="0.6" stroke-width="1"/>`);
+    for (const y of [fs0 + 2, H - 6]) parts.push(`<text x="${x + 3}" y="${y}" font-family="sans-serif" font-size="${fs0}" font-weight="bold" fill="#ff66ff" stroke="#000" stroke-width="0.6">${(k / 10).toFixed(1)}</text>`);
+  }
+  const svg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">${parts.join("")}</svg>`);
+  return sharp(picture).composite([{ input: svg, left: 0, top: 0 }]).png().toBuffer();
+}
+
 export async function checkPanelPicture(db: DB, panelId: string, assetId: string): Promise<PictureCheck | null> {
   const text = getTextProvider();
   if (!text) return null;
@@ -126,8 +148,13 @@ export async function checkPanelPicture(db: DB, panelId: string, assetId: string
     if (f.imageAssetId && e.expect.props.includes(f.name)) refs.push({ label: `the ${f.name} (prop)`, asset: repo.getAsset(db, f.imageAssetId) });
   }
   const usable = refs.filter((r) => r.asset && fs.existsSync(r.asset.path));
+  // A measuring grid over a copy of the picture (D50): without it the model read the heads well
+  // but put far-off people's feet about a quarter of the picture too low.
+  const grid = e.expect.figures?.length ? await withGrid(fs.readFileSync(pic.path)).catch(() => undefined) : undefined;
+  if (grid) e.expect.grid = true;
   const images = [
     { data: fs.readFileSync(pic.path), mime: pic.mime },
+    ...(grid ? [{ data: grid, mime: "image/png" }] : []),
     ...(layout ? [{ data: Buffer.from(layout), mime: "image/png" }] : []),
     ...usable.map((r) => ({ data: fs.readFileSync(r.asset!.path), mime: r.asset!.mime })),
   ];

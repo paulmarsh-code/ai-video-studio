@@ -945,3 +945,15 @@ An independent ChatGPT review of the picture pipeline (pack v1.1, `video-product
   - a draw from the change form with the short request makes no automatic fix;
   - D46's and D47's browser tests still pass.
 - Next: Paul confirms the real check rejects panel 1's current picture ("Check again"), then runs T1 to T3 (test plan v0.2).
+
+### D50: Read the measurements off a grid; venue scaling off (2026-11-11)
+
+Paul ran "Check again" on panel 1's latest picture on his own machine. The check failed it on blocking, rightly: the group is about twice the planned size and the camera is tilted, with heads about 29% higher than planned. The numbers were off, though.
+
+- **Feet misread.** The vision model read the heads well (within about 3% of the picture), but put the far group's feet about a quarter of the picture too low. It reported Chase at 60% of the height where he is about 37%. On a correct picture that error could fail it wrongly.
+  - The check now also sends a copy of the picture with a numbered measuring grid (a line every 5% down and every 10% across), and says to read every position off it (`withGrid`). It also defines the head (hair included) and feet (the bottom of the shoes), and notes that people further back have their feet higher up the picture.
+  - This adds one picture to each check, a fraction of a penny.
+- **D48's venue scaling switched off.** The vision model read eye level very high in Paul's four venue pictures (36–38% from the top). The views were shrunk to about 40–55%, and image 1 became mostly blur. GPT still drew the group about twice too big, just as with the old frame, so the background wasn't the main cause of the squeezing.
+  - The ordinary fit is back. `RING_CALIBRATION=1` turns the measured scale on again for testing.
+  - Kept from D48: sizes in words, and the ankle-cut framing line.
+- Next: Paul runs "Check again" once more (about 1p) to see that the grid brings the numbers close to a careful reading: Chase about 37%, Nina about 35%, Jade about 78%, heads about 20% from the top. Then T1 to T3.

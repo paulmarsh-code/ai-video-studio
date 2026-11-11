@@ -132,3 +132,16 @@ describe("One request, full or short, without contradictions (D49, B3)", () => {
     expect(panelPrompt({ description: "Cleo walks in.", shot: spec, cast: cast as never, profiles: profiles as never, plan, venueName: "hall" }).short).toBeUndefined();
   });
 });
+
+describe("Measuring off a grid (D50)", () => {
+  it("with a grid, image 2 is the gridded copy and the approved shot moves to image 3", async () => {
+    const { checkPrompt } = await import("../src/lib/domain/pictureCheck");
+    const t = checkPrompt({ ...expect0, blocking: true, grid: true }, []);
+    expect(t).toMatch(/Image 2 is the same picture with a measuring grid/);
+    expect(t).toMatch(/Image 3 is the approved shot/);
+    expect(t).toMatch(/Read every number off the grid in image 2/);
+    expect(t).toMatch(/feet_y = the bottom of their shoes/);
+    const t0 = checkPrompt({ ...expect0, blocking: true }, []);
+    expect(t0).toMatch(/Image 2 is the approved shot/);
+  });
+});
