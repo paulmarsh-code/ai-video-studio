@@ -10,7 +10,7 @@ import { PLATE_KEEP_FULL, PLATE_KEEP_SHORT } from "./plate";
 export const CROWD_MIX = "Background people are ordinary and real-looking, not models: a natural mix of ages that suits this crowd, younger and older; of heights and body shapes, some heavier, some shorter, some broader; and of faces and hair. Each is dressed differently, in their own colours and style for the setting. No two alike, no one repeated.";
 export const CROWD_MIX_SHORT = "Ordinary real-looking people, not models: a natural mix of ages for this crowd, of heights and body shapes (some heavier, shorter or older), each dressed differently; no two alike.";
 import { mainSubjectId } from "./composer";
-import { describeFrame, facingOf, framedSize, pictureShare, PRESET_FOV, planForShot, presetText, readCamera, readProps } from "./geometry";
+import { describeFrame, facingOf, framedSize, pictureShare, PRESET_FOV, planForShot, presetText, readCamera, readProps, WALK_MS, walkAcross } from "./geometry";
 import { GENRE_PROFILES, type Genre } from "./genre";
 import { aimDetail, exitFrom, gestureDetail } from "./gestures";
 import { propMoves } from "./story";
@@ -255,13 +255,22 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   // Time between this moment and the approved picture (D73), from the panels' lengths: a server
   // walking at about 1.3 m/s is several metres on, not where the approved picture has her.
   const apart = i.continuity?.secondsApart;
-  const movedOn = !i.continuity || !shot?.crowd?.trim() ? ""
-    : apart !== undefined && Math.abs(apart) >= 1
-      ? ` This moment is about ${Math.round(Math.abs(apart))} seconds ${apart > 0 ? "before" : "after"} the approved picture, and the background people have moved in that time: those standing have shifted, turned or changed who they are talking to, and anyone walking is about ${Math.min(15, Math.round(Math.abs(apart) * 1.3))} metres from where they are in it, or out of the picture. Never copy the background people's places from it.`
-      : " A few seconds have passed: background people have shifted a little and anyone walking is somewhere else; never copy their exact places.";
   // From the same camera (D69): everything behind them is to match the approved picture exactly.
   // Two panels from one camera came out with a handrail of a different thickness.
   const sameCamera = !!i.continuity?.cameraId && i.continuity.cameraId === shot?.cameraId;
+  // Where a walker is now (D76). Told only how far they'd gone, with the approved picture's
+  // people taken out (D74), GPT put a server back in the same gap between the characters, facing
+  // the same way, 7 seconds later: the same image 1 invites the same choice. When a walker would
+  // have crossed this whole picture since, they are told where to be instead: at an edge.
+  const crossed = sameCamera && cam && shotPlan && apart !== undefined ? walkAcross(shotPlan, cam, apart) : 0;
+  const metres = apart !== undefined ? Math.round(Math.abs(apart) * WALK_MS) : 0;
+  const when = apart !== undefined && Math.abs(apart) >= 1 ? `This moment is about ${Math.round(Math.abs(apart))} seconds ${apart > 0 ? "before" : "after"} the approved picture` : "";
+  const movedOn = !i.continuity || !shot?.crowd?.trim() ? ""
+    : when && crossed >= 1
+      ? ` ${when}, and the background people have moved in that time: those standing have shifted, turned or changed who they are talking to, and anyone walking has gone ${metres > 15 ? "well over 15" : `about ${metres}`} metres, more than the whole width of this picture, so whoever was walking in it has left the picture. If the description has someone walking, draw them only at the left or right edge of the picture, just coming in or going out and facing the way they walk; never in the middle or between the characters. Never copy the background people's places from it.`
+      : when
+        ? ` ${when}, and the background people have moved in that time: those standing have shifted, turned or changed who they are talking to, and anyone walking is about ${Math.min(15, metres)} metres from where they are in it, or out of the picture. Never copy the background people's places from it.`
+        : " A few seconds have passed: background people have shifted a little and anyone walking is somewhere else; never copy their exact places.";
   const behind = "walls, railings, counters, fittings, lights and the view, the same shapes, sizes and thickness";
   if (i.continuity && sameCamera) S.refs.push(`The ${i.continuity.label} is from this same camera: keep the clothes, the furniture, what stands on the tables, the light and everything built behind the characters exactly as in it (${behind}), each character with the same drink and things in front of them; not its background people, who move on.${i.frame === "fill" ? " It is sent without its background people: draw them afresh, as described." : ""} Image 1 decides where everyone is and how they are posed in this moment.${movedOn}`);
   else if (i.continuity) S.refs.push(`The ${i.continuity.label} shows how the clothes, the furniture's colour and material, what stands on the tables and the light look: keep those the same, each character with the same drink and things in front of them. Image 1 decides where everyone and everything is, how big and how high, and what is behind them; never copy the approved picture's framing, positions or furniture sizes.${turned}${movedOn}`);

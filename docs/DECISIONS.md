@@ -1494,3 +1494,31 @@ Paul: "again I want to make sure we are not making Paid On Time specific changes
   - "Anyone walking (a server, say)" is now "anyone walking".
   - The app's hints used the Paid On Time cast and story ("move Jade closer to Nina…", "e.g. Paid On Time", the Glowvane story). They now use neutral examples (Sam, Priya and Tom; a corner bakery).
 - **Tested.** All unit tests pass, with their expected wording updated. Paid On Time names remain only in code comments and test fixtures.
+
+### D76: A walker who would have crossed the whole picture since is put at an edge (2026-11-12)
+
+**Failure (T6, panel 3 after D74).**
+- The background crowd was new: different faces, older and heavier people, which was the point of D73 and D74.
+- But a server with a tray stood in the same gap between the two characters, facing the same way, as in panel 1, which is 7 seconds earlier from the same camera.
+- Run on Paul's screenshot, D74's guest removal takes her out of the reference (8 of the 10 background people found). So she was not copied.
+- The request only said how far anyone walking had gone ("about 9 metres from where they are in it"). With her taken out, GPT couldn't see where that was. Image 1 is the same for both panels, so GPT made the same choice: the open gap in the middle.
+
+**Fix (prompt line).** The continuity line now says where a walker is, not only how far they've gone, when the app can work it out.
+- `walkAcross(plan, camera, seconds)` measures how many widths of this camera's picture someone walking crosses in the time between the panels. It uses walking pace (1.3 m/s) and the picture's width where background people stand: about 3 m behind the farthest character in view.
+- When that's a whole width or more, from the same camera, the request says:
+  - whoever was walking in the approved picture has left the picture;
+  - anyone walking now is drawn only at the left or right edge, just coming in or going out and facing the way they walk;
+  - never in the middle or between the characters.
+- For T6, the two-shot sees about 3–4 m across there, so 7 seconds is 2–3 widths.
+- Otherwise (a short gap, or a picture from another camera) the D73 wording stands.
+
+**Generic.**
+- It is worked out from the camera's lens, the plan's distances and the panels' lengths, so it holds in any scene, for anyone walking: staff, passers-by, a dog walker.
+- It uses no word list, and applies only when the scene has background people.
+
+**Limits.**
+- It doesn't say which edge. The app doesn't know which way the walker was going, so two later panels from the same camera could both put a walker at the same edge.
+- For a gap shorter than one crossing, GPT still can't see where the walker was (D74 took them out). That will only be worth solving if it shows up.
+- People standing right behind a main character's head stay in the reference, because the main characters' boxes are kept whole so their hair isn't cut (D74). That only leaves standing people in place, which Paul has said is fine for a few seconds.
+
+**Test.** Redraw T6 panel 3. The server should be at an edge or gone, not in the middle.

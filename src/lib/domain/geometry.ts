@@ -82,6 +82,24 @@ export interface CameraReading {
 }
 
 /**
+ * Walking pace (D73), metres a second.
+ */
+export const WALK_MS = 1.3;
+
+/**
+ * How many widths of this camera's picture someone walking among the background people crosses
+ * in `seconds` (D76), at walking pace. Background people are taken to be about 3 m behind the
+ * farthest character in view (5 m from the lens with none in view), where the picture is wider
+ * than at the characters, so this errs towards less movement, not more.
+ */
+export function walkAcross(plan: GeometryPlanData, cam: PlanCamera, seconds: number): number {
+  const depths = readCamera(plan, cam).actors.filter((a) => a.inView && !a.foreground).map((a) => a.depthM);
+  const depth = (depths.length ? Math.max(...depths) : 2) + 3;
+  const width = 2 * depth * Math.tan((horizontalFov(plan, cam) * Math.PI) / 360);
+  return (WALK_MS * Math.abs(seconds)) / width;
+}
+
+/**
  * The camera's horizontal field of view (D19). Preset angles are for the frame's long side:
  * in a portrait frame the width is the short side, so it sees a narrower slice of the room.
  */

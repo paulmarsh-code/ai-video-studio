@@ -55,9 +55,47 @@ describe("An approved picture from the same camera (D69)", () => {
 describe("Background guests move with the time between panels (D73)", () => {
   const timed = (secondsApart?: number) => panelPrompt({ description: "They talk.", shot: spec("front"), cast: cast as never, profiles: {}, plan, venueName: "roof", blockingHref: "/api/blocking/x", continuity: { assetId: "z", label: "approved scene picture (panel 3)", view: "skyline", cameraId: "front", ...(secondsApart !== undefined ? { secondsApart } : {}) } });
   it("says how long before the approved picture this is, and how far a walker has gone", () => {
-    const t = timed(7);
-    for (const x of [t.text, t.short!]) expect(x).toMatch(/This moment is about 7 seconds before the approved picture, and the background people have moved in that time: .*anyone walking is about 9 metres from where they are in it, or out of the picture\. Never copy the background people's places from it\./);
-    expect(timed(-4).short).toMatch(/about 4 seconds after the approved picture/);
+    // Two seconds: 2.6 m, about half this picture's width among the background people.
+    const t = timed(2);
+    for (const x of [t.text, t.short!]) expect(x).toMatch(/This moment is about 2 seconds before the approved picture, and the background people have moved in that time: .*anyone walking is about 3 metres from where they are in it, or out of the picture\. Never copy the background people's places from it\./);
+    expect(timed(-2).short).toMatch(/about 2 seconds after the approved picture/);
     expect(timed().short).toMatch(/A few seconds have passed/);
+  });
+});
+
+describe("A walker who has crossed the whole picture since is put at an edge (D76)", () => {
+  const timed = (secondsApart: number, cameraId = "front", from = "front") => panelPrompt({ description: "They talk.", shot: spec(cameraId), cast: cast as never, profiles: {}, plan, venueName: "roof", blockingHref: "/api/blocking/x", continuity: { assetId: "z", label: "approved scene picture (panel 1)", view: "skyline", cameraId: from, secondsApart } });
+  it("7 seconds on, from the same camera: whoever walked has left; anyone walking now is at an edge", () => {
+    // The two-shot sees about 4.5 m across where background people stand; 7 s is about 9 m.
+    const t = timed(-7);
+    for (const x of [t.text, t.short!]) {
+      expect(x).toMatch(/This moment is about 7 seconds after the approved picture, .*anyone walking has gone about 9 metres, more than the whole width of this picture, so whoever was walking in it has left the picture\./);
+      expect(x).toMatch(/If the description has someone walking, draw them only at the left or right edge of the picture, just coming in or going out and facing the way they walk; never in the middle or between the characters\./);
+    }
+  });
+  it("works the same either way in time, and says 'well over' for long gaps", () => {
+    expect(timed(7).short).toMatch(/7 seconds before the approved picture, .*has left the picture/);
+    expect(timed(-40).short).toMatch(/has gone well over 15 metres/);
+  });
+  it("not from another camera, whose walker may be anywhere in this picture", () => {
+    const t = timed(-7, "front", "ots");
+    expect(t.short).not.toMatch(/left or right edge/);
+    expect(t.short).toMatch(/anyone walking is about 9 metres from where they are in it/);
+  });
+  it("not with no background people described", () => {
+    const quiet = panelPrompt({ description: "They talk.", shot: { ...spec("front"), crowd: "" } as ShotSpec, cast: cast as never, profiles: {}, plan, venueName: "roof", blockingHref: "/api/blocking/x", continuity: { assetId: "z", label: "approved scene picture (panel 1)", view: "skyline", cameraId: "front", secondsApart: -7 } });
+    for (const x of [quiet.text, quiet.short!]) expect(x).not.toMatch(/anyone walking|left or right edge/);
+  });
+});
+
+describe("How far a walker crosses the picture (D76)", () => {
+  it("is walking pace over the picture's width where background people stand", async () => {
+    const { walkAcross, horizontalFov } = await import("../src/lib/domain/geometry");
+    const cam = plan.cameras[0];
+    // Characters 4 m from the lens; background people about 3 m behind them, at 7 m.
+    const width = 2 * 7 * Math.tan((horizontalFov(plan, cam) * Math.PI) / 360);
+    expect(walkAcross(plan, cam, 7)).toBeCloseTo((1.3 * 7) / width, 5);
+    expect(walkAcross(plan, cam, -7)).toBeCloseTo(walkAcross(plan, cam, 7), 5);
+    expect(walkAcross(plan, cam, 2)).toBeLessThan(1);
   });
 });
