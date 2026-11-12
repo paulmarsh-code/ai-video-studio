@@ -1730,3 +1730,16 @@ STORYBOARD_FRAME=box npx tsx scripts/exercise.ts <folder>
 **Checked on a copy of Paul's scene, as saved:** the bowl is an area; panel 1 has Kai at the near rim and Rosa on the opposite edge; panel 2 has Kai in the bowl, riding, the camera at 3 m looking in; panel 4 has Kai on the far lip. All four cameras have the venue's bowl view behind.
 
 **Limit.** The plan's bowl and the bowl in the venue's picture are not the same shape or place: the outline sits beyond the photo's bowl. GPT is told the outline is the bowl; it may follow the photo's instead. Making the plan's area match the picture is the next thing to solve if the draws show it.
+
+### D83: An out-of-date layout updates itself (2026-11-12)
+
+**Failure.** After D80 and D82, Paul drew the skate park three more times on the old layout. His database shows why: layout rules 14, no bowl area, the old cameras. The fix sat behind "Update the layout", a button he had no reason to press; and with his cameras approved it would have stopped with "the cameras are approved and locked". He should not have to know any of that.
+
+**Fix.**
+- Opening a storyboard whose layout is out of date updates it by itself when no picture is approved yet (nothing to protect): areas from the setting, places from the panels' words, cameras chosen again. A green note says it happened and that pictures need drawing again.
+- With approved pictures the amber notice and its button stay, so nothing approved changes unasked.
+- The update unlocks the cameras as well as the positions.
+
+**Checked** on a copy of Paul's database as it stands, through the real page: first open updates (bowl area in, four cameras chosen, rules 15); second open does nothing.
+
+**Working rule from tonight.** A fix isn't done until it works from Paul's saved scene with no extra steps, checked on a copy of his database through the page he'll open.

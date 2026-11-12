@@ -13,6 +13,7 @@ import { StoryboardBoard } from "@/components/StoryboardBoard";
 import { SceneSettingCard } from "@/components/SceneSettingCard";
 import { asStaging, propMoves, propsFromFurniture, stagingPrompt } from "@/lib/domain/story";
 import { LAYOUT_RULES } from "@/lib/domain/director";
+import { updateLayout } from "@/lib/layoutUpdate";
 import { PanelEditor } from "@/components/PanelEditor";
 import { hasRing } from "@/lib/backgroundImage";
 import { ensureHeldItems } from "@/lib/heldItemsServer";
@@ -28,8 +29,21 @@ export default async function StoryboardPage({ params, searchParams }: { params:
   const sp = await searchParams;
   const db = await getDb();
   const project = repo.getProject(db, id);
-  const s = repo.getScene(db, sceneId);
+  let s = repo.getScene(db, sceneId);
   if (!project || !s || s.scene.projectId !== id) notFound();
+  // An out-of-date layout updates itself (D83) when no picture is approved yet, so there is
+  // nothing to protect: Paul redrew three times on an old layout because the update was a button
+  // he had no reason to press. With approved pictures, the notice and its button remain.
+  let updatedNote = "";
+  if (s.plan && (s.plan.data.rules ?? 0) < LAYOUT_RULES && studio.sceneLocks(db, sceneId).positions && !s.panels.some((p) => p.status === "approved")) {
+    try {
+      await updateLayout(db, sceneId);
+      updatedNote = "The app's layout rules have improved, so this scene's layout and cameras were updated for you. Pictures drawn before need drawing again.";
+    } catch (e) {
+      updatedNote = `The layout couldn't be updated by itself: ${e instanceof Error ? e.message : String(e)}`;
+    }
+    s = repo.getScene(db, sceneId)!;
+  }
   const cast = repo.getCast(db, id);
   const chars = studio.listCharacters(db, id);
   // Which hand holds what, read once from each reference picture (D34), so the storyboard can
@@ -78,6 +92,7 @@ export default async function StoryboardPage({ params, searchParams }: { params:
   return (
     <div className="max-w-6xl">
       {crumbs}
+      {updatedNote && <p className="my-3 rounded-lg border border-green-300 bg-green-50 p-3 text-sm" data-testid="layout-updated">{updatedNote}</p>}
       <h1 className="text-2xl font-semibold">Storyboard: {s.scene.title}</h1>
       <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-900" data-testid="storyboard-summary">
         <span><strong>{s.panels.length} panels</strong> · about {total} s · target {s.scene.targetSec} s</span>
