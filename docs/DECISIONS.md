@@ -1255,3 +1255,23 @@ T6, round 3. Paul redrew panel 3 and got the sides and a normal-height table; th
 - **Tested.**
   - Unit tests check that the references come in the order named left to right, for a camera and its reverse, and that the reverse turns the order round. They also check that the padding fills to size, mirrored above and drawn out below.
   - Image 1 was rendered for panels 1 and 2 from a copy of Paul's scene. There's no blurred band; the pergola carries on above and the floor below.
+
+### D65: Sides said outright for two; a bag stays with its owner when seated or side-on; the approved picture's guests not frozen (2026-11-12)
+
+T6, round 4. Paul approved panel 3 and redrew panels 1 and 2 with D64 in place.
+- **The blurred roof was still in panel 1.** Its image 1 was clean (the D64 padding worked), but panel 3 was drawn before D64 and has the blurred band. Panels 1 and 3 share a camera, so GPT copied panel 3's top. This needs no code change: redraw panel 3 on the current rules and approve it again.
+- **Panel 2 swapped the pair again**, though its references now came in left-to-right order (Nina's back, then Jade). It's an over-the-shoulder shot, and the order alone still left GPT free to put the foreground back on the right. It has swapped in 3 of 5 draws.
+- **Drinks swapped in panel 2.** That follows from the people swapping. Nothing asked for each drink to stay with its person.
+- **Jade's satchel** is in panel 2 but in neither 1 nor 3. The request names a carried bag only for someone facing the camera or seen from behind. Side-on, or seated, the bag wasn't mentioned, so it came and went.
+- **Background guests in panels 1 and 3 were the same, with the server in exactly the same place.** Paul's note: someone walking would have moved on.
+
+- **Failures fixed (D38).** People swapped, a bag that comes and goes, drinks swapped between people, and a background frozen between panels. All reach generation through prompt lines.
+- **Sides.** With exactly two main characters, both requests now add, for example: "Nina is on the left of the picture and Jade on the right, as in image 1."
+- **Bags (`carriedItems`).**
+  - Seated, a carried bag (not something on the wrist) is "with her, on her lap or on the seat beside her". In the short request: "Jade's satchel on her lap or the seat beside her". It's never in a hand while she sits.
+  - Standing side-on, the bag is named in its hand, without the picture side, because which side it shows on depends on how she's turned.
+  - Facing the camera or seen from behind, the D33 wording is unchanged.
+- **The approved picture.**
+  - "Each character keeps the same drink and things in front of them."
+  - With a crowd: "A few seconds have passed: background guests have shifted a little and anyone walking is somewhere else; never copy their exact places."
+- **Tested.** Unit tests cover the two-sides sentence in both requests, the seated bag wording (and no hand), and the drink and moved-on lines. The moved-on line appears only with a crowd and an approved picture.

@@ -22,7 +22,7 @@ const draw = (cameraId: string, view: string) => panelPrompt({ description: "The
 describe("The approved picture gives looks, never the shot (D63)", () => {
   it("keeps clothes, the furniture's colour and material, the table things and the light; image 1 decides the rest", () => {
     const p = draw("front", "skyline");
-    expect(p.short).toMatch(/shows how the clothes, the furniture's colour and material, what stands on the tables and the light look: keep those the same\. Image 1 decides where everyone and everything is, how big and how high, and what is behind them/);
+    expect(p.short).toMatch(/shows how the clothes, the furniture's colour and material, what stands on the tables and the light look: keep those the same, each character with the same drink and things in front of them\. Image 1 decides where everyone and everything is, how big and how high, and what is behind them/);
     expect(p.text).toMatch(/Where everyone and everything is, how big and how high, and what is behind them come from image 1, not from it\./);
     for (const t of [p.text, p.short!]) {
       expect(t).not.toMatch(/the same furniture at the same height and size/);
