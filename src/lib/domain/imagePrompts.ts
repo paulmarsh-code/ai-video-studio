@@ -7,7 +7,7 @@ import { outfitColours } from "./outfitColour";
 import { PLATE_KEEP_FULL, PLATE_KEEP_SHORT } from "./plate";
 
 /** Background people as a real crowd (D73): Paul's ask, for any scene. */
-export const CROWD_MIX = "Background guests are ordinary, real-looking people, not models: a natural mix of ages that suits this crowd, younger and older; of heights and body shapes, some heavier, some shorter, some broader; and of faces and hair. Each is dressed differently, in their own colours and style for the occasion. No two alike, no one repeated.";
+export const CROWD_MIX = "Background people are ordinary and real-looking, not models: a natural mix of ages that suits this crowd, younger and older; of heights and body shapes, some heavier, some shorter, some broader; and of faces and hair. Each is dressed differently, in their own colours and style for the setting. No two alike, no one repeated.";
 export const CROWD_MIX_SHORT = "Ordinary real-looking people, not models: a natural mix of ages for this crowd, of heights and body shapes (some heavier, shorter or older), each dressed differently; no two alike.";
 import { mainSubjectId } from "./composer";
 import { describeFrame, facingOf, framedSize, pictureShare, PRESET_FOV, planForShot, presetText, readCamera, readProps } from "./geometry";
@@ -257,24 +257,24 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   const apart = i.continuity?.secondsApart;
   const movedOn = !i.continuity || !shot?.crowd?.trim() ? ""
     : apart !== undefined && Math.abs(apart) >= 1
-      ? ` This moment is about ${Math.round(Math.abs(apart))} seconds ${apart > 0 ? "before" : "after"} the approved picture, and the background guests have moved in that time: those standing have shifted, turned or changed who they are talking to, and anyone walking (a server, say) is about ${Math.min(15, Math.round(Math.abs(apart) * 1.3))} metres from where they are in it, or out of the picture. Never copy the guests' places from it.`
-      : " A few seconds have passed: background guests have shifted a little and anyone walking is somewhere else; never copy their exact places.";
+      ? ` This moment is about ${Math.round(Math.abs(apart))} seconds ${apart > 0 ? "before" : "after"} the approved picture, and the background people have moved in that time: those standing have shifted, turned or changed who they are talking to, and anyone walking is about ${Math.min(15, Math.round(Math.abs(apart) * 1.3))} metres from where they are in it, or out of the picture. Never copy the background people's places from it.`
+      : " A few seconds have passed: background people have shifted a little and anyone walking is somewhere else; never copy their exact places.";
   // From the same camera (D69): everything behind them is to match the approved picture exactly.
   // Two panels from one camera came out with a handrail of a different thickness.
   const sameCamera = !!i.continuity?.cameraId && i.continuity.cameraId === shot?.cameraId;
-  const behind = "railings, walls, planters, lights and the view, the same shapes, sizes and thickness";
-  if (i.continuity && sameCamera) S.refs.push(`The ${i.continuity.label} is from this same camera: keep the clothes, the furniture, what stands on the tables, the light and everything built behind the characters exactly as in it (${behind}), each character with the same drink and things in front of them; not its background guests, who move on.${i.frame === "fill" ? " It is sent without its background guests: draw them afresh, as described." : ""} Image 1 decides where everyone is and how they are posed in this moment.${movedOn}`);
+  const behind = "walls, railings, counters, fittings, lights and the view, the same shapes, sizes and thickness";
+  if (i.continuity && sameCamera) S.refs.push(`The ${i.continuity.label} is from this same camera: keep the clothes, the furniture, what stands on the tables, the light and everything built behind the characters exactly as in it (${behind}), each character with the same drink and things in front of them; not its background people, who move on.${i.frame === "fill" ? " It is sent without its background people: draw them afresh, as described." : ""} Image 1 decides where everyone is and how they are posed in this moment.${movedOn}`);
   else if (i.continuity) S.refs.push(`The ${i.continuity.label} shows how the clothes, the furniture's colour and material, what stands on the tables and the light look: keep those the same, each character with the same drink and things in front of them. Image 1 decides where everyone and everything is, how big and how high, and what is behind them; never copy the approved picture's framing, positions or furniture sizes.${turned}${movedOn}`);
   if (backs.length) lines.push(`${joinNames(backs)} ${backs.length === 1 ? "is" : "are"} seen from behind: copy the back of their clothes, hair and bag exactly from the attached back ${backs.length === 1 ? "image" : "images"}.`);
-  if (ring) lines.push(`Use the attached background picture as the room behind the characters: it is cut from the venue's 360° view for exactly this camera position, angle and lens, so what is on its left stays on the left and what is on its right stays on the right. Same place, layout and light, seen across the room several metres behind them.${shot?.crowd?.trim() ? " Fill it with the background guests described below." : ""}`);
-  if (bgImage) lines.push(`Use the attached ${bgView} image as the background, seen across the room several metres behind the characters: same place, layout and light.${shot?.crowd?.trim() ? " It shows the room empty; fill it with the background guests described below." : ""}`);
+  if (ring) lines.push(`Use the attached background picture as the room behind the characters: it is cut from the venue's 360° view for exactly this camera position, angle and lens, so what is on its left stays on the left and what is on its right stays on the right. Same place, layout and light, seen across the room several metres behind them.${shot?.crowd?.trim() ? " Fill it with the background people described below." : ""}`);
+  if (bgImage) lines.push(`Use the attached ${bgView} image as the background, seen across the room several metres behind the characters: same place, layout and light.${shot?.crowd?.trim() ? " It shows the room empty; fill it with the background people described below." : ""}`);
   // The room keeps its order in every shot (D19f): what lies left and right of the background.
   const sides = reading?.sideViews;
   if (bgView && (sides?.left || sides?.right)) lines.push(`The room around it, never swapped: ${[sides.left ? `the ${sides.left} is to the left of the ${bgView}` : "", sides.right ? `the ${sides.right} is to the right of the ${bgView}` : ""].filter(Boolean).join("; ")}. Anything of ${sides.left && sides.right ? "them" : "it"} in the picture stays on that side.`);
   const spot = shot?.spot?.trim();
   const crowd = shot?.crowd?.trim();
   // An older approved picture may show an empty room: keep its spot and look, but add the crowd.
-  if (i.continuity) lines.push(`Use the attached ${i.continuity.label} for continuity: the same clothes, the same colour and material of furniture, the same things on the tables (glasses, drinks, bags) and the same light${crowd ? ". If it shows fewer background guests than described below, add them" : ", and the same kind of background guests"}. Each character keeps the same drink and things in front of them. ${sameCamera ? `It is from this same camera: everything built behind the characters stays exactly as in it (${behind}), but not its background guests${i.frame === "fill" ? ", which are taken out of it: draw them afresh, as described" : ""}. Where everyone is and how they are posed come from ${blocking ? "image 1" : "the layout"}.` : `Where everyone and everything is, how big and how high, and what is behind them come from ${blocking ? "image 1" : "the layout"}, not from it.${turned}`}${movedOn}`);
+  if (i.continuity) lines.push(`Use the attached ${i.continuity.label} for continuity: the same clothes, the same colour and material of furniture, the same things on the tables (glasses, drinks, bags) and the same light${crowd ? ". If it shows fewer background people than described below, add them" : ", and the same kind of background people"}. Each character keeps the same drink and things in front of them. ${sameCamera ? `It is from this same camera: everything built behind the characters stays exactly as in it (${behind}), but not its background people${i.frame === "fill" ? ", who are taken out of it: draw them afresh, as described" : ""}. Where everyone is and how they are posed come from ${blocking ? "image 1" : "the layout"}.` : `Where everyone and everything is, how big and how high, and what is behind them come from ${blocking ? "image 1" : "the layout"}, not from it.${turned}`}${movedOn}`);
   // The same light in every picture (D31): one picture came out much darker than the rest.
   const light = lightingOf(i.venueDescription ?? "");
   if (light) lines.push(`Lighting, identical in every picture of this scene: ${light} Same brightness, colour and mood as the other pictures of the scene; not darker, not brighter.`);
@@ -363,7 +363,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   // Real people, not models (D73): "varied" alone still gave a row of slim, young, similarly
   // dressed extras.
   if (crowd) S.people.push(`Background: ${sentence(crowd).split(/(?<=[.!?])\s+/)[0]} ${CROWD_MIX_SHORT} Out of focus, smaller than the main characters, never looking at the camera, none like them.`);
-  if (crowd) lines.push(`Background: ${sentence(crowd)}${castUp ? ` They are down on the main floor, not up on ${castUp.name} with the characters.` : ""}${layout ? " The grey figures in the layout sketch show where they stand." : ""} Background guests are out of focus, smaller than the main characters and never look at the camera; none of them look like the main characters. ${CROWD_MIX}`);
+  if (crowd) lines.push(`Background: ${sentence(crowd)}${castUp ? ` They are down on the main floor, not up on ${castUp.name} with the characters.` : ""}${layout ? " The grey figures in the layout sketch show where they stand." : ""} Background people are out of focus, smaller than the main characters and never look at the camera; none of them look like the main characters. ${CROWD_MIX}`);
   for (const c of visible) {
     const p = i.profiles[c.id];
     const parts = [p?.appearance, p?.wardrobe ? `wearing ${p.wardrobe}` : ""].filter(Boolean).map((x) => sceneDescription(stripQuotes(x!)).replace(/[.!?]+$/, "")).filter(Boolean);
@@ -466,7 +466,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
       // Two people: each side said outright (D65). Order alone still let GPT swap an over-the-shoulder pair.
       const sides = order.length === 2 ? ` ${name(order[0].characterId)} is on the left of the picture and ${name(order[1].characterId)} on the right, as in image 1.` : "";
       lines.push(`Exactly ${order.length} main characters in this picture, from left to right: ${who}.${sides} Keep this left-to-right order; do not swap anyone, and do not leave anyone out.`);
-      S.people.unshift(`Exactly ${order.length} main characters, left to right: ${who}; background guests apart.${sides}`);
+      S.people.unshift(`Exactly ${order.length} main characters, left to right: ${who}; background people apart.${sides}`);
       if (reading.backgroundView && subjectId) lines.push(`Behind ${name(subjectId)}, across the room several metres away: the ${reading.backgroundView}. Nothing stands right behind them.`);
     } else {
       const frame = describeFrame(reading, i.cast, [...shownIds, ...edgeIds], subjectId);
@@ -575,7 +575,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   const look = light ? GENRE_PROFILES[genre].look.split(/,\s*/).filter((x) => !/\blight/i.test(x)) : [GENRE_PROFILES[genre].look];
   if (look.length && (look.length > 1 || /\s/.test(look[0]))) lines.push(`Look: ${look.join(", ")}.`);
   if (visible.length === 1 && edge.length) lines.push(`Exactly one of each person: ${joinNames([...visible, ...edge].map((c) => c.name))}. ${visible[0].name} is the main subject.`);
-  else if (visible.length === 1) lines.push(crowd ? `Only ${visible[0].name} in the foreground; other guests only in the background.` : `Only ${visible[0].name} in frame.`);
+  else if (visible.length === 1) lines.push(crowd ? `Only ${visible[0].name} in the foreground; other people only in the background.` : `Only ${visible[0].name} in frame.`);
   else if (visible.length > 1) lines.push(`Exactly one of each person: ${joinNames([...visible, ...edge].map((c) => c.name))}. No other people in the foreground.`);
   // A logo or sign that is part of the scene is the one exception (D47).
   const noText = noTextRule(props, ["no speech bubbles", "no watermark"], propPics.map((f) => f.name));

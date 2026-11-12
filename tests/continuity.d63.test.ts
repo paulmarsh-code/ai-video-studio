@@ -41,8 +41,8 @@ describe("An approved picture from the same camera (D69)", () => {
   const same = (cameraId: string, from: string) => panelPrompt({ description: "They talk.", shot: spec(cameraId), cast: cast as never, profiles: {}, plan, venueName: "roof", blockingHref: "/api/blocking/x", continuity: { assetId: "z", label: "approved scene picture (panel 3)", view: "skyline", cameraId: from } });
   it("keeps everything behind the characters exactly as in it", () => {
     const p = same("front", "front");
-    expect(p.short).toMatch(/is from this same camera: keep the clothes, the furniture, what stands on the tables, the light and everything built behind the characters exactly as in it \(railings, walls, planters, lights and the view, the same shapes, sizes and thickness\).*not its background guests, who move on/);
-    expect(p.text).toMatch(/It is from this same camera: everything built behind the characters stays exactly as in it .*but not its background guests/);
+    expect(p.short).toMatch(/is from this same camera: keep the clothes, the furniture, what stands on the tables, the light and everything built behind the characters exactly as in it \(walls, railings, counters, fittings, lights and the view, the same shapes, sizes and thickness\).*not its background people, who move on/);
+    expect(p.text).toMatch(/It is from this same camera: everything built behind the characters stays exactly as in it .*but not its background people/);
     expect(p.short).not.toMatch(/never copy the approved picture's framing/);
   });
   it("from another camera, gives looks only, as before", () => {
@@ -56,7 +56,7 @@ describe("Background guests move with the time between panels (D73)", () => {
   const timed = (secondsApart?: number) => panelPrompt({ description: "They talk.", shot: spec("front"), cast: cast as never, profiles: {}, plan, venueName: "roof", blockingHref: "/api/blocking/x", continuity: { assetId: "z", label: "approved scene picture (panel 3)", view: "skyline", cameraId: "front", ...(secondsApart !== undefined ? { secondsApart } : {}) } });
   it("says how long before the approved picture this is, and how far a walker has gone", () => {
     const t = timed(7);
-    for (const x of [t.text, t.short!]) expect(x).toMatch(/This moment is about 7 seconds before the approved picture, and the background guests have moved in that time: .*anyone walking \(a server, say\) is about 9 metres from where they are in it, or out of the picture\. Never copy the guests' places from it\./);
+    for (const x of [t.text, t.short!]) expect(x).toMatch(/This moment is about 7 seconds before the approved picture, and the background people have moved in that time: .*anyone walking is about 9 metres from where they are in it, or out of the picture\. Never copy the background people's places from it\./);
     expect(timed(-4).short).toMatch(/about 4 seconds after the approved picture/);
     expect(timed().short).toMatch(/A few seconds have passed/);
   });

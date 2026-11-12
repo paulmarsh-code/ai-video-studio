@@ -577,7 +577,7 @@ export function PlanEditor(props: {
               <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/40 p-3" data-testid="panel-words">
                 <label className="block font-medium">What should change in this panel?<WordsHelp guide="change" />
                   <textarea className="mt-1 w-full rounded border border-neutral-300 bg-white px-2 py-1" rows={2} value={words} data-testid="panel-words-input"
-                    placeholder="e.g. move Jade closer to Nina and have Marcus walk off to the right" onChange={(e) => setWords(e.target.value)} />
+                    placeholder="e.g. move Sam closer to Priya and have Tom walk off to the right" onChange={(e) => setWords(e.target.value)} />
                 </label>
                 <button type="button" className="mt-1 rounded-md bg-blue-700 px-3 py-1 text-white hover:bg-blue-800 disabled:opacity-40" disabled={!words.trim()} data-testid="panel-words-apply"
                   onClick={() => applyWords(words)}>Show it on the plan</button>

@@ -69,7 +69,7 @@ describe("The people and props' area (D66)", () => {
 
 describe("The request in version C (D66, D67)", () => {
   it("keeps image 1's finished background, adding only the background guests", () => {
-    expect(blockingInstruction([], false, true, true)).toMatch(/is the finished background photograph: keep it exactly as it is, as sharp as it is, adding only the background guests described below/);
+    expect(blockingInstruction([], false, true, true)).toMatch(/is the finished background photograph: keep it exactly as it is, as sharp as it is, adding only the background people described below/);
     expect(blockingShort(false, true, true)).toContain(PLATE_KEEP_SHORT);
     expect(blockingShort(false, true)).not.toContain(PLATE_KEEP_SHORT);
     const shot = { code: "P1", visibleIds: ["ava", "bo"], excludedIds: [], presentIds: ["ava", "bo"], cameraId: "c", shot: "medium shot", audioMode: "off", durationSec: 4, venueName: "roof", crowd: "about 10 guests" } as unknown as ShotSpec;
@@ -85,8 +85,8 @@ describe("An approved picture from the same camera, sent without its guests (D74
     const shot = { code: "P1", visibleIds: ["ava", "bo"], excludedIds: [], presentIds: ["ava", "bo"], cameraId: "c", shot: "medium shot", audioMode: "off", durationSec: 4, venueName: "roof", crowd: "about 10 guests" } as unknown as ShotSpec;
     const cast = [{ id: "ava", name: "Ava" }, { id: "bo", name: "Bo" }].map((c) => ({ ...c, pronoun: "she" as const, voiceLock: "", description: "" }));
     const c = panelPrompt({ description: "They talk.", shot, cast: cast as never, profiles: {}, plan, venueName: "roof", blockingHref: "/api/blocking/x", frame: "fill", continuity: { assetId: "z", label: "approved scene picture (panel 3)", cameraId: "c", secondsApart: 7 } });
-    expect(c.short).toMatch(/It is sent without its background guests: draw them afresh, as described\./);
-    expect(c.text).toMatch(/but not its background guests, which are taken out of it: draw them afresh, as described\./);
+    expect(c.short).toMatch(/It is sent without its background people: draw them afresh, as described\./);
+    expect(c.text).toMatch(/but not its background people, who are taken out of it: draw them afresh, as described\./);
   });
   it("leaves a picture alone when the detector finds no one", async () => {
     const { withoutGuests } = await import("../src/lib/plateImage");

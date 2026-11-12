@@ -273,8 +273,8 @@ describe("Scene setting (D18c): the same spot and crowd in every picture and cli
     const shot = shotSpecFor(parseStoryReply(REPLY, CAST).panels[0], { code: "P1", venueName: "Launch", castIds: CAST.map((c) => c.id), staging: { spot: "around a tall cocktail table", crowd: "about 30 guests mingling" } });
     const p = panelPrompt({ description: "Jade arrives", shot, cast, profiles: {}, venueName: "Launch", continuity: { assetId: "a-p2", label: "approved scene picture (panel 2)" } });
     expect(p.text).toContain("Where: around a tall cocktail table. Keep it in the picture wherever the camera would see it, always the same height and size. Everyone keeps their own place and posture around it, standing upright; no one leans on it");
-    expect(p.text).toContain("Background: about 30 guests mingling. Background guests are out of focus");
-    expect(p.text).toContain("Only Jade in the foreground; other guests only in the background.");
+    expect(p.text).toContain("Background: about 30 guests mingling. Background people are out of focus");
+    expect(p.text).toContain("Only Jade in the foreground; other people only in the background.");
     expect(p.text).toContain("Use the attached approved scene picture (panel 2) for continuity");
     expect(p.attach).toContainEqual({ label: "approved scene picture (panel 2)", assetId: "a-p2" });
     const bare = panelPrompt({ description: "Jade arrives", shot: { ...shot, spot: undefined, crowd: undefined }, cast, profiles: {}, venueName: "Launch" });
@@ -287,7 +287,7 @@ describe("Scene setting (D18c): the same spot and crowd in every picture and cli
     const shot = shotSpecFor(parseStoryReply(REPLY, CAST).panels[0], { code: "P1", venueName: "Launch", castIds: CAST.map((c) => c.id), staging: { spot: "around a tall cocktail table", crowd: "about 30 guests mingling" } });
     const t = composePrompt(shot, cast).text;
     expect(t).toContain("They are around a tall cocktail table. In the background: about 30 guests mingling, out of focus.");
-    expect(t).toContain("Only Jade is in the foreground. Background guests stay out of focus");
+    expect(t).toContain("Only Jade is in the foreground. Background people stay out of focus");
     expect(t).not.toContain("No other people visible");
   });
   it("saving the setting updates every shot in the scene", async () => {

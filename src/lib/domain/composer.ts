@@ -242,7 +242,7 @@ export function composeKlingPrompt(
   }
   if (visible.length === 1) {
     guards.push(shot.crowd?.trim()
-      ? `Only ${visible[0].name} is in the foreground. Background guests stay out of focus and never speak to the camera.`
+      ? `Only ${visible[0].name} is in the foreground. Background people stay out of focus and never speak to the camera.`
       : `Only ${visible[0].name} is in frame. No other people visible.`);
   } else if (visible.length > 1) {
     guards.push(`Exactly one of each person: ${joinNames(visible.map((c) => c.name))}.`);

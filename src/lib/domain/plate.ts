@@ -70,8 +70,8 @@ export function structureMatch(a: ArrayLike<number>, b: ArrayLike<number>): numb
 export const SAME_PLACE = 0.6;
 
 /** The cue in the picture request (D66, D67): image 1's background is finished; keep it. */
-export const PLATE_KEEP_FULL = "- Everything in image 1 outside the stand-ins and the outlined props is the finished background photograph: keep it exactly as it is, as sharp as it is, adding only the background guests described below. Draw the main characters, the props and their shadows as sharp as the background.";
-export const PLATE_KEEP_SHORT = "Everything else in image 1 is the finished background: keep it exactly, as sharp as it is, adding only the background guests described; draw the main characters, the props and their shadows as sharp as it.";
+export const PLATE_KEEP_FULL = "- Everything in image 1 outside the stand-ins and the outlined props is the finished background photograph: keep it exactly as it is, as sharp as it is, adding only the background people described below. Draw the main characters, the props and their shadows as sharp as the background.";
+export const PLATE_KEEP_SHORT = "Everything else in image 1 is the finished background: keep it exactly, as sharp as it is, adding only the background people described; draw the main characters, the props and their shadows as sharp as it.";
 
 /**
  * Extra parts GPT may draw (D66), as SVG polygons in a `width` × `height` picture: beyond the

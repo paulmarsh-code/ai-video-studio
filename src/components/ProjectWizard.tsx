@@ -71,7 +71,7 @@ export function ProjectWizard({ existing }: ProjectWizardProps) {
         <>
           <StepHeader n={1} title="What are you making?" />
           <label className="block max-w-md text-sm">Project name
-            <input className={field} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Paid On Time" data-testid="pw-name" />
+            <input className={field} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. The Corner Bakery" data-testid="pw-name" />
           </label>
           <p className="mt-4 text-sm font-medium">Kind of video</p>
           <div className="mt-2 flex flex-wrap gap-2">
@@ -137,7 +137,7 @@ export function ProjectWizard({ existing }: ProjectWizardProps) {
           <StepHeader n={3} title="Outline the story" />
           <p className="mb-2 text-sm text-neutral-600">{summary}. In a few lines: who it&apos;s about, what happens, and how it ends. You&apos;ll tell each scene in detail later.</p>
           <textarea className={field} rows={6} value={outline} onChange={(e) => setOutline(e.target.value)} data-testid="pw-outline"
-            placeholder="e.g. Jade, a freelance content creator, made the promo for the Glowvane launch. Weeks later she still hasn't been paid. Over four short scenes she chases Chase, the smug marketing director, until she finally gets her money in a way he never sees coming." />
+            placeholder="e.g. Maya runs a small bakery that is losing customers to a new chain café across the street. Over four short scenes she tries everything to win them back, until one idea brings the whole street to her door." />
           <div className="mt-4 flex items-center gap-3">
             <button type="button" onClick={() => setStep(2)} className="text-sm text-neutral-600 underline">Back</button>
             <ActionButton label={existing ? "Save brief" : "Create project"} busyLabel={existing ? "Saving…" : "Creating…"} doneLabel={existing ? "Saved" : "Created"}

@@ -20,7 +20,7 @@ const QUESTIONS = {
     { key: "other", label: "Anything else?", short: "Also", hint: "e.g. a warmer smile; standing straighter" },
   ],
   panel: [
-    { key: "place", label: "Is anyone in the wrong place, facing the wrong way or in the wrong posture?", short: "Who stands where", hint: "e.g. move Jade closer to Nina and have Marcus walk off to the right" },
+    { key: "place", label: "Is anyone in the wrong place, facing the wrong way or in the wrong posture?", short: "Who stands where", hint: "e.g. move Sam closer to Priya and have Tom walk off to the right" },
     { key: "picture", label: "What else should change in this picture?", short: "Change", hint: "e.g. he holds a glass; she looks angrier" },
     { key: "other", label: "Anything else?", short: "Also", hint: "e.g. warmer light; more guests in the background" },
   ],

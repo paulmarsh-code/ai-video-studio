@@ -45,7 +45,7 @@ describe("The approved picture: each keeps their drink; guests move on (D65)", (
     const p = draw({ ava: seat, bo: seat }, true);
     expect(p.short).toMatch(/each character with the same drink and things in front of them/);
     expect(p.text).toMatch(/Each character keeps the same drink and things in front of them\./);
-    for (const t of [p.text, p.short!]) expect(t).toMatch(/A few seconds have passed: background guests have shifted a little and anyone walking is somewhere else; never copy their exact places\./);
+    for (const t of [p.text, p.short!]) expect(t).toMatch(/A few seconds have passed: background people have shifted a little and anyone walking is somewhere else; never copy their exact places\./);
   });
   it("says nothing about guests moving when there is no crowd or no approved picture", () => {
     expect(draw({ ava: seat, bo: seat }, true, "").text).not.toMatch(/A few seconds have passed/);

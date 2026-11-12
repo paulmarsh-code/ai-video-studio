@@ -1467,3 +1467,30 @@ With D73's wording in place, Paul redrew panel 3. The crowd changed to a real mi
   - Unit tests cover the wording, and a picture with no one in it left alone.
   - On Paul's panel 3, nine guests were taken out, the waitress among them. Nina and Jade were untouched, and a guest standing right behind a main character's head stays.
   - On the way, two faults were found and fixed. With the mask in the same chain as `removeAlpha`, sharp dropped the joined mask, so the whole picture was filled from the plate. Guest boxes overlapping a main character cut into her hair.
+
+### D75: Generality check of D62–D74; scene-specific wording taken out (2026-11-12)
+
+Paul: "again I want to make sure we are not making Paid On Time specific changes." The day's fixes were reviewed for anything that holds only for this project, this venue or this kind of scene.
+
+- **General by construction** (they read the scene's own data, not this scene's):
+  - Coloured stand-ins (D62) come from each character's wardrobe words.
+  - Seated eye level (D62) applies to anyone sitting.
+  - Table-top things and sitting-height tables (D62) are read from prop names and posture.
+  - Divider trimming (D62) applies to any venue sheet.
+  - Looks-only approved pictures, and a turned camera named (D63).
+  - References in left-to-right order (D64) and sides said for any two (D65).
+  - Seated bags and drinks staying with their person (D65).
+  - Plates checked against the venue (D66, D67), full-size venue views and full-size image 1 (D67).
+  - Seated framing (D68), which uses body proportions, not this cast.
+  - Same-camera continuity (D69, D72), the default model (D70), the time between panels from panel lengths (D73), and guests taken out using the person detector (D74).
+- **Shown so far on one scene type only** (two people seated at a table, one rooftop venue, the same project's characters):
+  - The same-place threshold (0.6, from two good and two invented plates).
+  - Not failing a group drawn closer (D71).
+  - Taking guests out by size (the main characters are the largest outlines). A scene where background people stand nearer than the cast would need a different rule.
+  - D59's rule asked for a second, different project before more check or image 1 fixes. T6 was a different venue and shot type, but the same project and two of the same characters. **The next test after the Kling takes should be a different project**: other characters, standing, more or fewer people, no table, indoors or outdoors.
+- **Scene-specific wording, fixed now.**
+  - Every request line said "background guests", "other guests" and "for the occasion". That fits a party but not a street, an office or a shop. It now says "background people" and "for the setting", in the picture requests, the version C cues and the Kling prompt.
+  - The same-camera list "railings, walls, planters, lights and the view" was the rooftop's. It's now "walls, railings, counters, fittings, lights and the view".
+  - "Anyone walking (a server, say)" is now "anyone walking".
+  - The app's hints used the Paid On Time cast and story ("move Jade closer to Nina…", "e.g. Paid On Time", the Glowvane story). They now use neutral examples (Sam, Priya and Tom; a corner bakery).
+- **Tested.** All unit tests pass, with their expected wording updated. Paid On Time names remain only in code comments and test fixtures.
