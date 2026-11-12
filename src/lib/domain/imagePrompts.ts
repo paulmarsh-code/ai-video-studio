@@ -5,6 +5,10 @@
 
 import { outfitColours } from "./outfitColour";
 import { PLATE_KEEP_FULL, PLATE_KEEP_SHORT } from "./plate";
+
+/** Background people as a real crowd (D73): Paul's ask, for any scene. */
+export const CROWD_MIX = "Background guests are ordinary, real-looking people, not models: a natural mix of ages that suits this crowd, younger and older; of heights and body shapes, some heavier, some shorter, some broader; and of faces and hair. Each is dressed differently, in their own colours and style for the occasion. No two alike, no one repeated.";
+export const CROWD_MIX_SHORT = "Ordinary real-looking people, not models: a natural mix of ages for this crowd, of heights and body shapes (some heavier, shorter or older), each dressed differently; no two alike.";
 import { mainSubjectId } from "./composer";
 import { describeFrame, facingOf, framedSize, pictureShare, PRESET_FOV, planForShot, presetText, readCamera, readProps } from "./geometry";
 import { GENRE_PROFILES, type Genre } from "./genre";
@@ -127,7 +131,7 @@ export interface PanelPromptInput {
    * An approved picture of this scene (D18c), attached so later panels keep the same spot,
    * furniture, background guests, light and clothes. Not used for the panel's own picture.
    */
-  continuity?: { assetId: string; label: string; /** The venue view behind the people in it (D63). */ view?: string; /** Its camera (D69). */ cameraId?: string };
+  continuity?: { assetId: string; label: string; /** The venue view behind the people in it (D63). */ view?: string; /** Its camera (D69). */ cameraId?: string; /** Seconds from this panel's start to its start (D73): + it comes later. */ secondsApart?: number };
 }
 
 export interface PanelPrompt {
@@ -248,12 +252,18 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   const turned = otherSide ? ` This camera faces the ${here}, not the ${i.continuity!.view} behind them in the ${i.continuity!.label}: take nothing behind the characters from it.` : "";
   // A few seconds on (D65): copied from an approved picture taken from the same camera, the
   // background guests were frozen in place, a server mid-stride in the same spot in both.
-  const movedOn = i.continuity && shot?.crowd?.trim() ? " A few seconds have passed: background guests have shifted a little and anyone walking is somewhere else; never copy their exact places." : "";
+  // Time between this moment and the approved picture (D73), from the panels' lengths: a server
+  // walking at about 1.3 m/s is several metres on, not where the approved picture has her.
+  const apart = i.continuity?.secondsApart;
+  const movedOn = !i.continuity || !shot?.crowd?.trim() ? ""
+    : apart !== undefined && Math.abs(apart) >= 1
+      ? ` This moment is about ${Math.round(Math.abs(apart))} seconds ${apart > 0 ? "before" : "after"} the approved picture, and the background guests have moved in that time: those standing have shifted, turned or changed who they are talking to, and anyone walking (a server, say) is about ${Math.min(15, Math.round(Math.abs(apart) * 1.3))} metres from where they are in it, or out of the picture. Never copy the guests' places from it.`
+      : " A few seconds have passed: background guests have shifted a little and anyone walking is somewhere else; never copy their exact places.";
   // From the same camera (D69): everything behind them is to match the approved picture exactly.
   // Two panels from one camera came out with a handrail of a different thickness.
   const sameCamera = !!i.continuity?.cameraId && i.continuity.cameraId === shot?.cameraId;
   const behind = "railings, walls, planters, lights and the view, the same shapes, sizes and thickness";
-  if (i.continuity && sameCamera) S.refs.push(`The ${i.continuity.label} is from this same camera: keep the clothes, the furniture, what stands on the tables, the light and everything behind the characters exactly as in it (${behind}), each character with the same drink and things in front of them. Image 1 decides where everyone is and how they are posed in this moment.${movedOn}`);
+  if (i.continuity && sameCamera) S.refs.push(`The ${i.continuity.label} is from this same camera: keep the clothes, the furniture, what stands on the tables, the light and everything built behind the characters exactly as in it (${behind}), each character with the same drink and things in front of them; not its background guests, who move on. Image 1 decides where everyone is and how they are posed in this moment.${movedOn}`);
   else if (i.continuity) S.refs.push(`The ${i.continuity.label} shows how the clothes, the furniture's colour and material, what stands on the tables and the light look: keep those the same, each character with the same drink and things in front of them. Image 1 decides where everyone and everything is, how big and how high, and what is behind them; never copy the approved picture's framing, positions or furniture sizes.${turned}${movedOn}`);
   if (backs.length) lines.push(`${joinNames(backs)} ${backs.length === 1 ? "is" : "are"} seen from behind: copy the back of their clothes, hair and bag exactly from the attached back ${backs.length === 1 ? "image" : "images"}.`);
   if (ring) lines.push(`Use the attached background picture as the room behind the characters: it is cut from the venue's 360° view for exactly this camera position, angle and lens, so what is on its left stays on the left and what is on its right stays on the right. Same place, layout and light, seen across the room several metres behind them.${shot?.crowd?.trim() ? " Fill it with the background guests described below." : ""}`);
@@ -264,7 +274,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   const spot = shot?.spot?.trim();
   const crowd = shot?.crowd?.trim();
   // An older approved picture may show an empty room: keep its spot and look, but add the crowd.
-  if (i.continuity) lines.push(`Use the attached ${i.continuity.label} for continuity: the same clothes, the same colour and material of furniture, the same things on the tables (glasses, drinks, bags) and the same light${crowd ? ". If it shows fewer background guests than described below, add them" : ", and the same kind of background guests"}. Each character keeps the same drink and things in front of them. ${sameCamera ? `It is from this same camera: everything behind the characters stays exactly as in it (${behind}). Where everyone is and how they are posed come from ${blocking ? "image 1" : "the layout"}.` : `Where everyone and everything is, how big and how high, and what is behind them come from ${blocking ? "image 1" : "the layout"}, not from it.${turned}`}${movedOn}`);
+  if (i.continuity) lines.push(`Use the attached ${i.continuity.label} for continuity: the same clothes, the same colour and material of furniture, the same things on the tables (glasses, drinks, bags) and the same light${crowd ? ". If it shows fewer background guests than described below, add them" : ", and the same kind of background guests"}. Each character keeps the same drink and things in front of them. ${sameCamera ? `It is from this same camera: everything built behind the characters stays exactly as in it (${behind}), but not its background guests. Where everyone is and how they are posed come from ${blocking ? "image 1" : "the layout"}.` : `Where everyone and everything is, how big and how high, and what is behind them come from ${blocking ? "image 1" : "the layout"}, not from it.${turned}`}${movedOn}`);
   // The same light in every picture (D31): one picture came out much darker than the rest.
   const light = lightingOf(i.venueDescription ?? "");
   if (light) lines.push(`Lighting, identical in every picture of this scene: ${light} Same brightness, colour and mood as the other pictures of the scene; not darker, not brighter.`);
@@ -350,8 +360,10 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   }
   // The cast up on a stage or balcony (D29): the crowd stays down on the main floor.
   const castUp = i.plan?.levels?.length ? i.plan.levels.find((l) => l.heightM > 0 && i.plan!.actors.some((a) => levelAt(i.plan!, a.position) === l)) : undefined;
-  if (crowd) S.people.push(`Background: ${sentence(crowd).split(/(?<=[.!?])\s+/)[0]} Out of focus, smaller than the main characters, never looking at the camera, none like them, and no two alike: varied faces, ages, builds, hair and clothes.`);
-  if (crowd) lines.push(`Background: ${sentence(crowd)}${castUp ? ` They are down on the main floor, not up on ${castUp.name} with the characters.` : ""}${layout ? " The grey figures in the layout sketch show where they stand." : ""} Background guests are out of focus, smaller than the main characters and never look at the camera; none of them look like the main characters. Every background guest is a different person (varied faces, ages, builds, hair and clothes): no two alike, no one repeated.`);
+  // Real people, not models (D73): "varied" alone still gave a row of slim, young, similarly
+  // dressed extras.
+  if (crowd) S.people.push(`Background: ${sentence(crowd).split(/(?<=[.!?])\s+/)[0]} ${CROWD_MIX_SHORT} Out of focus, smaller than the main characters, never looking at the camera, none like them.`);
+  if (crowd) lines.push(`Background: ${sentence(crowd)}${castUp ? ` They are down on the main floor, not up on ${castUp.name} with the characters.` : ""}${layout ? " The grey figures in the layout sketch show where they stand." : ""} Background guests are out of focus, smaller than the main characters and never look at the camera; none of them look like the main characters. ${CROWD_MIX}`);
   for (const c of visible) {
     const p = i.profiles[c.id];
     const parts = [p?.appearance, p?.wardrobe ? `wearing ${p.wardrobe}` : ""].filter(Boolean).map((x) => sceneDescription(stripQuotes(x!)).replace(/[.!?]+$/, "")).filter(Boolean);

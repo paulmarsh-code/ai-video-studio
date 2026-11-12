@@ -7,10 +7,10 @@
 import { planForShot, readCamera } from "./geometry";
 import type { GeometryPlanData, ShotSpec } from "./types";
 
-export interface ContinuityPicture { assetId: string; label: string; view?: string; cameraId?: string }
+export interface ContinuityPicture { assetId: string; label: string; view?: string; cameraId?: string; /** Seconds from this panel's start to the picture's panel's start (D73): + it comes later. */ secondsApart?: number }
 
 export function continuityFor(
-  panels: { id: string; status: string; imageAssetId?: string | null }[],
+  panels: { id: string; status: string; imageAssetId?: string | null; durationSec?: number | null }[],
   shots: { panelId: string | null; spec: ShotSpec }[],
   plan: GeometryPlanData | undefined,
   panelId: string,
@@ -24,7 +24,10 @@ export function continuityFor(
       || (b.spec?.visibleIds.length ?? 0) - (a.spec?.visibleIds.length ?? 0) || a.n - b.n);
   const pick = approved[0];
   if (!pick) return undefined;
+  // When each panel starts, from the lengths of those before it (D73).
+  const start = (id: string) => { let t = 0; for (const p of panels) { if (p.id === id) return t; t += p.durationSec ?? 0; } return t; };
+  const secondsApart = panels.some((p) => p.durationSec) ? start(pick.p.id) - start(panelId) : undefined;
   const sp = pick.spec && plan ? planForShot(plan, pick.spec) : undefined;
   const cam = sp?.cameras.find((c) => c.id === pick.spec?.cameraId);
-  return { assetId: pick.p.imageAssetId!, label: `approved scene picture (panel ${pick.n})`, view: sp && cam ? readCamera(sp, cam).backgroundView : undefined, cameraId: pick.spec?.cameraId };
+  return { assetId: pick.p.imageAssetId!, label: `approved scene picture (panel ${pick.n})`, view: sp && cam ? readCamera(sp, cam).backgroundView : undefined, cameraId: pick.spec?.cameraId, ...(secondsApart !== undefined ? { secondsApart } : {}) };
 }

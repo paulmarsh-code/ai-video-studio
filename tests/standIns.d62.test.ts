@@ -76,8 +76,9 @@ describe("A full request with seated people, a crowd and a continuity picture (D
   const profiles = { ava: { appearance: "Bob.", wardrobe: "Orange dress under a cream jacket.", refs: { front: "af" } }, bo: { appearance: "Braids.", wardrobe: "Lilac jumpsuit.", refs: { front: "bf" } } };
   const p = panelPrompt({ description: "They talk.", shot: spec, cast: cast as never, profiles: profiles as never, plan, venueName: "roof", blockingHref: "/api/blocking/x", continuity: { assetId: "z", label: "approved scene picture (panel 3)" } });
   it("asks for background guests who are all different people", () => {
-    expect(p.text).toMatch(/Every background guest is a different person \(varied faces, ages, builds, hair and clothes\): no two alike, no one repeated/);
-    expect(p.short).toMatch(/no two alike: varied faces, ages, builds, hair and clothes/);
+    // Real people, not models (D73).
+    expect(p.text).toMatch(/Background guests are ordinary, real-looking people, not models: a natural mix of ages that suits this crowd.*some heavier, some shorter, some broader.*Each is dressed differently.*No two alike, no one repeated\./);
+    expect(p.short).toMatch(/Ordinary real-looking people, not models: a natural mix of ages for this crowd, of heights and body shapes \(some heavier, shorter or older\), each dressed differently; no two alike\./);
   });
   it("keeps the things on the tables from the approved picture", () => {
     expect(p.text).toMatch(/the same things on the tables \(glasses, drinks, bags\)/);

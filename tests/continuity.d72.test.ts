@@ -15,7 +15,7 @@ const plan = {
   lineOfAction: ["ava", "bo"] as [string, string],
 };
 const spec = (cameraId: string) => ({ visibleIds: ["ava", "bo"], cameraId } as unknown as ShotSpec);
-const panels = (approved: string[]) => ["p1", "p2", "p3"].map((id) => ({ id, status: approved.includes(id) ? "approved" : "draft", imageAssetId: `a-${id}` }));
+const panels = (approved: string[]) => ["p1", "p2", "p3"].map((id, k) => ({ id, status: approved.includes(id) ? "approved" : "draft", imageAssetId: `a-${id}`, durationSec: [3, 4, 5][k] }));
 const shots = [{ panelId: "p1", spec: spec("two") }, { panelId: "p2", spec: spec("ots") }, { panelId: "p3", spec: spec("two") }];
 
 describe("The approved picture for continuity (D72)", () => {
@@ -25,6 +25,7 @@ describe("The approved picture for continuity (D72)", () => {
     expect(c.label).toBe("approved scene picture (panel 3)");
     expect(c.cameraId).toBe("two");
     expect(c.view).toBe("skyline");
+    expect(c.secondsApart).toBe(7); // panel 3 starts 7 seconds after panel 1 (3 + 4)
   });
   it("panel 2 has no approved picture from its camera, so it gets the fullest, lowest-numbered one", () => {
     expect(continuityFor(panels(["p1", "p3"]), shots, plan, "p2")!.assetId).toBe("a-p1");
