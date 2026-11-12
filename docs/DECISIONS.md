@@ -1717,3 +1717,16 @@ STORYBOARD_FRAME=box npx tsx scripts/exercise.ts <folder>
 - A two-shot of people 8 m apart shows them small.
 
 **Tests:** `tests/exercise.d81.test.ts`. All 671 tests pass.
+
+### D82: Older scenes brought up to date in one click (2026-11-12)
+
+**Failure.** Paul redrew the skate park twice after D80 and got the old result: no bowl in the plan, Kai on the flat by the steps in panel 3. D80 only took effect after "Rewrite from the story", which is an extra step nobody should need (the app does the heavy lifting).
+
+**Fix.** "Update the layout" (the amber notice a scene shows when the layout rules have moved on; rules are now 15) does it all from what the scene already has:
+- **A prop that is really an area becomes one.** A thing a metre or more across whose name is a hollow, water, a slope, a stage, stands or a pitch, and isn't furniture ("big concrete bowl, about 5 m diameter"), moves from the props to the areas, in the setting, on every shot and in the plan.
+- **The panels' existing words place people at parts of an area:** "at the near rim of the bowl", "on the far lip of the bowl", "toward the far lip", "to the top of the slope". "Drops into the bowl" puts the person in it in that panel, not walking towards it.
+- **Cameras prefer the venue view that shows the area** (+3 with it behind, −3 without). The bowl is only in the venue's "deep bowl" picture; a camera facing the graffiti wall had the bowl outlined over a wall.
+
+**Checked on a copy of Paul's scene, as saved:** the bowl is an area; panel 1 has Kai at the near rim and Rosa on the opposite edge; panel 2 has Kai in the bowl, riding, the camera at 3 m looking in; panel 4 has Kai on the far lip. All four cameras have the venue's bowl view behind.
+
+**Limit.** The plan's bowl and the bowl in the venue's picture are not the same shape or place: the outline sits beyond the photo's bowl. GPT is told the outline is the bowl; it may follow the photo's instead. Making the plan's area match the picture is the next thing to solve if the draws show it.

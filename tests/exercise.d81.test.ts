@@ -47,3 +47,24 @@ describe("Faults found across the five scenes (D81)", () => {
     expect(verticalFor("She looks down at the street far below.")?.kind).toBe("high");
   });
 });
+
+describe("Older scenes brought up to date in one step (D82)", () => {
+  it("a prop that is really an area becomes one; furniture and small things stay props", async () => {
+    const { propsAsAreas, asStaging } = await import("../src/lib/domain/story");
+    const st = propsAsAreas(asStaging({ spot: "at the bowl", props: [{ name: "big concrete bowl", detail: "about 5 m diameter, smooth grey concrete" }, { name: "pool table", detail: "2.7 m long, green baize" }, { name: "fruit bowl", detail: "25 cm across" }] }));
+    expect(st.areas).toEqual([{ name: "big concrete bowl", kind: "lowered", detail: "about 5 m diameter, smooth grey concrete" }]);
+    expect(st.props.map((p) => p.name)).toEqual(["pool table", "fruit bowl"]);
+  });
+  it("the panel's own words place people at a part of an area", () => {
+    const bowl = { ...areaFromWords({ name: "bowl", kind: "lowered", detail: "round, 5 m across, 2 m deep" }, b, { x: 0, y: 5 }, [])! };
+    const plan: GeometryPlanData = { bounds: b, levels: [bowl], actors: [{ characterId: "ava", position: { x: -1, y: 5 } }, { characterId: "bo", position: { x: 1, y: 5 } }], cameras: [], views: [] };
+    const out = blockingFromWords(plan, [
+      { action: "Bo drops into the bowl and carves across it.", visibleIds: ["ava", "bo"] },
+      { action: "Bo stands on the far lip of the bowl.", visibleIds: ["ava", "bo"] },
+    ], CAST);
+    expect(out[0].bo.why).toBe("in the bowl");
+    expect(out[0].bo.to).toBeUndefined();
+    expect(out[1].bo.why).toBe("across the bowl");
+    expect(out[1].bo.at.y).toBeGreaterThan(bowl.y + bowl.d);
+  });
+});

@@ -15,7 +15,7 @@ import { deriveDuration } from "./domain/duration";
 import { hasQuotes } from "./domain/text";
 import type { GeometryPlanData, PanelBlock, PlanCamera, PlanView, Point, Pronoun, ShotSpec } from "./domain/types";
 import { asGenre, type Genre } from "./domain/genre";
-import { addMovementMarks, asStaging, planProps, propHeight, propsFromFurniture, propKind, propWidth, checkStoryboard, defaultPlan, panelSeconds, shotSpecFor, type DraftPanel, type SceneStaging } from "./domain/story";
+import { addMovementMarks, asStaging, propsAsAreas, planProps, propHeight, propsFromFurniture, propKind, propWidth, checkStoryboard, defaultPlan, panelSeconds, shotSpecFor, type DraftPanel, type SceneStaging } from "./domain/story";
 import { LAYOUT_RULES } from "./domain/director";
 import { applyRoom, boundsFor, groupCentre, roomFor, roomOf, type RoomSize } from "./domain/room";
 import { carryBlocking, type BlockEntry } from "./domain/blocking";
@@ -645,10 +645,18 @@ export function syncAreas(db: DB, sceneId: string): boolean {
   const plan = latestPlan(db, sceneId);
   const scene = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();
   if (!plan || !scene) return false;
-  const st = asStaging(scene.staging);
+  const st0 = asStaging(scene.staging);
+  // A prop that is really an area (D82) becomes one, in the setting and on every shot.
+  const st = propsAsAreas(st0);
+  if (st !== st0) {
+    db.update(t.scenes).set({ staging: st }).where(eq(t.scenes.id, sceneId)).run();
+    for (const sh of db.select().from(t.shots).where(eq(t.shots.sceneId, sceneId)).all()) {
+      db.update(t.shots).set({ spec: { ...(sh.spec as ShotSpec), props: st.props.length ? st.props : undefined } }).where(eq(t.shots.id, sh.id)).run();
+    }
+  }
   if (!st.areas?.length) return false;
   const next = withAreas(plan.data, st.areas, st.spot);
-  if (next === plan.data) return false;
+  if (next === plan.data) { if (st !== st0) persist(db); return st !== st0; }
   db.insert(t.plans).values({ id: randomUUID(), sceneId, name: plan.name, version: plan.version + 1, data: next }).run();
   persist(db);
   return true;

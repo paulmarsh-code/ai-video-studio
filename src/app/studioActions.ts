@@ -146,6 +146,8 @@ export async function updateLayoutAction(sceneId: string) {
     studio.unlockScene(db, sceneId, "positions");
     // The venue's room size and any raised or lowered areas (D29).
     studio.syncRoom(db, sceneId);
+    // Areas from the setting, and props that are really areas (D80, D82), before places are read.
+    studio.syncAreas(db, sceneId);
     studio.approvePositions(db, sceneId);
     return chooseCameras(db, sceneId);
   });

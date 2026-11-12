@@ -106,6 +106,26 @@ export function actionsInWords(text: string, ids: string[]): Record<string, Doin
   return out;
 }
 
+/**
+ * Key props that are really areas (D82): "big concrete bowl, about 5 m diameter" listed as a prop
+ * in a scene saved before areas existed, or by a writer who used PROP for it. A thing a metre or
+ * more across whose name is a hollow, water, a slope, a stage, stands or a pitch, and isn't
+ * furniture, moves from the props to the areas.
+ */
+export function propsAsAreas(st: SceneStaging): SceneStaging {
+  const moved: KeyArea[] = [];
+  const props = st.props.filter((p) => {
+    const text = `${p.name} ${p.detail}`;
+    const kind = areaKindOf(p.name);
+    if (!kind || kind === "barrier" || !aMetreOrMore(text) || /\b(table|counter|bar|desk|sofa|couch|bench|bed|chair|stool|shelf|cabinet|board|screen|sign|banner)\b/i.test(p.name)) return true;
+    moved.push({ name: p.name, kind, detail: p.detail });
+    return false;
+  });
+  if (!moved.length) return st;
+  const have = new Set((st.areas ?? []).map((a) => a.name.trim().toLowerCase()));
+  return { ...st, props, areas: [...(st.areas ?? []), ...moved.filter((a) => !have.has(a.name.trim().toLowerCase()))] };
+}
+
 /** An area's kind from its words (D80): the fixed kinds, or a plain word for one. */
 export function areaKindOf(text: string): AreaKind | undefined {
   const t = text.toLowerCase();
@@ -193,7 +213,7 @@ const TABLE_TOP = /\b(glass|glasses|drinks?|cocktails?|flutes?|wine glass(?:es)?
 const SURFACE = /\b(table|counter|bar|desk|island|bench|sofa|couch|shelf|shelves|stand|trolley|cart|cabinet|sideboard|display|rack|fridge|tower|wall|plinth|pedestal)\b/i;
 
 /** Words giving a size of a metre or more: "about 5 m diameter", "120 cm wide", "2 metres long". */
-function aMetreOrMore(text: string): boolean {
+export function aMetreOrMore(text: string): boolean {
   const m = text.match(/(\d+(?:\.\d+)?)\s?(?:m|metres?|meters?)\b/i);
   const cm = text.match(/(\d{3,4})\s?cm\b/i);
   return (!!m && Number(m[1]) >= 1) || (!!cm && Number(cm[1]) >= 100);

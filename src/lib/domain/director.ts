@@ -219,6 +219,29 @@ function candidates(plan: GeometryPlanData, shot: ShotSpec, moment: MomentKind, 
   return out;
 }
 
+/**
+ * Whether the camera's background is the venue view that shows the area its people are in or by
+ * (D82): the skate bowl is only in the venue's "deep bowl" picture, so a camera facing the
+ * graffiti wall would have the bowl drawn over a wall. Undefined when no view names the area.
+ */
+function areaBackground(plan: GeometryPlanData, backgroundView: string | undefined, ids: (string | undefined)[]): boolean | undefined {
+  const words = (t: string) => t.toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).filter((w) => w.length > 2 && !["the", "and", "big", "small", "with"].includes(w)).map((w) => w.replace(/s$/, ""));
+  for (const id of ids) {
+    const p = plan.actors.find((x) => x.characterId === id)?.position;
+    if (!p) continue;
+    for (const l of plan.levels ?? []) {
+      if (!l.kind) continue;
+      const c = { x: l.x + l.w / 2, y: l.y + l.d / 2 };
+      if (!insideLevel(l, p) && Math.hypot(p.x - c.x, p.y - c.y) > Math.max(l.w, l.d) / 2 + 1) continue;
+      const own = words(l.name);
+      const naming = (plan.views ?? []).filter((v) => words(v.name).some((w) => own.includes(w)));
+      if (!naming.length) continue;
+      return naming.some((v) => v.name === backgroundView);
+    }
+  }
+  return undefined;
+}
+
 // ---------- scoring ----------
 
 interface Memory {
@@ -453,6 +476,9 @@ function score(
       }
     }
   }
+
+  const bgOk = areaBackground(plan, reading.backgroundView, required);
+  if (bgOk === true) { s += 3; reasons.push(`R-AREA: the venue's ${reading.backgroundView} view is behind them`); } else if (bgOk === false) s -= 3;
 
   return { ok: true, score: s, reasons, reading };
 }
@@ -719,7 +745,8 @@ function namedShotDesign(d: ShotDesign, plan: GeometryPlanData, sh: ShotInput, l
         .filter((x) => !propsBlocking(sp, x.c, pair).some((b) => b.face))
         // Others nearby may show at the edges (D30): keeping the angle square-on, and so the
         // same background as the shots around it, matters more than cutting them out.
-        .map((x) => ({ ...x, cost: seen(x.c).filter((a) => !pair.includes(a.characterId)).length + (Math.abs(x.o) / 15) * 1.5 + (x.sg === sideOfBase ? 0 : 6) }))
+        // The venue view that shows their area behind them (D82) is worth swinging round for.
+        .map((x) => ({ ...x, cost: seen(x.c).filter((a) => !pair.includes(a.characterId)).length + (Math.abs(x.o) / 15) * 1.5 + (x.sg === sideOfBase ? 0 : 6) + (areaBackground(sp, readCamera(sp, x.c).backgroundView, pair) === false ? 8 : 0) }))
         .sort((a, b) => a.cost - b.cost);
       const cams = tries.length ? [tries[0].c] : [make(sideOfBase, 0)];
       options = [{ camera: cams[0], kind: `Two-shot on ${name(pair[0])} and ${name(pair[1])}`, score: (options[0]?.score ?? 0) + 1, reasons: [`R-NAMED: two-shot, named in the panel: ${name(pair[0])} and ${name(pair[1])} side by side in the frame`] }, ...options];
@@ -858,9 +885,10 @@ export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (i
  * group drops out of frame, arrivals filmed from further back (D19e); 5 = start and finish
  * positions for anyone moving (D20); 6 = movement marks worked out afresh, props seen across
  * their real extent (D21b); 7 = high and low cameras for looking down or up (D25);
- * 14 = positions per panel from the words: walking off, going places, turning, props in hand (D36).
+ * 14 = positions per panel from the words: walking off, going places, turning, props in hand (D36);
+ * 15 = areas, actions and places in them, cameras that see the action (D80-D82).
  */
-export const LAYOUT_RULES = 14;
+export const LAYOUT_RULES = 15;
 
 export function applyDesign(plan: GeometryPlanData, choices: { shotId: string; shotCode: string; option: CameraOption }[], line?: [string, string]) {
   const cameras: PlanCamera[] = [];

@@ -32,8 +32,11 @@ const NAME = String.raw`([A-Z][a-z]+)`;
 const MOVE = String.raw`(?:walk(?:s|ed|ing)?|go(?:es|ing)?|went|head(?:s|ed|ing)?|wander(?:s|ed|ing)?|mov(?:e|es|ed|ing)|cross(?:es|ed|ing)?|step(?:s|ped|ping)?|stroll(?:s|ed|ing)?|hurr(?:y|ies|ied|ying)|rush(?:es|ed|ing)?|run(?:s|ning)?|ran|dash(?:es|ed|ing)?|march(?:es|ed|ing)?|strid(?:e|es|ing)|strode|mak(?:e|es|ing)\s+(?:her|his|their)\s+way|made\s+(?:her|his|their)\s+way|retreat(?:s|ed|ing)?|back(?:s|ed|ing)?\s+away|drop(?:s|ped|ping)?(?:\s+in)?|rid(?:e|es|ing)|rode|skat(?:e|es|ed|ing)|swim(?:s|ming)?|swam|div(?:e|es|ed|ing)|dove|jump(?:s|ed|ing)?|leap(?:s|t|ing)?|slid(?:e|es|ing)?|climb(?:s|ed|ing)?|wad(?:e|es|ed|ing)|cycl(?:e|es|ed|ing)|paddl(?:e|es|ed|ing)|carv(?:e|es|ed|ing)|plung(?:e|es|ed|ing)|fall(?:s|ing)?|fell)`;
 const ADV = String.raw`(?:\s+(?:slowly|quickly|briskly|calmly|angrily|nervously|confidently|purposefully|casually|back|over|across|straight|up|down|off|round|around|upstairs|downstairs|inside))*`;
 
-type Rule = { kind: "leave" | "goto" | "gotoPerson" | "closer" | "turn" | "turnAway" | "face" | "at" | "pick" | "put"; re: RegExp };
+type Rule = { kind: "leave" | "goto" | "gotoPerson" | "closer" | "turn" | "turnAway" | "face" | "at" | "pick" | "put" | "part"; re: RegExp };
 const RULES: Rule[] = [
+  // A part of an area (D82): "at the near rim of the bowl", "toward the far lip of the bowl",
+  // "to the top of the slope", "up the far wall". Read by `readPlace`.
+  { kind: "part", re: new RegExp(String.raw`\b(?:(?:on|at|to|onto|towards?|up\s+to|up|by|along)\s+)(?:the\s+)?(?:(?:near|far|other|opposite)\s+)?(?:rim|lip|edge|side|wall|bank|shore|top|bottom|foot|head|crest)\s+of\s+${TGT}|\b(?:on|at|to|onto|towards?|up)\s+the\s+(?:far|other|opposite)\s+(?:rim|lip|edge|side|wall|bank|shore)\b`, "g") },
   // A step towards someone: "steps closer", "moves in on Chase", "edges nearer to Mia".
   { kind: "closer", re: new RegExp(String.raw`\b(?:step(?:s|ped|ping)?|mov(?:e|es|ed|ing)|edg(?:e|es|ed|ing)|inch(?:es|ed|ing)?|draw(?:s|ing)?|drew|press(?:es|ed|ing)?)\s+(?:a\s+(?:step|little|bit)\s+)?(?:closer|nearer|forward|in\s+on|in)\b(?:\s+(?:to(?:wards?)?|on)\s+${NAME})?`, "g") },
   // Leaving: "walks off", "storms out", "leaves the kitchen", "heads for the door", "goes upstairs".
@@ -271,6 +274,12 @@ export function blockingFromWords(plan: GeometryPlanData, panels: WordsPanel[], 
     // match, or the one before carrying on ("she", "and"), or the panel's main person.
     const found: { kind: Rule["kind"]; m: RegExpExecArray }[] = [];
     for (const rule of RULES) { rule.re.lastIndex = 0; let m; while ((m = rule.re.exec(pn.action))) found.push({ kind: rule.kind, m }); }
+    // A part of an area wins over a plainer reading of the same words ("rides up toward the far lip").
+    const partsFound = found.filter((f) => f.kind === "part");
+    for (let k = found.length - 1; k >= 0; k--) {
+      const f = found[k];
+      if (f.kind !== "part" && f.kind !== "pick" && f.kind !== "put" && partsFound.some((q) => q.m.index < f.m.index + f.m[0].length && f.m.index < q.m.index + q.m[0].length)) found.splice(k, 1);
+    }
     found.sort((x, y) => x.m.index - y.m.index || y.m[0].length - x.m[0].length);
     const kept: typeof found = [];
     for (const f of found) { const last = kept[kept.length - 1]; if (!last || f.m.index >= last.m.index + last.m[0].length) kept.push(f); }
@@ -290,7 +299,22 @@ export function blockingFromWords(plan: GeometryPlanData, panels: WordsPanel[], 
         if (n.to) delete n.facingDeg; // walking: they face the way they walk
         out[id] = n;
       };
-      if (kind === "leave") {
+      if (kind === "part") {
+        if (done.has(`${id}:move`)) continue;
+        const said = m[0].replace(/^(?:towards?|up\s+to|up|by|along)\s+/i, "on ");
+        const { how, what } = readPlace(/\bof\s/i.test(said) ? said : `${said} of area`);
+        // Named, or else the area they're in or nearest to.
+        const named = resolve(what, [], [], areas);
+        const l = named?.kind === "area" ? named.l : [...areas].sort((x, y) => Math.hypot(x.x + x.w / 2 - from.x, x.y + x.d / 2 - from.y) - Math.hypot(y.x + y.w / 2 - from.x, y.y + y.d / 2 - from.y))[0];
+        if (!l || how === "beside") continue;
+        const rest = [...pos.entries()].filter(([k]) => k !== id && !left.has(k)).map(([, p]) => p);
+        const others = rest.length ? { x: rest.reduce((a, p) => a + p.x, 0) / rest.length, y: rest.reduce((a, p) => a + p.y, 0) / rest.length } : undefined;
+        const spot = clamp(areaSpot(l, how, from, others));
+        done.add(`${id}:move`);
+        if (Math.hypot(spot.x - from.x, spot.y - from.y) < 0.3) continue;
+        set({ at: spot, why: `${how === "far" ? "across" : how === "farWall" ? "on the far wall of" : "at the edge of"} the ${l.name}` });
+        pos.set(id, spot);
+      } else if (kind === "leave") {
         if (done.has(`${id}:move`)) continue;
         // Where to: "heads for the stairs", "goes upstairs"; the room they leave isn't where they go.
         const dest = /\bfor\s+the\s+([a-z\s]+)/i.exec(m[0])?.[1] ?? (/\b(?:up|down)stairs\b/i.test(m[0]) ? "stairs" : undefined);
@@ -311,7 +335,9 @@ export function blockingFromWords(plan: GeometryPlanData, panels: WordsPanel[], 
         const spot = placeOf(t, from, on);
         if (Math.hypot(spot.x - from.x, spot.y - from.y) < 0.3) continue;
         const name = nameOf(t);
-        if (kind === "goto") set({ at: from, to: spot, why: `goes to the ${name}` });
+        // Into an area (D82): the panel shows them in it, riding or swimming, not on the way.
+        if (kind === "goto" && t.kind === "area" && on) set({ at: spot, why: `in the ${name}` });
+        else if (kind === "goto") set({ at: from, to: spot, why: `goes to the ${name}` });
         else set({ at: spot, ...(t.kind === "view" ? { facingDeg: t.v.directionDeg } : {}), why: `${on ? "on" : "at"} the ${name}` });
         pos.set(id, spot);
         done.add(`${id}:move`);
