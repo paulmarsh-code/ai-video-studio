@@ -72,6 +72,8 @@ export interface PictureCheck {
   measured?: { name: string; fit?: string; heightRatio?: number; headY?: number; plannedHeadY?: number; x?: number; plannedX?: number; /** The detector's outline number (D53). */ box?: number }[];
   /** Each detectable prop's measured place against the plan (D55). */
   propsMeasured?: { name: string; x: number; plannedX: number; baseY: number; plannedBaseY: number }[];
+  /** How far below image 1 the people's feet are, the middle of them (D68, D71): + drawn closer. Recorded, not judged. */
+  groupFeetShift?: number;
   /** How sizes and heads were found (D53): measured by the detector, or the vision model's estimate. */
   measuredBy?: "detector" | "estimate";
   /** Heads against the planned eye level (D52): "on", "above" or "below", read from where the heads are. */
@@ -446,18 +448,13 @@ export function judgePicture(e: PictureExpectation, reply: string, plan?: string
   // camera problem says so. A table several metres in front of the group it should stand among
   // passed the model's front-or-behind question.
   // The group drawn closer or further than image 1 (D68): their feet well below or above where
-  // image 1 has them, with heads where they should be. Said as what it is; and the props among
-  // them are then judged against the people, not the frame, so a table that is with the group
-  // isn't reported as moved.
+  // image 1 has them. Not a fault in itself (D71): with heads on the eye line and everyone at
+  // their place across, it is a tighter framing of the right blocking, the same in every panel
+  // from that camera, and a fail made Paul redraw pictures that were right. It's recorded, and
+  // the props among them are judged against the people, not the frame, so a table that is
+  // with the group isn't reported as moved.
   const median = (xs: number[]) => { const d = [...xs].sort((a, b) => a - b); return d.length % 2 ? d[(d.length - 1) / 2] : (d[d.length / 2 - 1] + d[d.length / 2]) / 2; };
   const groupShift = feetShifts.length ? median(feetShifts) : 0;
-  const sizeSaid = issues.some((x) => x.area === "blocking" && /times the planned height|of the picture's height, planned/.test(x.text));
-  if (eyeLevel === "on" && !sizeSaid && Math.abs(groupShift) > 0.08) {
-    const plannedFeet = median((e.figures ?? []).filter((f) => f.feetY <= 0.97).map((f) => f.feetY));
-    add("blocking", groupShift > 0
-      ? `Everyone is drawn closer to the camera than in image 1: their feet are about ${pct(plannedFeet + groupShift)} of the way down the picture, but image 1 has them about ${pct(plannedFeet)} down. Keep image 1's camera distance: everyone as big as their stand-in, with the floor in front of them as in image 1.`
-      : `Everyone is drawn further from the camera than in image 1: their feet are about ${pct(plannedFeet + groupShift)} of the way down the picture, but image 1 has them about ${pct(plannedFeet)} down. Keep image 1's camera distance: everyone as big as their stand-in.`, true);
-  }
   const propsMeasured: NonNullable<PictureCheck["propsMeasured"]> = [];
   if (typeof plan === "object" && e.propSpots?.length) {
     for (const spot of e.propSpots) {
@@ -482,7 +479,7 @@ export function judgePicture(e: PictureExpectation, reply: string, plan?: string
     return [a, { pass: ps.length === 0, problems: ps, unmeasured: unmeasured[a] }];
   })) as Record<CheckArea, AreaResult>;
   const problems = issues.map((x) => x.text);
-  return { pass: problems.length === 0, problems, areas, ...(issues.some((x) => x.redraw) ? { redraw: true } : {}), ...(measured.length ? { measured } : {}), ...(eyeLevel ? { eyeLevel } : {}), ...(measuredBy ? { measuredBy } : {}), ...(propsMeasured.length ? { propsMeasured } : {}) };
+  return { pass: problems.length === 0, problems, areas, ...(issues.some((x) => x.redraw) ? { redraw: true } : {}), ...(measured.length ? { measured } : {}), ...(eyeLevel ? { eyeLevel } : {}), ...(measuredBy ? { measuredBy } : {}), ...(propsMeasured.length ? { propsMeasured } : {}), ...(feetShifts.length ? { groupFeetShift: +groupShift.toFixed(3) } : {}) };
 }
 
 /** The extra instruction for the one automatic redraw. */

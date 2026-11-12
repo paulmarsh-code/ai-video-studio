@@ -54,15 +54,15 @@ describe("The table judged against the group (D68)", () => {
     reply: JSON.stringify({ people: [{ name: "Bo", box: 1 }, { name: "Ava", box: 2 }] }), aspect: 1024 / 1536,
     things: [{ kind: "dining table", x0: 0.4, x1: 0.6, y0: 0.6, y1: tableFoot, score: 0.8 }],
   });
-  it("names a group drawn closer, and doesn't call its table moved", () => {
-    const c = judgePicture(e, reply, measuredPlan(0.97, 0.97));
-    expect(c.problems.join(" ")).toMatch(/Everyone is drawn closer to the camera than in image 1: their feet are about 97% of the way down the picture, but image 1 has them about 77% down/);
-    expect(c.problems.join(" ")).not.toMatch(/table is well in front/);
+  it("records a group drawn closer without failing it, and doesn't call its table moved (D71)", () => {
+    const c = judgePicture(e, reply, measuredPlan(0.91, 0.93));
+    expect(c.pass).toBe(true);
+    expect(c.groupFeetShift).toBeCloseTo(0.14, 2);
   });
   it("still reports a table moved away from a group that is where it should be", () => {
     const c = judgePicture(e, reply, measuredPlan(0.78, 0.97));
     expect(c.problems.join(" ")).toMatch(/The small round table is well in front of where image 1 puts it/);
-    expect(c.problems.join(" ")).not.toMatch(/Everyone is drawn closer/);
+    expect(c.groupFeetShift).toBeCloseTo(0.01, 2);
   });
   it("passes a group and table where image 1 has them", () => {
     expect(judgePicture(e, reply, measuredPlan(0.78, 0.79)).pass).toBe(true);

@@ -1415,3 +1415,16 @@ The older model, not the number of pictures sent, is what made the spend.
 - **Change.** `OPENAI_IMAGE_MODEL` now defaults to `gpt-image-2.6-sunburst`, with quality still medium. Setting the variable still chooses another model. `.env.example` says so.
 - **The "about 7p" labels stay** as a safe upper figure until more days are measured.
 - **Tested.** All unit tests pass. Nothing else names the model.
+
+### D71: A group drawn a little closer is recorded, not failed (2026-11-12)
+
+With D68 in place, Paul drew all three T6 panels again on version C.
+- The sides were right in all three, and panel 2 passed.
+- Panels 1 and 3 failed only on D68's new line: "Everyone is drawn closer to the camera than in image 1: their feet are about 90–91% of the way down the picture, but image 1 has them about 77% down."
+- In both, the heads are on the eye line, the women are at their places across, and the table is between them. GPT drew the group bigger, with less empty floor in front, the same way in both panels from that camera. Even with the framing words matching image 1 (D68), it composes two seated people this way.
+- Paul pointed at the blocking messages: the pictures were right, and the fail would only have cost a redraw.
+
+- **Failure fixed (D38).** A false fail on a picture whose blocking is right, which would have cost a redraw. It reaches generation through the picture check.
+- **Change.** The group's feet against the plan (D68) are still measured and recorded (`groupFeetShift` in `check.json`; + means drawn closer), and props among the people are still judged against them. But it is no longer a fail: with heads on the eye line and everyone at their place across, it is a tighter framing of the right blocking. Standing people drawn 1.5× too tall or short still fail (D53), and so does a camera that is too high or low.
+- **The handrail.** Panels 1 and 3 again differed (thin in 1 this time, thick in 3). None of the three was approved, so D69's same-camera line wasn't in play. Approve the panel with the right rail, then redraw the other.
+- **Tested.** Unit tests: a group drawn about 14% closer, with its table, passes and records the shift; a table well in front of a group that is in place still fails.
