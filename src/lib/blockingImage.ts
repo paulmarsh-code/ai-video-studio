@@ -8,6 +8,8 @@
 import fs from "node:fs";
 import sharp from "sharp";
 import { propKind } from "./domain/story";
+import { greyBoxSvg } from "./domain/greyBox";
+import { frameVariant } from "./testRecords";
 import type { DB } from "@/db/client";
 import { planForShot, readCamera } from "./domain/geometry";
 import { layoutSketchSvg } from "./domain/layoutSketch";
@@ -64,7 +66,8 @@ export async function renderBlockingForShot(db: DB, shotId: string, extraHeld?: 
   const aspect = String((project?.brief as { aspect?: string } | undefined)?.aspect ?? plan.aspect ?? "9:16");
   const portrait = !aspect.startsWith("16");
   const W = portrait ? 1024 : 1536, H = portrait ? 1536 : 1024;
-  const bg = await backgroundForFrame(db, shotId, W, H);
+  // Test B (D60): the room as a grey box from the plan, with the venue's look sent separately.
+  const bg = frameVariant() === "box" ? await sharp(Buffer.from(greyBoxSvg(full, cam, W, H, { outdoors: scene.venue?.setting === "exterior" }))).png().toBuffer() : await backgroundForFrame(db, shotId, W, H);
   if (!bg) return null; // no 360° view: the plain layout sketch is used instead
   const cast = repo.getCast(db, scene.scene.projectId);
   const profiles = studio.getApprovedProfiles(db, scene.scene.projectId) as Record<string, CharacterProfile>;

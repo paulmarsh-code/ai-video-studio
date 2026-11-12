@@ -10,6 +10,8 @@ import type { PictureCheck } from "./domain/pictureCheck";
 
 export const testMode = () => /^(1|true|yes|on)$/i.test(process.env.STORYBOARD_TEST ?? "");
 export const requestVariant = (): "full" | "short" => (/^short$/i.test(process.env.STORYBOARD_REQUEST ?? "") ? "short" : "full");
+/** Image 1 drawn over the venue photo (A, the default) or as a grey-box room from the plan (B, D60): STORYBOARD_FRAME=box. */
+export const frameVariant = (): "photo" | "box" => (/^box$/i.test(process.env.STORYBOARD_FRAME ?? "") ? "box" : "photo");
 
 const root = () => path.join(process.cwd(), "data", "tests");
 const stamp = () => new Date().toISOString().replace(/[-:]/g, "").replace(/\..*$/, "").replace("T", "_");
@@ -42,7 +44,7 @@ export function recordDraw(r: DrawRecord): void {
     });
     fs.writeFileSync(path.join(dir, "result.png"), r.output.data);
     fs.writeFileSync(path.join(dir, "settings.json"), JSON.stringify({
-      panel: r.panelCode, kind: r.kind, requestVersion: r.variant, model: r.model, quality: r.quality, size: r.size, endpoint: r.endpoint,
+      panel: r.panelCode, kind: r.kind, requestVersion: r.variant, frame: frameVariant(), model: r.model, quality: r.quality, size: r.size, endpoint: r.endpoint,
       // The images API takes no seed, so repeat draws can't be made identical; each is its own sample.
       seed: "not available in the OpenAI images API",
       requestCharacters: r.prompt.length, conflictsFound: r.conflicts ?? [],
@@ -92,7 +94,7 @@ export function recordCheck(r: { panelCode: string; assetId: string; picture?: B
     if (fs.existsSync(csv) && !fs.readFileSync(csv, "utf8").startsWith("time,panel,picture,kind,request,model,request_chars,pass,blocking,characters_look,room_and_props,redraw,size_vs_plan,eye_level,")) fs.renameSync(csv, path.join(root(), `results_before_${stamp()}.csv`));
     if (!fs.existsSync(csv)) fs.writeFileSync(csv, "time,panel,picture,kind,request,model,request_chars,pass,blocking,characters_look,room_and_props,redraw,size_vs_plan,eye_level,not_measured,problems,folder\n");
     fs.appendFileSync(csv, [
-      new Date().toISOString(), r.panelCode, t, kind, settings.requestVersion ?? "", settings.model ?? "", settings.requestCharacters ?? "",
+      new Date().toISOString(), r.panelCode, t, kind, `${settings.requestVersion ?? ""}${settings.frame === "box" ? "+box" : ""}`, settings.model ?? "", settings.requestCharacters ?? "",
       r.check.pass ? "pass" : "fail", a ? (a.blocking.pass ? "pass" : "fail") : "", a ? (a.look.pass ? "pass" : "fail") : "", a ? (a.room.pass ? "pass" : "fail") : "",
       r.check.redraw ? "yes" : "", ratios, eye,
       a ? [...a.blocking.unmeasured, ...a.look.unmeasured, ...a.room.unmeasured].join("; ") : "", r.check.problems.join(" "), dir,

@@ -6,7 +6,7 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/db/client";
 import { cleanBaseCode, storeAsset } from "@/lib/assetStore";
 import { getImageProvider, imageSettings, SIZES } from "@/lib/providers/images";
-import { recordDraw, testMode } from "@/lib/testRecords";
+import { frameVariant, recordDraw, testMode } from "@/lib/testRecords";
 import { renderLayoutForShot } from "@/lib/layoutImage";
 import { renderBackgroundForShot } from "@/lib/backgroundImage";
 import { renderBlockingForShot } from "@/lib/blockingImage";
@@ -33,7 +33,14 @@ export async function POST(req: Request) {
     if (shot) await ensureHeldItems(db, body.projectId);
     const png = await renderBlockingForShot(db, body.blockingShotId);
     if (png) {
-      refs.splice(body.baseAssetId ? 1 : 0, 0, { data: Buffer.from(png), mime: "image/png", name: "blocking_frame.png" });
+      const at = body.baseAssetId ? 1 : 0;
+      refs.splice(at, 0, { data: Buffer.from(png), mime: "image/png", name: "blocking_frame.png" });
+      // Test B (D60): image 1 is a grey-box room, so the room's look from this camera goes right
+      // after it, as image 2, which is what the request says.
+      if (frameVariant() === "box" && body.backgroundShotId) {
+        const look = await renderBackgroundForShot(db, body.backgroundShotId);
+        if (look) refs.splice(at + 1, 0, { data: Buffer.from(look), mime: "image/png", name: "room_look.png" });
+      }
       body.backgroundShotId = undefined;
       body.layoutShotId = undefined;
     }

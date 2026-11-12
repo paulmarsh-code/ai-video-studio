@@ -4,7 +4,7 @@ import { getDb } from "@/db/client";
 import * as repo from "@/lib/repo";
 import * as studio from "@/lib/studioRepo";
 import { heldConflicts, panelPrompt, requestConflicts } from "@/lib/domain/imagePrompts";
-import { requestVariant, testMode } from "@/lib/testRecords";
+import { frameVariant, requestVariant, testMode } from "@/lib/testRecords";
 import { getImageProvider, getTextProvider } from "@/lib/providers/images";
 import { GENRE_PROFILES } from "@/lib/domain/genre";
 import { StoryWizard } from "@/components/StoryWizard";
@@ -127,6 +127,7 @@ export default async function StoryboardPage({ params, searchParams }: { params:
               backgroundHref: shot?.spec.cameraId && hasRing(s.venue?.views as { imageAssetId?: string }[] | undefined) ? `/api/background/${shot.id}` : undefined,
               // The blocking frame (D34): the shot itself, finished by GPT.
               blockingHref: shot?.spec.cameraId && hasRing(s.venue?.views as { imageAssetId?: string }[] | undefined) ? `/api/blocking/${shot.id}` : undefined,
+              frame: frameVariant(),
               continuity: anchor && anchor.panel.id !== p.id ? { assetId: anchor.panel.imageAssetId!, label: `approved scene picture (panel ${anchor.n})` } : undefined,
             });
             return {

@@ -78,7 +78,10 @@ export function venueSheetRequest(viewNames?: string[], style = "photorealistic"
     `Step 2: using the description above, create ONE ${style} image in landscape 3:2 format (wider than it is tall), divided into a 2 by 2 grid of four equal panels, each showing the same place from the main viewpoint looking in a different direction.`,
     "It must be a four-panel board, not a single picture of the place.",
     order,
-    "Eye-level wide shots, no people, the same layout, materials and light in every panel.",
+    // An empty floor (D60): each scene places its own furniture, and furniture standing in the
+    // room pictures was copied into shots in place of the plan's (D55, D56).
+    "Eye-level wide shots of the room with its floor empty: no people and no free-standing furniture (no loose tables, chairs, stools, sofas or pot plants on the floor), because each scene places its own. Everything built in stays as described: walls, bar, counters, shelving, screens, signs, lights, windows, stairs, balcony.",
+    "The same layout, materials and light in every panel.",
     SHEET_COMMON,
   ].join("\n");
 }

@@ -117,6 +117,11 @@ export interface PanelPromptInput {
    */
   blockingHref?: string;
   /**
+   * Image 1 over the venue photo ("photo", the default) or as a grey-box room from the plan
+   * ("box", D60 test B): then the room's look from this camera goes as image 2.
+   */
+  frame?: "photo" | "box";
+  /**
    * An approved picture of this scene (D18c), attached so later panels keep the same spot,
    * furniture, background guests, light and clothes. Not used for the panel's own picture.
    */
@@ -210,16 +215,19 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   const layout = !blocking && !!(i.layoutHref && reading);
   if (layout) attach.push({ label: "layout sketch", assetId: "", href: i.layoutHref });
   // The blocking frame is image 1 (D34): the picture to finish. Everything else follows it.
+  // In test B (D60) it's a grey-box room, and the room's look from this camera is image 2.
+  const box = blocking && i.frame === "box" && !!i.backgroundHref;
+  if (box) attach.unshift({ label: "the room's look from this camera", assetId: "", href: i.backgroundHref });
   if (blocking) attach.unshift({ label: "blocking frame (the shot to finish)", assetId: "", href: i.blockingHref });
-  const peopleFrom = blocking ? 1 : 0;
+  const peopleFrom = blocking ? (box ? 2 : 1) : 0;
 
   const lines: string[] = [];
   lines.push(`${(i.style ?? "photorealistic").replace(/^./, (m) => m.toUpperCase())} storyboard frame for a ${i.aspect ?? "9:16"} video, set in the ${i.venueName}.`);
-  if (blocking) lines.push(blockingInstruction(attach.slice(1).map((a) => a.label)));
+  if (blocking) lines.push(blockingInstruction(attach.slice(box ? 2 : 1).map((a) => a.label), box));
   const people = attach.slice(peopleFrom, peopleFrom + peopleCount);
   if (people.length) lines.push(`Use the attached reference images for ${joinNames([...new Set(people.map((a) => a.label.replace(/ (reference|back)$/, "")))])}; keep their faces, hair and clothes identical, every pattern, stripe and colour block included. Bags and anything carried stay exactly as in the reference, in the same hand or on the same shoulder. Mind the mirror: a bag in someone's left hand is on the right of the picture when they face the camera, and on the left of the picture when they are seen from behind.`);
   const backs = people.filter((a) => a.label.endsWith(" back")).map((a) => a.label.replace(/ back$/, ""));
-  if (blocking) S.refs.push(`The other images show only how people and props look (${attach.slice(1).map((a) => a.label).join(", ")}): copy faces, hair, clothes, carried things and props exactly; never take positions or background from them.`);
+  if (blocking) S.refs.push(`The other images show only how people and props look (${attach.slice(box ? 2 : 1).map((a) => a.label).join(", ")}): copy faces, hair, clothes, carried things and props exactly; never take positions or background from them.`);
   if (backs.length) S.refs.push(`${joinNames(backs)} ${backs.length === 1 ? "is" : "are"} seen from behind: copy the back of the clothes, hair and bag from the back ${backs.length === 1 ? "image" : "images"}.`);
   if (i.continuity) S.refs.push(`The ${i.continuity.label} shows how the room, light and clothes look; never copy its framing or positions.`);
   if (backs.length) lines.push(`${joinNames(backs)} ${backs.length === 1 ? "is" : "are"} seen from behind: copy the back of their clothes, hair and bag exactly from the attached back ${backs.length === 1 ? "image" : "images"}.`);
@@ -517,7 +525,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   // words say only what neither shows. Same values as above, so the two never disagree.
   const short = blocking ? [
     lines[0],
-    blockingShort(),
+    blockingShort(box),
     ...S.refs,
     ...S.people,
     ...S.props,
@@ -631,23 +639,27 @@ export function itemNoun(what: string): string {
  * shot itself; GPT finishes it rather than composing its own. Written so each element of the
  * frame has one meaning and one job.
  */
-export function blockingInstruction(refLabels: string[]): string {
+export function blockingInstruction(refLabels: string[], box = false): string {
   return [
     "IMAGE 1 IS THIS SHOT. Turn image 1 into the finished photograph; do not compose a new picture.",
-    "Image 1 was built from the approved layout: the real room exactly as this camera sees it, with a pale labelled stand-in for each character.",
+    box
+      ? "Image 1 was built from the approved layout: a plain grey model of the room exactly as this camera sees it (its floor and walls, with a one-metre grid on the floor for scale, and the props in place), with a pale labelled stand-in for each character."
+      : "Image 1 was built from the approved layout: the real room exactly as this camera sees it, with a pale labelled stand-in for each character.",
     "- Each stand-in becomes the character named on it, standing exactly where the stand-in stands, the same size in the frame, and turned the way its label says (FACING CAMERA, BACK TO CAMERA, or SIDE-ON facing left or right).",
-    "- An orange arrow on the floor marks someone walking: they walk exactly along it, in the arrow's direction.",
+    "- An orange arrow on the floor shows which way someone is walking from their stand-in; it is never a second place for them, so each character appears once.",
     "- A yellow tag beside a stand-in marks an item they hold: it is on that side of the picture, in that hand.",
     "- Outlined shapes marked with a prop's name are that prop, in that place, at that size.",
-    "- The room, the background, the light, the camera position, the angle and the lens stay exactly as in image 1. Do not move, swap, re-frame, zoom or re-imagine anything.",
+    box
+      ? "- Image 2 shows how this room looks from this camera: paint image 1's grey floor and walls to look like it (its walls, bar, windows, lights, colours and materials). The camera position, angle, lens, floor, walls, positions and sizes stay exactly as in image 1; take no furniture and no people from image 2."
+      : "- The room, the background, the light, the camera position, the angle and the lens stay exactly as in image 1. Do not move, swap, re-frame, zoom or re-imagine anything.",
     "- Remove every stand-in outline, label, arrow and tag: none of them appear in the finished picture.",
     refLabels.length ? `The other attached images are reference pictures (${refLabels.join(", ")}): use them only for how each character and prop looks, never for where anyone stands or what is behind them.` : "",
   ].filter(Boolean).join("\n");
 }
 
 /** Image 1's instruction in the short request (B3): the same meaning as `blockingInstruction`, said once. */
-export function blockingShort(): string {
-  return "Image 1 is this exact shot: keep its framing, eye level, perspective, positions and the size of everyone and everything in it. Each pale stand-in becomes the person named on it, exactly where it stands and turned as its label says; an orange arrow only shows which way a walker is heading from their stand-in, never a second place for them, so everyone appears once; a yellow tag marks something held, on that side of the picture; an outline is the named prop. Remove every label, outline, arrow and tag.";
+export function blockingShort(box = false): string {
+  return (box ? "Image 1 is this exact shot as a plain grey model of the room; image 2 shows how the room looks from this camera, so paint image 1's grey floor and walls to look like it, taking no furniture or people from image 2. " : "") + "Image 1 is this exact shot: keep its framing, eye level, perspective, positions and the size of everyone and everything in it. Each pale stand-in becomes the person named on it, exactly where it stands and turned as its label says; an orange arrow only shows which way a walker is heading from their stand-in, never a second place for them, so everyone appears once; a yellow tag marks something held, on that side of the picture; an outline is the named prop. Remove every label, outline, arrow and tag.";
 }
 
 /**
