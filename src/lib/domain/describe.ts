@@ -330,10 +330,12 @@ export function venueFillFromReply(reply: string): VenueFill & { missing: string
   }
   const views: { name: string; directionDeg: number }[] = [];
   for (const l of viewLines) {
+    // "copper bar: ahead", or the other way round, "ahead: the copper bar" (D61).
     const m = l.match(/^(.+?)\s*[:—–-]\s*(ahead|left|right|behind|front|back|forward|far|near)\b/i);
-    if (!m) continue;
-    const name = stripQuotes(m[1]).replace(/^(the|a)\s+/i, "").trim().toLowerCase();
-    const deg = DIRECTION_DEG[m[2].toLowerCase()];
+    const r = m ? undefined : l.match(/^(?:to the\s+)?(ahead|left|right|behind|front|back|forward|far|near)(?:\s+side)?\s*[:—–-]\s*(.+)$/i);
+    if (!m && !r) continue;
+    const name = stripQuotes(m ? m[1] : r![2]).replace(/^(the|a)\s+/i, "").replace(/[.;,]+$/, "").trim().toLowerCase();
+    const deg = DIRECTION_DEG[(m ? m[2] : r![1]).toLowerCase()];
     if (name && !views.some((x) => x.name === name)) views.push({ name, directionDeg: deg });
   }
   const { values: v, missing } = parseLabelled(reply, VENUE_FIELDS);

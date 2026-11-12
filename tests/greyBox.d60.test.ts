@@ -54,3 +54,11 @@ describe("Venues: four real directions, and furniture left to the scenes (D61)",
     expect(t).toMatch(/Free-standing furniture is left out even if the description mentions it/);
   });
 });
+
+describe("Reading the views either way round (D61)", () => {
+  it("takes 'name: direction' and 'direction: name'", async () => {
+    const { venueFillFromReply } = await import("../src/lib/domain/describe");
+    const reply = "SETTING: outdoors\nPLACE: A rooftop terrace.\nLAYOUT: Bar ahead.\nMATERIALS AND DECOR: Copper.\nLIGHT AND TIME OF DAY: Dusk.\nIDENTITY ANCHORS: copper bar; glass railing; living wall\nVIEWS:\nahead: the fire trough and skyline\nLeft: copper bar and river railing.\nbehind: glass entrance and stairs\nliving wall and steps: right";
+    expect(venueFillFromReply(reply).views.map((v) => v.name)).toEqual(["fire trough and skyline", "copper bar and river railing", "glass entrance and stairs", "living wall and steps"]);
+  });
+});
