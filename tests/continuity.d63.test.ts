@@ -69,12 +69,12 @@ describe("A walker who has crossed the whole picture since is put at an edge (D7
     // The two-shot sees about 4.5 m across where background people stand; 7 s is about 9 m.
     const t = timed(-7);
     for (const x of [t.text, t.short!]) {
-      expect(x).toMatch(/This moment is about 7 seconds after the approved picture, .*anyone walking has gone about 9 metres, more than the whole width of this picture, so whoever was walking in it has left the picture\./);
+      expect(x).toMatch(/This moment is about 7 seconds after the approved picture, .*anyone walking has gone about 9 metres, more than the whole width of this picture, so whoever was walking in it has walked out of the picture by now\./);
       expect(x).toMatch(/If the description has someone walking, draw them only at the left or right edge of the picture, just coming in or going out and facing the way they walk; never in the middle or between the characters\./);
     }
   });
   it("works the same either way in time, and says 'well over' for long gaps", () => {
-    expect(timed(7).short).toMatch(/7 seconds before the approved picture, .*has left the picture/);
+    expect(timed(7).short).toMatch(/7 seconds before the approved picture, .*has walked out of the picture by now/);
     expect(timed(-40).short).toMatch(/has gone well over 15 metres/);
   });
   it("not from another camera, whose walker may be anywhere in this picture", () => {
@@ -97,5 +97,23 @@ describe("How far a walker crosses the picture (D76)", () => {
     expect(walkAcross(plan, cam, 7)).toBeCloseTo((1.3 * 7) / width, 5);
     expect(walkAcross(plan, cam, -7)).toBeCloseTo(walkAcross(plan, cam, 7), 5);
     expect(walkAcross(plan, cam, 2)).toBeLessThan(1);
+  });
+});
+
+describe("The background's one walker, gone from this picture, is left out of its words (D77)", () => {
+  const SERVED = "about 10 guests mingling with drinks, a few seated at other tables, a server in black moving between groups";
+  const timed = (secondsApart: number, from = "front") => panelPrompt({ description: "They talk.", shot: { ...spec("front"), crowd: SERVED } as ShotSpec, cast: cast as never, profiles: {}, plan, venueName: "roof", blockingHref: "/api/blocking/x", continuity: { assetId: "z", label: "approved scene picture (panel 1)", view: "skyline", cameraId: from, secondsApart } });
+  it("7 seconds on from the same camera: no server in the background words", () => {
+    const t = timed(-7);
+    for (const x of [t.text, t.short!]) {
+      expect(x).not.toMatch(/server/);
+      expect(x).toMatch(/Background: about 10 guests mingling with drinks, a few seated at other tables\./);
+      expect(x).toMatch(/whoever was walking in it has walked out of the picture by now\. Never copy/);
+      expect(x).not.toMatch(/left or right edge/);
+    }
+  });
+  it("kept when the picture is from another camera, or the gap is short", () => {
+    expect(timed(-7, "ots").short).toMatch(/a server in black moving between groups/);
+    expect(timed(-2).short).toMatch(/a server in black moving between groups/);
   });
 });

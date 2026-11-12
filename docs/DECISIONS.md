@@ -1522,3 +1522,30 @@ Paul: "again I want to make sure we are not making Paid On Time specific changes
 - People standing right behind a main character's head stay in the reference, because the main characters' boxes are kept whole so their hair isn't cut (D74). That only leaves standing people in place, which Paul has said is fine for a few seconds.
 
 **Test.** Redraw T6 panel 3. The server should be at an edge or gone, not in the middle.
+
+### D77: A background walker who has left the picture is left out of the panel's words (2026-11-12)
+
+**Failure (T6 panel 3, after D76).**
+- The request said whoever was walking had left the picture, and to draw anyone walking only at an edge, never between the characters.
+- GPT still drew the server in black in the gap between the two women, 7 seconds on, from the same camera. That is the third time.
+- The record shows D74 worked: 8 background people were taken out of the reference, the server among them.
+- What put her back was the background words ("…a server in black moving between groups") together with an image 1 identical to panel 1's. Instructions about where not to draw her lost to words that described her.
+
+**Tried and dropped.** A stand-in of her own in image 1, near the edge and heading out.
+- Drawn on Paul's real panel 3 (from a copy of his data), the only floor at an edge was behind Jade. The rooftop drops away 1 m behind the table. The stand-in would have put the server behind Jade's head.
+
+**Fix (prompt line).** When the approved picture is from the same camera and the walker would have crossed the whole picture since (D76), the walker is left out of this panel's background words.
+- She has walked out by now, so she isn't described.
+- The rest of the crowd is unchanged, and the continuity line says whoever was walking has walked out of the picture.
+- For T6 panel 3 the background becomes "about 10 well-dressed industry guests mingling with drinks, some standing near the rooftop railing, a few seated at other tables".
+
+**Finding the walker.** `walkerIn` picks out the one part of the background words about a single person moving through: "a server…", "a waiter carrying…", "a ground crew member walking out…".
+- It ignores groups ("a few skaters…", "skiers coming off the chairlift") and anyone standing or sitting.
+- The words are English, like the scene setting. Finding nothing changes nothing.
+- A group moving, or a walker in a shorter gap, keeps the D76 wording.
+
+**Also: the new scene page.** After "Next: tell the story", the button now reads "Saved: opening the story…". A link to open the scene shows too.
+- Paul's new scene saved, but the page stayed put. The storyboard page compiles the first time it's opened after a restart, which on Windows can take a while.
+- Reproduced here: save, then the story page opened in 6 seconds.
+
+**Test.** Redraw T6 panel 3: no server in the background.

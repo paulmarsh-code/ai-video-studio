@@ -10,6 +10,7 @@ import { PLATE_KEEP_FULL, PLATE_KEEP_SHORT } from "./plate";
 export const CROWD_MIX = "Background people are ordinary and real-looking, not models: a natural mix of ages that suits this crowd, younger and older; of heights and body shapes, some heavier, some shorter, some broader; and of faces and hair. Each is dressed differently, in their own colours and style for the setting. No two alike, no one repeated.";
 export const CROWD_MIX_SHORT = "Ordinary real-looking people, not models: a natural mix of ages for this crowd, of heights and body shapes (some heavier, shorter or older), each dressed differently; no two alike.";
 import { mainSubjectId } from "./composer";
+import { crowdWithout, walkerGone } from "./continuity";
 import { describeFrame, facingOf, framedSize, pictureShare, PRESET_FOV, planForShot, presetText, readCamera, readProps, WALK_MS, walkAcross } from "./geometry";
 import { GENRE_PROFILES, type Genre } from "./genre";
 import { aimDetail, exitFrom, gestureDetail } from "./gestures";
@@ -263,11 +264,13 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   // the same way, 7 seconds later: the same image 1 invites the same choice. When a walker would
   // have crossed this whole picture since, they are told where to be instead: at an edge.
   const crossed = sameCamera && cam && shotPlan && apart !== undefined ? walkAcross(shotPlan, cam, apart) : 0;
+  // The background's one walker, if they've walked out of this picture since (D77): left out of the words.
+  const gone = walkerGone(i.plan, shot, i.continuity);
   const metres = apart !== undefined ? Math.round(Math.abs(apart) * WALK_MS) : 0;
   const when = apart !== undefined && Math.abs(apart) >= 1 ? `This moment is about ${Math.round(Math.abs(apart))} seconds ${apart > 0 ? "before" : "after"} the approved picture` : "";
   const movedOn = !i.continuity || !shot?.crowd?.trim() ? ""
     : when && crossed >= 1
-      ? ` ${when}, and the background people have moved in that time: those standing have shifted, turned or changed who they are talking to, and anyone walking has gone ${metres > 15 ? "well over 15" : `about ${metres}`} metres, more than the whole width of this picture, so whoever was walking in it has left the picture. If the description has someone walking, draw them only at the left or right edge of the picture, just coming in or going out and facing the way they walk; never in the middle or between the characters. Never copy the background people's places from it.`
+      ? ` ${when}, and the background people have moved in that time: those standing have shifted, turned or changed who they are talking to, and anyone walking has gone ${metres > 15 ? "well over 15" : `about ${metres}`} metres, more than the whole width of this picture, so whoever was walking in it has walked out of the picture by now.${gone ? "" : " If the description has someone walking, draw them only at the left or right edge of the picture, just coming in or going out and facing the way they walk; never in the middle or between the characters."} Never copy the background people's places from it.`
       : when
         ? ` ${when}, and the background people have moved in that time: those standing have shifted, turned or changed who they are talking to, and anyone walking is about ${Math.min(15, metres)} metres from where they are in it, or out of the picture. Never copy the background people's places from it.`
         : " A few seconds have passed: background people have shifted a little and anyone walking is somewhere else; never copy their exact places.";
@@ -281,7 +284,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   const sides = reading?.sideViews;
   if (bgView && (sides?.left || sides?.right)) lines.push(`The room around it, never swapped: ${[sides.left ? `the ${sides.left} is to the left of the ${bgView}` : "", sides.right ? `the ${sides.right} is to the right of the ${bgView}` : ""].filter(Boolean).join("; ")}. Anything of ${sides.left && sides.right ? "them" : "it"} in the picture stays on that side.`);
   const spot = shot?.spot?.trim();
-  const crowd = shot?.crowd?.trim();
+  const crowd = gone && shot?.crowd ? crowdWithout(shot.crowd, gone) || undefined : shot?.crowd?.trim();
   // An older approved picture may show an empty room: keep its spot and look, but add the crowd.
   if (i.continuity) lines.push(`Use the attached ${i.continuity.label} for continuity: the same clothes, the same colour and material of furniture, the same things on the tables (glasses, drinks, bags) and the same light${crowd ? ". If it shows fewer background people than described below, add them" : ", and the same kind of background people"}. Each character keeps the same drink and things in front of them. ${sameCamera ? `It is from this same camera: everything built behind the characters stays exactly as in it (${behind}), but not its background people${i.frame === "fill" ? ", who are taken out of it: draw them afresh, as described" : ""}. Where everyone is and how they are posed come from ${blocking ? "image 1" : "the layout"}.` : `Where everyone and everything is, how big and how high, and what is behind them come from ${blocking ? "image 1" : "the layout"}, not from it.${turned}`}${movedOn}`);
   // The same light in every picture (D31): one picture came out much darker than the rest.

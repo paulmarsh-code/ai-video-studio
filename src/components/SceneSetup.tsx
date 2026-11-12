@@ -20,6 +20,7 @@ export function SceneSetup({ projectId, venues, characters }: {
   const [venueId, setVenueId] = useState(venues.filter((v) => v.approved).length === 1 ? venues.find((v) => v.approved)!.id : "");
   const [cast, setCast] = useState<string[]>([]);
   const [error, setError] = useState("");
+  const [made, setMade] = useState("");
   const toggle = (id: string) => setCast((x) => (x.includes(id) ? x.filter((y) => y !== id) : [...x, id]));
 
   return (
@@ -51,14 +52,17 @@ export function SceneSetup({ projectId, venues, characters }: {
       </div>
 
       <div className="mt-5">
-        <ActionButton label="Next: tell the story" busyLabel="Saving…" doneLabel="Saved" disabled={!title.trim() || !venueId || !cast.length} testId="scene-create"
+        <ActionButton label="Next: tell the story" busyLabel="Saving…" doneLabel="Saved: opening the story…" disabled={!title.trim() || !venueId || !cast.length || !!made} testId="scene-create"
           onAction={async () => {
             setError("");
             const r = await addSceneAction(projectId, { title, venueId, castIds: cast });
             if (!r.ok) { setError(r.error); return r; }
+            setMade(r.value ?? "");
             router.push(`/projects/${projectId}/scenes/${r.value}/storyboard`);
             return r;
           }} />
+        {/* The first time after a restart, the story page can take a while to open. */}
+        {made && <p className="mt-2 text-sm text-neutral-600">The first time after starting the app this can take up to a minute. <a className="text-blue-700 underline" href={`/projects/${projectId}/scenes/${made}/storyboard`} data-testid="scene-open">Open the scene now</a></p>}
       </div>
       {error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}
     </div>
