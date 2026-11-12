@@ -427,8 +427,11 @@ export function judgePicture(e: PictureExpectation, reply: string, plan?: string
       const d = offsets.map((o) => o.head - o.planned).sort((a, b) => a - b);
       const mid = d.length % 2 ? d[(d.length - 1) / 2] : (d[d.length / 2 - 1] + d[d.length / 2]) / 2;
       const avg = (k: "head" | "planned") => offsets.reduce((a, o) => a + o[k], 0) / offsets.length;
-      if (mid < -0.08) { eyeLevel = "above"; add("blocking", `The camera is too high or tilted down: heads are about ${pct(avg("head"))} of the way down the picture, but image 1 has them about ${pct(avg("planned"))} down, on the eye-level line. Keep the camera level at image 1's height, so heads sit where they are in image 1.`, true); }
-      else if (mid > 0.08) { eyeLevel = "below"; add("blocking", `The camera is too low or tilted up: heads are about ${pct(avg("head"))} of the way down the picture, but image 1 has them about ${pct(avg("planned"))} down, on the eye-level line. Keep the camera level at image 1's height, so heads sit where they are in image 1.`, true); }
+      // Heads higher in the picture than planned come from a camera pointed further down or set
+      // lower (D62); lower heads from one pointed up or set higher. From heads alone the two
+      // can't be told apart, so the message says both: "too high" had sent a low camera lower.
+      if (mid < -0.08) { eyeLevel = "above"; add("blocking", `Heads are higher in the picture than in image 1: about ${pct(avg("head"))} of the way down, but image 1 has them about ${pct(avg("planned"))} down. The camera is pointed further down, or set lower, than image 1's. Match image 1's camera height and angle, so heads sit where they are in image 1.`, true); }
+      else if (mid > 0.08) { eyeLevel = "below"; add("blocking", `Heads are lower in the picture than in image 1: about ${pct(avg("head"))} of the way down, but image 1 has them about ${pct(avg("planned"))} down. The camera is pointed further up, or set higher, than image 1's. Match image 1's camera height and angle, so heads sit where they are in image 1.`, true); }
       else eyeLevel = "on";
     } else unmeasured.blocking.push("eye level: not judged");
   }

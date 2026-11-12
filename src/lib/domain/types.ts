@@ -128,6 +128,8 @@ export interface PlanFurniture {
   imageAssetId?: string;
   /** In a panel's plan only (D36): the character holding it. */
   heldBy?: string;
+  /** In a panel's plan only (D62): the table a drink, glass or the like stands on. */
+  onId?: string;
 }
 
 /**

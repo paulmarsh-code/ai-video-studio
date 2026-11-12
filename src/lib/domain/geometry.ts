@@ -4,6 +4,7 @@
 import { verticalText } from "./vertical";
 import { cameraZ, floorZ, levelAt } from "./levels";
 import { SHOT_SIZES, type ShotSize } from "./shotLanguage";
+import { propHeight, propKind, propWidth } from "./story";
 import type { PoseEntry, PanelBlock,
   CameraPreset,
   CastMember,
@@ -484,16 +485,74 @@ export function readProps(plan: GeometryPlanData, cam: PlanCamera): { id: string
     .map((x) => x.seen);
 }
 
+/** Seated eye height (D62): where a camera sits when everyone in the picture is seated. */
+export const SEATED_EYE_M = 1.2;
+
+/**
+ * Everyone in the picture seated (D62): a camera with no height of its own is at seated eye
+ * level, as a camera operator would put it. At standing height it looked down on them, and GPT
+ * drew it at seated eye level anyway, so the whole picture was off from image 1.
+ */
+function atSeatedEyeLevel(plan: GeometryPlanData, visibleIds?: string[]): GeometryPlanData {
+  const seen = plan.actors.filter((a) => !visibleIds || visibleIds.includes(a.characterId));
+  if (!seen.length || !seen.every((a) => a.pose === "sitting")) return plan;
+  return { ...plan, cameras: plan.cameras.map((c) => (c.heightM === undefined ? { ...c, heightM: SEATED_EYE_M } : c)) };
+}
+
+/** A table people sit at (D62): its height when the words gave it a standing one. */
+export const SITTING_TABLE_M = 0.75;
+
+/**
+ * Props settled for a shot (D62). Drinks, glasses and other table-top things stand on the nearest
+ * table, at their own small size: placed as tables, two cocktails stood as a 1.1 m block two
+ * metres away and were left out of the picture. A table everyone at it sits at, with no stools,
+ * is sitting height: drawn chest-high, it hid the faces and GPT redrew it differently each panel.
+ */
+function settleProps(plan: GeometryPlanData): GeometryPlanData {
+  const furniture = plan.furniture;
+  if (!furniture?.length) return plan;
+  const kindOf = (f: { name: string; detail?: string }) => propKind(`${f.name} ${f.detail ?? ""}`, f.name);
+  const tables = furniture.filter((f) => !f.heldBy && kindOf(f) === "table");
+  let changed = false;
+  const out = furniture.map((f) => {
+    if (f.heldBy) return f;
+    const kind = kindOf(f);
+    if (kind === "small") {
+      const text = `${f.name} ${f.detail ?? ""}`;
+      const heightM = propHeight(text, f.name);
+      const under = tables.find((t) => Math.hypot(t.position.x - f.position.x, t.position.y - f.position.y) <= t.radiusM);
+      const t = under ?? [...tables].sort((a, b) => Math.hypot(a.position.x - f.position.x, a.position.y - f.position.y) - Math.hypot(b.position.x - f.position.x, b.position.y - f.position.y))[0];
+      if (!t) return f;
+      changed = true;
+      const radiusM = +Math.min(propWidth(text, "small") / 2, t.radiusM * 0.6).toFixed(2);
+      if (under) return { ...f, heightM, radiusM, onId: t.id };
+      // Onto the table, on the side it was on, well inside the edge.
+      const dx = f.position.x - t.position.x, dy = f.position.y - t.position.y, d = Math.hypot(dx, dy) || 1;
+      const r = t.radiusM * 0.4;
+      return { ...f, heightM, onId: t.id, radiusM, position: { x: +(t.position.x + (dx / d) * r).toFixed(2), y: +(t.position.y + (dy / d) * r).toFixed(2) } };
+    }
+    if (kind === "table" && /\b(table|desk)\b/i.test(f.name) && (f.heightM ?? 0) > 0.9) {
+      const at = plan.actors.filter((a) => Math.hypot(a.position.x - f.position.x, a.position.y - f.position.y) <= f.radiusM + 1.3);
+      if (!at.length || !at.every((a) => a.pose === "sitting" && !/\b(stool|high chair|bar chair)\b/i.test(a.poseOn ?? ""))) return f;
+      changed = true;
+      const detail = f.detail?.replace(/\bchest[- ]high(?:\s+at\s+\d{2,3}\s?cm)?|\bbar[- ]height\b|\b\d{2,3}\s?cm\s+(?:tall|high)\b|\bat\s+\d{2,3}\s?cm\b/gi, "table height, about 75 cm");
+      return { ...f, heightM: SITTING_TABLE_M, ...(detail !== undefined ? { detail } : {}) };
+    }
+    return f;
+  });
+  return changed ? { ...plan, furniture: out } : plan;
+}
+
 /**
  * The floor plan as it stands for one shot (D19b): anyone the shot puts on a mark (arriving,
  * say) stands there instead of their usual place. Everything that reads a camera for a shot
  * uses this, so the sketch, the prompts, the check and the camera choice all agree.
  */
-export function planForShot(plan: GeometryPlanData, shot?: { at?: Record<string, string>; blocking?: Record<string, PanelBlock>; posture?: Record<string, PoseEntry> }): GeometryPlanData {
+export function planForShot(plan: GeometryPlanData, shot?: { at?: Record<string, string>; blocking?: Record<string, PanelBlock>; posture?: Record<string, PoseEntry>; visibleIds?: string[] }): GeometryPlanData {
   const at = shot?.at;
   const bl = shot?.blocking;
   const po = shot?.posture;
-  if ((!at || !Object.keys(at).length) && (!bl || !Object.keys(bl).length) && (!po || !Object.keys(po).length)) return plan;
+  if ((!at || !Object.keys(at).length) && (!bl || !Object.keys(bl).length) && (!po || !Object.keys(po).length)) return atSeatedEyeLevel(settleProps(plan), shot?.visibleIds);
   // Someone who has left (D36) isn't in the panel at all.
   const actors = plan.actors.filter((a) => !bl?.[a.characterId]?.gone).map((a0) => {
     // Their posture in this panel (D37).
@@ -512,7 +571,7 @@ export function planForShot(plan: GeometryPlanData, shot?: { at?: Record<string,
     const f = a.facingDeg !== undefined ? { x: Math.cos((a.facingDeg * Math.PI) / 180), y: Math.sin((a.facingDeg * Math.PI) / 180) } : a.to ? norm(sub(a.to, a.position)) : { x: 0, y: 0 };
     return { x: +(a.position.x + f.x * 0.25).toFixed(2), y: +(a.position.y + f.y * 0.25).toFixed(2) };
   };
-  return {
+  return atSeatedEyeLevel(settleProps({
     ...plan,
     actors,
     // Props moved, taken away or picked up on a panel (D35, D36).
@@ -526,7 +585,7 @@ export function planForShot(plan: GeometryPlanData, shot?: { at?: Record<string,
           }),
         }
       : {}),
-  };
+  }), shot?.visibleIds);
 }
 
 /**

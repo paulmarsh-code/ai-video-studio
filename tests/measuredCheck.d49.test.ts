@@ -39,7 +39,7 @@ describe("The plan check reads heads and compares sizes with the plan (D49, D51,
     expect(all).toMatch(/Cleo is drawn about 2\.0 times taller than planned/);
     // Dee runs off the bottom edge in the plan: her size goes with where her head is, which the eye level covers.
     expect(all).not.toMatch(/Dee is drawn/);
-    expect(all).toMatch(/The camera is too high or tilted down: heads are about 19% of the way down the picture, but image 1 has them about 48% down/);
+    expect(all).toMatch(/Heads are higher in the picture than in image 1: about 19% of the way down, but image 1 has them about 48% down. The camera is pointed further down, or set lower/);
     expect(r.eyeLevel).toBe("above");
     expect(r.areas!.blocking.unmeasured).toEqual([expect.stringMatching(/person detector isn't running/), "Ben: hidden, size not judged"]);
     expect(r.measured?.find((m) => m.name === "Ava Stone")).toEqual({ name: "Ava Stone", plannedHeadY: 0.488, headY: 0.2, fit: "bigger", heightRatio: 2.1 });
@@ -68,7 +68,7 @@ describe("The plan check reads heads and compares sizes with the plan (D49, D51,
   it("heads well below the plan: the camera is too low or tilted up", () => {
     const r = judgePicture(expect0, main, planOf([{ name: "Ava Stone", head_top: 0.7, vs_box: "about the same" }, { name: "Ben", head_top: 0.72, vs_box: "about the same" }]));
     expect(r.eyeLevel).toBe("below");
-    expect(r.problems.join(" ")).toMatch(/too low or tilted up/);
+    expect(r.problems.join(" ")).toMatch(/Heads are lower in the picture than in image 1.*pointed further up, or set higher/);
   });
 
   it("someone away from their place fails blocking; someone the plan cuts who is shown whole fails as pulled back", () => {

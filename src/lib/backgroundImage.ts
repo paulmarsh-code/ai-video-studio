@@ -9,6 +9,7 @@ import { persist, type DB } from "@/db/client";
 import * as t from "@/db/schema";
 import { pictureXY, planForShot } from "./domain/geometry";
 import { detectorKind, type Thing } from "./domain/peopleDetect";
+import { dividerBands } from "./domain/sheet";
 import { detectPeople } from "./peopleDetector";
 import { calibrationPrompt, horizonOf, readCalibration, ringSectors, roomCentre, viewScale, viewSlice, wallDistance, type ViewCalibration } from "./domain/panorama";
 import { getTextProvider } from "./providers/images";
@@ -22,12 +23,27 @@ const ringCache = new Map<string, { data: Buffer; width: number; startDeg: numbe
 type RingView = { name: string; directionDeg: number; path: string; calib?: ViewCalibration; wallM?: number };
 
 /**
+ * A view picture without the white sheet divider left along an edge (D62), and its measured eye
+ * level and floor line moved to match the trimmed picture.
+ */
+async function withoutDividers(buf: Buffer, calib?: ViewCalibration): Promise<{ buf: Buffer; calib?: ViewCalibration }> {
+  const { data, info } = await sharp(buf).removeAlpha().greyscale().raw().toBuffer({ resolveWithObject: true });
+  const b = dividerBands({ w: info.width, h: info.height, data, channels: info.channels });
+  if (!b.top && !b.bottom && !b.left && !b.right) return { buf, calib };
+  const h2 = info.height - b.top - b.bottom;
+  const out = await sharp(buf).extract({ left: b.left, top: b.top, width: info.width - b.left - b.right, height: h2 }).png().toBuffer();
+  const move = (y: number) => +((y * info.height - b.top) / h2).toFixed(3);
+  return { buf: out, calib: calib ? { horizon: move(calib.horizon), floor: Math.min(1, move(calib.floor)) } : undefined };
+}
+
+/**
  * One view picture filling its share of the ring. Measured (D48): at the room's own scale, its
  * eye level on the ring's, and a soft continuation of its own colours around it where it's
  * smaller than its share. Otherwise: fitted to cover its share, as before.
  */
-async function sectorImage(v: RingView, w: number): Promise<Buffer> {
-  const buf = fs.readFileSync(v.path);
+async function sectorImage(v0: RingView, w: number): Promise<Buffer> {
+  const { buf, calib } = await withoutDividers(fs.readFileSync(v0.path), v0.calib);
+  const v = { ...v0, calib };
   const cover = () => sharp(buf).resize({ width: w, height: H, fit: "cover" }).png().toBuffer();
   if (!v.calib || !v.wallM) return cover();
   const meta = await sharp(buf).metadata();

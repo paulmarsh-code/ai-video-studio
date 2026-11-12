@@ -17,6 +17,7 @@ import { mainSubjectId } from "./domain/composer";
 import { carriedItems, heldProps } from "./domain/imagePrompts";
 import { WALK_OFF } from "./domain/gestures";
 import { backgroundForFrame } from "./backgroundImage";
+import { outfitColours } from "./domain/outfitColour";
 import * as repo from "./repo";
 import * as studio from "./studioRepo";
 import type { CharacterProfile } from "./domain/imagePrompts";
@@ -82,7 +83,7 @@ export async function renderBlockingForShot(db: DB, shotId: string, extraHeld?: 
   const svg = layoutSketchSvg({
     plan, camera: cam, size: portrait ? "portrait" : "landscape", overlay: true,
     people: plan.actors.filter((a) => shot.spec.presentIds.includes(a.characterId) && !shot.spec.excludedIds.includes(a.characterId))
-      .map((a) => ({ id: a.characterId, name: cast.find((c) => c.id === a.characterId)?.name ?? a.characterId })),
+      .map((a) => ({ id: a.characterId, name: cast.find((c) => c.id === a.characterId)?.name ?? a.characterId, colours: outfitColours(profiles[a.characterId]?.wardrobe) })),
     subjectId: mainSubjectId(shot.spec), backgroundView: readCamera(plan, cam).backgroundView,
     moves: movesFor(full, shot.spec, plan, text), held, propPictures: await flatPropPictures(db, plan),
   });

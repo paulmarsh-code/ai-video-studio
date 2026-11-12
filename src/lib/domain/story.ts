@@ -78,8 +78,16 @@ export function asStaging(v: unknown): SceneStaging {
  * Height in metres from words like "chest-high", "110 cm tall" or "coffee table" (D19), so a
  * prop is drawn at the same height in every camera view.
  */
-/** What shape a prop is (D19b): drawn and placed by kind. */
-export type PropKind = "table" | "flat" | "column";
+/** What shape a prop is (D19b): drawn and placed by kind. "small" stands on a table (D62). */
+export type PropKind = "table" | "flat" | "column" | "small";
+
+/**
+ * Things that stand on a table (D62): drinks, glasses, a laptop. Treated as tables, two cocktails
+ * were drawn as a 1.1 m block on the floor two metres from the table, and GPT left them out.
+ */
+const TABLE_TOP = /\b(glass|glasses|drinks?|cocktails?|flutes?|wine glass(?:es)?|tumblers?|cups?|mugs?|teacups?|teapot|bottles?|cans?|plates?|bowls?|dish(?:es)?|laptops?|tablet|phones?|candles?|vase|menus?|books?|notebooks?|papers|documents|folder|trays?|coasters?|ice bucket|cake|napkins?|ashtray|keys|wallet|receipt|bill)\b/i;
+const SURFACE = /\b(table|counter|bar|desk|island|bench|sofa|couch|shelf|shelves|stand|trolley|cart|cabinet|sideboard|display|rack|fridge|tower|wall|plinth|pedestal)\b/i;
+
 export function propKind(text: string, name?: string): PropKind {
   // The name decides first: a "cocktail table with a pedestal base" is still a table.
   if (name !== undefined) {
@@ -90,7 +98,14 @@ export function propKind(text: string, name?: string): PropKind {
   }
   if (/\b(backdrop|banner|sign|signage|screen|wall|poster|neon|logo|billboard|curtain|board)\b/i.test(text)) return "flat";
   if (/\b(pedestal|plinth|podium|lectern|column|display stand|display case|statue|sculpture|lamp|tree|plant)\b/i.test(text)) return "column";
+  if (TABLE_TOP.test(text) && !SURFACE.test(text)) return "small";
   return "table";
+}
+
+/** A table-top thing's own height (D62): the first size given in centimetres, else about 20 cm. */
+function smallHeight(text: string): number {
+  const cm = text.match(/(\d{1,2})\s?cm\s*(?:tall|high)/i) ?? text.match(/(\d{1,2})\s?cm\b(?!\s*(?:wide|across|long|deep|in diameter))/i);
+  return cm ? Math.min(0.6, Math.max(0.03, Number(cm[1]) / 100)) : 0.2;
 }
 
 /** Width in metres from words like "3 m wide" or "180 cm wide". */
@@ -99,10 +114,12 @@ export function propWidth(text: string, kind: PropKind): number {
   if (m) return Math.min(8, Number(m[1]));
   const cm = text.match(/(\d{2,3})\s?cm\s*(?:wide|across|long)/i);
   if (cm) return Number(cm[1]) / 100;
-  return kind === "flat" ? 2 : kind === "column" ? 0.5 : 0.7;
+  return kind === "flat" ? 2 : kind === "column" ? 0.5 : kind === "small" ? 0.25 : 0.7;
 }
 
-export function propHeight(text: string): number {
+export function propHeight(text: string, name?: string): number {
+  // Only a name says it's a table-top thing: a table's own words often mention a glass on it.
+  if (name !== undefined && propKind(text, name) === "small") return smallHeight(text);
   // The prop is described before the things on it ("chest-high at 110 cm, … a glass 15 cm
   // tall"), so the first height mentioned is the prop's own (D19c).
   const found: { at: number; m: number }[] = [];
@@ -228,18 +245,24 @@ export function planProps(staging: SceneStaging | undefined, group: boolean, C: 
   const spotText = staging.spot.toLowerCase();
   const centre = props.find((p) => spotText.includes(p.name.toLowerCase().split(/\s+/).at(-1) ?? "~")) ?? props.find((p) => GATHER.test(p.name));
   const far = [60, 120, 30, 150, 90];
-  let k = 0;
+  let k = 0, onTop = 0;
+  const centrePos = group ? C : { x: 0.65, y: 5 };
   return props.map((p, i) => {
     const centred = p === centre;
     const text = `${p.name} ${p.detail}`;
     const kind = propKind(text, p.name);
+    // Drinks, glasses and the like stand on the table everyone is at (D62), a little apart.
+    if (kind === "small" && centre && !centred) {
+      const n = onTop++;
+      return { id: `prop-${i + 1}`, name: p.name, detail: p.detail, position: { x: +(centrePos.x + 0.12 * ((n % 3) - 1)).toFixed(2), y: +(centrePos.y - 0.08 * (1 + Math.floor(n / 3))).toFixed(2) }, radiusM: +(propWidth(text, kind) / 2).toFixed(2), heightM: propHeight(text, p.name), ...(p.imageAssetId ? { imageAssetId: p.imageAssetId } : {}) };
+    }
     // Flat things (backdrops, signs, screens) stand back towards the room's edge; others nearer.
     const dist = kind === "flat" ? 4.2 : 2.4;
     const ang = far[k % far.length];
     // With one person the prop stands beside them, not under their feet.
-    const pos = centred ? (group ? C : { x: 0.65, y: 5 }) : { x: +(C.x + dist * Math.cos((ang * Math.PI) / 180)).toFixed(2), y: +(C.y + dist * Math.sin((far[k++ % far.length] * Math.PI) / 180)).toFixed(2) };
+    const pos = centred ? centrePos : { x: +(C.x + dist * Math.cos((ang * Math.PI) / 180)).toFixed(2), y: +(C.y + dist * Math.sin((far[k++ % far.length] * Math.PI) / 180)).toFixed(2) };
     const width = propWidth(text, kind);
-    return { id: i === 0 && centred ? "spot" : `prop-${i + 1}`, name: p.name, detail: p.detail, position: pos, radiusM: centred ? 0.35 : +(width / 2).toFixed(2), heightM: propHeight(text), ...(p.imageAssetId ? { imageAssetId: p.imageAssetId } : {}) };
+    return { id: i === 0 && centred ? "spot" : `prop-${i + 1}`, name: p.name, detail: p.detail, position: pos, radiusM: centred ? 0.35 : +(width / 2).toFixed(2), heightM: propHeight(text, p.name), ...(p.imageAssetId ? { imageAssetId: p.imageAssetId } : {}) };
   });
 }
 
@@ -247,7 +270,7 @@ export function planProps(staging: SceneStaging | undefined, group: boolean, C: 
 const SCENE_FORMAT = [
   "SCENE",
   "SPOT: where the characters are and whether they stand or sit (for example: standing around the cocktail table, near the bar)",
-  "PROP: name - size, height and colour, so it is drawn the same way every time (for example: cocktail table - round, about 70 cm across, chest-high at 110 cm, white floor-length cloth). One PROP line for each object that matters to the story or that the characters gather around; leave out ordinary furniture.",
+  "PROP: name - size, height and colour, so it is drawn the same way every time (for example: cocktail table - round, about 70 cm across, chest-high at 110 cm, white floor-length cloth). Give a table the height people use it at: chest-high, about 110 cm, for standing round it; about 75 cm for sitting at it. One PROP line for each object that matters to the story or that the characters gather around; leave out ordinary furniture.",
   "OTHER PEOPLE: none, few or busy - who they are and what they are doing (for example: busy - about 40 well-dressed industry guests mingling with drinks)",
 ];
 

@@ -653,7 +653,7 @@ export function approvePositions(db: DB, sceneId: string) {
           if (bounds) position = { x: Math.min(bounds.maxX - 0.3, Math.max(bounds.minX + 0.3, position.x)), y: Math.min(bounds.maxY - 0.3, Math.max(bounds.minY + 0.3, position.y)) };
         }
       }
-      return { ...f, position, heightM: propHeight(text), radiusM: kind === "table" && !/\d\s?c?m\s*(?:wide|across|long)|(?:width|wide)[^\d]{0,12}\d/i.test(text) ? f.radiusM : +(propWidth(text, kind) / 2).toFixed(2) };
+      return { ...f, position, heightM: propHeight(text, f.name), radiusM: kind === "table" && !/\d\s?c?m\s*(?:wide|across|long)|(?:width|wide)[^\d]{0,12}\d/i.test(text) ? f.radiusM : +(propWidth(text, kind) / 2).toFixed(2) };
     });
     db.update(t.plans).set({ data: { ...before.data, furniture, rules: LAYOUT_RULES } }).where(eq(t.plans.id, before.id)).run();
   } else if (before) {

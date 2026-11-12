@@ -62,7 +62,7 @@ describe("Measured against the plan (D53)", () => {
     expect(all).toMatch(/Ava Stone is drawn about 2\.3 times the planned height \(38% of the picture's height, planned 17%\)/);
     expect(all).toMatch(/Cleo is drawn about 2\.0 times the planned height/);
     expect(all).not.toMatch(/Dee|Ben is drawn/);
-    expect(all).toMatch(/heads are about 19% of the way down the picture, but image 1 has them about 48% down/);
+    expect(all).toMatch(/Heads are higher in the picture than in image 1: about 19% of the way down, but image 1 has them about 48% down/);
     expect(r.eyeLevel).toBe("above");
     // Behind the table, Ben's outline isn't his height.
     expect(r.areas!.blocking.unmeasured).toEqual(["Ben: partly hidden, size not measured"]);

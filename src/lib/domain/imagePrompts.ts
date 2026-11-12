@@ -3,6 +3,7 @@
 // prompt. Lessons applied: character crops no narrower than 1:2 (narrower images were
 // rejected); images made in GPT, not Kling (better and cheaper); no text or logos.
 
+import { outfitColours } from "./outfitColour";
 import { mainSubjectId } from "./composer";
 import { describeFrame, facingOf, framedSize, pictureShare, PRESET_FOV, planForShot, presetText, readCamera, readProps } from "./geometry";
 import { GENRE_PROFILES, type Genre } from "./genre";
@@ -223,13 +224,15 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
 
   const lines: string[] = [];
   lines.push(`${(i.style ?? "photorealistic").replace(/^./, (m) => m.toUpperCase())} storyboard frame for a ${i.aspect ?? "9:16"} video, set in the ${i.venueName}.`);
-  if (blocking) lines.push(blockingInstruction(attach.slice(box ? 2 : 1).map((a) => a.label), box));
+  // Stand-ins in their clothes' colours (D62), when the wardrobe words name any.
+  const coloured = blocking && visible.some((c) => outfitColours(i.profiles[c.id]?.wardrobe).length > 0);
+  if (blocking) lines.push(blockingInstruction(attach.slice(box ? 2 : 1).map((a) => a.label), box, coloured));
   const people = attach.slice(peopleFrom, peopleFrom + peopleCount);
   if (people.length) lines.push(`Use the attached reference images for ${joinNames([...new Set(people.map((a) => a.label.replace(/ (reference|back)$/, "")))])}; keep their faces, hair and clothes identical, every pattern, stripe and colour block included. Bags and anything carried stay exactly as in the reference, in the same hand or on the same shoulder. Mind the mirror: a bag in someone's left hand is on the right of the picture when they face the camera, and on the left of the picture when they are seen from behind.`);
   const backs = people.filter((a) => a.label.endsWith(" back")).map((a) => a.label.replace(/ back$/, ""));
   if (blocking) S.refs.push(`The other images show only how people and props look (${attach.slice(box ? 2 : 1).map((a) => a.label).join(", ")}): copy faces, hair, clothes, carried things and props exactly; never take positions or background from them.`);
   if (backs.length) S.refs.push(`${joinNames(backs)} ${backs.length === 1 ? "is" : "are"} seen from behind: copy the back of the clothes, hair and bag from the back ${backs.length === 1 ? "image" : "images"}.`);
-  if (i.continuity) S.refs.push(`The ${i.continuity.label} shows how the room, light and clothes look; never copy its framing or positions.`);
+  if (i.continuity) S.refs.push(`The ${i.continuity.label} shows how the room, the furniture, what stands on the tables, the light and the clothes look: keep them all the same; never copy its framing or positions.`);
   if (backs.length) lines.push(`${joinNames(backs)} ${backs.length === 1 ? "is" : "are"} seen from behind: copy the back of their clothes, hair and bag exactly from the attached back ${backs.length === 1 ? "image" : "images"}.`);
   if (ring) lines.push(`Use the attached background picture as the room behind the characters: it is cut from the venue's 360° view for exactly this camera position, angle and lens, so what is on its left stays on the left and what is on its right stays on the right. Same place, layout and light, seen across the room several metres behind them.${shot?.crowd?.trim() ? " Fill it with the background guests described below." : ""}`);
   if (bgImage) lines.push(`Use the attached ${bgView} image as the background, seen across the room several metres behind the characters: same place, layout and light.${shot?.crowd?.trim() ? " It shows the room empty; fill it with the background guests described below." : ""}`);
@@ -239,7 +242,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   const spot = shot?.spot?.trim();
   const crowd = shot?.crowd?.trim();
   // An older approved picture may show an empty room: keep its spot and look, but add the crowd.
-  if (i.continuity) lines.push(`Use the attached ${i.continuity.label} for continuity: the same spot, the same furniture at the same height and size, the same light and clothes${crowd ? ". If it shows fewer background guests than described below, add them" : ", and the same background guests"}. Change only the camera angle and the moment.`);
+  if (i.continuity) lines.push(`Use the attached ${i.continuity.label} for continuity: the same spot, the same furniture at the same height and size, the same things on the tables (glasses, drinks, bags), the same light and clothes${crowd ? ". If it shows fewer background guests than described below, add them" : ", and the same background guests"}. Change only the camera angle and the moment.`);
   // The same light in every picture (D31): one picture came out much darker than the rest.
   const light = lightingOf(i.venueDescription ?? "");
   if (light) lines.push(`Lighting, identical in every picture of this scene: ${light} Same brightness, colour and mood as the other pictures of the scene; not darker, not brighter.`);
@@ -249,10 +252,12 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   const walkingIn = walkerIds.filter((id) => shownIds.includes(id)).map(name);
   if (spot) lines.push(`Where: ${sentence(spot)} Keep it in the picture wherever the camera would see it, always the same height and size. ${walkingIn.length ? `Everyone else keeps their own place and posture around it (${joinNames(walkingIn)} ${walkingIn.length === 1 ? "is" : "are"} walking in, not there yet)` : "Everyone keeps their own place and posture around it"}${/\b(sit|sits|sitting|seated|sofa|couch|bench|lie|lies|lying|bed)\b/i.test(spot) || posed.length ? "" : ", standing upright"}; no one leans on it or on the bar unless the moment says so.`);
   // The floor plan's props are the approved list (D19a); the shot's copy is the fallback.
-  const planProps = ((shotPlan ?? i.plan)?.furniture ?? []).map((f) => ({ name: f.name, detail: f.detail ?? "", pic: !!f.imageAssetId }));
+  const allFurniture = (shotPlan ?? i.plan)?.furniture ?? [];
+  // A drink or glass says which table it stands on (D62).
+  const planProps = allFurniture.map((f) => ({ name: f.name, detail: f.detail ?? "", pic: !!f.imageAssetId, on: allFurniture.find((x) => x.id === f.onId)?.name }));
   const props = planProps.length ? planProps : (shot?.props ?? []).map((p) => ({ ...p, pic: false }));
   // A prop with a picture is described by its picture alone (B3): its words had disagreed with it.
-  const propWords = (p: { name: string; detail?: string; pic?: boolean }) => p.pic ? `${p.name} (exactly as in its picture)` : `${p.name}${p.detail ? ` (${stripQuotes(p.detail).replace(/[.]$/, "")})` : ""}`;
+  const propWords = (p: { name: string; detail?: string; pic?: boolean; on?: string }) => (p.pic ? `${p.name} (exactly as in its picture)` : `${p.name}${p.detail ? ` (${stripQuotes(p.detail).replace(/[.]$/, "")})` : ""}`) + (p.on ? `, standing on the ${p.on}` : "");
   if (props.length) lines.push(`Key props, identical in every picture of this scene: ${props.map(propWords).join("; ")}. Show each exactly as described, every time, with nothing extra on or around it.`);
   if (propPics.length) lines.push(`Use the attached ${joinNames(propPics.map((f) => `${f.name} picture`))} for exactly how ${propPics.length === 1 ? "it looks" : "they look"}: same shape, colours, materials and everything on ${propPics.length === 1 ? "it" : "them"}. Only its place and size in the frame come from the layout.`);
   if (cam && i.plan) {
@@ -323,8 +328,8 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   }
   // The cast up on a stage or balcony (D29): the crowd stays down on the main floor.
   const castUp = i.plan?.levels?.length ? i.plan.levels.find((l) => l.heightM > 0 && i.plan!.actors.some((a) => levelAt(i.plan!, a.position) === l)) : undefined;
-  if (crowd) S.people.push(`Background: ${sentence(crowd).split(/(?<=[.!?])\s+/)[0]} Out of focus, smaller than the main characters, never looking at the camera, none like them.`);
-  if (crowd) lines.push(`Background: ${sentence(crowd)}${castUp ? ` They are down on the main floor, not up on ${castUp.name} with the characters.` : ""}${layout ? " The grey figures in the layout sketch show where they stand." : ""} Background guests are out of focus, smaller than the main characters and never look at the camera; none of them look like the main characters.`);
+  if (crowd) S.people.push(`Background: ${sentence(crowd).split(/(?<=[.!?])\s+/)[0]} Out of focus, smaller than the main characters, never looking at the camera, none like them, and no two alike: varied faces, ages, builds, hair and clothes.`);
+  if (crowd) lines.push(`Background: ${sentence(crowd)}${castUp ? ` They are down on the main floor, not up on ${castUp.name} with the characters.` : ""}${layout ? " The grey figures in the layout sketch show where they stand." : ""} Background guests are out of focus, smaller than the main characters and never look at the camera; none of them look like the main characters. Every background guest is a different person (varied faces, ages, builds, hair and clothes): no two alike, no one repeated.`);
   for (const c of visible) {
     const p = i.profiles[c.id];
     const parts = [p?.appearance, p?.wardrobe ? `wearing ${p.wardrobe}` : ""].filter(Boolean).map((x) => sceneDescription(stripQuotes(x!)).replace(/[.!?]+$/, "")).filter(Boolean);
@@ -525,7 +530,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   // words say only what neither shows. Same values as above, so the two never disagree.
   const short = blocking ? [
     lines[0],
-    blockingShort(box),
+    blockingShort(box, coloured),
     ...S.refs,
     ...S.people,
     ...S.props,
@@ -639,12 +644,13 @@ export function itemNoun(what: string): string {
  * shot itself; GPT finishes it rather than composing its own. Written so each element of the
  * frame has one meaning and one job.
  */
-export function blockingInstruction(refLabels: string[], box = false): string {
+export function blockingInstruction(refLabels: string[], box = false, coloured = false): string {
+  const standIns = coloured ? "a labelled stand-in for each character, its body shaded in the colours of their clothes so you can tell who is who" : "a pale labelled stand-in for each character";
   return [
     "IMAGE 1 IS THIS SHOT. Turn image 1 into the finished photograph; do not compose a new picture.",
     box
-      ? "Image 1 was built from the approved layout: a plain grey model of the room exactly as this camera sees it (its floor and walls, with a one-metre grid on the floor for scale, and the props in place), with a pale labelled stand-in for each character."
-      : "Image 1 was built from the approved layout: the real room exactly as this camera sees it, with a pale labelled stand-in for each character.",
+      ? `Image 1 was built from the approved layout: a plain grey model of the room exactly as this camera sees it (its floor and walls, with a one-metre grid on the floor for scale, and the props in place), with ${standIns}.`
+      : `Image 1 was built from the approved layout: the real room exactly as this camera sees it, with ${standIns}.`,
     "- Each stand-in becomes the character named on it, standing exactly where the stand-in stands, the same size in the frame, and turned the way its label says (FACING CAMERA, BACK TO CAMERA, or SIDE-ON facing left or right).",
     "- An orange arrow on the floor shows which way someone is walking from their stand-in; it is never a second place for them, so each character appears once.",
     "- A yellow tag beside a stand-in marks an item they hold: it is on that side of the picture, in that hand.",
@@ -658,8 +664,8 @@ export function blockingInstruction(refLabels: string[], box = false): string {
 }
 
 /** Image 1's instruction in the short request (B3): the same meaning as `blockingInstruction`, said once. */
-export function blockingShort(box = false): string {
-  return (box ? "Image 1 is this exact shot as a plain grey model of the room; image 2 shows how the room looks from this camera, so paint image 1's grey floor and walls to look like it, taking no furniture or people from image 2. " : "") + "Image 1 is this exact shot: keep its framing, eye level, perspective, positions and the size of everyone and everything in it. Each pale stand-in becomes the person named on it, exactly where it stands and turned as its label says; an orange arrow only shows which way a walker is heading from their stand-in, never a second place for them, so everyone appears once; a yellow tag marks something held, on that side of the picture; an outline is the named prop. Remove every label, outline, arrow and tag.";
+export function blockingShort(box = false, coloured = false): string {
+  return (box ? "Image 1 is this exact shot as a plain grey model of the room; image 2 shows how the room looks from this camera, so paint image 1's grey floor and walls to look like it, taking no furniture or people from image 2. " : "") + `Image 1 is this exact shot: keep its framing, eye level, perspective, positions and the size of everyone and everything in it. ${coloured ? "Each stand-in (shaded in the colours of that person's clothes) becomes" : "Each pale stand-in becomes"} the person named on it, exactly where it stands and turned as its label says; an orange arrow only shows which way a walker is heading from their stand-in, never a second place for them, so everyone appears once; a yellow tag marks something held, on that side of the picture; an outline is the named prop. Remove every label, outline, arrow and tag.`;
 }
 
 /**

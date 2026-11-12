@@ -1165,3 +1165,49 @@ Paul made the T6 venue, a rooftop bar, with D60 in place. Two things came out wr
 - **Venues already made aren't touched.** The rooftop bar is made again for T6, about 7p. This is setup for T6, not one of the check or image 1 fixes paused by D59.
 - **Tested.** A unit test on the venue request. Whether GPT follows it is seen on the next venue made.
 - **Follow-up (D61, same morning):** the remade rooftop venue never saved. Only GPT's board picture was stored; the venue had no description and no views. GPT's text reply isn't kept, so the cause can't be seen. The most likely one is that the views came back as "ahead: the copper bar" rather than "copper bar: ahead", after the new example wording. The app then counted fewer than four and refused to save. Views are now read in either order (with or without "to the" or "side"), and trailing punctuation is dropped.
+
+### D62: T6 fixes. Stand-ins in their clothes' colours, a seated camera for seated people, drinks on the table, divider bars trimmed, varied extras (2026-11-12)
+
+T6, version A, one draw each, on the second venue (the rooftop bar) with two people sitting at a small table across three panels. The character pictures were good, but the panels weren't usable.
+- Panels 1 and 2 swapped Nina and Jade.
+- Panel 2 lost the drinks.
+- Panel 3 changed the table.
+- Background guests looked like copies of each other.
+- Panel 1 had a white bar across the top.
+
+Every cause below is general, and two venues now show them, not one. This is the second-project test D59 asked for, so these are the fixes it found.
+
+- **Failures fixed (D38), and how each reaches generation.**
+  - **Sides swapped.** Image 1's stand-ins were identical pale figures with small name tags. Each stand-in's body is now shaded in the colours of that character's clothes (blocking frame, plus a prompt line).
+  - **Heads off from the plan.** The plan put the camera at standing height (1.6 m) over seated people. GPT shot at seated eye level anyway, so heads came out 30–49% down against 57% planned. A camera with no height of its own is now at seated eye level (1.2 m) when everyone in the picture sits (blocking frame and picture check).
+  - **Drinks missing and the table changing.**
+    - Prop words named the drinks "tall glasses", so the cocktails were treated as a 1.1 m table standing on the floor 2 m away.
+    - The table itself was "chest-high at 110 cm", copied from the example in the staging request, with people sitting at it. GPT drew a different low table each time.
+    - Fix: table-top things stand on their table, and a table everyone sits at is sitting height (blocking frame and prompt words).
+  - **White bar.** The venue views kept 2–5 pixels of the sheet's white divider at their edges. It is now trimmed when the ring is built (blocking frame and room look).
+  - **Clones.** The request now asks for background guests who are all different people (prompt line).
+- **Coloured stand-ins (`outfitColours`).**
+  - The colour comes from the wardrobe words. The outermost garment fills the body (jacket, coat, blazer, bomber, suit and so on). The dress or top under it, when it differs, is a band down the middle, like an open jacket.
+  - Examples: Jade is cream with orange, Chase navy with white, Marcus green with black, Nina lilac.
+  - Sentences about what they don't wear ("No jackets") are skipped. With no colour named, the stand-in stays pale.
+  - The head stays pale, and the outline keeps its own colour.
+  - The request says so only when there are colours: "a labelled stand-in for each character, its body shaded in the colours of their clothes so you can tell who is who".
+- **Seated eye level.** `planForShot` puts any camera without its own height at 1.2 m when everyone visible is sitting, including people seated on the floor plan itself. A camera set high or low keeps its height. Image 1, the room behind and the check all read the same plan, so they agree. The words stay "eye level", which is right for seated people.
+- **Eye-level message.** "Too high" had been said when GPT's camera was lower. The message now says what is seen and what to do. Heads higher in the picture than image 1 means the camera is pointed further down or set lower; the fix is to "match image 1's camera height and angle".
+- **Table-top things.**
+  - A new prop kind, "small", covers drinks, glasses, cups, bottles, plates, a laptop, a phone, candles, a vase, a menu, books and papers. It's decided by the prop's name, so a table whose words mention a glass is still a table, and a "bottle display" on a plinth is still a stand.
+  - Its height is its own (centimetres from its words, else about 20 cm), never the 1.1 m a table gets from "tall".
+  - For each shot, `planForShot` stands it on the nearest table, on the side it was on, and notes which (`onId`). Image 1 draws it as a small yellow outline on the table top. The request says "two cocktails (…), standing on the small round table".
+  - New scenes place it on the gathering table when staged.
+- **Sitting-height tables.**
+  - A table or desk over 0.9 m, where everyone at it (within 1.3 m of its edge) is sitting and none on a stool, is 0.75 m for that shot. Its words follow: "chest-high at 110 cm" becomes "table height, about 75 cm".
+  - The staging request's example now adds: "Give a table the height people use it at: chest-high, about 110 cm, for standing round it; about 75 cm for sitting at it."
+  - The table's top is drawn for the camera's real height, not a fixed 1.6 m.
+- **Divider trimming (`dividerBands`).** Whole lines of near-white starting within 3 pixels of an edge are trimmed, plus 2 pixels for the soft edge, never more than 8% of the picture. The measured eye level and floor line move to match. This is done when the ring is built, so venues already made are fixed without a redraw. All four rooftop views had such an edge (5 px at the top on two).
+- **Continuity.** The approved picture with the most people already goes with every other panel (D18c). Its lines now include the things on the tables: "the same things on the tables (glasses, drinks, bags)". In the short request: "what stands on the tables … keep them all the same".
+- **Background guests.** "Every background guest is a different person (varied faces, ages, builds, hair and clothes): no two alike, no one repeated."
+- **Tested.**
+  - Unit tests cover the seated camera, colour reading (on the real wardrobe words of all five characters), the coloured stand-ins and their wording, the extras line, the continuity line, divider trimming, the small kind and its height, drinks onto the table, sitting-height tables (not with stools or anyone standing), the drink drawn on the table, the request's words, and staging.
+  - Image 1 was rendered for all three T6 panels, in A and B, from a copy of Paul's database and venue pictures.
+  - Results: no white bar; Nina lilac and Jade cream with orange; the table at sitting height with the cocktails on it; the stand-ins seated and shorter.
+- **Next.** Paul approves the T6 panel with the right sides (panel 3), so it goes with the others as the continuity picture. Then he redraws versions A and B twice each. The measure is still Kling takes per approved clip.

@@ -82,3 +82,35 @@ export function pieceRects(W: number, H: number, xCuts: number[], yCuts: number[
   }
   return rects;
 }
+
+/**
+ * Plain white bands along a view picture's edges (D62): a sheet divider left on the piece when it
+ * was cut. Carried into image 1, GPT drew it as a white bar across the top of the picture (T6,
+ * the rooftop bar). A band is whole lines of near-white starting within a few pixels of the edge;
+ * the pixels to trim from each side, with two more for the soft edge, never more than `maxFrac`
+ * of the picture.
+ */
+export function dividerBands(img: Lum & { channels?: number }, maxFrac = 0.08): { top: number; bottom: number; left: number; right: number } {
+  const { w, h, data } = img;
+  const ch = img.channels ?? 1;
+  const at = (x: number, y: number) => data[(y * w + x) * ch];
+  const white = (n: number, get: (j: number) => number) => {
+    let hits = 0;
+    for (let j = 0; j < n; j++) if (get(j) >= 225) hits++;
+    return hits / n >= 0.9;
+  };
+  const band = (n: number, span: number, line: (k: number) => boolean) => {
+    const cap = Math.floor(n * maxFrac);
+    let k = 0;
+    while (k < 4 && k < cap && !line(k)) k++;
+    if (k >= 4 || k >= cap) return 0;
+    while (k < cap && line(k)) k++;
+    return Math.min(cap, k + 2);
+  };
+  return {
+    top: band(h, w, (k) => white(w, (j) => at(j, k))),
+    bottom: band(h, w, (k) => white(w, (j) => at(j, h - 1 - k))),
+    left: band(w, h, (k) => white(h, (j) => at(k, j))),
+    right: band(w, h, (k) => white(h, (j) => at(w - 1 - k, j))),
+  };
+}

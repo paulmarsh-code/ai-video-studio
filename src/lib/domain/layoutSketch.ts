@@ -9,7 +9,16 @@ import { itemNoun } from "./imagePrompts";
 import { propKind } from "./story";
 import type { GeometryPlanData, PlanCamera } from "./types";
 
-export interface SketchPerson { id: string; name: string; heightM?: number; }
+export interface SketchPerson {
+  id: string;
+  name: string;
+  heightM?: number;
+  /**
+   * Their clothes' colours (D62), outermost first: the stand-in's body is shaded in them, so who
+   * is where shows at a glance. Pale when none are known.
+   */
+  colours?: string[];
+}
 
 const COLOURS = ["#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c", "#0891b2", "#be185d", "#4d7c0f"];
 const EYE_HEIGHT = 1.6; // camera at eye level
@@ -157,6 +166,22 @@ export function layoutSketchSvg(i: {
     if (fu.heldBy) continue; // in someone's hand (D36): it's tagged on them instead
     const text = `${fu.name} ${fu.detail ?? ""}`;
     const kind = propKind(text, fu.name);
+    if (kind === "small") {
+      // On its table (D62): a small upright outline standing on the table top, named above it.
+      const t = (i.plan.furniture ?? []).find((x) => x.id === fu.onId);
+      const base = t ? t.heightM ?? TABLE_HEIGHT : 0;
+      const hs = fu.heightM ?? 0.2;
+      const top = toScreen(fu.position, base + hs), foot = toScreen(fu.position, base);
+      if (top.depth < near) continue;
+      const w = Math.max(10, ((Math.max(0.08, fu.radiusM * 2)) / top.depth) * focal);
+      const tdepth = t ? toScreen(t.position, base).depth : top.depth;
+      items.push({
+        depth: Math.min(top.depth, tdepth) - 0.05,
+        svg: `<g><rect x="${(top.x - w / 2).toFixed(1)}" y="${top.y.toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(6, foot.y - top.y).toFixed(1)}" rx="4" fill="#fde68a" fill-opacity="${OV ? 0.9 : 1}" stroke="#525252" stroke-width="3"/>`
+          + `<text x="${top.x.toFixed(1)}" y="${(top.y - 10).toFixed(1)}" font-size="20" text-anchor="middle" fill="#404040"${OV ? ' stroke="#fff" stroke-width="5" paint-order="stroke"' : ""} font-family="sans-serif">${esc(fu.name)}</text></g>`,
+      });
+      continue;
+    }
     const h = fu.heightM ?? TABLE_HEIGHT;
     const c = toScreen(fu.position, h);
     if (c.depth < near) continue;
@@ -164,7 +189,7 @@ export function layoutSketchSvg(i: {
     const label = `<text x="${c.x.toFixed(1)}" y="${(floor.y + 26).toFixed(1)}" font-size="22" text-anchor="middle" fill="#404040"${OV ? ' stroke="#fff" stroke-width="5" paint-order="stroke"' : ""} font-family="sans-serif">${esc(fu.name)}</text>`;
     if (kind === "table") {
       const rx = (fu.radiusM / c.depth) * focal;
-      const ry = Math.max(4, rx * Math.min(0.5, Math.abs(EYE_HEIGHT - h) / c.depth));
+      const ry = Math.max(4, rx * Math.min(0.5, Math.abs(camH - floorZ(i.plan, fu.position) - h) / c.depth));
       // A solid, draped stand-in from top to floor (D56), as plain to see as the people: a thin
       // outline and pole lost out to a real table standing in the venue picture.
       const fx = rx * 1.08;
@@ -213,7 +238,7 @@ export function layoutSketchSvg(i: {
       const headR = Math.max(8, (0.12 / c0.depth) * focal);
       const fsN = Math.max(20, Math.min(44, thick * 0.9)), fs2 = Math.max(16, Math.min(26, fsN * 0.6));
       const ty = Math.max(fsN + 8, Math.min(H - fs2 * 2, Math.min(H0.y, F0.y) - thick - fs2 * 1.6));
-      const fill = OV ? "#e5e7eb" : col;
+      const fill = OV ? p.colours?.[0] ?? "#e5e7eb" : col;
       items.push({
         depth: c0.depth,
         svg: `<g><line x1="${F0.x.toFixed(1)}" y1="${F0.y.toFixed(1)}" x2="${H0.x.toFixed(1)}" y2="${H0.y.toFixed(1)}" stroke="${col}" stroke-width="${(thick + (bold ? 10 : 6)).toFixed(1)}" stroke-linecap="round"/>`
@@ -260,7 +285,11 @@ export function layoutSketchSvg(i: {
       const clash = (y: number) => tags.some((t) => Math.abs(t.x - head.x) < (t.w + lw) / 2 && Math.abs(t.y - y) < (t.h + lh) / 2);
       for (let n = 0; n < 12 && clash(tagY); n++) tagY += small ? -(lh + 4) : lh + 4;
       tags.push({ x: head.x, y: tagY, w: lw, h: lh });
-      let svg = `<g><rect x="${(head.x - half).toFixed(1)}" y="${shoulders.y.toFixed(1)}" width="${(half * 2).toFixed(1)}" height="${Math.max(0, feet.y - shoulders.y).toFixed(1)}" rx="${(half * 0.6).toFixed(1)}" fill="#e5e7eb" fill-opacity="0.93" stroke="${col}" stroke-width="${bold ? 8 : 5}"/>`
+      // The body in their clothes' colours (D62): the outer garment, open over what's under it.
+      const [outer = "#e5e7eb", under] = p.colours ?? [];
+      const bodyH = Math.max(0, feet.y - shoulders.y);
+      let svg = `<g><rect x="${(head.x - half).toFixed(1)}" y="${shoulders.y.toFixed(1)}" width="${(half * 2).toFixed(1)}" height="${bodyH.toFixed(1)}" rx="${(half * 0.6).toFixed(1)}" fill="${outer}" fill-opacity="0.93" stroke="${col}" stroke-width="${bold ? 8 : 5}"/>`
+        + (under ? `<rect x="${(head.x - half * 0.36).toFixed(1)}" y="${(shoulders.y + bodyH * 0.04).toFixed(1)}" width="${(half * 0.72).toFixed(1)}" height="${(bodyH * 0.5).toFixed(1)}" rx="${(half * 0.2).toFixed(1)}" fill="${under}" fill-opacity="0.95"/>` : "")
         + `<circle cx="${head.x.toFixed(1)}" cy="${head.y.toFixed(1)}" r="${headR.toFixed(1)}" fill="#e5e7eb" fill-opacity="0.93" stroke="${col}" stroke-width="${bold ? 8 : 5}"/>`;
       // A nose on the head points the way they face (side-on), or a face mark (towards us).
       if (/SIDE-ON/.test(facing)) svg += `<polygon points="${(head.x + Math.sign(lat) * headR * 1.6).toFixed(1)},${head.y.toFixed(1)} ${(head.x + Math.sign(lat) * headR * 0.8).toFixed(1)},${(head.y - headR * 0.35).toFixed(1)} ${(head.x + Math.sign(lat) * headR * 0.8).toFixed(1)},${(head.y + headR * 0.35).toFixed(1)}" fill="${col}"/>`;
