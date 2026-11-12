@@ -41,3 +41,16 @@ describe("The grey-box room (D60)", () => {
     expect(r).toMatch(/Everything built in stays as described/);
   });
 });
+
+describe("Venues: four real directions, and furniture left to the scenes (D61)", () => {
+  it("asks for quarter turns that change the near things, and for a description without free-standing furniture", async () => {
+    const { venueDescribePrompt } = await import("../src/lib/domain/describe");
+    const t = venueDescribePrompt("idea", "A rooftop bar");
+    expect(t).toMatch(/four quarter turns on the spot/);
+    expect(t).toMatch(/The near things \(counters, railings, doors, walls, planters\) change from panel to panel/);
+    expect(t).toMatch(/LAYOUT: <what is built in where.*Leave out free-standing furniture/);
+    expect(t).not.toMatch(/surfaces, furniture, colours/);
+    expect(t).toMatch(/named after what is close at that side of the place itself/);
+    expect(t).toMatch(/Free-standing furniture is left out even if the description mentions it/);
+  });
+});

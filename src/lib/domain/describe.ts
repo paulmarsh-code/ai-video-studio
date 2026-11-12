@@ -33,11 +33,11 @@ export const CHARACTER_FIELDS: Field[] = [
 export const VENUE_FIELDS: Field[] = [
   { key: "setting", label: "SETTING", hint: "exactly one word: indoors or outdoors" },
   { key: "place", label: "PLACE", hint: "what kind of place it is, in one sentence, with no business or brand names" },
-  { key: "layout", label: "LAYOUT", hint: "what is where, using ahead, left, right and behind from the main viewpoint" },
-  { key: "materials", label: "MATERIALS AND DECOR", hint: "surfaces, furniture, colours, textures" },
+  { key: "layout", label: "LAYOUT", hint: "what is built in where, using ahead, left, right and behind from the main viewpoint: walls, counters, railings, planters, doors, stairs, windows, screens. Leave out free-standing furniture (tables, chairs, stools, sofas, fire pits, pot plants): each scene places its own" },
+  { key: "materials", label: "MATERIALS AND DECOR", hint: "surfaces, colours, textures and fixed fittings; no free-standing furniture" },
   { key: "light", label: "LIGHT AND TIME OF DAY", hint: "light sources, warmth, time of day, weather if outdoors" },
   { key: "anchors", label: "IDENTITY ANCHORS", hint: "3 to 5 short phrases separated by semicolons: the features that make this place recognisable" },
-  { key: "views", label: "VIEWS", hint: "four lines, each 'name: direction' where direction is ahead, left, behind or right, e.g. 'bar: left'" },
+  { key: "views", label: "VIEWS", hint: "four lines, each 'name: direction' where direction is ahead, left, behind or right, named after what is close at that side of the place itself, not only what is far off, e.g. 'bar: ahead', 'railing over the river: left', 'stairs and entrance: behind'" },
 ];
 
 function format(fields: Field[]): string {
@@ -78,9 +78,12 @@ export function venueSheetRequest(viewNames?: string[], style = "photorealistic"
     `Step 2: using the description above, create ONE ${style} image in landscape 3:2 format (wider than it is tall), divided into a 2 by 2 grid of four equal panels, each showing the same place from the main viewpoint looking in a different direction.`,
     "It must be a four-panel board, not a single picture of the place.",
     order,
+    // Four real directions (D61): asked only for "a different direction", GPT drew the same
+    // terrace four times and changed the skyline behind it.
+    "The four panels are four quarter turns on the spot, so each shows a different side of the place: what is ahead in one panel is behind the viewpoint in another and does not appear in it. The near things (counters, railings, doors, walls, planters) change from panel to panel, not only the distant view. Never repeat one composition with a different background.",
     // An empty floor (D60): each scene places its own furniture, and furniture standing in the
     // room pictures was copied into shots in place of the plan's (D55, D56).
-    "Eye-level wide shots of the room with its floor empty: no people and no free-standing furniture (no loose tables, chairs, stools, sofas or pot plants on the floor), because each scene places its own. Everything built in stays as described: walls, bar, counters, shelving, screens, signs, lights, windows, stairs, balcony.",
+    "Eye-level wide shots of the room with its floor empty: no people and no free-standing furniture (no loose tables, chairs, stools, sofas or pot plants on the floor), because each scene places its own. Everything built in stays as described: walls, bar, counters, shelving, screens, signs, lights, windows, stairs, balcony. Free-standing furniture is left out even if the description mentions it.",
     "The same layout, materials and light in every panel.",
     SHEET_COMMON,
   ].join("\n");

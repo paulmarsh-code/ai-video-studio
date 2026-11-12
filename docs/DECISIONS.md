@@ -1149,3 +1149,18 @@ Paul shared a video of what Fable 5.2 builds: games, recreations and 3D models m
 - **Walking wording in the full request**, to match D58: "An orange arrow on the floor shows which way someone is walking from their stand-in; it is never a second place for them, so each character appears once."
 - **The measure.** The second-project test compares A and B on the check's measures. Then, for the panel pictures that pass, it records Kling takes per approved clip and credits per approved second: the number the studio exists to bring down.
 - **Tested.** Unit tests cover the grey-box room (indoors and outdoors), the wording for B and A, and the empty-floor venue request. In the browser, against the stand-in API in test mode, a version B draw of panel 1 sent the grey-box image 1, then the room's look as image 2 (that was missing at first, and was fixed in the draw route), then the references. The request named them in that order, and the record says frame "box".
+
+### D61: Venue views are four real directions, and venue descriptions leave out free-standing furniture (2026-11-12)
+
+Paul made the T6 venue, a rooftop bar, with D60 in place. Two things came out wrong.
+- **The same view four times.** GPT named the views after distant scenery (city skyline, river and bridge lights, neighbouring rooftops, the avenue below) and drew the same terrace four times, changing only the skyline. In the 360° ring, every camera would then see the same bar whichever way it pointed.
+- **The floor wasn't empty.** Sofas, stools, tables and a fire pit stood on it. The description step asked for "surfaces, furniture, colours" and a layout of "what is where", so the description listed them. The picture request said "everything built in stays as described", so GPT kept them.
+
+- **Failure fixed (D38).** Venue views that don't turn, so backgrounds are wrong for any camera not facing ahead. Furniture in the views that competes with the scene's props (D55, D56). Both reach generation through the ring: image 1's background in A, and the room's look in B.
+- **The description step.**
+  - LAYOUT now asks for what is *built in* where: walls, counters, railings, planters, doors, stairs, windows, screens. It leaves out free-standing furniture (tables, chairs, stools, sofas, fire pits, pot plants), because each scene places its own.
+  - MATERIALS AND DECOR asks for surfaces, colours, textures and fixed fittings, with no free-standing furniture.
+  - VIEWS are named after what is close at that side of the place itself, not only what is far off. For example: "bar: ahead", "railing over the river: left", "stairs and entrance: behind".
+- **The picture step.** "The four panels are four quarter turns on the spot, so each shows a different side of the place: what is ahead in one panel is behind the viewpoint in another and does not appear in it. The near things (counters, railings, doors, walls, planters) change from panel to panel, not only the distant view. Never repeat one composition with a different background." The empty-floor sentence adds: "Free-standing furniture is left out even if the description mentions it."
+- **Venues already made aren't touched.** The rooftop bar is made again for T6, about 7p. This is setup for T6, not one of the check or image 1 fixes paused by D59.
+- **Tested.** A unit test on the venue request. Whether GPT follows it is seen on the next venue made.
