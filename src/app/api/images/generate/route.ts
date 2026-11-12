@@ -10,7 +10,7 @@ import { frameVariant, recordDraw, testMode } from "@/lib/testRecords";
 import { renderLayoutForShot } from "@/lib/layoutImage";
 import { renderBackgroundForShot } from "@/lib/backgroundImage";
 import { renderBlockingForShot, renderBlockingOnPlate } from "@/lib/blockingImage";
-import { ensurePlate, plateNumbers } from "@/lib/plateImage";
+import { ensurePlate, plateNumbers, withoutGuests } from "@/lib/plateImage";
 import { ensureHeldItems } from "@/lib/heldItemsServer";
 import * as repo from "@/lib/repo";
 
@@ -32,6 +32,7 @@ export async function POST(req: Request) {
   // Version C (D66, D67): image 1 on the camera's finished plate, checked against the venue's views.
   let onPlateOf: { plate: Buffer; area: Buffer; W: number; H: number } | undefined;
   let imageOne = false;
+  let guestsRemoved = 0;
   if (body.blockingShotId) {
     const shot = repo.getShot(db, body.blockingShotId);
     if (shot) await ensureHeldItems(db, body.projectId);
@@ -49,6 +50,21 @@ export async function POST(req: Request) {
     }
     png ??= await renderBlockingForShot(db, body.blockingShotId);
     imageOne = !!png;
+    // An approved picture from this same camera goes without its background guests (D74), so GPT
+    // can't copy their places: they are filled from the camera's plate, the same empty view.
+    if (onPlateOf && shot) {
+      const scene = repo.getScene(db, shot.sceneId);
+      for (const id of body.refAssetIds ?? []) {
+        const panel = scene?.panels.find((x) => x.imageAssetId === id);
+        const theirs = panel ? scene?.shots.find((x) => x.panelId === panel.id)?.spec : undefined;
+        if (!theirs || theirs.cameraId !== shot.spec.cameraId) continue;
+        const a = repo.getAsset(db, id);
+        const k = refs.findIndex((r) => r.name === a?.assetCode);
+        if (k < 0) continue;
+        const clean = await withoutGuests(refs[k].data, onPlateOf.plate, theirs.visibleIds.length);
+        if (clean.removed) { refs[k] = { ...refs[k], data: clean.png, mime: "image/png" }; guestsRemoved += clean.removed; }
+      }
+    }
     if (png) {
       const at = body.baseAssetId ? 1 : 0;
       refs.splice(at, 0, { data: Buffer.from(png), mime: "image/png", name: "blocking_frame.png" });
@@ -92,7 +108,7 @@ export async function POST(req: Request) {
         extras: onPlateOf && numbers ? [
           { name: "draw_area.png", data: onPlateOf.area },
           { name: "plate.png", data: onPlateOf.plate },
-          { name: "background.json", data: JSON.stringify(numbers, null, 2) },
+          { name: "background.json", data: JSON.stringify({ ...numbers, guestsTakenOutOfTheApprovedPicture: guestsRemoved }, null, 2) },
         ] : undefined,
       });
     }

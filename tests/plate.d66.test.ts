@@ -79,3 +79,19 @@ describe("The request in version C (D66, D67)", () => {
     expect(c.short).toMatch(/Background: about 10 guests/);
   });
 });
+
+describe("An approved picture from the same camera, sent without its guests (D74)", () => {
+  it("says so in version C", () => {
+    const shot = { code: "P1", visibleIds: ["ava", "bo"], excludedIds: [], presentIds: ["ava", "bo"], cameraId: "c", shot: "medium shot", audioMode: "off", durationSec: 4, venueName: "roof", crowd: "about 10 guests" } as unknown as ShotSpec;
+    const cast = [{ id: "ava", name: "Ava" }, { id: "bo", name: "Bo" }].map((c) => ({ ...c, pronoun: "she" as const, voiceLock: "", description: "" }));
+    const c = panelPrompt({ description: "They talk.", shot, cast: cast as never, profiles: {}, plan, venueName: "roof", blockingHref: "/api/blocking/x", frame: "fill", continuity: { assetId: "z", label: "approved scene picture (panel 3)", cameraId: "c", secondsApart: 7 } });
+    expect(c.short).toMatch(/It is sent without its background guests: draw them afresh, as described\./);
+    expect(c.text).toMatch(/but not its background guests, which are taken out of it: draw them afresh, as described\./);
+  });
+  it("leaves a picture alone when the detector finds no one", async () => {
+    const { withoutGuests } = await import("../src/lib/plateImage");
+    const pic = await sharp({ create: { width: 64, height: 96, channels: 3, background: { r: 10, g: 20, b: 30 } } }).png().toBuffer();
+    const r = await withoutGuests(pic, pic, 2);
+    expect(r.removed).toBe(0);
+  });
+});

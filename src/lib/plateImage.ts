@@ -139,3 +139,44 @@ export async function drawArea(over: Buffer, extrasSvg: string, W: number, H: nu
   const both = await sharp(drawn).composite([{ input: extra, blend: "lighten" }]).greyscale().png().toBuffer();
   return sharp(both).blur(Math.max(2, W * 0.008)).threshold(6).greyscale().png().toBuffer();
 }
+
+/**
+ * An approved picture from the same camera, without its background guests (D74): each guest's
+ * outline is filled from the camera's plate, which is the same view with nobody in it. Asked in
+ * words not to copy the guests' places, GPT still copied them, a waitress in the same spot and
+ * facing the same way seven seconds later. The main characters (the `keep` largest outlines, and
+ * anyone nearly as large) stay. Returns the picture unchanged when the detector can't run.
+ */
+export async function withoutGuests(picture: Buffer, plate: Buffer, keep: number): Promise<{ png: Buffer; removed: number }> {
+  try {
+    const { detectPeople } = await import("./peopleDetector");
+    const { numberPeople } = await import("./domain/peopleDetect");
+    const found = await detectPeople(picture);
+    const people = numberPeople(found.people, 0.03, 0.3).sort((a, b) => (b.y1 - b.y0) - (a.y1 - a.y0));
+    if (!people.length) return { png: picture, removed: 0 };
+    const tallest = people[0].y1 - people[0].y0;
+    const main = people.filter((p, k) => k < keep || p.y1 - p.y0 >= 0.6 * tallest);
+    const guests = people.filter((p) => !main.includes(p));
+    if (!guests.length) return { png: picture, removed: 0 };
+    const { width: W, height: H } = found;
+    const rects = guests.map((p) => {
+      const w = p.x1 - p.x0, h = p.y1 - p.y0;
+      const x0 = Math.max(0, p.x0 - 0.25 * w), x1 = Math.min(1, p.x1 + 0.25 * w), y0 = Math.max(0, p.y0 - 0.1 * h), y1 = Math.min(1, p.y1 + 0.06 * h);
+      return `<rect x="${(x0 * W).toFixed(1)}" y="${(y0 * H).toFixed(1)}" width="${((x1 - x0) * W).toFixed(1)}" height="${((y1 - y0) * H).toFixed(1)}" fill="#fff"/>`;
+    }).join("");
+    // The main characters are never touched, even where a guest's box overlaps them.
+    const keepOut = main.map((p) => {
+      const w = p.x1 - p.x0, h = p.y1 - p.y0;
+      const x0 = Math.max(0, p.x0 - 0.04 * w), x1 = Math.min(1, p.x1 + 0.04 * w), y0 = Math.max(0, p.y0 - 0.04 * h);
+      return `<rect x="${(x0 * W).toFixed(1)}" y="${(y0 * H).toFixed(1)}" width="${((x1 - x0) * W).toFixed(1)}" height="${((Math.min(1, p.y1) - y0) * H).toFixed(1)}" fill="#000"/>`;
+    }).join("");
+    const area = await sharp(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><rect width="${W}" height="${H}" fill="#000"/>${rects}${keepOut}</svg>`)).removeAlpha().blur(Math.max(2, W * 0.006)).extractChannel(0).raw().toBuffer();
+    // The plate as plain colour first: removeAlpha in the same chain would drop the joined mask too.
+    const base = await sharp(plate).resize({ width: W, height: H, fit: "fill" }).removeAlpha().png().toBuffer();
+    const fill = await sharp(base).joinChannel(area, { raw: { width: W, height: H, channels: 1 } }).png().toBuffer();
+    const png = await sharp(picture).removeAlpha().composite([{ input: fill, left: 0, top: 0 }]).png().toBuffer();
+    return { png, removed: guests.length };
+  } catch {
+    return { png: picture, removed: 0 };
+  }
+}

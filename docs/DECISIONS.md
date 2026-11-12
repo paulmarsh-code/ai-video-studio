@@ -1450,3 +1450,20 @@ T6 version C, with panels 1–3 passing. Paul: "90% there". Two things, for any 
 - **Same camera: the built background, not the guests.** D69's line now reads "everything built behind the characters … exactly as in it", and adds "not its background guests, who move on".
 - **Time between panels (`continuityFor`, `secondsApart`).** Each panel's start is worked out from the lengths of the panels before it. With a crowd and an approved picture, the request says, for example: "This moment is about 7 seconds before the approved picture, and the background guests have moved in that time: those standing have shifted, turned or changed who they are talking to, and anyone walking (a server, say) is about 9 metres from where they are in it, or out of the picture. Never copy the guests' places from it." The distance is at about 1.3 m a second, at most 15 m. Without lengths, the D65 line stays.
 - **Tested.** Unit tests cover the crowd wording in both requests, the same-camera line leaving the guests out, the 7-seconds-before wording (both requests), after, and the fallback, and the 7 seconds worked out from 3 s and 4 s panels.
+
+### D74: An approved picture from the same camera is sent without its background guests (2026-11-12)
+
+With D73's wording in place, Paul redrew panel 3. The crowd changed to a real mix, as asked, but the waitress stayed in the same spot as in panel 1, facing the same way. The request held the 7-seconds-after line and "not its background guests, who move on". The words lose to the picture: given an approved picture from the same camera, GPT copies the guests along with the rail.
+
+- **Failure fixed (D38).** A background guest frozen in place across panels from one camera, so a walker jumps back at the cut. It reaches generation through the reference picture itself.
+- **Change (`withoutGuests`).** In version C, when a reference is an approved panel picture from the drawing panel's own camera, the person detector (D53) finds everyone in it.
+  - The main characters are kept: the n largest outlines, n being that panel's visible cast, and anyone at least 60% as tall as the tallest.
+  - Every other outline, grown a little, is filled from the camera's plate (the same view with nobody in it), with a soft edge. The main characters' outlines are never touched, even where a guest's box overlaps them.
+  - The picture then shows the rail, planters, lights, view, furniture, drinks and clothes, but no guests to copy.
+  - It's only possible in version C, where the plate exists. If the detector can't run, the picture goes as it was.
+- **The request says so** in version C: "It is sent without its background guests: draw them afresh, as described." The full request says the same.
+- **Recorded.** `background.json` gives `guestsTakenOutOfTheApprovedPicture`.
+- **Tested.**
+  - Unit tests cover the wording, and a picture with no one in it left alone.
+  - On Paul's panel 3, nine guests were taken out, the waitress among them. Nina and Jade were untouched, and a guest standing right behind a main character's head stays.
+  - On the way, two faults were found and fixed. With the mask in the same chain as `removeAlpha`, sharp dropped the joined mask, so the whole picture was filled from the plate. Guest boxes overlapping a main character cut into her hair.
