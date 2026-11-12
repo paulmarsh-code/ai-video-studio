@@ -84,16 +84,24 @@ async function sectorImage(v0: RingView, w: number): Promise<Buffer> {
  */
 export async function paddedOut(part: Buffer, vw: number, vh: number, e: { top: number; left: number; bottom: number; right: number }): Promise<Buffer> {
   // Below, the floor is drawn out from its last line: mirrored, it showed the planters and their
-  // lights again under the people. Above and at the sides, the room is mirrored, as far as the
-  // picture reaches and repeated beyond that.
+  // lights again under the people. Above, the same from its top line (D78). At the sides, the
+  // room is mirrored, as far as the picture reaches and repeated beyond that.
   let img = part;
   if (e.bottom) {
     const k = Math.max(2, Math.min(vh, Math.round(vh * 0.04)));
     const floor = await sharp(part).extract({ left: 0, top: vh - k, width: vw, height: k }).resize({ width: vw, height: e.bottom, fit: "fill" }).blur(12).png().toBuffer();
     img = await sharp(part).extend({ bottom: e.bottom, background: { r: 0, g: 0, b: 0, alpha: 1 } }).composite([{ input: floor, left: 0, top: vh }]).png().toBuffer();
   }
-  let cw = vw, ch = vh + e.bottom;
-  const left = { ...e, bottom: 0 };
+  // Above too (D78): mirrored, a skate park's brick building and screen hung upside down in the
+  // sky, and the finished background kept them. The top line drawn out and softened is sky or
+  // ceiling carrying on, which the plate request finishes sharp.
+  if (e.top) {
+    const k = Math.max(2, Math.min(vh, Math.round(vh * 0.04)));
+    const sky = await sharp(img).extract({ left: 0, top: 0, width: vw, height: k }).resize({ width: vw, height: e.top, fit: "fill" }).blur(12).png().toBuffer();
+    img = await sharp(img).extend({ top: e.top, background: { r: 0, g: 0, b: 0, alpha: 1 } }).composite([{ input: sky, left: 0, top: 0 }]).png().toBuffer();
+  }
+  let cw = vw, ch = vh + e.bottom + e.top;
+  const left = { ...e, bottom: 0, top: 0 };
   while (left.top || left.left || left.right) {
     const step = { top: Math.min(left.top, ch - 1), left: Math.min(left.left, cw - 1), right: Math.min(left.right, cw - 1) };
     img = await sharp(img).extend({ ...step, extendWith: "mirror" }).png().toBuffer();

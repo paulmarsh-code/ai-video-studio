@@ -456,7 +456,12 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     // Only just cut (at the ankles): still a full shot, said as the picture shows it; cut higher: named for what it is.
     // Seated and not over a shoulder: the words follow image 1's framing whichever way they differ.
     const seatedFix = seatedSubj && !ots && !!framed && !!said && framed.size !== said ? framed.size : undefined;
-    const fix = cutFull && framed!.bottomM > 0.3 ? framed!.size : seatedFix;
+    // Standing too (D78): a skate-park two-shot named "medium shot, from the waist up" showed two
+    // people whole at 5 m; GPT drew them about twice image 1's size. A wide or long shot that
+    // frames them whole is left as named: both are the whole body, small.
+    const whole = (x?: string) => x === "ws" || x === "ls" || x === "fs";
+    const standingFix = !seatedSubj && !cutFull && !ots && !!framed && !!said && framed.size !== said && !(whole(said) && whole(framed.size)) ? framed.size : undefined;
+    const fix = cutFull && framed!.bottomM > 0.3 ? framed!.size : seatedFix ?? standingFix;
     const camW = fix ? { ...cam, size: fix } : cam;
     const preset = presetText(camW).replace(", static camera", "").replace(" static camera,", "");
     lines.push(preset);

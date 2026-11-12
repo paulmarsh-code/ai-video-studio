@@ -1549,3 +1549,42 @@ Paul: "again I want to make sure we are not making Paid On Time specific changes
 - Reproduced here: save, then the story page opened in 6 seconds.
 
 **Test.** Redraw T6 panel 3: no server in the background.
+
+### D78: Four general fixes from the skate park (T7) (2026-11-12)
+
+T7 (the skate park, the first generality test) gave four panels. Paul judged panels 1 and 4 fine. In 2 and 3 the bowl had gone and no trick was shown. The records and the plan show three causes:
+- the bowl taken for a fruit bowl;
+- no way to put Kai in the bowl or riding;
+- cameras 2 and 3 facing the steps, away from it.
+
+The last two need a design, set out below. Four plain faults also showed, each of which would hit any scene. They are fixed now.
+
+1. **Framing words follow image 1 for people standing, as D68 did for seated.**
+   - Panels 2 and 3 were named "medium shot, from the waist up" and "cowboy shot". The geometry (a 73° lens at 5.3 m) shows both people whole, about a quarter of the picture high.
+   - GPT drew them about twice image 1's size, which the check failed.
+   - The request now names the shot the geometry gives (long shot here), unless:
+     - it is over-the-shoulder;
+     - it is a full shot only just cut at the ankles (D48);
+     - wide and long, both being the whole body small.
+   - This fault has now shown in two scenes (T6 seated, T7 standing).
+2. **A prop the words give to someone is theirs.** The staging said "phone … held by Rosa" and "skateboard … used by Kai". Neither was linked to its person:
+   - the phone was stood on the ledge as a box;
+   - the skateboard was a 75 cm block in front of Kai, as well as in his hand.
+
+   Now "held / carried / used / ridden / worn / pushed / played by <name>" makes the prop that person's. It is in their hand, tagged on them, and left out of the floor props, the "Props" line and the props check. Any prop already given to someone (D36) is also left out of those.
+3. **A metre or more across is never a table-top thing.** "Big concrete bowl, about 5 m diameter" matched "bowl" in the table-top words (D62) and was moved onto the ledge at 13 cm. A stated size of a metre or more now overrides the name.
+4. **Above the picture is drawn out, not mirrored.** Where a portrait camera sees above the venue views, the views were mirrored upwards.
+   - In panels 1 and 3, a brick building and its screen hung upside down in the sky, and the finished background kept them.
+   - The top line is now drawn out and softened, as the floor below already was (D64), and the plate request finishes it sharp.
+   - Cameras whose cut changes get a new plate the first time: one picture each.
+
+**Not fixed yet: places and actions.** These need a design.
+- A bowl, a pool, a slope or a stage is a place the story happens in, not a prop.
+- A panel that says "drops into the bowl", "skis down", "jumps out" needs that person in that place, in that action, with a camera that sees the place.
+- Today:
+  - stand-ins only stand, sit, lie or walk;
+  - a character's place doesn't change between panels unless a walk is set;
+  - cameras frame the people, whatever is behind them.
+- T8 (the ski slope) and T11 (the skydive) will show the same gap. Per the test rule (two scenes before a fix), it is designed once T8 confirms it.
+
+**Tested.** All unit tests pass. On a copy of Paul's skate park scene, the phone and skateboard are now Rosa's and Kai's, and the floor props are the ledge and the bowl.

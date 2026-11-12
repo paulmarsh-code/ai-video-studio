@@ -481,7 +481,8 @@ export function readProps(plan: GeometryPlanData, cam: PlanCamera): { id: string
   // backdrop as a 1.5 m circle put it "in front of everyone" in a camera that only grazes it.
   const people = plan.actors.map((a) => a.position);
   const G = people.length ? { x: people.reduce((t, q) => t + q.x, 0) / people.length, y: people.reduce((t, q) => t + q.y, 0) / people.length } : undefined;
-  return (plan.furniture ?? [])
+  // Something in a hand is tagged on its holder, not stood on the floor (D36, D78).
+  return (plan.furniture ?? []).filter((fu) => !fu.heldBy)
     .map((fu) => {
       const pts: Point[] = [fu.position];
       if (fu.radiusM > 0.6 && G) {
@@ -538,8 +539,18 @@ function settleProps(plan: GeometryPlanData): GeometryPlanData {
   const kindOf = (f: { name: string; detail?: string }) => propKind(`${f.name} ${f.detail ?? ""}`, f.name);
   const tables = furniture.filter((f) => !f.heldBy && kindOf(f) === "table");
   let changed = false;
+  // A prop the words give to someone (D78), "held by Rosa", "used by Kai", is theirs: in their
+  // hand, not on the floor. A skate park's phone was stood on a ledge as a box, and the
+  // skateboard as a 75 cm block in front of the skater, as well as in their hands.
+  const owner = (f: { name: string; detail?: string }) => {
+    const m = `${f.name} ${f.detail ?? ""}`.match(/\b(?:held|carried|used|ridden|worn|pushed|played)\s+by\s+([\p{L}][\p{L}'’-]*)/iu);
+    const id = m?.[1].toLowerCase();
+    return id ? plan.actors.find((a) => a.characterId === id) : undefined;
+  };
   const out = furniture.map((f) => {
     if (f.heldBy) return f;
+    const who = owner(f);
+    if (who) { changed = true; return { ...f, heldBy: who.characterId, position: who.position }; }
     const kind = kindOf(f);
     if (kind === "small") {
       const text = `${f.name} ${f.detail ?? ""}`;

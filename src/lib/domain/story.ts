@@ -88,17 +88,26 @@ export type PropKind = "table" | "flat" | "column" | "small";
 const TABLE_TOP = /\b(glass|glasses|drinks?|cocktails?|flutes?|wine glass(?:es)?|tumblers?|cups?|mugs?|teacups?|teapot|bottles?|cans?|plates?|bowls?|dish(?:es)?|laptops?|tablet|phones?|candles?|vase|menus?|books?|notebooks?|papers|documents|folder|trays?|coasters?|ice bucket|cake|napkins?|ashtray|keys|wallet|receipt|bill)\b/i;
 const SURFACE = /\b(table|counter|bar|desk|island|bench|sofa|couch|shelf|shelves|stand|trolley|cart|cabinet|sideboard|display|rack|fridge|tower|wall|plinth|pedestal)\b/i;
 
+/** Words giving a size of a metre or more: "about 5 m diameter", "120 cm wide", "2 metres long". */
+function aMetreOrMore(text: string): boolean {
+  const m = text.match(/(\d+(?:\.\d+)?)\s?(?:m|metres?|meters?)\b/i);
+  const cm = text.match(/(\d{3,4})\s?cm\b/i);
+  return (!!m && Number(m[1]) >= 1) || (!!cm && Number(cm[1]) >= 100);
+}
+
 export function propKind(text: string, name?: string): PropKind {
   // The name decides first: a "cocktail table with a pedestal base" is still a table.
   if (name !== undefined) {
     const byName = /\b(table|counter|bar|desk|island|bench|sofa|couch)\b/i.test(name) ? "table" : undefined;
     if (byName) return byName;
     const fromName = propKind(name);
-    if (fromName !== "table") return fromName;
+    if (fromName !== "table" && !(fromName === "small" && aMetreOrMore(text))) return fromName;
   }
   if (/\b(backdrop|banner|sign|signage|screen|wall|poster|neon|logo|billboard|curtain|board)\b/i.test(text)) return "flat";
   if (/\b(pedestal|plinth|podium|lectern|column|display stand|display case|statue|sculpture|lamp|tree|plant)\b/i.test(text)) return "column";
-  if (TABLE_TOP.test(text) && !SURFACE.test(text)) return "small";
+  // A metre or more across is never a table-top thing (D78): a skate park's 5 m "bowl" was
+  // taken for a fruit bowl and stood on a ledge.
+  if (TABLE_TOP.test(text) && !SURFACE.test(text) && !aMetreOrMore(text)) return "small";
   return "table";
 }
 

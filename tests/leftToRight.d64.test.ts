@@ -37,7 +37,7 @@ describe("Character references in image 1's left-to-right order (D64)", () => {
 });
 
 describe("Image 1 padded out without a blurred band (D64)", () => {
-  it("fills to size, carrying the picture on above (mirrored) and below (its last band, drawn out)", async () => {
+  it("fills to size, carrying the picture on above and below from its edge lines, drawn out (D78: no longer mirrored above)", async () => {
     const w = 60, h = 40;
     const raw = Buffer.alloc(w * h * 3);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = (y * w + x) * 3; raw[i] = y < 5 ? 250 : 20; raw[i + 1] = x * 4; raw[i + 2] = 90; }
@@ -46,10 +46,10 @@ describe("Image 1 padded out without a blurred band (D64)", () => {
     const { data, info } = await sharp(out).removeAlpha().raw().toBuffer({ resolveWithObject: true });
     expect([info.width, info.height]).toEqual([w, h + 45]);
     const red = (x: number, y: number) => data[(y * info.width + x) * info.channels];
-    // The bright top rows of the picture are mirrored just above it, not smeared away.
+    // The bright top line carries on above it, all the way up: mirrored, the darker part below
+    // it came back upside down at the top (D78).
     expect(red(30, 27)).toBeGreaterThan(150);
-    // Further up the mirror carries on into the darker part, as the room would.
-    expect(red(30, 5)).toBeLessThan(100);
+    expect(red(30, 5)).toBeGreaterThan(150);
     // Below, the floor's last band continues.
     expect(red(30, h + 40)).toBeLessThan(60);
   });
