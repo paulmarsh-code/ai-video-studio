@@ -56,10 +56,11 @@ export interface ImageProvider {
   id: string;
   label: string;
   /**
-   * `mask` (version C, D66): a PNG the size of the first picture, clear where GPT may draw. The
-   * first picture then goes as it is, full size, so the result lines up with it.
+   * `firstFullSize` (D67): the first picture goes as it is, not shrunk to 1,024 pixels and made a
+   * JPEG; for image 1, whose background GPT keeps far better when it is sharp. `mask` (D66): a
+   * PNG the size of the first picture, clear where GPT may draw.
    */
-  generate(prompt: string, refs: { data: Buffer; mime: string; name: string }[], size: "portrait" | "landscape" | "square", opts?: { mask?: Buffer }): Promise<GeneratedImage>;
+  generate(prompt: string, refs: { data: Buffer; mime: string; name: string }[], size: "portrait" | "landscape" | "square", opts?: { mask?: Buffer; firstFullSize?: boolean }): Promise<GeneratedImage>;
 }
 
 export const SIZES = { portrait: "1024x1536", landscape: "1536x1024", square: "1024x1024" } as const;
@@ -76,7 +77,7 @@ export function openAIProvider(apiKey: string, model = imageSettings().model, qu
       let res: Response;
       let note = "";
       if (refs.length) {
-        const small = await Promise.all(refs.map((r, k) => (k === 0 && opts?.mask ? r : shrinkRef(r))));
+        const small = await Promise.all(refs.map((r, k) => (k === 0 && (opts?.mask || opts?.firstFullSize) ? r : shrinkRef(r))));
         const send = (mask?: Buffer) => fetchWithRetry(`${baseUrl()}/images/edits`, () => {
           const form = new FormData();
           form.set("model", model);

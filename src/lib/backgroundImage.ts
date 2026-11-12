@@ -15,8 +15,11 @@ import { calibrationPrompt, horizonOf, readCalibration, ringSectors, roomCentre,
 import { getTextProvider } from "./providers/images";
 import * as repo from "./repo";
 
-const H = 768; // ring height in pixels
-const PX_PER_DEG = 1024 / 90; // a view picture spans about 90°
+// A view picture spans about 90°. At 1,024 pixels for 90°, a medium shot's slice was about 300
+// to 400 pixels stretched to fill a 1,024-wide frame, so image 1's background was soft in every
+// version (D67). The ring now keeps 1,536 pixels for 90°, the width of a full-size view.
+const H = 1152; // ring height in pixels
+const PX_PER_DEG = 1536 / 90;
 
 const ringCache = new Map<string, { data: Buffer; width: number; startDeg: number }>();
 

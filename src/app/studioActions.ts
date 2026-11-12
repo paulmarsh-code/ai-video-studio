@@ -8,6 +8,8 @@ import { getDb } from "@/db/client";
 import type { RefView } from "@/lib/domain/imagePrompts";
 import type { Pronoun } from "@/lib/domain/types";
 import * as studio from "@/lib/studioRepo";
+import { fullSizeViews } from "@/lib/venueFullSize";
+import { getImageProvider } from "@/lib/providers/images";
 import type { DraftPanel, SceneStaging } from "@/lib/domain/story";
 
 export type Result<T = undefined> = { ok: true; value?: T } | { ok: false; error: string };
@@ -69,6 +71,14 @@ export async function addVenueAction(projectId: string, name: string) {
 }
 export async function saveVenueAction(venueId: string, input: { name: string; description: string; setting: "interior" | "exterior"; views: studio.VenueView[] }) {
   return run((db) => studio.saveVenue(db, venueId, input));
+}
+/** Redraw a venue's small view pictures at full size (D67), about 7p each. */
+export async function fullSizeViewsAction(venueId: string) {
+  return runAsync(async (db) => {
+    const provider = getImageProvider();
+    if (!provider) throw new Error("No image provider is connected.");
+    return fullSizeViews(db, venueId, provider);
+  });
 }
 export async function setVenueViewImageAction(venueId: string, viewName: string, assetId: string) {
   return run((db) => studio.setVenueViewImage(db, venueId, viewName, assetId));

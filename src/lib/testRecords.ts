@@ -12,8 +12,8 @@ export const testMode = () => /^(1|true|yes|on)$/i.test(process.env.STORYBOARD_T
 export const requestVariant = (): "full" | "short" => (/^short$/i.test(process.env.STORYBOARD_REQUEST ?? "") ? "short" : "full");
 /**
  * Image 1 drawn over the venue photo (A, the default), as a grey-box room from the plan (B, D60:
- * STORYBOARD_FRAME=box), or over a finished background plate that is pasted back after GPT draws
- * the people and props (C, D66: STORYBOARD_FRAME=fill).
+ * STORYBOARD_FRAME=box), or over each camera's finished background, made once and checked against
+ * the venue's views (C, D66, D67: STORYBOARD_FRAME=fill).
  */
 export const frameVariant = (): "photo" | "box" | "fill" => {
   const v = process.env.STORYBOARD_FRAME ?? "";
@@ -26,7 +26,7 @@ const tag = (assetId: string) => assetId.replace(/-/g, "").slice(0, 8);
 
 export interface DrawRecord {
   panelCode: string;
-  kind: "draw" | "correction" | "redraw" | "plate";
+  kind: "draw" | "correction" | "redraw" | "plate" | "view";
   variant: string;
   prompt: string;
   conflicts?: string[];

@@ -10,7 +10,7 @@ import { frameVariant, recordDraw, testMode } from "@/lib/testRecords";
 import { renderLayoutForShot } from "@/lib/layoutImage";
 import { renderBackgroundForShot } from "@/lib/backgroundImage";
 import { renderBlockingForShot, renderBlockingOnPlate } from "@/lib/blockingImage";
-import { ensurePlate, onPlate, openAIMask } from "@/lib/plateImage";
+import { ensurePlate, plateNumbers } from "@/lib/plateImage";
 import { ensureHeldItems } from "@/lib/heldItemsServer";
 import * as repo from "@/lib/repo";
 
@@ -29,8 +29,9 @@ export async function POST(req: Request) {
   }
   // The blocking frame (D34) goes first, as the shot to finish; it already holds the
   // background and the layout, so those aren't sent separately.
-  // Version C (D66): image 1 on the camera's finished plate, which goes back after GPT draws.
+  // Version C (D66, D67): image 1 on the camera's finished plate, checked against the venue's views.
   let onPlateOf: { plate: Buffer; area: Buffer; W: number; H: number } | undefined;
+  let imageOne = false;
   if (body.blockingShotId) {
     const shot = repo.getShot(db, body.blockingShotId);
     if (shot) await ensureHeldItems(db, body.projectId);
@@ -47,6 +48,7 @@ export async function POST(req: Request) {
       }
     }
     png ??= await renderBlockingForShot(db, body.blockingShotId);
+    imageOne = !!png;
     if (png) {
       const at = body.baseAssetId ? 1 : 0;
       refs.splice(at, 0, { data: Buffer.from(png), mime: "image/png", name: "blocking_frame.png" });
@@ -71,13 +73,13 @@ export async function POST(req: Request) {
     if (png) refs.push({ data: Buffer.from(png), mime: "image/png", name: "layout_sketch.png" });
   }
   try {
-    const img = await provider.generate(body.prompt, refs, body.size ?? "portrait", onPlateOf ? { mask: await openAIMask(onPlateOf.area, onPlateOf.W, onPlateOf.H) } : undefined);
-    // Version C (D66): the plate goes back everywhere but the people and props.
-    const put = onPlateOf ? await onPlate(img.data, onPlateOf.plate, onPlateOf.area, onPlateOf.W, onPlateOf.H) : undefined;
-    const data = put?.png ?? img.data;
+    // Image 1 (or the picture being fixed) goes full size (D67): GPT keeps a sharp background.
+    const img = await provider.generate(body.prompt, refs, body.size ?? "portrait", { firstFullSize: imageOne || !!body.baseAssetId });
+    const data = img.data;
     const saved = storeAsset(db, {
-      projectId: body.projectId, baseCode: cleanBaseCode(body.baseCode), kind: body.kind ?? "image", ext: "png", mime: put ? "image/png" : img.mime, data, note: `${img.providerNote}${put ? "; background plate pasted back" : ""}`,
+      projectId: body.projectId, baseCode: cleanBaseCode(body.baseCode), kind: body.kind ?? "image", ext: "png", mime: img.mime, data, note: img.providerNote,
     });
+    const numbers = onPlateOf ? await plateNumbers(img.data, onPlateOf.plate, onPlateOf.area, onPlateOf.W, onPlateOf.H).catch(() => undefined) : undefined;
     // Test mode (B4): keep exactly what this picture was drawn from.
     if (testMode() && body.test) {
       const s = imageSettings();
@@ -87,11 +89,10 @@ export async function POST(req: Request) {
         inputs: refs.map((r) => { const a = ids.map((id) => repo.getAsset(db, id)).find((x) => x?.assetCode === r.name); return { name: r.name, data: r.data, mime: r.mime, assetId: a?.id, assetCode: a?.assetCode }; }),
         model: s.model, quality: s.quality, size: SIZES[body.size ?? "portrait"], endpoint: refs.length ? "images/edits" : "images/generations",
         output: { assetId: saved.id, data, note: img.providerNote },
-        extras: onPlateOf && put ? [
-          { name: "gpt_picture.png", data: img.data },
+        extras: onPlateOf && numbers ? [
           { name: "draw_area.png", data: onPlateOf.area },
           { name: "plate.png", data: onPlateOf.plate },
-          { name: "pasted.json", data: JSON.stringify(put.numbers, null, 2) },
+          { name: "background.json", data: JSON.stringify(numbers, null, 2) },
         ] : undefined,
       });
     }

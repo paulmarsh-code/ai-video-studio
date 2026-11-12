@@ -1317,3 +1317,44 @@ His hope was that the 360° views, cut for each camera, would give each shot a f
   - Unit tests cover the plate request, the extra draw areas (only for people in the shot), the C wording and the crowd left out, the paste-back (GPT's picture inside, the plate outside, and how much changed), and OpenAI's mask.
   - The draw route was run against the stand-in API on a copy of Paul's T6 scene. Panel 1 made the first camera's plate, panel 3 reused it, and panel 2 made its own: two plates for three panels. Every record had its mask, plate and numbers. GPT may draw about 32% of panel 1 and 58% of panel 2 (an over-the-shoulder shot, whose foreground back fills most of the picture).
 - **Not yet known.** Whether GPT's people look pasted in (lighting at the join), and whether GPT keeps the framing with the mask. Paul's draws will show both, and `pasted.json` will put numbers on them.
+
+### D67: Version C's first run. The paste-back is dropped; plates are checked against the venue; venue views made full size; image 1 sent full size (2026-11-12)
+
+Paul ran version C (D66) on T6.
+- **Hair and legs were cut off.** GPT drew the people a little bigger and lower than planned, so the pasted-back plate cut into them: Nina's hair in panel 2, legs and chairs in panel 1.
+- **Both plates were a different place.** Asked to finish each camera's cut with its background guests, GPT invented the same long covered terrace with a bar for both cameras, not the rooftop's balustrade or decking. Measured against the cut, the plates scored 0.10 and -0.29, where a faithful redraw scores about 1.
+- **The root cause of soft backgrounds.** The rooftop's four views are each 768 × 510 pixels, a quarter of one GPT sheet. A medium shot's background used about 300 pixels of one, stretched to the 1,024-pixel frame. Image 1 was also shrunk to 683 × 1,024 and sent as a JPEG with every draw. Every image 1 in A, B and C has had a soft background, and GPT re-imagines soft backgrounds.
+- **What worked.**
+  - With a sharp, finished background in image 1, GPT kept it. The top of the picture scored 0.997 against the plate, where two of the last three version A draws scored 0.21 and 0.31.
+  - The people were as sharp as the background (11.6 against 10.9).
+  - The sides were right in all 4 version C draws.
+
+- **Failures fixed (D38).**
+  - People cut by the paste.
+  - A plate that isn't the venue.
+  - Soft backgrounds that GPT re-imagines.
+  - A check that failed a bag on a seated person's lap, which the request now asks for (D65).
+
+  These reach generation through image 1 and the picture check.
+- **No paste-back.** GPT's picture is the result. The people-and-props area is kept only for the record's numbers (`background.json`: how far GPT's background strayed from the plate, how sharp each part is, and how alike they are).
+- **The plate is a clean-up of the real place, checked.**
+  - The request is now: "Image 1 is a real photograph of the [venue] … Return the same photograph, sharp and clean. Change nothing in it … Add nothing and remove nothing … No people anywhere."
+  - It's used only if it scores at least 0.6 against the cut (`structureMatch` on small blurred greyscale copies; `SAME_PLACE`).
+  - If not, it's made once more. If that strays too, the cut is used (version A's background), and a `.strayed` note stops it being tried again for that camera.
+  - Each attempt is recorded with its score.
+  - The background guests are drawn in each picture again, as in A, so the D65 lines apply.
+- **Full-size venue views (`fullSizeViews`).**
+  - On the venue page, while any view picture is narrower than 1,200 pixels, a box offers "Make them full size (about 7p a view)".
+  - GPT redraws each view at 1,536 × 1,024 with the same "change nothing" request, checked the same way (one more try, else the small one is kept).
+  - The new pictures replace the old ones and the venue goes back to draft for the user to check and approve.
+  - This is once per venue, and every camera in every version benefits.
+- **The 360° ring keeps full-size views.** It's now 1,536 pixels for 90° (was 1,024), and 1,152 high. A medium shot's background is about 600 pixels before it fills the frame, instead of about 300.
+- **Image 1 goes full size.** The blocking frame (or the picture being fixed) is sent as it is, PNG, not shrunk to 1,024 and made a JPEG. This applies in every version.
+- **The check and seated bags.** For someone seated, the check no longer expects their bag in a hand on one side of the picture. Its look rule adds: "Someone seated may have their bag on their lap or on the seat beside them: that matches a bag carried in the reference; a bag nowhere to be seen does not."
+- **The test line** reads "version C (finished background)".
+- **Tested.**
+  - Unit tests cover the clean-up and full-size requests, the same-place score (a sharpened copy above 0.95, a different layout below 0.6, correlation ±1), the people-and-props area, the record's numbers, and the C wording with the guests back in.
+  - On Paul's two drifted plates, the score is 0.10 and -0.29 (a sharpened copy of each cut scores 0.996 and 0.999).
+  - Against the stand-in API on a copy of Paul's scene, version C made one plate per camera, used it for the panel sharing the camera, and recorded each plate's score.
+  - Full-size views made all four rooftop views and put the venue back to draft.
+  - In the browser, the venue page shows "4 view pictures are small" with "Make them full size (about 28p)", and reports what was made. The panel's test line names version C.

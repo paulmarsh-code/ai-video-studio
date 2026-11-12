@@ -9,32 +9,69 @@ import { pictureXY } from "./geometry";
 import type { GeometryPlanData, PlanCamera, Point } from "./types";
 
 /** Bump when the plate request or how it's made changes, so plates are made again. */
-export const PLATE_RULES = 1;
+export const PLATE_RULES = 2;
 
 /**
- * The request for a camera's plate. Image 1 is the rough cut of what this camera sees, from the
- * venue's 360° views: soft where the views ran out or the floor was cleared. GPT finishes it as
- * one sharp photograph, with the background guests, and the open floor where the main
- * characters and their props will go left empty.
+ * The request for a camera's plate (D66, D67): the empty place from this camera, finished as a
+ * sharp photograph. Image 1 is the cut from the venue's approved views. Asked to "finish" it with
+ * background guests, GPT invented a different place for both cameras, so the plate now has no
+ * people (the guests are drawn in each picture, as in version A) and the request is a clean-up:
+ * the same photograph, sharper. It's checked against the cut before it's used (`structureMatch`).
  */
-export function platePrompt(i: { venueName: string; aspect?: string; crowd?: string; light?: string; style?: string }): string {
-  const crowd = i.crowd?.trim().replace(/[.\s]+$/, "");
+export function platePrompt(i: { venueName: string; aspect?: string; light?: string; style?: string }): string {
   return [
-    `${(i.style ?? "photorealistic").replace(/^./, (m) => m.toUpperCase())} photograph for a ${i.aspect ?? "9:16"} video: the ${i.venueName}, seen from one fixed camera. Image 1 is a rough cut of exactly what this camera sees.`,
-    "Keep image 1's framing, camera height, eye level, perspective and layout exactly: every wall, railing, counter, light and view stays where it is in image 1, at the same size. Do not move, zoom, tilt or re-frame.",
-    "Finish it as one sharp photograph with the same clarity all over: everything from near to far in focus, no blur and no haze added. Any soft, blurred or mirrored part of image 1 is only unfinished: draw it sharp, carrying on what is next to it.",
-    "The open floor in the middle and front of the picture is empty: no tables, chairs, stools, sofas or other free-standing furniture on it, and nobody on it. The main characters and their props are added later.",
-    crowd
-      ? `Background guests: ${crowd}. They stand or sit further back and at the sides, never on the open floor in the middle and front; all different people, natural and relaxed, none looking at the camera.`
-      : "No people anywhere.",
-    i.light ? `Light: ${i.light}` : "",
+    `Image 1 is a real photograph of the ${i.venueName}, seen from one fixed camera, but soft and low in detail. Return the same photograph, sharp and clean, for a ${i.aspect ?? "9:16"} ${(i.style ?? "photorealistic").toLowerCase()} video.`,
+    "Change nothing in it: the framing, camera height, eye level and perspective stay exactly as they are, and every wall, railing, screen, planter, counter, door, light, the view beyond and the floor stay exactly where they are, at the same size, with the same materials and colours. Add nothing and remove nothing. Do not move, zoom, tilt or re-frame.",
+    "Only sharpen it and add fine detail, with the same clarity all over: everything from near to far in focus. Any soft, blurred or mirrored strip along an edge carries on what is next to it, sharp.",
+    "No people anywhere, and no tables, chairs or other free-standing furniture on the open floor.",
+    i.light ? `Light, as it is in image 1: ${i.light}` : "",
     "No text, no logos, no watermark.",
   ].filter(Boolean).join("\n");
 }
 
-/** The cue in the picture request (D66): only the main characters, the props and their shadows are drawn. */
-export const PLATE_KEEP_FULL = "- Everything in image 1 outside the stand-ins and the outlined props is the finished background photograph, with its background guests: keep it exactly as it is, as sharp as it is, and add no one to it. Draw only the main characters, the props and their shadows, as sharp as the background.";
-export const PLATE_KEEP_SHORT = "Everything else in image 1 is the finished background, with its guests: keep it exactly, as sharp as it is, and add no one; draw only the main characters, the props and their shadows, as sharp as the background.";
+/**
+ * The request to redraw one small venue view at full size (D67). A venue's four views came as
+ * quarters of one GPT picture, 768 × 510 pixels each, which is all a camera's background was cut
+ * from. Redrawn once at full size and approved on the venue page, every camera gets a sharp
+ * background from the same approved views.
+ */
+export function viewFullSizePrompt(i: { venueName: string; viewName: string }): string {
+  return [
+    `Image 1 is one view of the ${i.venueName}, looking towards the ${i.viewName}, but small and low in detail. Return the same picture at full size and full detail.`,
+    "Change nothing in it: the framing, camera height, eye level and perspective stay exactly as they are, and every wall, railing, screen, planter, counter, door, light, the view beyond and the floor stay exactly where they are, at the same size, with the same materials, colours and light. Add nothing and remove nothing; no people.",
+    "Only sharpen it and add fine detail, with the same clarity all over.",
+    "No text, no logos, no watermark.",
+  ].join("\n");
+}
+
+/**
+ * How alike two pictures are in layout (D67): -1 to 1, from small, blurred greyscale copies of
+ * the same size, each evened out to its own brightness and contrast. A redraw that keeps the
+ * place scores about 0.9 or more; GPT's invented terraces scored about 0.12.
+ */
+export function structureMatch(a: ArrayLike<number>, b: ArrayLike<number>): number {
+  const n = Math.min(a.length, b.length);
+  if (!n) return 0;
+  const stats = (x: ArrayLike<number>) => {
+    let m = 0;
+    for (let i = 0; i < n; i++) m += x[i];
+    m /= n;
+    let v = 0;
+    for (let i = 0; i < n; i++) v += (x[i] - m) ** 2;
+    return { m, sd: Math.sqrt(v / n) || 1 };
+  };
+  const sa = stats(a), sb = stats(b);
+  let c = 0;
+  for (let i = 0; i < n; i++) c += ((a[i] - sa.m) / sa.sd) * ((b[i] - sb.m) / sb.sd);
+  return +(c / n).toFixed(3);
+}
+
+/** Below this a redraw has changed the place, and isn't used (D67). */
+export const SAME_PLACE = 0.6;
+
+/** The cue in the picture request (D66, D67): image 1's background is finished; keep it. */
+export const PLATE_KEEP_FULL = "- Everything in image 1 outside the stand-ins and the outlined props is the finished background photograph: keep it exactly as it is, as sharp as it is, adding only the background guests described below. Draw the main characters, the props and their shadows as sharp as the background.";
+export const PLATE_KEEP_SHORT = "Everything else in image 1 is the finished background: keep it exactly, as sharp as it is, adding only the background guests described; draw the main characters, the props and their shadows as sharp as it.";
 
 /**
  * Extra parts GPT may draw (D66), as SVG polygons in a `width` × `height` picture: beyond the

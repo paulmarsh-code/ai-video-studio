@@ -54,7 +54,9 @@ export function expectationFor(db: DB, shotId: string): { expect: PictureExpecta
     const vx = cam.position.x - pos.x, vy = cam.position.y - pos.y, l = Math.hypot(vx, vy) || 1;
     const c = (fwd.x * vx + fwd.y * vy) / l;
     if (c <= 0.5 && c >= -0.35) return []; // side-on: either side can show
-    return [...carriedItems(profiles[id]), ...heldProps(plan, id, profiles[id])].filter((it) => /^(hand|shoulder|arm)$/.test(it.where)).map((it) => ({
+    // Seated, a bag is on the lap or the seat beside them, as the request says (D65, D67).
+    const seated = (shot.spec.posture?.[id]?.pose ?? plan.actors.find((x) => x.characterId === id)?.pose) === "sitting";
+    return [...(seated ? [] : carriedItems(profiles[id])), ...heldProps(plan, id, profiles[id])].filter((it) => /^(hand|shoulder|arm)$/.test(it.where)).map((it) => ({
       name: name(id), item: itemNoun(it.what), side: (c > 0.5 ? (it.side === "left" ? "right" : "left") : it.side) as "left" | "right",
     }));
   });

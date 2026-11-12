@@ -248,7 +248,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   const turned = otherSide ? ` This camera faces the ${here}, not the ${i.continuity!.view} behind them in the ${i.continuity!.label}: take nothing behind the characters from it.` : "";
   // A few seconds on (D65): copied from an approved picture taken from the same camera, the
   // background guests were frozen in place, a server mid-stride in the same spot in both.
-  const movedOn = i.continuity && shot?.crowd?.trim() && i.frame !== "fill" ? " A few seconds have passed: background guests have shifted a little and anyone walking is somewhere else; never copy their exact places." : "";
+  const movedOn = i.continuity && shot?.crowd?.trim() ? " A few seconds have passed: background guests have shifted a little and anyone walking is somewhere else; never copy their exact places." : "";
   if (i.continuity) S.refs.push(`The ${i.continuity.label} shows how the clothes, the furniture's colour and material, what stands on the tables and the light look: keep those the same, each character with the same drink and things in front of them. Image 1 decides where everyone and everything is, how big and how high, and what is behind them; never copy the approved picture's framing, positions or furniture sizes.${turned}${movedOn}`);
   if (backs.length) lines.push(`${joinNames(backs)} ${backs.length === 1 ? "is" : "are"} seen from behind: copy the back of their clothes, hair and bag exactly from the attached back ${backs.length === 1 ? "image" : "images"}.`);
   if (ring) lines.push(`Use the attached background picture as the room behind the characters: it is cut from the venue's 360° view for exactly this camera position, angle and lens, so what is on its left stays on the left and what is on its right stays on the right. Same place, layout and light, seen across the room several metres behind them.${shot?.crowd?.trim() ? " Fill it with the background guests described below." : ""}`);
@@ -345,9 +345,8 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   }
   // The cast up on a stage or balcony (D29): the crowd stays down on the main floor.
   const castUp = i.plan?.levels?.length ? i.plan.levels.find((l) => l.heightM > 0 && i.plan!.actors.some((a) => levelAt(i.plan!, a.position) === l)) : undefined;
-  // In version C the guests are already in the plate (D66): GPT adds no one.
-  if (crowd && !fill) S.people.push(`Background: ${sentence(crowd).split(/(?<=[.!?])\s+/)[0]} Out of focus, smaller than the main characters, never looking at the camera, none like them, and no two alike: varied faces, ages, builds, hair and clothes.`);
-  if (crowd && !fill) lines.push(`Background: ${sentence(crowd)}${castUp ? ` They are down on the main floor, not up on ${castUp.name} with the characters.` : ""}${layout ? " The grey figures in the layout sketch show where they stand." : ""} Background guests are out of focus, smaller than the main characters and never look at the camera; none of them look like the main characters. Every background guest is a different person (varied faces, ages, builds, hair and clothes): no two alike, no one repeated.`);
+  if (crowd) S.people.push(`Background: ${sentence(crowd).split(/(?<=[.!?])\s+/)[0]} Out of focus, smaller than the main characters, never looking at the camera, none like them, and no two alike: varied faces, ages, builds, hair and clothes.`);
+  if (crowd) lines.push(`Background: ${sentence(crowd)}${castUp ? ` They are down on the main floor, not up on ${castUp.name} with the characters.` : ""}${layout ? " The grey figures in the layout sketch show where they stand." : ""} Background guests are out of focus, smaller than the main characters and never look at the camera; none of them look like the main characters. Every background guest is a different person (varied faces, ages, builds, hair and clothes): no two alike, no one repeated.`);
   for (const c of visible) {
     const p = i.profiles[c.id];
     const parts = [p?.appearance, p?.wardrobe ? `wearing ${p.wardrobe}` : ""].filter(Boolean).map((x) => sceneDescription(stripQuotes(x!)).replace(/[.!?]+$/, "")).filter(Boolean);

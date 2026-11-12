@@ -11,6 +11,8 @@ import { VenueEditor } from "@/components/VenueEditor";
 import { VenueWizard } from "@/components/VenueWizard";
 import { VenueRoom } from "@/components/VenueRoom";
 import { roomFor } from "@/lib/domain/room";
+import { FullSizeViews } from "@/components/FullSizeViews";
+import { smallViews } from "@/lib/venueFullSize";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +37,8 @@ export default async function VenuesPage({ params, searchParams }: { params: Pro
   const hasImages = !!venue?.views.some((v) => v.imageAssetId);
   const created = !!venue && (hasImages || !!venue.description.trim());
   const baseCode = venue ? `${project.code}_VEN_${codeName(venue.name).slice(0, 24)}` : "";
+  // Small view pictures (D67): offered full size, since every camera's background comes from them.
+  const small = venue && hasImages && canGenerate ? await smallViews(db, venue.id) : 0;
 
   return (
     <div className="max-w-6xl">
@@ -69,6 +73,7 @@ export default async function VenuesPage({ params, searchParams }: { params: Pro
             <VenueEditor key={venue.id} canAuto={canAuto} venue={venue} projectId={id} baseCode={baseCode}
               images={hasImages ? (
                 <div key="images" className="grid gap-3 sm:grid-cols-2">
+                  {small > 0 && <div className="sm:col-span-2"><FullSizeViews venueId={venue.id} small={small} /></div>}
                   {venue.views.map((v) => (
                     <ImageSlot
                       key={v.name}
