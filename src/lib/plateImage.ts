@@ -59,11 +59,23 @@ export async function cachedPlate(db: DB, shotId: string): Promise<Buffer | null
  * it's made once more, and if that strays too, the cut itself is used (version A's background)
  * and the record says so. Returns null when there's nothing to use but the cut.
  */
+// Plates being made, by name: two panels sharing a camera drawn at once wait for one plate
+// instead of each paying for their own (D68: panels 1 and 3 made the same plate twice).
+const making = new Map<string, Promise<Buffer | null>>();
+
 export async function ensurePlate(db: DB, shotId: string, provider: ImageProvider, test?: { panelCode: string; variant: string }): Promise<Buffer | null> {
   const p = await plateInput(db, shotId);
   if (!p) return null;
   const file = path.join(plates(), `${p.key}.png`);
   if (fs.existsSync(file)) return fs.readFileSync(file);
+  const already = making.get(p.key);
+  if (already) return already;
+  const job = makePlate(p, file, provider, test).finally(() => making.delete(p.key));
+  making.set(p.key, job);
+  return job;
+}
+
+async function makePlate(p: NonNullable<Awaited<ReturnType<typeof plateInput>>>, file: string, provider: ImageProvider, test?: { panelCode: string; variant: string }): Promise<Buffer | null> {
   const strayed = path.join(plates(), `${p.key}.strayed`);
   if (fs.existsSync(strayed)) return null;
   for (let attempt = 1; attempt <= 2; attempt++) {

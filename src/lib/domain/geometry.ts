@@ -230,7 +230,7 @@ export function pictureXY(plan: GeometryPlanData, cam: PlanCamera, at: Point, zM
  * picture, which is a little shorter) can cut the feet off a "full shot": GPT then moved the
  * camera back to show them, and squeezed the room up behind.
  */
-export function framedSize(plan: GeometryPlanData, cam: PlanCamera, at: Point, depthM: number): { size: ShotSize; bottomM: number } | undefined {
+export function framedSize(plan: GeometryPlanData, cam: PlanCamera, at: Point, depthM: number, opts: { seated?: boolean } = {}): { size: ShotSize; bottomM: number } | undefined {
   const portrait = plan.aspect === "9:16";
   const tanH = Math.tan((horizontalFov(plan, cam) * Math.PI) / 360);
   const focalOverH = (portrait ? 2 / 3 : 3 / 2) / (2 * tanH);
@@ -239,8 +239,14 @@ export function framedSize(plan: GeometryPlanData, cam: PlanCamera, at: Point, d
   const d = Math.max(0.3, depthM);
   const eye = cameraZ(plan, cam) - floorZ(plan, at);
   const bottom = eye + d * Math.tan(tilt - edge), top = eye + d * Math.tan(tilt + edge);
-  if (top < 1.72) return undefined;
   const r = (size: ShotSize) => ({ size, bottomM: +bottom.toFixed(2) });
+  // Seated (D68): head about 1.3 m up, knees about 0.5, waist about table height.
+  if (opts.seated) {
+    if (top < 1.3) return undefined;
+    if (bottom <= 0) return r(1.3 / (top - bottom) < 0.3 ? "ls" : "fs");
+    return r(bottom <= 0.4 ? "mls" : bottom <= 0.6 ? "cowboy" : bottom <= 0.85 ? "ms" : bottom <= 1.0 ? "mcu" : "cu");
+  }
+  if (top < 1.72) return undefined;
   if (bottom <= 0) return r(1.72 / (top - bottom) < 0.3 ? "ls" : "fs");
   return r(bottom <= 0.55 ? "mls" : bottom <= 0.85 ? "cowboy" : bottom <= 1.15 ? "ms" : bottom <= 1.35 ? "mcu" : "cu");
 }

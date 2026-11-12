@@ -346,6 +346,7 @@ export function judgePicture(e: PictureExpectation, reply: string, plan?: string
   let measuredBy: PictureCheck["measuredBy"];
   const pct = (y: number) => `${Math.round(y * 100)}%`;
   const offsets: { head: number; planned: number }[] = [];
+  const feetShifts: number[] = [];
   const parsePlan = (text: string) => { try { return objs((JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] ?? "") as { people?: unknown }).people); } catch { return []; } };
   const judged = (e.figures ?? []).filter((want) => !(want.headY < 0.02 || want.feetY - want.headY >= 0.85) && !missing.some((m) => first(m) === first(want.name)));
 
@@ -362,6 +363,8 @@ export function judgePicture(e: PictureExpectation, reply: string, plan?: string
     }
     const matched = matchPeople(e, plan);
     const wrong = wrongMatches(gaze);
+    // Where each person's feet are against the plan (D68), for anyone whose feet the plan shows:
+    // the group drawn closer or further than image 1 moves them all.
     for (const want of judged) {
       const box = matched.find((x) => x.name === want.name)?.box;
       if (!box) { unmeasured.blocking.push(`${want.name}: not matched to anyone found, not measured`); continue; }
@@ -371,6 +374,8 @@ export function judgePicture(e: PictureExpectation, reply: string, plan?: string
       const m: (typeof measured)[number] = { name: want.name, box: n, headY: +box.y0.toFixed(3), plannedHeadY: want.headY, x: +cx.toFixed(3), plannedX: want.x };
       measured.push(m);
       offsets.push({ head: box.y0, planned: want.headY });
+      // Feet at the bottom edge are at least that low: still a fair measure of a group drawn closer.
+      if (want.feetY <= 0.97) feetShifts.push(Math.min(box.y1, 1) - want.feetY);
       // Place across: off by more than their own planned width, and at least 15% of the picture.
       const plannedTall = Math.min(want.feetY, 1) - want.headY;
       if (Math.abs(cx - want.x) > Math.max(0.15, 0.28 * plannedTall * plan.aspect)) {
@@ -440,6 +445,19 @@ export function judgePicture(e: PictureExpectation, reply: string, plan?: string
   // judged only when the eye level is right; when the camera is wrong everything moves and the
   // camera problem says so. A table several metres in front of the group it should stand among
   // passed the model's front-or-behind question.
+  // The group drawn closer or further than image 1 (D68): their feet well below or above where
+  // image 1 has them, with heads where they should be. Said as what it is; and the props among
+  // them are then judged against the people, not the frame, so a table that is with the group
+  // isn't reported as moved.
+  const median = (xs: number[]) => { const d = [...xs].sort((a, b) => a - b); return d.length % 2 ? d[(d.length - 1) / 2] : (d[d.length / 2 - 1] + d[d.length / 2]) / 2; };
+  const groupShift = feetShifts.length ? median(feetShifts) : 0;
+  const sizeSaid = issues.some((x) => x.area === "blocking" && /times the planned height|of the picture's height, planned/.test(x.text));
+  if (eyeLevel === "on" && !sizeSaid && Math.abs(groupShift) > 0.08) {
+    const plannedFeet = median((e.figures ?? []).filter((f) => f.feetY <= 0.97).map((f) => f.feetY));
+    add("blocking", groupShift > 0
+      ? `Everyone is drawn closer to the camera than in image 1: their feet are about ${pct(plannedFeet + groupShift)} of the way down the picture, but image 1 has them about ${pct(plannedFeet)} down. Keep image 1's camera distance: everyone as big as their stand-in, with the floor in front of them as in image 1.`
+      : `Everyone is drawn further from the camera than in image 1: their feet are about ${pct(plannedFeet + groupShift)} of the way down the picture, but image 1 has them about ${pct(plannedFeet)} down. Keep image 1's camera distance: everyone as big as their stand-in.`, true);
+  }
   const propsMeasured: NonNullable<PictureCheck["propsMeasured"]> = [];
   if (typeof plan === "object" && e.propSpots?.length) {
     for (const spot of e.propSpots) {
@@ -450,6 +468,9 @@ export function judgePicture(e: PictureExpectation, reply: string, plan?: string
       const cx = (near.t.x0 + near.t.x1) / 2, foot = Math.min(near.t.y1, 1);
       propsMeasured.push({ name: spot.name, x: +cx.toFixed(3), plannedX: spot.x, baseY: +foot.toFixed(3), plannedBaseY: spot.baseY });
       const where = `its foot is about ${pct(foot)} of the way down the picture, but image 1 has it about ${pct(spot.baseY)} down${spot.among ? ", among the people" : ""}`;
+      // Among the people: measured against them, so a group drawn closer takes its table with it.
+      const rel = spot.among ? foot - groupShift : foot;
+      if (spot.among && Math.abs(rel - spot.baseY) <= 0.08) { if (Math.abs(cx - spot.x) > 0.15) add("room", `The ${spot.name} is about ${pct(cx)} of the way across the picture; image 1 has it about ${pct(spot.x)} across.`, true); continue; }
       if (foot - spot.baseY > 0.08) add("room", `The ${spot.name} is well in front of where image 1 puts it: ${where}. Keep it where image 1 shows it.`, true);
       else if (spot.baseY - foot > 0.08) add("room", `The ${spot.name} is well behind where image 1 puts it: ${where}. Keep it where image 1 shows it.`, true);
       else if (Math.abs(cx - spot.x) > 0.15) add("room", `The ${spot.name} is about ${pct(cx)} of the way across the picture; image 1 has it about ${pct(spot.x)} across.`, true);

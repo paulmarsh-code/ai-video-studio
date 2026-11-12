@@ -418,10 +418,16 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     const subjRead = subjectId ? reading.actors.find((a) => a.characterId === subjectId && a.inView) : undefined;
     const subjAt = subjRead ? (shotPlan ?? i.plan!).actors.find((a) => a.characterId === subjectId)?.position : undefined;
     const said = cam.size ?? namedShot(shot.shot ?? "").size;
-    const framed = subjAt && subjRead ? framedSize(shotPlan ?? i.plan!, cam, subjAt, subjRead.depthM) : undefined;
+    // Seated (D68): what image 1 frames of someone sitting. A two-shot named "medium shot, from the
+    // waist up" showed two seated people whole, with the floor in front; GPT met the words halfway,
+    // drew everyone closer than image 1, and the table came out "well in front" of its place.
+    const seatedSubj = (shotPlan ?? i.plan!).actors.find((a) => a.characterId === subjectId)?.pose === "sitting";
+    const framed = subjAt && subjRead ? framedSize(shotPlan ?? i.plan!, cam, subjAt, subjRead.depthM, { seated: seatedSubj }) : undefined;
     const cutFull = !!said && ["fs", "ls", "ws"].includes(said) && !!framed && framed.bottomM > 0;
     // Only just cut (at the ankles): still a full shot, said as the picture shows it; cut higher: named for what it is.
-    const fix = cutFull && framed!.bottomM > 0.3 ? framed!.size : undefined;
+    // Seated and not over a shoulder: the words follow image 1's framing whichever way they differ.
+    const seatedFix = seatedSubj && !ots && !!framed && !!said && framed.size !== said ? framed.size : undefined;
+    const fix = cutFull && framed!.bottomM > 0.3 ? framed!.size : seatedFix;
     const camW = fix ? { ...cam, size: fix } : cam;
     const preset = presetText(camW).replace(", static camera", "").replace(" static camera,", "");
     lines.push(preset);

@@ -1358,3 +1358,29 @@ Paul ran version C (D66) on T6.
   - Against the stand-in API on a copy of Paul's scene, version C made one plate per camera, used it for the panel sharing the camera, and recorded each plate's score.
   - Full-size views made all four rooftop views and put the venue back to draft.
   - In the browser, the venue page shows "4 view pictures are small" with "Make them full size (about 28p)", and reports what was made. The panel's test line names version C.
+
+### D68: Seated framing said as image 1 shows it; a table judged against its group; one plate per camera at a time (2026-11-12)
+
+T6 version C, after D67. Paul: "a vast improvement".
+- All three camera backgrounds matched the venue (0.86, 0.83, 0.84).
+- GPT kept them: 6–8% colour change outside the people.
+- The people and the background were about equally sharp.
+- Panel 2 passed. Panels 1 and 3 failed only on "the small round table is well in front of where image 1 puts it": its foot was 92–98% down the picture, where image 1 has it 77%.
+
+Looking at the pictures, the table is with the two women, and they too are drawn bigger, their feet near the bottom edge. The request named the two-shot "Medium shot … Framing: medium shot from the waist up". Image 1 shows two seated people whole and small, with the floor in front. GPT met the words halfway: everyone was drawn closer, with heads in place, and the table went with them.
+
+- **Failure fixed (D38).** A framing that differs from image 1, reported as a table moved. It reaches generation through the prompt's framing words and the picture check.
+- **Seated framing from image 1 (`framedSize`, seated).**
+  - For someone sitting, the size image 1 gives them is read against a seated body: head about 1.3 m, knees about 0.5, waist about table height.
+  - When it differs from the camera's named size, the words follow image 1. For example, "Shot: long shot, two-shot. Framing: long shot: the whole body small in the frame". This applies only when the camera isn't over someone's shoulder, where the words describe the shot's intent and panel 2 already passes.
+  - For people standing, D48 is unchanged.
+- **A table among the people is judged against them.**
+  - The check now measures where each person's feet are against the plan, including feet at the bottom edge, which are at least that low.
+  - When the group as a whole is drawn closer or further (median feet more than 8% off, heads on the eye line, no size fail already), it says so: "Everyone is drawn closer to the camera than in image 1: their feet are about 97% of the way down the picture, but image 1 has them about 77% down. Keep image 1's camera distance…"
+  - A table among them is then judged against where the people are, not the frame. A table moved away from a group that is in place is still reported, as before.
+- **One plate at a time per camera.** Panels 1 and 3 were drawn together and both made the same camera's plate (14p instead of 7p). Plates being made are now shared, so the second panel waits for the first.
+- **Tested.**
+  - Unit tests check seated framing: a long shot at 60°, a full shot at 40°, a cowboy shot at 20°.
+  - "Medium shot, two-shot" becomes "long shot, two-shot" for two seated people whole in frame. The over-the-shoulder shot's words are left alone.
+  - A group drawn closer is named, with no table fail. A table in front of a group that's in place still fails. A group and table where image 1 has them pass.
+  - The D55 prop tests are unchanged.
