@@ -126,7 +126,7 @@ export interface PanelPromptInput {
    * An approved picture of this scene (D18c), attached so later panels keep the same spot,
    * furniture, background guests, light and clothes. Not used for the panel's own picture.
    */
-  continuity?: { assetId: string; label: string };
+  continuity?: { assetId: string; label: string; /** The venue view behind the people in it (D63). */ view?: string };
 }
 
 export interface PanelPrompt {
@@ -232,7 +232,13 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   const backs = people.filter((a) => a.label.endsWith(" back")).map((a) => a.label.replace(/ back$/, ""));
   if (blocking) S.refs.push(`The other images show only how people and props look (${attach.slice(box ? 2 : 1).map((a) => a.label).join(", ")}): copy faces, hair, clothes, carried things and props exactly; never take positions or background from them.`);
   if (backs.length) S.refs.push(`${joinNames(backs)} ${backs.length === 1 ? "is" : "are"} seen from behind: copy the back of the clothes, hair and bag from the back ${backs.length === 1 ? "image" : "images"}.`);
-  if (i.continuity) S.refs.push(`The ${i.continuity.label} shows how the room, the furniture, what stands on the tables, the light and the clothes look: keep them all the same; never copy its framing or positions.`);
+  // The approved picture gives looks, never the shot (D63). Asked to keep "the room" the same, GPT
+  // kept its skyline behind a panel whose camera faces the other way, and its chest-high table
+  // after the plan had made the table sitting height.
+  const here = reading?.backgroundView;
+  const otherSide = !!i.continuity?.view && !!here && i.continuity.view !== here;
+  const turned = otherSide ? ` This camera faces the ${here}, not the ${i.continuity!.view} behind them in the ${i.continuity!.label}: take nothing behind the characters from it.` : "";
+  if (i.continuity) S.refs.push(`The ${i.continuity.label} shows how the clothes, the furniture's colour and material, what stands on the tables and the light look: keep those the same. Image 1 decides where everyone and everything is, how big and how high, and what is behind them; never copy the approved picture's framing, positions or furniture sizes.${turned}`);
   if (backs.length) lines.push(`${joinNames(backs)} ${backs.length === 1 ? "is" : "are"} seen from behind: copy the back of their clothes, hair and bag exactly from the attached back ${backs.length === 1 ? "image" : "images"}.`);
   if (ring) lines.push(`Use the attached background picture as the room behind the characters: it is cut from the venue's 360° view for exactly this camera position, angle and lens, so what is on its left stays on the left and what is on its right stays on the right. Same place, layout and light, seen across the room several metres behind them.${shot?.crowd?.trim() ? " Fill it with the background guests described below." : ""}`);
   if (bgImage) lines.push(`Use the attached ${bgView} image as the background, seen across the room several metres behind the characters: same place, layout and light.${shot?.crowd?.trim() ? " It shows the room empty; fill it with the background guests described below." : ""}`);
@@ -242,7 +248,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   const spot = shot?.spot?.trim();
   const crowd = shot?.crowd?.trim();
   // An older approved picture may show an empty room: keep its spot and look, but add the crowd.
-  if (i.continuity) lines.push(`Use the attached ${i.continuity.label} for continuity: the same spot, the same furniture at the same height and size, the same things on the tables (glasses, drinks, bags), the same light and clothes${crowd ? ". If it shows fewer background guests than described below, add them" : ", and the same background guests"}. Change only the camera angle and the moment.`);
+  if (i.continuity) lines.push(`Use the attached ${i.continuity.label} for continuity: the same clothes, the same colour and material of furniture, the same things on the tables (glasses, drinks, bags) and the same light${crowd ? ". If it shows fewer background guests than described below, add them" : ", and the same kind of background guests"}. Where everyone and everything is, how big and how high, and what is behind them come from ${blocking ? "image 1" : "the layout"}, not from it.${turned}`);
   // The same light in every picture (D31): one picture came out much darker than the rest.
   const light = lightingOf(i.venueDescription ?? "");
   if (light) lines.push(`Lighting, identical in every picture of this scene: ${light} Same brightness, colour and mood as the other pictures of the scene; not darker, not brighter.`);

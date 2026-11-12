@@ -1211,3 +1211,24 @@ Every cause below is general, and two venues now show them, not one. This is the
   - Image 1 was rendered for all three T6 panels, in A and B, from a copy of Paul's database and venue pictures.
   - Results: no white bar; Nina lilac and Jade cream with orange; the table at sitting height with the cocktails on it; the stand-ins seated and shorter.
 - **Next.** Paul approves the T6 panel with the right sides (panel 3), so it goes with the others as the continuity picture. Then he redraws versions A and B twice each. The measure is still Kling takes per approved clip.
+
+### D63: The approved picture gives looks, never the shot (2026-11-12)
+
+T6 round 2: Paul approved panel 3, then redrew panels 1 and 2.
+- Sides were right in both, and the drinks stayed the same.
+- Panel 2's camera faces the raised decking, and round 1 drew that view correctly. In round 2 it came back with panel 3's skyline behind them.
+- Both redraws copied panel 3's tall wooden pedestal table and bar stools. Paul found the table odd: a "wood plinth".
+
+The continuity line (D18c, D62) asked GPT to keep "how the room, the furniture … look" the same as the approved picture. The full request added "the same furniture at the same height and size". GPT did exactly that, so a panel facing another side of the place got the approved picture's background. Panel 3 was drawn before D62, at the old chest-high table, and its table outranked image 1's sitting-height one.
+
+- **Failure fixed (D38).** Wrong background for the camera, and a table that doesn't match the plan, carried from one approved picture to every other panel. It reaches generation through a prompt line.
+- **Looks only.**
+  - The approved picture now gives only the clothes, the furniture's colour and material, what stands on the tables, and the light.
+  - In the short request: "Image 1 decides where everyone and everything is, how big and how high, and what is behind them; never copy the approved picture's framing, positions or furniture sizes."
+  - The full request says the same, and no longer asks for "the same furniture at the same height and size" or "the same spot".
+- **A turned camera is named.** The storyboard page now passes the venue view behind the people in the approved picture (`continuity.view`). When this panel's camera faces a different one, the request says so. For example: "This camera faces the raised decking and slatted windscreen, not the glass balustrade and skyline behind them in the approved scene picture (panel 3): take nothing behind the characters from it."
+- **An approved picture drawn before a plan change carries the old plan.** Panel 3 was approved after D62, but drawn before it. Redrawing it puts it back to draft (`setPanelImage`), so the next draw has no continuity picture and follows image 1 alone. Approve the first picture drawn on the current plan, then redraw the others.
+- **Not a fault.** Nina seen from behind in panel 2 is the panel's camera: "Over-the-shoulder on Jade (P2)", placed behind Nina. Identical drinks across panels is the continuity asked for.
+- **Tested.**
+  - Unit tests cover the looks-only wording in both requests and the turned-camera sentence (only when the sides differ).
+  - On a copy of Paul's scene, panels 1 and 3 read "glass balustrade and skyline" and panel 2 reads "raised decking and slatted windscreen", so panel 2's request now carries the sentence.

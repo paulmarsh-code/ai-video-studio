@@ -81,7 +81,7 @@ describe("A full request with seated people, a crowd and a continuity picture (D
   });
   it("keeps the things on the tables from the approved picture", () => {
     expect(p.text).toMatch(/the same things on the tables \(glasses, drinks, bags\)/);
-    expect(p.short).toMatch(/what stands on the tables, the light and the clothes look: keep them all the same; never copy its framing or positions/);
+    expect(p.short).toMatch(/the furniture's colour and material, what stands on the tables and the light look: keep those the same/);
   });
   it("tells GPT the stand-ins are in their clothes' colours", () => {
     expect(p.text).toMatch(/its body shaded in the colours of their clothes/);
