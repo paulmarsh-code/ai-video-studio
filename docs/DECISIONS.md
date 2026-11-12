@@ -1681,3 +1681,39 @@ Paul approved `VP_Places_Actions_Movers_Plan_v0.2` (in the Project).
 - Big areas (a pitch, a long ski run) grow the plan, but the venue's views are still a 10–15 m room (stage 5).
 
 **Tests:** `tests/places.d80.test.ts`. All 664 tests pass.
+
+### D81: The exercise: five scenes run through the app without drawing, and the general faults fixed (2026-11-12)
+
+Paul: "rather than having to fix every scene we do, can you do an exercise on the five settings and see if general improvements can be made."
+
+**The exercise.** `scripts/exercise.ts` sets up the five generality scenes (T7–T11) as a user would: characters, venue, story, and a reply in the app's own format. It saves the storyboard, approves positions and chooses cameras. For every panel it writes image 1 (as the grey-box room), the floor plan from above with the camera, and the picture request. No pictures are drawn, so it costs nothing and runs in seconds.
+
+```
+STORYBOARD_FRAME=box npx tsx scripts/exercise.ts <folder>
+```
+
+**It does not test** what GPT draws from image 1, or the venue pictures. Only real draws test those.
+
+**Faults found and fixed (all general):**
+
+| Fault | Seen in | Fix |
+| --- | --- | --- |
+| Two people sent to the same place stood on one point, and the camera stood there too | ski, skydive | The later one steps aside, a pace at a time |
+| "Skis down the slope" left the skier at the top | ski | "Partway down", "down", "in the middle of" place someone out on an area |
+| A prop whose description mentions a table-top thing became one (a DJ booth "with a laptop on it" was 20 cm tall) | boat | Only the prop's name makes it a table-top thing |
+| Small things with no size were 75 cm tables (a kettle) | camp | More small things known by name; the setting step now asks for every prop's height and width, and for two of a thing as two lines |
+| Small things were stood on the nearest prop, a campfire | camp | Only onto real surfaces |
+| Someone falling was still "kneeling" from the panel before; labels read "KNEELING, KNEELING" | skydive, camp | Moving actions end a carried posture; a posture isn't said twice |
+| Outdoor venues were sized from any word in their description ("flat green farmland" made an airfield a small room); a deck or clearing was 30 m square | skydive, boat, camp | Outdoors, only outdoor kinds are read; decks, boats, clearings, terraces and yards are 8 × 12 m |
+| "At the rail" outdoors put someone 9 m away | boat | Outdoors, going to a named side is a few paces |
+| "On the landing field" made a 4 m balcony | skydive | "Landing" followed by field, strip, zone or pad isn't a landing |
+| "Stares down the slope" got a high angle from above | ski | Looking down a slope, road, corridor or the like isn't looking over an edge |
+| Someone in a hollow was drawn whole, in front of it | skate | The stand-in is cut at the near rim, as the camera sees it; and the camera goes up to 3 m and tilts down to see in |
+| "Leo is cooking the kettle" | camp | "Cooking with the kettle" |
+
+**Left for their stages:**
+- T11's three places in one scene, and two people strapped together (stage 4).
+- Props are round in image 1, so a 2 m log is a 2 m drum.
+- A two-shot of people 8 m apart shows them small.
+
+**Tests:** `tests/exercise.d81.test.ts`. All 671 tests pass.

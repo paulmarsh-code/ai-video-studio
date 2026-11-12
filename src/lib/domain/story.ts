@@ -189,7 +189,7 @@ export type PropKind = "table" | "flat" | "column" | "small";
  * Things that stand on a table (D62): drinks, glasses, a laptop. Treated as tables, two cocktails
  * were drawn as a 1.1 m block on the floor two metres from the table, and GPT left them out.
  */
-const TABLE_TOP = /\b(glass|glasses|drinks?|cocktails?|flutes?|wine glass(?:es)?|tumblers?|cups?|mugs?|teacups?|teapot|bottles?|cans?|plates?|bowls?|dish(?:es)?|laptops?|tablet|phones?|candles?|vase|menus?|books?|notebooks?|papers|documents|folder|trays?|coasters?|ice bucket|cake|napkins?|ashtray|keys|wallet|receipt|bill)\b/i;
+const TABLE_TOP = /\b(glass|glasses|drinks?|cocktails?|flutes?|wine glass(?:es)?|tumblers?|cups?|mugs?|teacups?|teapot|bottles?|cans?|plates?|bowls?|dish(?:es)?|laptops?|tablet|phones?|candles?|vase|menus?|books?|notebooks?|papers|documents|folder|trays?|coasters?|ice bucket|cake|napkins?|ashtray|keys|wallet|receipt|bill|kettle|pot|pan|saucepan|jug|flask|thermos|lantern|torch|radio|camera|letter|envelope|box|tin|jar|basket|ball|toy|knife|fork|spoon|remote|headphones|watch|ring|card|ticket|map|photo|photograph|picture frame)\b/i;
 const SURFACE = /\b(table|counter|bar|desk|island|bench|sofa|couch|shelf|shelves|stand|trolley|cart|cabinet|sideboard|display|rack|fridge|tower|wall|plinth|pedestal)\b/i;
 
 /** Words giving a size of a metre or more: "about 5 m diameter", "120 cm wide", "2 metres long". */
@@ -206,6 +206,8 @@ export function propKind(text: string, name?: string): PropKind {
     if (byName) return byName;
     const fromName = propKind(name);
     if (fromName !== "table" && !(fromName === "small" && aMetreOrMore(text))) return fromName;
+    // Only the name makes it a table-top thing (D81): a "DJ booth … with a laptop on it" isn't one.
+    if (TABLE_TOP.test(text) && !TABLE_TOP.test(name)) text = text.replace(new RegExp(TABLE_TOP, "gi"), " ");
   }
   if (/\b(backdrop|banner|sign|signage|screen|wall|poster|neon|logo|billboard|curtain|board)\b/i.test(text)) return "flat";
   if (/\b(pedestal|plinth|podium|lectern|column|display stand|display case|statue|sculpture|lamp|tree|plant)\b/i.test(text)) return "column";
@@ -376,7 +378,8 @@ export function planProps(staging: SceneStaging | undefined, group: boolean, C: 
     const text = `${p.name} ${p.detail}`;
     const kind = propKind(text, p.name);
     // Drinks, glasses and the like stand on the table everyone is at (D62), a little apart.
-    if (kind === "small" && centre && !centred) {
+    // Only onto a real surface (D81): two mugs were stood on a campfire.
+    if (kind === "small" && centre && !centred && SURFACE.test(centre.name)) {
       const n = onTop++;
       return { id: `prop-${i + 1}`, name: p.name, detail: p.detail, position: { x: +(centrePos.x + 0.12 * ((n % 3) - 1)).toFixed(2), y: +(centrePos.y - 0.08 * (1 + Math.floor(n / 3))).toFixed(2) }, radiusM: +(propWidth(text, kind) / 2).toFixed(2), heightM: propHeight(text, p.name), ...(p.imageAssetId ? { imageAssetId: p.imageAssetId } : {}) };
     }
@@ -394,7 +397,7 @@ export function planProps(staging: SceneStaging | undefined, group: boolean, C: 
 const SCENE_FORMAT = [
   "SCENE",
   "SPOT: where the characters are and whether they stand or sit (for example: standing around the cocktail table, near the bar)",
-  "PROP: name - size, height and colour, so it is drawn the same way every time (for example: cocktail table - round, about 70 cm across, chest-high at 110 cm, white floor-length cloth). Give a table the height people use it at: chest-high, about 110 cm, for standing round it; about 75 cm for sitting at it. One PROP line for each object that matters to the story or that the characters gather around; leave out ordinary furniture.",
+  "PROP: name - size, height and colour, so it is drawn the same way every time (for example: cocktail table - round, about 70 cm across, chest-high at 110 cm, white floor-length cloth). Give a table the height people use it at: chest-high, about 110 cm, for standing round it; about 75 cm for sitting at it. One PROP line for each object that matters to the story or that the characters gather around; leave out ordinary furniture. Always give each prop's height and width in centimetres or metres. Two of a thing that stand apart (two logs, two chairs) get a line each, named apart (left log, right log).",
   "OTHER PEOPLE: none, few or busy - who they are and what they are doing (for example: busy - about 40 well-dressed industry guests mingling with drinks)",
   "AREA: name - kind - size and how high, deep or steep, for each part of the ground the action happens on or in that isn't flat floor (for example: skate bowl - lowered - round, about 5 m across and 2 m deep; pool - water - 10 m by 5 m, 1.4 m deep; ski run - slope - 40 m long, falls 8 m; stage - raised - 6 m by 4 m, 1 m high). The kind is one of: raised, lowered, slope, water, steps, marked. An area is not a PROP. Leave AREA out when the floor is flat.",
 ];

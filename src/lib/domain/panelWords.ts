@@ -81,7 +81,7 @@ const r2 = (p: Point): Point => ({ x: +p.x.toFixed(2), y: +p.y.toFixed(2) });
 const degTo = (from: Point, to: Point) => Math.round((Math.atan2(to.y - from.y, to.x - from.x) * 180) / Math.PI);
 
 /** How someone is placed by an area (D80): in it, at its edge, at its far edge, at its top or foot. */
-export type AreaHow = "in" | "edge" | "far" | "top" | "bottom" | "farWall";
+export type AreaHow = "in" | "edge" | "far" | "top" | "bottom" | "farWall" | "mid";
 
 /**
  * Where someone stands for an area (D80). In it: on their own side of its middle. At its edge:
@@ -101,6 +101,17 @@ export function areaSpot(l: PlanLevel, how: AreaHow, from: Point, others?: Point
   // "Far" is far from the others (D80): the lip across the bowl from where the rest stand, not
   // from wherever this person happens to be.
   const awayFrom = others && Math.hypot(others.x - c.x, others.y - c.y) > 0.05 ? { x: others.x - c.x, y: others.y - c.y } : toward;
+  // Partway down a slope, or out in the middle of anything else (D81).
+  if (how === "mid") {
+    if (l.dropM) {
+      const u = { x: Math.cos(((l.fallDeg ?? 90) * Math.PI) / 180), y: Math.sin(((l.fallDeg ?? 90) * Math.PI) / 180) };
+      const top = rim({ x: -u.x, y: -u.y });
+      // About 8 m on from the top, or a third of the way down a short one.
+      const run = Math.min(8, (Math.hypot(top.x, top.y) * 2) / 3);
+      return r2({ x: c.x + top.x + u.x * (run + 0.6), y: c.y + top.y + u.y * (run + 0.6) });
+    }
+    return r2(c);
+  }
   if (how === "top" || how === "bottom") {
     if (l.dropM) {
       const u = { x: Math.cos(((l.fallDeg ?? 90) * Math.PI) / 180), y: Math.sin(((l.fallDeg ?? 90) * Math.PI) / 180) };
@@ -132,12 +143,14 @@ export function readPlace(words: string): { how: AreaHow | "beside"; what: strin
   const forms: [RegExp, AreaHow | "beside"][] = [
     [/^(?:(?:on|up|at|to|onto|up\s+on|up\s+to)\s+)?(?:the\s+)?(?:far|other|opposite)\s+(?:wall|face)\s+of\s+/i, "farWall"],
     [/^(?:(?:on|up|at|to|onto)\s+)?(?:the\s+)?(?:near\s+)?(?:wall|face)\s+of\s+/i, "in"],
+    [/^(?:(?:part|half|mid)[-\s]?way|further|some\s+way|a\s+(?:little|short)\s+way)\s+(?:down|up|along|across|into)\s+/i, "mid"],
+    [/^(?:down|out\s+on|out\s+in|in\s+the\s+(?:middle|centre|center)\s+of)\s+/i, "mid"],
     [/^(?:(?:on|at|to|onto)\s+)?(?:the\s+)?(?:far|other|opposite)\s+(?:edge|side|lip|rim|end|bank|shore)\s+of\s+/i, "far"],
     [/^(?:on\s+the\s+other\s+side\s+of|across)\s+/i, "far"],
     [/^(?:(?:on|at|to)\s+)?(?:the\s+)?(?:top|head|crest)\s+of\s+/i, "top"],
     [/^(?:(?:on|at|to)\s+)?(?:the\s+)?(?:bottom|foot|base)\s+of\s+/i, "bottom"],
     [/^(?:(?:on|at|by|to|along)\s+)?(?:the\s+)?(?:near\s+)?(?:edge|side|lip|rim|end|bank|shore|poolside)\s+of\s+/i, "edge"],
-    [/^(?:in|inside|into|down\s+in|in\s+the\s+middle\s+of|in\s+the\s+centre\s+of|in\s+the\s+center\s+of|on|onto|upon)\s+/i, "in"],
+    [/^(?:in|inside|into|down\s+in|on|onto|upon)\s+/i, "in"],
     [/^(?:beside|next\s+to|near|by|at|behind|in\s+front\s+of|close\s+to|with)\s+/i, "beside"],
   ];
   for (const [re, how] of forms) if (re.test(t)) return { how, what: t.replace(re, "").replace(/^(?:the|a|an|his|her|their|its)\s+/i, "").trim() };
@@ -182,7 +195,8 @@ export function blockingFromWords(plan: GeometryPlanData, panels: WordsPanel[], 
   const placeOf = (t: Target, from: Point, on: boolean): Point => {
     if (t.kind === "prop") { const p = propAt.get(t.f.id) ?? t.f.position; return on ? clamp(p) : beside({ position: p, radiusM: t.f.radiusM }, from); }
     if (t.kind === "area") return clamp(areaSpot(t.l, on ? "in" : "edge", from));
-    return towardWall(from, t.v.directionDeg, 1.0, 9);
+    // Outdoors the "walls" are far off (D81): going to the rail or the trees is a few paces.
+    return towardWall(from, t.v.directionDeg, 1.0, Math.min(b.maxX - b.minX, b.maxY - b.minY) >= 20 ? 3.5 : 9);
   };
   const nameOf = (t: Target) => (t.kind === "prop" ? t.f.name : t.kind === "area" ? t.l.name : t.v.name);
 
@@ -233,11 +247,21 @@ export function blockingFromWords(plan: GeometryPlanData, panels: WordsPanel[], 
         const rest = [...pos.entries()].filter(([k]) => k !== id && !left.has(k)).map(([, p]) => p);
         const others = rest.length ? { x: rest.reduce((a, p) => a + p.x, 0) / rest.length, y: rest.reduce((a, p) => a + p.y, 0) / rest.length } : undefined;
         if (t.kind === "area") spot = clamp(areaSpot(t.l, how === "beside" ? "edge" : how, from, others));
-        else if (how === "farWall") spot = placeOf(t, from, false);
+        else if (how === "farWall" || how === "mid") spot = placeOf(t, from, false);
         else spot = placeOf(t, from, how === "in");
-        why = `${how === "in" ? (t.kind === "area" && isIn(t.l) ? "in" : "on") : how === "far" ? "across" : how === "farWall" ? "on the far wall of" : "at"} the ${nameOf(t)}`;
+        why = `${how === "in" ? (t.kind === "area" && isIn(t.l) ? "in" : "on") : how === "far" ? "across" : how === "farWall" ? "on the far wall of" : how === "mid" ? "out on" : "at"} the ${nameOf(t)}`;
       }
       placed.add(id);
+      // Nobody shares a spot (D81): two people "at the top of the slope" stood on one point, and
+      // the camera chosen for them stood there too. The later one steps aside, a pace at a time.
+      if (spot) {
+        const taken = (q: Point) => [...pos.entries()].some(([k, o]) => k !== id && !left.has(k) && Math.hypot(o.x - q.x, o.y - q.y) < 0.75);
+        const c0 = centre();
+        const out0 = { x: spot.x - c0.x, y: spot.y - c0.y }, ol = Math.hypot(out0.x, out0.y);
+        const side = ol > 0.05 ? { x: -out0.y / ol, y: out0.x / ol } : { x: 1, y: 0 };
+        const base = spot;
+        for (let n = 1; n <= 6 && taken(spot); n++) { const k = Math.ceil(n / 2) * 0.9 * (n % 2 ? 1 : -1); spot = clamp({ x: base.x + side.x * k, y: base.y + side.y * k }); }
+      }
       if (!spot || Math.hypot(spot.x - from.x, spot.y - from.y) < 0.3) continue;
       out[id] = { at: spot, by: "app", why };
       pos.set(id, spot);

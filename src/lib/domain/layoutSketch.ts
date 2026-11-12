@@ -402,6 +402,21 @@ export function layoutSketchSvg(i: {
             + `<text x="${Math.min(W - 120, Math.max(120, s1.x)).toFixed(1)}" y="${Math.min(H - 12, Math.max(40, s1.y + (s1.y > s0.y ? 44 : -22))).toFixed(1)}" font-size="26" font-weight="700" text-anchor="middle" fill="#b45309" stroke="#fff" stroke-width="5" paint-order="stroke" font-family="sans-serif">WALKING THIS WAY</text>`;
         }
       }
+      // Down in a hollow (D81): the near rim hides their lower body from a camera on the floor.
+      // Drawn whole, a skater in a bowl looked as if he stood in front of it. Everything below
+      // the rim's line is cut off, as the camera would see it.
+      const hollow = levelAt(i.plan, a.position);
+      if (hollow && hollow.kind === "lowered" && levelAt(i.plan, cam.position) !== hollow) {
+        let rimPt = a.position;
+        for (let t = 0.02; t <= 1; t += 0.02) { const q = { x: a.position.x + (cam.position.x - a.position.x) * t, y: a.position.y + (cam.position.y - a.position.y) * t }; if (levelAt(i.plan, q) !== hollow) { rimPt = q; break; } }
+        const ry = toScreen(rimPt, 0).y;
+        if (ry < feet.y && rimPt !== a.position) {
+          const cid = `rim-${k}`;
+          svg = `<clipPath id="${cid}"><rect x="0" y="0" width="${W}" height="${Math.max(0, ry).toFixed(1)}"/></clipPath><g clip-path="url(#${cid})">${svg}</g>`;
+          items.push({ depth: head.depth, svg: `${svg}</g>` });
+          return;
+        }
+      }
       items.push({ depth: head.depth, svg: `${svg}</g>` });
       return;
     }

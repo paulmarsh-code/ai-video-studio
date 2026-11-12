@@ -16,6 +16,7 @@ const KINDS: { re: RegExp; size: RoomSize; label: string }[] = [
   { re: /\b(living\s+room|lounge|sitting\s+room|cafe|coffee\s+shop|shop|boutique|classroom|studio|salon|pub|diner|waiting\s+room|ward|library|boardroom)\b/i, size: { widthM: 7, depthM: 8 }, label: "a medium room" },
   { re: /\b(bar|restaurant|club|nightclub|gallery|lobby|reception|bistro|lounge\s+bar|cocktail\s+bar|hospitality\s+suite)\b/i, size: { widthM: 10, depthM: 11 }, label: "a large room" },
   { re: /\b(hall|ballroom|warehouse|church|cathedral|gym|gymnasium|theatre|theater|auditorium|function\s+room|event\s+space|events?\s+venue|showroom|concourse|atrium|launch|conference|banqueting|exhibition|hangar|factory|terminal|station)\b/i, size: { widthM: 18, depthM: 22 }, label: "a hall" },
+  { re: /\b(deck|yacht|boat|barge|ferry|raft|clearing|campsite|patio|terrace|yard|balcony|porch|jetty|bandstand)\b/i, size: { widthM: 8, depthM: 12 }, label: "a small open space" },
   { re: /\b(outdoors?|outside|exterior|street|road|park|beach|garden|field|meadow|rooftop|roof\s+terrace|square|car\s+park|parking|cliff|stadium|pitch|forest|woods?|mountain|hill|desert|harbour|harbor|dock|pier|riverside|lake|countryside|courtyard|playground|market)\b/i, size: { widthM: 30, depthM: 30 }, label: "open ground outdoors" },
 ];
 
@@ -23,7 +24,10 @@ const KINDS: { re: RegExp; size: RoomSize; label: string }[] = [
 export function guessRoom(text0: string, setting?: string): RoomSize & { label: string } {
   const text = text0.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // café → cafe
   // The most specific match wins: a "hotel bar" is a bar, a "car park" outdoors.
-  for (const k of KINDS) if (k.re.test(text)) return { ...k.size, label: k.label };
+  // Outdoors, only the outdoor kinds are read (D81): "flat green farmland" made an airfield a
+  // small room, as a flat.
+  const open = KINDS.slice(-2);
+  for (const k of setting === "exterior" ? open : KINDS) if (k.re.test(text)) return { ...k.size, label: k.label };
   if (setting === "exterior") return { widthM: 30, depthM: 30, label: "open ground outdoors" };
   return { ...DEFAULT_ROOM, label: "a medium-large room" };
 }

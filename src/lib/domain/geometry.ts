@@ -539,7 +539,8 @@ function settleProps(plan: GeometryPlanData): GeometryPlanData {
   const furniture = plan.furniture;
   if (!furniture?.length) return plan;
   const kindOf = (f: { name: string; detail?: string }) => propKind(`${f.name} ${f.detail ?? ""}`, f.name);
-  const tables = furniture.filter((f) => !f.heldBy && kindOf(f) === "table");
+  // Real surfaces only (D81): two enamel mugs were stood on a campfire, the nearest "table".
+  const tables = furniture.filter((f) => !f.heldBy && kindOf(f) === "table" && /\b(table|counter|bar|desk|island|bench|shelf|stand|trolley|cart|cabinet|sideboard|worktop|ledge|crate|stool|booth|bed|sofa|couch|rug|blanket|mat|tray)\b/i.test(f.name));
   let changed = false;
   // A prop the words give to someone (D78), "held by Rosa", "used by Kai", is theirs: in their
   // hand, not on the floor. A skate park's phone was stood on a ledge as a box, and the
@@ -604,7 +605,12 @@ export function planForShot(plan: GeometryPlanData, shot?: { at?: Record<string,
     if (!d || d.action === "stand" || d.action === "walk") return a;
     // Sitting, lying, kneeling or crouching said as an action is a posture too (D37), unless one is set.
     const pose = ({ sit: "sitting", drive: "sitting", lie: "lying", kneel: "kneeling", crouch: "crouching" } as Partial<Record<ActionKind, Pose>>)[d.action];
-    return { ...a, doing: d, ...(pose && (!a.pose || a.pose === "standing") ? { pose } : {}) };
+    // Up and moving (D81): someone falling, riding or running isn't still kneeling from the panel before.
+    const up = ["ride", "run", "swim", "dive", "jump", "fall", "climb", "dance", "fight", "kick", "throw", "catch"].includes(d.action);
+    if (up) { const { pose: _p, poseOn: _o, ...rest } = a; return { ...rest, doing: d }; }
+    // A posture said as the action isn't said twice (the label read "KNEELING, KNEELING").
+    if (pose) return { ...a, pose: !a.pose || a.pose === "standing" ? pose : a.pose };
+    return { ...a, doing: d };
   };
   if ((!at || !Object.keys(at).length) && (!bl || !Object.keys(bl).length) && (!po || !Object.keys(po).length)) {
     return atSeatedEyeLevel(settleProps(Object.keys(doing).length ? { ...plan, actors: plan.actors.map(withDoing) } : plan), shot?.visibleIds);

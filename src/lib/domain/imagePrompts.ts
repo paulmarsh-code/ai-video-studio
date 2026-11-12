@@ -762,7 +762,7 @@ export function doingWords(who: string, d: Doing): string {
     jump: "is in the air, mid-jump, feet off the ground", fall: "is falling", climb: `is climbing${the}`, run: "is running", dance: "is dancing",
     fight: "is fighting", throw: `is throwing${the}`, kick: `is kicking${the}`, catch: `is catching${the}`, phone: "is on the phone, holding it to the ear",
     read: `is reading${the}`, write: `is writing${d.with ? ` on${the}` : ""}`, type: `is typing${d.with ? ` on${the}` : ""}`, eat: `is eating${the}`,
-    drink: `is drinking${the}`, cook: `is cooking${the}`, play: `is playing${the}`,
+    drink: `is drinking${the}`, cook: `is cooking${d.with ? ` with the ${d.with}` : ""}`, play: `is playing${the}`,
   };
   return w[d.action] ? `${who} ${w[d.action]}` : "";
 }

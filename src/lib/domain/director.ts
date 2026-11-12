@@ -778,6 +778,20 @@ function aimAcrossLevels(d: ShotDesign, plan: GeometryPlanData, sh: ShotInput | 
       const camAbs = cameraZ(sp, o.camera);
       const group = o.camera.povId || o.camera.preset === "main-ots" || o.camera.preset === "reverse-ots" || o.camera.preset === "single-cu" ? [] : (sh.spec.visibleIds ?? []).map((id) => sp.actors.find((a) => a.characterId === id)?.position).filter((p): p is Point => !!p);
       const faces = group.length > 1 ? group : [T];
+      // Someone well below the camera's floor (D81: down in a skate bowl, an empty pool, a
+      // trench): from eye level the near rim hides all but their head, so the camera goes up
+      // to see in, as a crew would climb a ladder.
+      const lowest = Math.min(...faces.map((p) => floorZ(sp, p)));
+      const camFloor = floorZ(sp, o.camera.position);
+      if (!o.camera.povId && camFloor - lowest >= 1 && (o.camera.heightM ?? 1.6) < 3) {
+        const cam2 = { ...o.camera, heightM: 3 };
+        const aim2 = faces.reduce((t, p) => t + floorZ(sp, p) + 1.5, 0) / faces.length;
+        const C2 = { x: faces.reduce((t, p) => t + p.x, 0) / faces.length, y: faces.reduce((t, p) => t + p.y, 0) / faces.length };
+        const d2 = Math.max(0.5, Math.hypot(C2.x - cam2.position.x, C2.y - cam2.position.y));
+        const tilt2 = Math.round((Math.atan((aim2 - (camFloor + 3)) / d2) * 180) / Math.PI);
+        const who = sp.actors.find((a) => floorZ(sp, a.position) === lowest);
+        return { ...o, camera: { ...cam2, tiltDeg: tilt2 }, reasons: [...o.reasons, `R-LEVEL: ${who ? name(who.characterId) : "someone"} is ${Math.round((camFloor - lowest) * 10) / 10} m below the floor: the camera goes up to 3 m and tilts down ${Math.abs(tilt2)}° to see in over the edge`] };
+      }
       const aim = faces.reduce((t, p) => t + floorZ(sp, p) + 1.5, 0) / faces.length;
       const C = { x: faces.reduce((t, p) => t + p.x, 0) / faces.length, y: faces.reduce((t, p) => t + p.y, 0) / faces.length };
       const dist = Math.max(0.5, Math.hypot(C.x - o.camera.position.x, C.y - o.camera.position.y));

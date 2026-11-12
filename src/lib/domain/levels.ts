@@ -114,7 +114,7 @@ type Bounds = NonNullable<GeometryPlanData["bounds"]>;
 
 const ON = String.raw`\b(?:on|onto|up\s+on|upon|at|along|across|from|standing\s+on|stood\s+on|out\s+on)\s+(?:the\s+|a\s+|an\s+)?`;
 const STAGE = new RegExp(`${ON}(?:\\w+\\s+)?(?:stage|platform|podium|dais|stand|catwalk|runway|bandstand|rostrum)\\b`, "i");
-const BALCONY = new RegExp(`${ON}(?:\\w+\\s+)?(?:balcony|mezzanine|gallery|landing|upper\\s+(?:floor|level|deck)|walkway|terrace\\s+above|minstrels['’]?\\s+gallery)\\b|\\blooking\\s+down\\s+(?:on|at|over)\\s+the\\s+(?:hall|crowd|room|street|dance\\s?floor|square|courtyard|guests)\\b`, "i");
+const BALCONY = new RegExp(`${ON}(?:\\w+\\s+)?(?:balcony|mezzanine|gallery|landing(?!\\s+(?:field|strip|zone|pad|stage|area|site|gear|ground))|upper\\s+(?:floor|level|deck)|walkway|terrace\\s+above|minstrels['’]?\\s+gallery)\\b|\\blooking\\s+down\\s+(?:on|at|over)\\s+the\\s+(?:hall|crowd|room|street|dance\\s?floor|square|courtyard|guests)\\b`, "i");
 const CLIFF = /\b(?:cliff\s?(?:top|edge)?|clifftop|edge\s+of\s+(?:a|the)\s+cliff|precipice|crag|gorge\s+edge|canyon\s+(?:edge|rim)|rim\s+of\s+the\s+(?:canyon|gorge))\b/i;
 const ROOF = /\b(?:roof\s?top|on\s+the\s+roof|roof\s+edge|edge\s+of\s+the\s+roof|top\s+of\s+(?:the|a)\s+(?:building|tower|skyscraper|block)|ledge)\b/i;
 const BRIDGE = /\b(?:on|across|from|over)\s+(?:the|a)\s+(?:\w+\s+)?bridge\b/i;
