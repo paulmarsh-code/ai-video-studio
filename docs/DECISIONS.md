@@ -1588,3 +1588,96 @@ The last two need a design, set out below. Four plain faults also showed, each o
 - T8 (the ski slope) and T11 (the skydive) will show the same gap. Per the test rule (two scenes before a fix), it is designed once T8 confirms it.
 
 **Tested.** All unit tests pass. On a copy of Paul's skate park scene, the phone and skateboard are now Rosa's and Kai's, and the floor props are the ledge and the bowl.
+
+### D79: Plan for places, actions and things that move adopted (2026-11-12)
+
+Paul approved `VP_Places_Actions_Movers_Plan_v0.2` (in the Project).
+- **What it covers.** Paul's three lists:
+  - people in cars, chases, swimming, sport, zoos, jungles and deserts;
+  - 100 settings and the iconic scene types;
+  - 100 short film ideas.
+- **The building blocks:**
+  1. setting kinds;
+  2. areas;
+  3. actions;
+  4. where each person is per panel;
+  5. things that move;
+  6. groups;
+  7. changes over time;
+  8. cameras for action;
+  - plus hands, screens and voices, and a few special shots.
+- **Seven stages,** each tested on two scenes before the next:
+  1. areas, actions, places per panel, cameras that see the action;
+  2. hands, screens and voices;
+  3. things that move;
+  4. inside vehicles and one scene per place;
+  5. groups and sport;
+  6. changes over time;
+  7. special shots.
+- **Rules kept:**
+  - no 3D room: areas are shapes with heights on the top-down plan (D29);
+  - words come from the existing story-to-panels step, from fixed lists;
+  - corrections stay on the floor plan.
+
+### D80: Stage 1: areas, actions, places per panel, cameras that see the action (2026-11-12)
+
+**Failure (T7, the skate park).** Panels 2 and 3 lost the bowl and the trick:
+- the bowl was a 13 cm table-top "bowl";
+- Kai stood beside Rosa, because image 1 said "standing";
+- the cameras faced the steps.
+
+**What's built.** Stage 1 of `VP_Places_Actions_Movers_Plan_v0.2` (D79), all from the words of the existing story-to-panels step:
+
+1. **Areas (`AREA:` in the setting).**
+   - **Kinds:** a part of the ground that's raised, lowered, a slope, steps, water or marked, with its size, depth, height or fall.
+   - **Stored as** `PlanLevel`s (D29) with `kind`, `round`, `dropM` and `fallDeg` (slopes and tiers) and `waterM`.
+   - **Placed at real size beside the group:** towards the venue view that names it (the "deep bowl and street section" view for a skate bowl), else behind the group; or centred on them when the spot puts them in it.
+   - **The plan's bounds grow** to hold them, as a ski run outgrows any room.
+   - **A prop of the same name gives way:** it was the area misread.
+   - **Added to existing plans** when the setting or the story is saved, even with positions approved: nothing approved moves.
+   - **Shown on the setting card,** where they can be removed.
+2. **Actions (`DOING:` per person per panel),** from a fixed list of 27:
+   - stand, walk, run, sit, lie, kneel, crouch;
+   - ride, drive, swim, dive, jump, fall, climb, dance;
+   - fight, throw, kick, catch;
+   - phone, read, write, type, eat, drink, cook, play.
+
+   Each has what it's on or with: "ride (skateboard)". With no DOING, clear verbs in the panel's words are read (English, with "runs her hand", "falls silent" and the like left out). Sitting, lying, kneeling and crouching set the posture (D37) too.
+3. **Where each person is (`PLACE:` per person per panel).**
+   - **Ways of placing:** in, at the edge, on the far lip, up the far wall, at the top or foot, beside someone.
+   - **"Far"** is away from the others, not from where that person happens to be.
+   - **New verbs** move people into areas too: drops into, dives into, rides, skates, swims, climbs.
+   - **Carried on panel to panel** (D35, D36), and applied on save even with positions approved.
+4. **Image 1.**
+   - **Areas drawn at true size:** a hollow's rim and shaded hole, water in blue at its surface, a slope with an arrow down it, tiers with lines, a marked floor outlined. Labelled with depth, fall or height.
+   - **A hollow's bottom isn't drawn:** the near rim hides it, and drawn it showed as a second ellipse.
+   - **Stand-ins:** the label says the action ("RIDING SKATEBOARD"); a board or skis are drawn under the feet; a jumper is lifted, with a shadow; a swimmer is under blue to the shoulders.
+5. **The request.**
+   - A "Doing:" line.
+   - The area lines (who is in it and how far below; what is in view), now in the short request too.
+   - The legend names areas and label actions.
+   - Something ridden isn't "in his right hand".
+   - A prop held is said once, in the hand the profile already has it in.
+6. **Cameras.**
+   - A shot scores +2 when the area its people are in or by is in view, −2 when it isn't.
+   - A shot of people on different floors aims between their faces.
+   - A prop hides a face when its top rises above the line from the lens to that face, each from its own floor, so a knee-high ledge on the rim hides a skater down in the bowl. Named two-shots now avoid that too.
+   - No camera stands in water or down in a hollow.
+7. **Also:**
+   - A height said against the body ("knee-high", "hip-high") is that height: "knee-high" had matched "high" and stood 1.1 m.
+   - The stored height gives way to it.
+
+**Checked on a copy of Paul's skate park**, re-run with a reply in the new format:
+- **Panel 1:** both on the rim, the bowl in front, its outline on the real bowl in the venue picture.
+- **Panel 2:** Kai in the bowl, riding, Rosa on the rim; the camera tilts down between them, clear of the ledge.
+- **Panel 3:** Kai up the far wall.
+- **Panel 4:** Kai on the far lip, over Rosa's shoulder, the bowl between them.
+- Every camera has the bowl in view.
+
+**Limits.**
+- Fences and glass (barriers) are read but not yet placed.
+- A person down in a hollow is drawn whole, through the rim.
+- Over-the-shoulder framing words still don't follow image 1 (D78).
+- Big areas (a pitch, a long ski run) grow the plan, but the venue's views are still a 10–15 m room (stage 5).
+
+**Tests:** `tests/places.d80.test.ts`. All 664 tests pass.

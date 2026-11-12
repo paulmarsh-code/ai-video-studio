@@ -7,7 +7,7 @@ import { cameraZ, floorZ, levelAt } from "./levels";
 import { facingOf, horizontalFov } from "./geometry";
 import { itemNoun } from "./imagePrompts";
 import { propKind } from "./story";
-import type { GeometryPlanData, PlanCamera } from "./types";
+import type { ActionKind, Doing, GeometryPlanData, PlanCamera } from "./types";
 
 export interface SketchPerson {
   id: string;
@@ -24,6 +24,17 @@ const COLOURS = ["#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c", "#0891b2
 const EYE_HEIGHT = 1.6; // camera at eye level
 const BODY_WIDTH = 0.46;
 const TABLE_HEIGHT = 1.1; // a standing cocktail table
+
+/** "RIDING SKATEBOARD", "ON THE PHONE": what someone is doing, for their stand-in's label (D80). */
+export function doingLabel(d: Doing): string {
+  const verb: Record<ActionKind, string> = {
+    stand: "STANDING", walk: "WALKING", run: "RUNNING", sit: "SITTING", lie: "LYING", kneel: "KNEELING", crouch: "CROUCHING",
+    ride: "RIDING", drive: "DRIVING", swim: "SWIMMING", dive: "DIVING", jump: "JUMPING", fall: "FALLING", climb: "CLIMBING",
+    dance: "DANCING", fight: "FIGHTING", throw: "THROWING", kick: "KICKING", catch: "CATCHING", phone: "ON THE PHONE",
+    read: "READING", write: "WRITING", type: "TYPING", eat: "EATING", drink: "DRINKING", cook: "COOKING", play: "PLAYING",
+  };
+  return `${verb[d.action]}${d.with ? ` ${d.with.toUpperCase()}` : ""}`;
+}
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
@@ -85,10 +96,15 @@ export function layoutSketchSvg(i: {
   for (const l of i.plan.levels ?? []) {
     // Over a real background (D34) the room's own balconies and drops are already in the
     // picture; only an area the cast stands on is outlined.
-    if (OV && !i.plan.actors.some((x) => levelAt(i.plan, x.position) === l)) continue;
-    const corners = [{ x: l.x, y: l.y }, { x: l.x + l.w, y: l.y }, { x: l.x + l.w, y: l.y + l.d }, { x: l.x, y: l.y + l.d }];
+    // An area from the scene's setting (D80) isn't in the venue's pictures at its place and size:
+    // it is always drawn.
+    if (OV && !l.kind && !i.plan.actors.some((x) => levelAt(i.plan, x.position) === l)) continue;
+    const corners = l.round
+      ? Array.from({ length: 28 }, (_, k) => { const t = (k / 28) * 2 * Math.PI; return { x: l.x + l.w / 2 + Math.cos(t) * (l.w / 2), y: l.y + l.d / 2 + Math.sin(t) * (l.d / 2) }; })
+      : [{ x: l.x, y: l.y }, { x: l.x + l.w, y: l.y }, { x: l.x + l.w, y: l.y + l.d }, { x: l.x, y: l.y + l.d }];
     // Shift each corner 1 cm inward, so it reads as standing on this level, not the floor around it.
-    const inner = corners.map((c) => ({ x: c.x + (c.x === l.x ? 0.01 : -0.01), y: c.y + (c.y === l.y ? 0.01 : -0.01) }));
+    const cxl = l.x + l.w / 2, cyl = l.y + l.d / 2;
+    const inner = corners.map((c) => ({ x: c.x + Math.sign(cxl - c.x) * 0.01, y: c.y + Math.sign(cyl - c.y) * 0.01 }));
     const at = (p: { x: number; y: number }, z: number) => toScreen(p, z - floorZ(i.plan, p));
     const clip = (pts: { x: number; y: number }[], z: number) => {
       const out: { x: number; y: number }[] = [];
@@ -105,8 +121,31 @@ export function layoutSketchSvg(i: {
     if (top.length < 3) continue;
     const far = Math.max(...top.map((p) => at(p, l.heightM).depth));
     const raised = l.heightM > 0;
+    const sloped = !!l.dropM;
     let svg = "";
-    if (raised) {
+    if (sloped) {
+      // A slope or tiers (D80): its surface at its own height, falling (or rising) away, with an
+      // arrow down it, or tier lines across it.
+      const surf = (pts: { x: number; y: number }[]) => pts.map((p) => { const q = toScreen(p, 0); return `${q.x.toFixed(1)},${q.y.toFixed(1)}`; }).join(" ");
+      svg += `<polygon points="${surf(top)}" fill="${l.kind === "steps" ? "#e7e5e4" : "#f1f5f9"}" fill-opacity="0.75" stroke="#475569" stroke-width="3"/>`;
+      const u = { x: Math.cos(((l.fallDeg ?? 90) * Math.PI) / 180), y: Math.sin(((l.fallDeg ?? 90) * Math.PI) / 180) };
+      const ext = Math.abs(u.x) * (l.w / 2) + Math.abs(u.y) * (l.d / 2);
+      if (l.kind === "steps") {
+        for (let k = 1; k < 5; k++) {
+          const t = -ext + (2 * ext * k) / 5, side = { x: -u.y, y: u.x }, half2 = Math.abs(side.x) * (l.w / 2) + Math.abs(side.y) * (l.d / 2);
+          const a1 = { x: cxl + u.x * t + side.x * half2, y: cyl + u.y * t + side.y * half2 }, a2 = { x: cxl + u.x * t - side.x * half2, y: cyl + u.y * t - side.y * half2 };
+          const q1 = toScreen(a1, 0), q2 = toScreen(a2, 0);
+          if (q1.depth > near && q2.depth > near) svg += `<line x1="${q1.x.toFixed(1)}" y1="${q1.y.toFixed(1)}" x2="${q2.x.toFixed(1)}" y2="${q2.y.toFixed(1)}" stroke="#78716c" stroke-width="2"/>`;
+        }
+      } else {
+        const q1 = toScreen({ x: cxl - u.x * ext * 0.6, y: cyl - u.y * ext * 0.6 }, 0.05), q2 = toScreen({ x: cxl + u.x * ext * 0.6, y: cyl + u.y * ext * 0.6 }, 0.05);
+        if (q1.depth > near && q2.depth > near) {
+          const ang = Math.atan2(q2.y - q1.y, q2.x - q1.x);
+          svg += `<line x1="${q1.x.toFixed(1)}" y1="${q1.y.toFixed(1)}" x2="${q2.x.toFixed(1)}" y2="${q2.y.toFixed(1)}" stroke="#475569" stroke-width="5" stroke-dasharray="16 10"/>`
+            + `<polygon points="${q2.x.toFixed(1)},${q2.y.toFixed(1)} ${(q2.x - 26 * Math.cos(ang - 0.45)).toFixed(1)},${(q2.y - 26 * Math.sin(ang - 0.45)).toFixed(1)} ${(q2.x - 26 * Math.cos(ang + 0.45)).toFixed(1)},${(q2.y - 26 * Math.sin(ang + 0.45)).toFixed(1)}" fill="#475569"/>`;
+        }
+      }
+    } else if (raised) {
       // Only the sides that face the camera (corners run anticlockwise), then the top if the
       // lens is above it; from below you see the front, not the top.
       for (let k = 0; k < top.length; k++) {
@@ -121,17 +160,33 @@ export function layoutSketchSvg(i: {
           svg += `<polygon points="${poly([a, b2], l.heightM + 1)} ${poly([b2, a], l.heightM)}" fill="none" stroke="#57534e" stroke-width="2" stroke-dasharray="3 5"/>`;
         }
       }
-    } else {
+    } else if (l.kind === "water") {
+      // Water (D80): the rim at floor level, and the surface a little below it, blue.
+      const surface = l.heightM + (l.waterM ?? 0);
+      svg += `<polygon points="${poly(top, surface)}" fill="#38bdf8" fill-opacity="0.55" stroke="#0369a1" stroke-width="3"/>`;
+      svg += `<polygon points="${poly(top, 0)}" fill="none" stroke="#0c4a6e" stroke-width="4"/>`;
+    } else if (l.kind === "lowered") {
+      // A hollow from the setting (D80), a skate bowl or a pit: its rim at floor level, the hole
+      // shaded. Its bottom is hidden by the near rim from any camera on the floor, so it isn't
+      // drawn (it showed as a second ellipse in front of the rim); anyone in it stands lower.
+      svg += `<polygon points="${poly(top, 0)}" fill="#64748b" fill-opacity="0.35"/>`;
+      svg += `<polygon points="${poly(top, 0)}" fill="none" stroke="#334155" stroke-width="4" stroke-dasharray="14 8"/>`;
+    } else if (l.heightM < 0) {
       // A drop or pit: nothing to stand on at floor level (pale), the far floor below darker,
       // and the edge as a heavy dashed line.
       svg += `<polygon points="${poly(top, 0)}" fill="#e0f2fe"/>`;
       svg += `<polygon points="${poly(top, l.heightM)}" fill="#94a3b8" fill-opacity="0.6" stroke="#64748b" stroke-width="2"/>`;
       svg += `<polygon points="${poly(top, 0)}" fill="none" stroke="#334155" stroke-width="4" stroke-dasharray="14 8"/>`;
+    } else {
+      // A marked area at floor level (D80): its outline.
+      svg += `<polygon points="${poly(top, 0.01)}" fill="#dcfce7" fill-opacity="0.35" stroke="#15803d" stroke-width="3"/>`;
     }
-    const cz = Math.max(0, l.heightM);
-    const pts = top.map((p) => at(p, cz));
+    const cz = sloped || l.kind === "lowered" ? 0 : Math.max(0, l.heightM);
+    const pts = top.map((p) => (sloped ? toScreen(p, 0) : at(p, cz)));
     const mid = { x: pts.reduce((t, q) => t + q.x, 0) / pts.length, y: Math.min(H - 60, pts.reduce((t, q) => t + q.y, 0) / pts.length), depth: Math.max(...pts.map((q) => q.depth)) };
-    if (mid.depth > near) svg += `<text x="${mid.x.toFixed(1)}" y="${mid.y.toFixed(1)}" font-size="22" text-anchor="middle" fill="#44403c" font-family="sans-serif">${esc(l.name)} (${l.heightM > 0 ? "+" : ""}${Math.round(l.heightM * 10) / 10} m)</text>`;
+    const r1 = (n: number) => Math.round(Math.abs(n) * 10) / 10;
+    const what = l.kind === "water" ? `water ${r1(l.waterM ?? 0)} m deep` : l.kind === "steps" ? `rises ${r1(l.dropM ?? 0)} m` : sloped ? `falls ${r1(l.dropM ?? 0)} m this way` : l.kind === "lowered" ? `${r1(l.heightM)} m deep` : l.kind === "marked" ? "" : `${l.heightM > 0 ? "+" : ""}${Math.round(l.heightM * 10) / 10} m`;
+    if (mid.depth > near) svg += `<text x="${mid.x.toFixed(1)}" y="${mid.y.toFixed(1)}" font-size="22" text-anchor="middle" fill="#44403c"${l.kind ? ' font-weight="700" stroke="#fff" stroke-width="5" paint-order="stroke"' : ""} font-family="sans-serif">${esc(l.name)}${what ? ` (${what})` : ""}</text>`;
     items.push({ depth: far + 50, svg: `<g>${svg}</g>` });
   }
 
@@ -226,7 +281,14 @@ export function layoutSketchSvg(i: {
     const seatProp = a.poseOn ? (i.plan.furniture ?? []).find((x) => a.poseOn!.toLowerCase().includes(x.name.toLowerCase())) : undefined;
     const seatZ = seatProp?.heightM ?? (a.poseOn && /\b(bed|sofa|couch|settee|bench|chair|seat|stool|armchair)\b/i.test(a.poseOn) ? 0.5 : a.pose === "lying" ? 0.12 : 0.45);
     const h = a.pose === "sitting" ? seatZ + 0.85 : a.pose === "kneeling" ? 1.25 : a.pose === "crouching" ? 1.0 : (p.heightM ?? 1.72);
-    const poseWord = a.pose && a.pose !== "standing" ? `${a.pose.toUpperCase()}${a.poseOn ? ` ON ${a.poseOn.replace(/^the\s+/i, "").toUpperCase()}` : ""}` : "";
+    const poseWord0 = a.pose && a.pose !== "standing" ? `${a.pose.toUpperCase()}${a.poseOn ? ` ON ${a.poseOn.replace(/^the\s+/i, "").toUpperCase()}` : ""}` : "";
+    // What they're doing (D80), on the label: what image 1 says is what GPT draws.
+    const act = a.doing ? doingLabel(a.doing) : "";
+    const poseWord = act && poseWord0 && ["sit", "lie", "kneel", "crouch", "drive"].includes(a.doing!.action) ? `${poseWord0}, ${act}` : act && poseWord0 ? `${poseWord0}, ${act}` : act || poseWord0;
+    // Off the ground (D80): jumping or diving, or swimming with the head just above the water.
+    const water = levelAt(i.plan, a.position)?.kind === "water" ? levelAt(i.plan, a.position) : undefined;
+    const surfaceAbove = water ? (water.waterM ?? 0) : 0; // the surface, above the area's floor
+    const lift = a.doing?.action === "jump" ? 0.5 : a.doing?.action === "dive" ? 0.8 : water && (a.doing?.action === "swim" || surfaceAbove > 1.3) ? Math.max(0, surfaceAbove - 1.45) : 0;
     if (a.pose === "lying") {
       const col = COLOURS[k % COLOURS.length];
       const bold = p.id === i.subjectId;
@@ -249,12 +311,12 @@ export function layoutSketchSvg(i: {
       });
       return;
     }
-    const head = toScreen(a.position, h - 0.12);
+    const head = toScreen(a.position, lift + h - 0.12);
     if (head.depth < near) return;
-    const feet = toScreen(a.position, 0);
+    const feet = toScreen(a.position, lift);
     const half = (BODY_WIDTH / 2 / head.depth) * focal;
     const headR = (0.12 / head.depth) * focal;
-    const shoulders = toScreen(a.position, h - 0.3);
+    const shoulders = toScreen(a.position, lift + h - 0.3);
     if (head.x + half < 0 || head.x - half > W) return; // out of frame
     const col = COLOURS[k % COLOURS.length];
     const bold = p.id === i.subjectId;
@@ -309,6 +371,21 @@ export function layoutSketchSvg(i: {
         const bw = Math.max(70, fs2 * (noun.length * 0.62 + 1));
         svg += `<rect x="${(mx - bw / 2).toFixed(1)}" y="${(hp.y - fs2 * 0.8).toFixed(1)}" width="${bw.toFixed(1)}" height="${(fs2 * 1.5).toFixed(1)}" rx="6" fill="#fef3c7" stroke="#b45309" stroke-width="3"/>`
           + `<text x="${mx.toFixed(1)}" y="${(hp.y + fs2 * 0.25).toFixed(1)}" font-size="${(fs2 * 0.85).toFixed(0)}" font-weight="700" text-anchor="middle" fill="#92400e" font-family="sans-serif">${esc(noun)}</text>`;
+      }
+      // Riding a board or skis (D80): it under their feet.
+      if (a.doing?.action === "ride" && !/\b(horse|bike|bicycle|motorbike|motorcycle|car|scooter)\b/i.test(a.doing.with ?? "")) {
+        const bw = half * (/ski/i.test(a.doing.with ?? "") ? 3.2 : 2.4);
+        svg += `<line x1="${(feet.x - bw / 2).toFixed(1)}" y1="${feet.y.toFixed(1)}" x2="${(feet.x + bw / 2).toFixed(1)}" y2="${feet.y.toFixed(1)}" stroke="#1f2937" stroke-width="${Math.max(6, half * 0.18).toFixed(1)}" stroke-linecap="round"/>`;
+      }
+      // Off the ground: a shadow on the floor below them.
+      if (lift && !water) {
+        const sh = toScreen(a.position, 0);
+        svg += `<ellipse cx="${sh.x.toFixed(1)}" cy="${sh.y.toFixed(1)}" rx="${half.toFixed(1)}" ry="${(half * 0.25).toFixed(1)}" fill="#111" fill-opacity="0.25"/>`;
+      }
+      // In water: the body below the surface, under blue.
+      if (water) {
+        const sy = toScreen(a.position, surfaceAbove).y;
+        if (feet.y > sy) svg += `<rect x="${(head.x - half * 1.4).toFixed(1)}" y="${sy.toFixed(1)}" width="${(half * 2.8).toFixed(1)}" height="${(feet.y - sy + 4).toFixed(1)}" fill="#0ea5e9" fill-opacity="0.6"/>`;
       }
       // The way they are walking (D34): an arrow on the floor from their feet.
       if (to) {

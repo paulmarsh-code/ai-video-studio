@@ -42,7 +42,23 @@ export interface PlanActor {
   pose?: Pose;
   /** What they sit or lie on, in words ("the bed") (D37). */
   poseOn?: string;
+  /** What they are doing in this panel (D80): riding, swimming, on the phone…; set per shot. */
+  doing?: Doing;
 }
+
+/**
+ * What someone is doing (D80), from a fixed list, so the stand-in, the request and the check
+ * mean the same whatever the story: the panel writer picks from these words.
+ */
+export const ACTIONS = ["stand", "walk", "run", "sit", "lie", "kneel", "crouch", "ride", "drive", "swim", "dive", "jump", "fall", "climb", "dance", "fight", "throw", "kick", "catch", "phone", "read", "write", "type", "eat", "drink", "cook", "play"] as const;
+export type ActionKind = (typeof ACTIONS)[number];
+
+/** An action and what it's on or with ("ride", "skateboard"). */
+export interface Doing { action: ActionKind; with?: string }
+
+/** Kinds of area (D80): parts of the ground the story happens on or in that aren't flat floor. */
+export const AREA_KINDS = ["raised", "lowered", "slope", "water", "steps", "marked", "barrier"] as const;
+export type AreaKind = (typeof AREA_KINDS)[number];
 
 /** How someone's body is (D37): it carries on from panel to panel until the words change it. */
 export type Pose = "standing" | "sitting" | "lying" | "kneeling" | "crouching";
@@ -145,6 +161,17 @@ export interface PlanLevel {
   x: number; y: number; w: number; d: number;
   /** How its edge looks: a railing (balcony), steps, or a sheer drop (cliff, roof edge). */
   edge?: "railing" | "steps" | "drop" | "plain";
+  /** An area from the scene's setting (D80): what kind, from a fixed list. Older levels have none. */
+  kind?: AreaKind;
+  /** Round (a bowl, a round pool, a ring of stones): the ellipse inside its box. */
+  round?: boolean;
+  /** A slope (D80): `heightM` is its top; it falls `dropM` metres across the box towards `fallDeg`. */
+  dropM?: number;
+  fallDeg?: number;
+  /** Water (D80): its depth above the area's floor; the surface is at `heightM + waterM`. */
+  waterM?: number;
+  /** The setting's own words for it: size, surface, colour. */
+  detail?: string;
 }
 
 export interface GeometryPlanData {
@@ -218,6 +245,10 @@ export interface ShotSpec {
   blocking?: Record<string, PanelBlock>;
   /** Everyone's posture in this panel (D37), worked out by the app from the words, carried on, or set by you. */
   posture?: Record<string, PoseEntry>;
+  /** Where each person is in this panel, in the panel writer's words (D80): "in the skate bowl". */
+  where?: Record<string, string>;
+  /** What each person is doing in this panel (D80), from the fixed list. */
+  doing?: Record<string, Doing>;
   /** Key props of the scene (D19), identical in every picture and clip. */
   props?: { name: string; detail: string; imageAssetId?: string }[];
 }

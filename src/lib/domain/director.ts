@@ -7,7 +7,7 @@ import { mainSubjectId } from "./composer";
 import { cameraPlacementProblem, facingOf, horizontalFov, PRESET_FOV, occlusions, planForShot, propsBlocking, readCamera, type CameraReading } from "./geometry";
 import { GENRE_PROFILES, genreBonus, type Genre } from "./genre";
 import { povFor, verticalFor } from "./vertical";
-import { cameraZ, floorZ, levelAt } from "./levels";
+import { cameraZ, floorZ, insideLevel, levelAt } from "./levels";
 import { fovForSize, namedShot, presetsFor, SHOT_SIZES } from "./shotLanguage";
 import { gazeFor } from "./gaze";
 import type { CameraPreset, GeometryPlanData, PlanCamera, Point, ShotSpec } from "./types";
@@ -427,6 +427,33 @@ function score(
   const excludedInView = shot.excludedIds.filter((id) => reading.actors.find((a) => a.characterId === id)?.inView).length;
   s -= 0.4 * excludedInView;
 
+  // The action's area in view (D80): someone in the skate bowl, at the pool's edge or on the ski
+  // run is there for the area, so the camera sees it, not just their faces. Cameras 2 and 3 of
+  // the skate park faced the steps with the bowl behind them.
+  {
+    const f = norm(sub(cam.lookAt, cam.position));
+    const seen = new Set<string>();
+    for (const id of required) {
+      const p = plan.actors.find((x) => x.characterId === id)?.position;
+      if (!p) continue;
+      for (const l of plan.levels ?? []) {
+        if (!l.kind || seen.has(l.id)) continue;
+        const c = { x: l.x + l.w / 2, y: l.y + l.d / 2 };
+        const near = insideLevel(l, p) || Math.hypot(p.x - c.x, p.y - c.y) <= Math.max(l.w, l.d) / 2 + 1;
+        if (!near) continue;
+        seen.add(l.id);
+        // Its middle or any point of its edge in front of the lens and inside the picture.
+        const pts = [c, ...Array.from({ length: 8 }, (_, k) => ({ x: c.x + Math.cos((k * Math.PI) / 4) * l.w * 0.45, y: c.y + Math.sin((k * Math.PI) / 4) * l.d * 0.45 }))];
+        const seenPt = pts.some((q) => {
+          const v = sub(q, cam.position);
+          const ahead = v.x * f.x + v.y * f.y;
+          return ahead > 0.5 && Math.abs((Math.atan2(v.x * f.y - v.y * f.x, ahead) * 180) / Math.PI) < halfFov;
+        });
+        if (seenPt) { s += 2; reasons.push(`R-AREA: ${l.name} in view`); } else s -= 2;
+      }
+    }
+  }
+
   return { ok: true, score: s, reasons, reading };
 }
 
@@ -688,6 +715,8 @@ function namedShotDesign(d: ShotDesign, plan: GeometryPlanData, sh: ShotInput, l
       const seen = (c: PlanCamera) => readCamera(sp, c).actors.filter((a) => a.inView);
       const tries = [sideOfBase, -sideOfBase].flatMap((sg) => [0, 15, -15, 30, -30, 45, -45, 60, -60, 70, -70].map((o) => ({ sg, o, c: make(sg, o) })))
         .filter((x) => pair.every((id) => seen(x.c).some((a) => a.characterId === id)))
+        // No face hidden by a prop (D80): someone down in a skate bowl was behind a ledge on the rim.
+        .filter((x) => !propsBlocking(sp, x.c, pair).some((b) => b.face))
         // Others nearby may show at the edges (D30): keeping the angle square-on, and so the
         // same background as the shots around it, matters more than cutting them out.
         .map((x) => ({ ...x, cost: seen(x.c).filter((a) => !pair.includes(a.characterId)).length + (Math.abs(x.o) / 15) * 1.5 + (x.sg === sideOfBase ? 0 : 6) }))
@@ -742,11 +771,16 @@ function aimAcrossLevels(d: ShotDesign, plan: GeometryPlanData, sh: ShotInput | 
     ...d,
     options: d.options.map((o) => {
       if (o.camera.tiltDeg) return o;
-      // A point of view looks at what they see; any other camera at its subject.
+      // A point of view looks at what they see; any other camera at its subject. A shot of
+      // several people on different floors (D80: Rosa on the rim, Kai down in the bowl) aims
+      // between their faces, so neither is cut off by the top or bottom of the frame.
       const T = o.camera.povId ? o.camera.lookAt : S;
       const camAbs = cameraZ(sp, o.camera);
-      const aim = floorZ(sp, T) + 1.5;
-      const dist = Math.max(0.5, Math.hypot(T.x - o.camera.position.x, T.y - o.camera.position.y));
+      const group = o.camera.povId || o.camera.preset === "main-ots" || o.camera.preset === "reverse-ots" || o.camera.preset === "single-cu" ? [] : (sh.spec.visibleIds ?? []).map((id) => sp.actors.find((a) => a.characterId === id)?.position).filter((p): p is Point => !!p);
+      const faces = group.length > 1 ? group : [T];
+      const aim = faces.reduce((t, p) => t + floorZ(sp, p) + 1.5, 0) / faces.length;
+      const C = { x: faces.reduce((t, p) => t + p.x, 0) / faces.length, y: faces.reduce((t, p) => t + p.y, 0) / faces.length };
+      const dist = Math.max(0.5, Math.hypot(C.x - o.camera.position.x, C.y - o.camera.position.y));
       if (Math.abs(aim - camAbs) < 0.6) return o;
       const tiltDeg = Math.round((Math.atan((aim - camAbs) / dist) * 180) / Math.PI);
       const l = levelAt(sp, T), lc = levelAt(sp, o.camera.position);

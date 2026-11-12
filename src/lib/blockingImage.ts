@@ -14,7 +14,7 @@ import type { DB } from "@/db/client";
 import { planForShot, readCamera } from "./domain/geometry";
 import { layoutSketchSvg } from "./domain/layoutSketch";
 import { mainSubjectId } from "./domain/composer";
-import { carriedItems, heldProps } from "./domain/imagePrompts";
+import { carriedNow, heldProps } from "./domain/imagePrompts";
 import { WALK_OFF } from "./domain/gestures";
 import { backgroundForFrame } from "./backgroundImage";
 import { cachedPlate, drawArea } from "./plateImage";
@@ -98,7 +98,8 @@ async function blockingParts(db: DB, shotId: string, opts: { extraHeld?: Record<
   const text = `${panel?.description ?? ""} ${shot.spec.actions ?? ""}`;
   const held: Record<string, { side: "left" | "right"; what: string; where: string }[]> = {};
   for (const a of plan.actors) {
-    const items = [...carriedItems(profiles[a.characterId]), ...heldProps(plan, a.characterId, profiles[a.characterId]), ...(extraHeld?.[a.characterId] ?? [])];
+    // Less anything they're riding (D80): a skateboard under the feet isn't tagged in a hand.
+    const items = [...carriedNow(plan, a.characterId, profiles[a.characterId]), ...heldProps(plan, a.characterId, profiles[a.characterId]), ...(extraHeld?.[a.characterId] ?? [])];
     const seen = new Set<string>();
     held[a.characterId] = items.filter((x) => { const k = `${x.what.split(/\s+/).slice(-1)[0]}`; if (seen.has(k)) return false; seen.add(k); return true; });
   }

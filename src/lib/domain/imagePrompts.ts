@@ -22,7 +22,7 @@ import { levelAt, levelLines } from "./levels";
 import { joinNames, stripQuotes } from "./text";
 import { postureWords } from "./panelWords";
 import { noTextRule } from "./signage";
-import type { CastMember, GeometryPlanData, ShotSpec } from "./types";
+import type { ActionKind, CastMember, Doing, GeometryPlanData, ShotSpec } from "./types";
 
 export interface CharacterProfile {
   appearance?: string;
@@ -328,6 +328,15 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     if (ws.length) lines.push(`Posture: ${ws.join("; ")}. Show exactly this; the body stays as it was unless this says it changed.`);
     if (ws.length) S.people.push(`Posture: ${ws.join("; ")}.`);
   }
+  // What each person is doing (D80): riding, swimming, on the phone. Image 1's label says it too.
+  {
+    const dp = shotPlan ?? i.plan;
+    const ds = (dp?.actors ?? []).filter((a) => a.doing && (shownIds.includes(a.characterId) || !shot?.visibleIds?.length)).map((a) => doingWords(name(a.characterId), a.doing!)).filter(Boolean);
+    if (ds.length) {
+      lines.push(`Doing: ${ds.join("; ")}. Show exactly this action in this moment, as its stand-in's label says.`);
+      S.moment.push(`Doing: ${ds.join("; ")}.`);
+    }
+  }
   // Someone on a mark (D19b): say where they are, so the picture doesn't put them with the group.
   for (const [id, markId] of Object.entries(shot?.at ?? {})) {
     if (shot?.blocking?.[id]) continue; // placed on the floor plan for this panel (D35)
@@ -474,7 +483,10 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     lines.push(...camLines);
     S.camera.push(preset, ...camLines.filter((l) => /^(Framing|Lens|Point of view|Angle):/.test(l)), "A level camera at image 1's height and angle: don't move, tilt or zoom it.");
     // Raised and lowered floors (D29): who is above or below the camera, and any drop in view.
-    lines.push(...levelLines(shotPlan ?? i.plan!, cam, reading.actors.filter((a) => a.inView && [...shownIds, ...edgeIds].includes(a.characterId)).map((a) => a.characterId), name));
+    const lv = levelLines(shotPlan ?? i.plan!, cam, reading.actors.filter((a) => a.inView && [...shownIds, ...edgeIds].includes(a.characterId)).map((a) => a.characterId), name);
+    lines.push(...lv);
+    // In the short request too (D80): where the skate bowl or the pool is, and who is down in it.
+    if ((shotPlan ?? i.plan!).levels?.some((l) => l.kind)) S.props.push(...lv);
     // A strict left-to-right order and head count (D18e): looser wording let GPT swap people or drop them.
     const order = reading.actors.filter((a) => a.inView && [...shownIds, ...edgeIds].includes(a.characterId)).sort((a, b) => a.angleDeg - b.angleDeg);
     if (order.length > 1) {
@@ -546,7 +558,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
       const pronouns = (id: string) => { const pr = byId(id)?.pronoun; return pr === "she" ? ["her", "her"] : pr === "he" ? ["his", "him"] : ["their", "them"]; };
       const keptBy = parts.flatMap((p) => {
         const [poss, obj] = pronouns(p.id);
-        const bagsOf = carriedItems(i.profiles[p.id]).filter((it) => it.where !== "wrist");
+        const bagsOf = carriedNow(shotPlan, p.id, i.profiles[p.id]).filter((it) => it.where !== "wrist");
         if (sitting(p.id)) return bagsOf.map((it) => ({ full: `${name(p.id)}'s ${it.what} is with ${obj}, on ${poss} lap or on the seat beside ${obj}`, short: `${name(p.id)}'s ${itemNoun(it.what)} on ${poss} lap or the seat beside ${obj}` }));
         if (/facing the camera|seen from behind/.test(p.face)) return [];
         return bagsOf.map((it) => ({ full: `${name(p.id)}'s ${it.what} is ${it.where === "hand" ? "in" : "on"} ${poss} ${it.side} ${it.where}`, short: `${name(p.id)}'s ${itemNoun(it.what)} ${it.where === "hand" ? "in" : "on"} ${poss} ${it.side} ${it.where}` }));
@@ -556,7 +568,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
         const facing = /facing the camera/.test(p.face);
         const pr = byId(p.id)?.pronoun;
         const poss = pr === "she" ? "her" : pr === "he" ? "his" : "their";
-        return [...(sitting(p.id) ? [] : carriedItems(i.profiles[p.id])), ...heldProps(shotPlan, p.id, i.profiles[p.id])].map((it) => {
+        return [...(sitting(p.id) ? [] : carriedNow(shotPlan, p.id, i.profiles[p.id])), ...heldProps(shotPlan, p.id, i.profiles[p.id])].map((it) => {
           const side = facing ? (it.side === "left" ? "right" : "left") : it.side;
           return `${name(p.id)}'s ${it.what} is ${it.where === "hand" ? "in" : "on"} ${poss} ${it.side} ${it.where}, so it shows on the ${side} of the picture (${facing ? "facing us, mirror-wise" : "seen from behind"})`;
         });
@@ -569,7 +581,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
         const pr = byId(p.id)?.pronoun;
         const poss = pr === "she" ? "her" : pr === "he" ? "his" : "their";
         if (sitting(p.id)) return [];
-        return carriedItems(i.profiles[p.id]).filter((it) => it.where !== "wrist").map((it) => `${name(p.id)}'s ${itemNoun(it.what)} ${it.where === "hand" ? "in" : "on"} ${poss} ${it.side} ${it.where} (${facing ? (it.side === "left" ? "right" : "left") : it.side} of the picture)`);
+        return carriedNow(shotPlan, p.id, i.profiles[p.id]).filter((it) => it.where !== "wrist").map((it) => `${name(p.id)}'s ${itemNoun(it.what)} ${it.where === "hand" ? "in" : "on"} ${poss} ${it.side} ${it.where} (${facing ? (it.side === "left" ? "right" : "left") : it.side} of the picture)`);
       });
       if (bagsShort.length || keptBy.length) S.people.push(`Carried: ${[...bagsShort, ...keptBy.map((k) => k.short)].join("; ")}.`);
       // Picked up in this moment (D36): whoever has the prop holds it, whichever way they face.
@@ -649,12 +661,38 @@ export function lightingOf(text: string): string {
  * unless the right already holds something they always carry. The same answer for the blocking
  * frame, the picture prompt and the check.
  */
-export function heldProps(plan: Pick<GeometryPlanData, "furniture"> | undefined, id: string, p: CharacterProfile | undefined): { side: "left" | "right"; what: string; where: string }[] {
-  const mine = (plan?.furniture ?? []).filter((f) => f.heldBy === id);
+export function heldProps(plan: Pick<GeometryPlanData, "furniture" | "actors"> | undefined, id: string, p: CharacterProfile | undefined): { side: "left" | "right"; what: string; where: string }[] {
+  const mine = (plan?.furniture ?? []).filter((f) => f.heldBy === id && !isRidden(plan, id, f.name));
   if (!mine.length) return [];
-  const busy = new Set(carriedItems(p).filter((x) => x.where === "hand").map((x) => x.side));
+  // The same thing they always carry (D80: a phone, a skateboard) stays in the hand it's in.
+  const carried = carriedItems(p);
+  const busy = new Set(carried.filter((x) => x.where === "hand" && !mine.some((f) => sameThing(x.what, f.name))).map((x) => x.side));
   const sides: ("left" | "right")[] = ["right", "left"].filter((x) => !busy.has(x as "left" | "right")) as ("left" | "right")[];
-  return mine.map((f, k) => ({ side: sides[k] ?? (k % 2 ? "left" : "right"), what: f.name, where: "hand" }));
+  return mine.map((f, k) => {
+    const same = carried.find((x) => x.where === "hand" && sameThing(x.what, f.name));
+    return { side: same?.side ?? sides[k] ?? (k % 2 ? "left" : "right"), what: f.name, where: "hand" };
+  });
+}
+
+/** Two words for one thing (D80): "skateboard" and "green skateboard", "phone" and "smartphone". */
+export function sameThing(a: string, b: string): boolean {
+  const na = itemNoun(a).toLowerCase(), nb = itemNoun(b).toLowerCase();
+  return na === nb || na.includes(nb) || nb.includes(na);
+}
+
+/** What someone is riding in this panel (D80): their skateboard is under their feet, not in a hand. */
+export function isRidden(plan: Pick<GeometryPlanData, "actors"> | undefined, id: string, what: string): boolean {
+  const d = plan?.actors?.find((a) => a.characterId === id)?.doing;
+  return d?.action === "ride" && (!d.with || sameThing(d.with, what));
+}
+
+/**
+ * What someone carries in this panel (D80): their usual things, less anything they're riding
+ * or holding as a prop of the scene, which is said once, where it really is.
+ */
+export function carriedNow(plan: Pick<GeometryPlanData, "furniture" | "actors"> | undefined, id: string, p: CharacterProfile | undefined): { side: "left" | "right"; what: string; where: string }[] {
+  const held = (plan?.furniture ?? []).filter((f) => f.heldBy === id);
+  return carriedItems(p).filter((it) => !isRidden(plan, id, it.what) && !held.some((f) => sameThing(it.what, f.name)));
 }
 
 export function carriedItems(p: CharacterProfile | undefined): { side: "left" | "right"; what: string; where: string }[] {
@@ -715,6 +753,20 @@ export function itemNoun(what: string): string {
  * shot itself; GPT finishes it rather than composing its own. Written so each element of the
  * frame has one meaning and one job.
  */
+/** "Kai is riding a skateboard" (D80): an action in words, for the request. Postures are said elsewhere. */
+export function doingWords(who: string, d: Doing): string {
+  const the = d.with ? ` the ${d.with}` : "";
+  const a = d.with ? ` ${/^(a|an|the|his|her|their)\s/i.test(d.with) ? d.with : `${/^[aeiou]/i.test(d.with) ? "an" : "a"} ${d.with}`}` : "";
+  const w: Partial<Record<ActionKind, string>> = {
+    ride: `is riding${a}`, drive: `is driving${the}`, swim: "is swimming, only head and shoulders above the water", dive: "is diving, in mid-air",
+    jump: "is in the air, mid-jump, feet off the ground", fall: "is falling", climb: `is climbing${the}`, run: "is running", dance: "is dancing",
+    fight: "is fighting", throw: `is throwing${the}`, kick: `is kicking${the}`, catch: `is catching${the}`, phone: "is on the phone, holding it to the ear",
+    read: `is reading${the}`, write: `is writing${d.with ? ` on${the}` : ""}`, type: `is typing${d.with ? ` on${the}` : ""}`, eat: `is eating${the}`,
+    drink: `is drinking${the}`, cook: `is cooking${the}`, play: `is playing${the}`,
+  };
+  return w[d.action] ? `${who} ${w[d.action]}` : "";
+}
+
 export function blockingInstruction(refLabels: string[], box = false, coloured = false, fill = false): string {
   const standIns = coloured ? "a labelled stand-in for each character, its body shaded in the colours of their clothes so you can tell who is who" : "a pale labelled stand-in for each character";
   return [
@@ -722,10 +774,11 @@ export function blockingInstruction(refLabels: string[], box = false, coloured =
     box
       ? `Image 1 was built from the approved layout: a plain grey model of the room exactly as this camera sees it (its floor and walls, with a one-metre grid on the floor for scale, and the props in place), with ${standIns}.`
       : `Image 1 was built from the approved layout: the real room exactly as this camera sees it, with ${standIns}.`,
-    "- Each stand-in becomes the character named on it, standing exactly where the stand-in stands, the same size in the frame, and turned the way its label says (FACING CAMERA, BACK TO CAMERA, or SIDE-ON facing left or right).",
+    "- Each stand-in becomes the character named on it, standing exactly where the stand-in stands, the same size in the frame, and turned the way its label says (FACING CAMERA, BACK TO CAMERA, or SIDE-ON facing left or right), doing what its label says (RIDING, SWIMMING, ON THE PHONE and so on).",
     "- An orange arrow on the floor shows which way someone is walking from their stand-in; it is never a second place for them, so each character appears once.",
     "- A yellow tag beside a stand-in marks an item they hold: it is on that side of the picture, in that hand.",
     "- Outlined shapes marked with a prop's name are that prop, in that place, at that size.",
+    "- A shaded area marked with its name (a hollow, water, a slope, steps, a raised or marked floor) is that part of the ground, in that place, at that size: draw it as part of the place.",
     box
       ? "- Image 2 shows how this room looks from this camera: paint image 1's grey floor and walls to look like it (its walls, bar, windows, lights, colours and materials). The camera position, angle, lens, floor, walls, positions and sizes stay exactly as in image 1; take no furniture and no people from image 2."
       : "- The room, the background, the light, the camera position, the angle and the lens stay exactly as in image 1. Do not move, swap, re-frame, zoom or re-imagine anything.",
@@ -737,7 +790,7 @@ export function blockingInstruction(refLabels: string[], box = false, coloured =
 
 /** Image 1's instruction in the short request (B3): the same meaning as `blockingInstruction`, said once. */
 export function blockingShort(box = false, coloured = false, fill = false): string {
-  return (box ? "Image 1 is this exact shot as a plain grey model of the room; image 2 shows how the room looks from this camera, so paint image 1's grey floor and walls to look like it, taking no furniture or people from image 2. " : "") + `Image 1 is this exact shot: keep its framing, eye level, perspective, positions and the size of everyone and everything in it. ${coloured ? "Each stand-in (shaded in the colours of that person's clothes) becomes" : "Each pale stand-in becomes"} the person named on it, exactly where it stands and turned as its label says; an orange arrow only shows which way a walker is heading from their stand-in, never a second place for them, so everyone appears once; a yellow tag marks something held, on that side of the picture; an outline is the named prop. Remove every label, outline, arrow and tag.${fill ? ` ${PLATE_KEEP_SHORT}` : ""}`;
+  return (box ? "Image 1 is this exact shot as a plain grey model of the room; image 2 shows how the room looks from this camera, so paint image 1's grey floor and walls to look like it, taking no furniture or people from image 2. " : "") + `Image 1 is this exact shot: keep its framing, eye level, perspective, positions and the size of everyone and everything in it. ${coloured ? "Each stand-in (shaded in the colours of that person's clothes) becomes" : "Each pale stand-in becomes"} the person named on it, exactly where it stands and turned as its label says; an orange arrow only shows which way a walker is heading from their stand-in, never a second place for them, so everyone appears once; a yellow tag marks something held, on that side of the picture; an outline is the named prop, and a shaded area the named part of the ground (a hollow, water, a slope), there and that size; a label's action is what they're doing. Remove every label, outline, arrow and tag.${fill ? ` ${PLATE_KEEP_SHORT}` : ""}`;
 }
 
 /**

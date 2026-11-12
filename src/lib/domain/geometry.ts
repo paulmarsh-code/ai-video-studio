@@ -4,8 +4,8 @@
 import { verticalText } from "./vertical";
 import { cameraZ, floorZ, levelAt } from "./levels";
 import { SHOT_SIZES, type ShotSize } from "./shotLanguage";
-import { propHeight, propKind, propWidth } from "./story";
-import type { PoseEntry, PanelBlock,
+import { actionsInWords, propHeight, propKind, propWidth } from "./story";
+import type { ActionKind, Doing, PlanActor, Pose, PoseEntry, PanelBlock,
   CameraPreset,
   CastMember,
   Finding,
@@ -462,9 +462,11 @@ export function cameraPlacementProblem(plan: GeometryPlanData, cam: PlanCamera):
   for (const a of plan.actors) {
     if (Math.hypot(a.position.x - cam.position.x, a.position.y - cam.position.y) < 0.3) return `inside ${a.characterId}`;
   }
-  // Nowhere to stand over a cliff or roof drop (D29).
+  // Nowhere to stand over a cliff or roof drop (D29), or in water or down in a hollow (D80):
+  // the background from the venue's views is cut for standing on the floor.
   const l = levelAt(plan, cam.position);
   if (l && (l.edge === "drop" || l.heightM <= -3)) return `over ${l.name}`;
+  if (l && (l.kind === "water" || (l.kind === "lowered" && l.heightM < -0.5))) return `in ${l.name}`;
   for (const f of plan.furniture ?? []) {
     if (Math.hypot(f.position.x - cam.position.x, f.position.y - cam.position.y) < f.radiusM + 0.15) return `inside the ${f.name}`;
   }
@@ -547,10 +549,18 @@ function settleProps(plan: GeometryPlanData): GeometryPlanData {
     const id = m?.[1].toLowerCase();
     return id ? plan.actors.find((a) => a.characterId === id) : undefined;
   };
-  const out = furniture.map((f) => {
+  const out = furniture.map((f0) => {
+    let f = f0;
     if (f.heldBy) return f;
     const who = owner(f);
     if (who) { changed = true; return { ...f, heldBy: who.characterId, position: who.position }; }
+    // A height said against the body (D80), "knee-high", wins over one stored before it was
+    // read right (a skate park's knee-high ledge stood 1.1 m tall in front of the skater).
+    const said = `${f.name} ${f.detail ?? ""}`;
+    if (/\b(?:ankle|knee|shin|hip|thigh|shoulder)[- ](?:high|height)\b/i.test(said)) {
+      const h = propHeight(said, f.name);
+      if (Math.abs((f.heightM ?? h) - h) > 0.3) { changed = true; f = { ...f, heightM: h }; }
+    }
     const kind = kindOf(f);
     if (kind === "small") {
       const text = `${f.name} ${f.detail ?? ""}`;
@@ -583,16 +593,27 @@ function settleProps(plan: GeometryPlanData): GeometryPlanData {
  * say) stands there instead of their usual place. Everything that reads a camera for a shot
  * uses this, so the sketch, the prompts, the check and the camera choice all agree.
  */
-export function planForShot(plan: GeometryPlanData, shot?: { at?: Record<string, string>; blocking?: Record<string, PanelBlock>; posture?: Record<string, PoseEntry>; visibleIds?: string[] }): GeometryPlanData {
+export function planForShot(plan: GeometryPlanData, shot?: { at?: Record<string, string>; blocking?: Record<string, PanelBlock>; posture?: Record<string, PoseEntry>; visibleIds?: string[]; doing?: Record<string, Doing>; actions?: string }): GeometryPlanData {
   const at = shot?.at;
   const bl = shot?.blocking;
   const po = shot?.posture;
-  if ((!at || !Object.keys(at).length) && (!bl || !Object.keys(bl).length) && (!po || !Object.keys(po).length)) return atSeatedEyeLevel(settleProps(plan), shot?.visibleIds);
+  // What each person is doing (D80): the panel writer's DOING, else clear verbs in the panel's words.
+  const doing = shot?.doing && Object.keys(shot.doing).length ? shot.doing : actionsInWords(shot?.actions ?? "", plan.actors.map((a) => a.characterId));
+  const withDoing = (a: PlanActor): PlanActor => {
+    const d = doing[a.characterId];
+    if (!d || d.action === "stand" || d.action === "walk") return a;
+    // Sitting, lying, kneeling or crouching said as an action is a posture too (D37), unless one is set.
+    const pose = ({ sit: "sitting", drive: "sitting", lie: "lying", kneel: "kneeling", crouch: "crouching" } as Partial<Record<ActionKind, Pose>>)[d.action];
+    return { ...a, doing: d, ...(pose && (!a.pose || a.pose === "standing") ? { pose } : {}) };
+  };
+  if ((!at || !Object.keys(at).length) && (!bl || !Object.keys(bl).length) && (!po || !Object.keys(po).length)) {
+    return atSeatedEyeLevel(settleProps(Object.keys(doing).length ? { ...plan, actors: plan.actors.map(withDoing) } : plan), shot?.visibleIds);
+  }
   // Someone who has left (D36) isn't in the panel at all.
   const actors = plan.actors.filter((a) => !bl?.[a.characterId]?.gone).map((a0) => {
     // Their posture in this panel (D37).
     const p = po?.[a0.characterId];
-    const a = p && p.pose !== "standing" ? { ...a0, pose: p.pose, ...(p.on ? { poseOn: p.on } : {}) } : a0;
+    const a = withDoing(p && p.pose !== "standing" ? { ...a0, pose: p.pose, ...(p.on ? { poseOn: p.on } : {}) } : a0);
     // Positions set for this panel (D35) come first; then marks from the panel's words.
     const b = bl?.[a.characterId];
     if (b) return { ...a, position: b.at, ...(b.to ? { to: b.to } : {}), ...(b.facingDeg !== undefined ? { facingDeg: b.facingDeg } : {}) };
@@ -642,7 +663,13 @@ export function propsBlocking(plan: GeometryPlanData, cam: PlanCamera, targetIds
       if (av.depth <= pv.depth + 0.1) continue; // the prop is not in front of them
       // Lateral distance between the prop and the person, measured at the prop's depth.
       const atProp = (av.lateral / av.depth) * pv.depth;
-      if (Math.abs(atProp - pv.lateral) < fu.radiusM + 0.15) out.push({ prop: fu.name, characterId: id, face: (fu.heightM ?? 1.1) >= 1.45 });
+      // The face is hidden when the prop's top rises above the line from the lens to the face
+      // at the prop's distance (D80): heights from each one's own floor, so someone down in a
+      // skate bowl is hidden by a knee-high ledge on the rim between them and the camera.
+      const camZ = cameraZ(plan, cam);
+      const faceZ = floorZ(plan, a.position) + (a.pose === "sitting" ? 1.15 : a.pose === "lying" ? 0.4 : a.pose === "kneeling" ? 1.1 : a.pose === "crouching" ? 0.9 : 1.5);
+      const sight = camZ + (faceZ - camZ) * (pv.depth / av.depth);
+      if (Math.abs(atProp - pv.lateral) < fu.radiusM + 0.15) out.push({ prop: fu.name, characterId: id, face: floorZ(plan, fu.position) + (fu.heightM ?? 1.1) >= sight - 0.05 });
     }
   }
   return out;

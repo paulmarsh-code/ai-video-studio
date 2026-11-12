@@ -99,7 +99,7 @@ describe("Telling the story", () => {
     expect(p).toContain("at most one person speaking");
     expect(p).toContain(`about ${MAX_LINE_WORDS} words`);
     expect(p).toContain("app chooses the cameras");
-    expect(p).toMatch(/PANEL 1\nACTION:.*\nIN FRAME:.*\nSPEAKER:.*\nLINE:.*\nEMOTION:.*\nSECONDS:/);
+    expect(p).toMatch(/PANEL 1\nACTION:.*\nIN FRAME:.*\nPLACE:.*\nDOING:.*\nSPEAKER:.*\nLINE:.*\nEMOTION:.*\nSECONDS:/);
     expect(p).toContain("walks off before she says somehtinbg she regrets"); // the story goes in as written
   });
 

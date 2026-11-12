@@ -21,7 +21,7 @@ import { applyRoom, boundsFor, groupCentre, roomFor, roomOf, type RoomSize } fro
 import { carryBlocking, type BlockEntry } from "./domain/blocking";
 import { blockingFromWords, posturesFromWords, startPose } from "./domain/panelWords";
 import { aimToInclude, planForShot, readCamera } from "./domain/geometry";
-import { levelsFromWords } from "./domain/levels";
+import { levelsFromWords, withAreas } from "./domain/levels";
 import { getAnimatic, getCast, saveAnimatic, type AnimaticTimeline } from "./repo";
 
 // ---------- Characters ----------
@@ -510,7 +510,11 @@ export function saveStoryboard(db: DB, sceneId: string, s: { story: string; targ
   const locks = (scene.locks ?? {}) as SceneLocks;
   db.update(t.scenes).set({ story: s.story, targetSec: s.targetSec, staging, locks: { positions: locks.positions } }).where(eq(t.scenes.id, sceneId)).run();
   persist(db);
+  syncAreas(db, sceneId);
+  // New panels get their places from their words (D36, D80) even with positions approved: those
+  // are per panel, and the approved floor plan itself doesn't change.
   if (!locks.positions) applyMovementMarks(db, sceneId);
+  else if (applyPanelWords(db, sceneId)) persist(db);
   return { panels: s.panels.length, totalSec: check.totalSec };
 }
 
@@ -593,6 +597,7 @@ export function saveSceneStaging(db: DB, sceneId: string, staging: Partial<Scene
     db.update(t.shots).set({ spec }).where(eq(t.shots.id, sh.id)).run();
   }
   persist(db);
+  syncAreas(db, sceneId);
   if (replan) applyMovementMarks(db, sceneId);
   return { staging: st, replanned: replan };
 }
@@ -629,6 +634,24 @@ function setLocks(db: DB, sceneId: string, locks: SceneLocks) {
 function latestPlan(db: DB, sceneId: string) {
   const p = db.select().from(t.plans).where(eq(t.plans.sceneId, sceneId)).orderBy(desc(t.plans.version)).get();
   return p ? { ...p, data: p.data as GeometryPlanData } : undefined;
+}
+
+/**
+ * The setting's areas into the floor plan (D80): a skate bowl, a pool or a ski run named in the
+ * scene setting and not yet on the plan is added beside the group, as a new plan version. Even
+ * with positions approved: nothing approved moves, and without it the action has nowhere to be.
+ */
+export function syncAreas(db: DB, sceneId: string): boolean {
+  const plan = latestPlan(db, sceneId);
+  const scene = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();
+  if (!plan || !scene) return false;
+  const st = asStaging(scene.staging);
+  if (!st.areas?.length) return false;
+  const next = withAreas(plan.data, st.areas, st.spot);
+  if (next === plan.data) return false;
+  db.insert(t.plans).values({ id: randomUUID(), sceneId, name: plan.name, version: plan.version + 1, data: next }).run();
+  persist(db);
+  return true;
 }
 
 export function approvePositions(db: DB, sceneId: string) {
@@ -982,7 +1005,7 @@ export function applyPanelWords(db: DB, sceneId: string): boolean {
   const shots = panelsOf(db, sceneId).map((p) => ({ p, sh: shotForPanel(db, p.id) })).filter((x): x is { p: typeof x.p; sh: NonNullable<typeof x.sh> } => !!x.sh);
   const mine = (sp: ShotSpec) => Object.fromEntries(Object.entries(sp.blocking ?? {}).filter(([, b]) => b.by === "you"));
   const app = blockingFromWords(plan.data, shots.map(({ p, sh }) => ({
-    action: p.description, subjectId: sh.spec.subjectId ?? sh.spec.speakerId ?? sh.spec.visibleIds[0], visibleIds: sh.spec.visibleIds, at: sh.spec.at, own: mine(sh.spec),
+    action: p.description, subjectId: sh.spec.subjectId ?? sh.spec.speakerId ?? sh.spec.visibleIds[0], visibleIds: sh.spec.visibleIds, at: sh.spec.at, own: mine(sh.spec), places: sh.spec.where,
   })), people);
   let changed = false;
   shots.forEach(({ sh }, k) => {

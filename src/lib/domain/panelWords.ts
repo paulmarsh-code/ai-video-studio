@@ -6,7 +6,8 @@
 // and the scene's props. Whatever the user sets on a panel wins over this, and arrival marks
 // from the words (D19b) are left to do their job.
 
-import type { GeometryPlanData, PanelBlock, PlanFurniture, PlanView, Point, Pose, PoseEntry } from "./types";
+import type { GeometryPlanData, PanelBlock, PlanFurniture, PlanLevel, PlanView, Point, Pose, PoseEntry } from "./types";
+import { insideLevel, isIn } from "./levels";
 
 export type AppBlock = Omit<PanelBlock, "by"> & { by: "app"; why: string };
 
@@ -18,6 +19,8 @@ export interface WordsPanel {
   at?: Record<string, string>;
   /** What the user has set on this panel (by "you"). */
   own?: Record<string, PanelBlock>;
+  /** Where each person is, in the panel writer's words (D80): "in the skate bowl". */
+  places?: Record<string, string>;
 }
 
 export const EXIT_RE = /\b(entrance|exit|door|doors|doorway|way out|lobby|foyer|hall|hallway|corridor|stairs|staircase|landing)\b/i;
@@ -26,7 +29,7 @@ const STOP = String.raw`(?:and|or|but|then|as|while|before|after|with|to|from|at
 const PHRASE = String.raw`([a-z][\w'-]*(?:\s+(?!${STOP}\b)[a-z][\w'-]*){0,2})`;
 const TGT = String.raw`(?:(?:the|a|an|his|her|their|its|my|our)\s+)?${PHRASE}`;
 const NAME = String.raw`([A-Z][a-z]+)`;
-const MOVE = String.raw`(?:walk(?:s|ed|ing)?|go(?:es|ing)?|went|head(?:s|ed|ing)?|wander(?:s|ed|ing)?|mov(?:e|es|ed|ing)|cross(?:es|ed|ing)?|step(?:s|ped|ping)?|stroll(?:s|ed|ing)?|hurr(?:y|ies|ied|ying)|rush(?:es|ed|ing)?|run(?:s|ning)?|ran|dash(?:es|ed|ing)?|march(?:es|ed|ing)?|strid(?:e|es|ing)|strode|mak(?:e|es|ing)\s+(?:her|his|their)\s+way|made\s+(?:her|his|their)\s+way|retreat(?:s|ed|ing)?|back(?:s|ed|ing)?\s+away)`;
+const MOVE = String.raw`(?:walk(?:s|ed|ing)?|go(?:es|ing)?|went|head(?:s|ed|ing)?|wander(?:s|ed|ing)?|mov(?:e|es|ed|ing)|cross(?:es|ed|ing)?|step(?:s|ped|ping)?|stroll(?:s|ed|ing)?|hurr(?:y|ies|ied|ying)|rush(?:es|ed|ing)?|run(?:s|ning)?|ran|dash(?:es|ed|ing)?|march(?:es|ed|ing)?|strid(?:e|es|ing)|strode|mak(?:e|es|ing)\s+(?:her|his|their)\s+way|made\s+(?:her|his|their)\s+way|retreat(?:s|ed|ing)?|back(?:s|ed|ing)?\s+away|drop(?:s|ped|ping)?(?:\s+in)?|rid(?:e|es|ing)|rode|skat(?:e|es|ed|ing)|swim(?:s|ming)?|swam|div(?:e|es|ed|ing)|dove|jump(?:s|ed|ing)?|leap(?:s|t|ing)?|slid(?:e|es|ing)?|climb(?:s|ed|ing)?|wad(?:e|es|ed|ing)|cycl(?:e|es|ed|ing)|paddl(?:e|es|ed|ing)|carv(?:e|es|ed|ing)|plung(?:e|es|ed|ing)|fall(?:s|ing)?|fell)`;
 const ADV = String.raw`(?:\s+(?:slowly|quickly|briskly|calmly|angrily|nervously|confidently|purposefully|casually|back|over|across|straight|up|down|off|round|around|upstairs|downstairs|inside))*`;
 
 type Rule = { kind: "leave" | "goto" | "gotoPerson" | "closer" | "turn" | "turnAway" | "face" | "at" | "pick" | "put"; re: RegExp };
@@ -53,10 +56,10 @@ const SKIP_HEADS = new Set(["camera", "lens", "viewer", "audience", "floor", "gr
 const singular = (w: string) => w.replace(/(?:ies)$/, "y").replace(/(?:es)$/, (m) => (/(?:ch|sh|ss|x)es$/.test(w) ? "" : m)).replace(/s$/, "");
 const words = (t: string) => t.toLowerCase().replace(/[^a-z0-9\s'-]/g, " ").split(/\s+/).filter(Boolean).map(singular);
 
-type Target = { kind: "prop"; f: PlanFurniture } | { kind: "view"; v: PlanView };
+type Target = { kind: "prop"; f: PlanFurniture } | { kind: "view"; v: PlanView } | { kind: "area"; l: PlanLevel };
 
-/** A prop or a part of the venue named by some words: the longest match from the front. */
-function resolve(text: string | undefined, props: PlanFurniture[], views: PlanView[]): Target | undefined {
+/** A prop, an area (D80) or a part of the venue named by some words: the longest match from the front. */
+function resolve(text: string | undefined, props: PlanFurniture[], views: PlanView[], areas: PlanLevel[] = []): Target | undefined {
   if (!text) return undefined;
   const ws = text.toLowerCase().split(/\s+/);
   for (let n = ws.length; n >= 1; n--) {
@@ -66,6 +69,8 @@ function resolve(text: string | undefined, props: PlanFurniture[], views: PlanVi
     const score = (name: string) => { const nw = words(name); return nw.includes(head) ? 2 + before.filter((w) => nw.includes(w)).length : 0; };
     const fp = props.map((f) => ({ f, s: score(f.name) })).filter((x) => x.s).sort((a, b) => b.s - a.s)[0];
     if (fp) return { kind: "prop", f: fp.f };
+    const ap = areas.map((l) => ({ l, s: score(l.name) })).filter((x) => x.s).sort((a, b) => b.s - a.s)[0];
+    if (ap) return { kind: "area", l: ap.l };
     const vp = views.map((v) => ({ v, s: score(v.name) })).filter((x) => x.s).sort((a, b) => b.s - a.s)[0];
     if (vp) return { kind: "view", v: vp.v };
   }
@@ -75,6 +80,70 @@ function resolve(text: string | undefined, props: PlanFurniture[], views: PlanVi
 const r2 = (p: Point): Point => ({ x: +p.x.toFixed(2), y: +p.y.toFixed(2) });
 const degTo = (from: Point, to: Point) => Math.round((Math.atan2(to.y - from.y, to.x - from.x) * 180) / Math.PI);
 
+/** How someone is placed by an area (D80): in it, at its edge, at its far edge, at its top or foot. */
+export type AreaHow = "in" | "edge" | "far" | "top" | "bottom" | "farWall";
+
+/**
+ * Where someone stands for an area (D80). In it: on their own side of its middle. At its edge:
+ * on the rim nearest them, outside a hollow or water, inside anything else. Its far edge: the
+ * rim across from them. A slope's top or foot: along the way it falls.
+ */
+export function areaSpot(l: PlanLevel, how: AreaHow, from: Point, others?: Point): Point {
+  const c = { x: l.x + l.w / 2, y: l.y + l.d / 2 };
+  const rx = l.w / 2, ry = l.d / 2;
+  const rim = (v: Point): Point => {
+    const n = Math.hypot(v.x, v.y) || 1, u = { x: v.x / n, y: v.y / n };
+    const t = l.round ? 1 / Math.sqrt((u.x / rx) ** 2 + (u.y / ry) ** 2) : Math.min(Math.abs(u.x) > 1e-6 ? rx / Math.abs(u.x) : Infinity, Math.abs(u.y) > 1e-6 ? ry / Math.abs(u.y) : Infinity);
+    return { x: u.x * t, y: u.y * t };
+  };
+  let toward = { x: from.x - c.x, y: from.y - c.y };
+  if (Math.hypot(toward.x, toward.y) < 0.05) toward = { x: 0, y: -1 };
+  // "Far" is far from the others (D80): the lip across the bowl from where the rest stand, not
+  // from wherever this person happens to be.
+  const awayFrom = others && Math.hypot(others.x - c.x, others.y - c.y) > 0.05 ? { x: others.x - c.x, y: others.y - c.y } : toward;
+  if (how === "top" || how === "bottom") {
+    if (l.dropM) {
+      const u = { x: Math.cos(((l.fallDeg ?? 90) * Math.PI) / 180), y: Math.sin(((l.fallDeg ?? 90) * Math.PI) / 180) };
+      const e = rim(how === "top" ? { x: -u.x, y: -u.y } : u);
+      const k = Math.max(0, 1 - 0.6 / (Math.hypot(e.x, e.y) || 1));
+      return r2({ x: c.x + e.x * k, y: c.y + e.y * k });
+    }
+    how = "in";
+  }
+  // On the far wall of a hollow (D80): inside it, up near the rim across from them.
+  if (how === "farWall") {
+    const e = rim({ x: -awayFrom.x, y: -awayFrom.y });
+    return r2({ x: c.x + e.x * 0.75, y: c.y + e.y * 0.75 });
+  }
+  if (how === "in") {
+    if (insideLevel(l, from)) return r2(from);
+    const e = rim(toward);
+    return r2({ x: c.x + e.x * 0.35, y: c.y + e.y * 0.35 });
+  }
+  const e = rim(how === "far" ? { x: -awayFrom.x, y: -awayFrom.y } : toward);
+  const n = Math.hypot(e.x, e.y) || 1;
+  const out = isIn(l) ? 0.4 : -0.4; // beside a hollow or water; just inside anything else
+  return r2({ x: c.x + e.x * (1 + out / n), y: c.y + e.y * (1 + out / n) });
+}
+
+/** "in the skate bowl", "on the far lip of the bowl", "beside Ava" (D80): how, and what. */
+export function readPlace(words: string): { how: AreaHow | "beside"; what: string } {
+  const t = words.trim().replace(/[.]$/, "").replace(/^(?:(?:standing|sitting|riding|skating|swimming|waiting|kneeling|crouching|lying|still|now|back)\s+)+/i, "");
+  const forms: [RegExp, AreaHow | "beside"][] = [
+    [/^(?:(?:on|up|at|to|onto|up\s+on|up\s+to)\s+)?(?:the\s+)?(?:far|other|opposite)\s+(?:wall|face)\s+of\s+/i, "farWall"],
+    [/^(?:(?:on|up|at|to|onto)\s+)?(?:the\s+)?(?:near\s+)?(?:wall|face)\s+of\s+/i, "in"],
+    [/^(?:(?:on|at|to|onto)\s+)?(?:the\s+)?(?:far|other|opposite)\s+(?:edge|side|lip|rim|end|bank|shore)\s+of\s+/i, "far"],
+    [/^(?:on\s+the\s+other\s+side\s+of|across)\s+/i, "far"],
+    [/^(?:(?:on|at|to)\s+)?(?:the\s+)?(?:top|head|crest)\s+of\s+/i, "top"],
+    [/^(?:(?:on|at|to)\s+)?(?:the\s+)?(?:bottom|foot|base)\s+of\s+/i, "bottom"],
+    [/^(?:(?:on|at|by|to|along)\s+)?(?:the\s+)?(?:near\s+)?(?:edge|side|lip|rim|end|bank|shore|poolside)\s+of\s+/i, "edge"],
+    [/^(?:in|inside|into|down\s+in|in\s+the\s+middle\s+of|in\s+the\s+centre\s+of|in\s+the\s+center\s+of|on|onto|upon)\s+/i, "in"],
+    [/^(?:beside|next\s+to|near|by|at|behind|in\s+front\s+of|close\s+to|with)\s+/i, "beside"],
+  ];
+  for (const [re, how] of forms) if (re.test(t)) return { how, what: t.replace(re, "").replace(/^(?:the|a|an|his|her|their|its)\s+/i, "").trim() };
+  return { how: "beside", what: t.replace(/^(?:the|a|an)\s+/i, "") };
+}
+
 /**
  * Per-panel placements from the words, panel by panel (D36). Returns, for each panel, the
  * app's entries keyed like `spec.blocking` (people by id, props by "prop:" and id).
@@ -83,6 +152,7 @@ export function blockingFromWords(plan: GeometryPlanData, panels: WordsPanel[], 
   const b = plan.bounds ?? { minX: -4.5, maxX: 4.5, minY: 0, maxY: 10 };
   const props = plan.furniture ?? [];
   const views = plan.views ?? [];
+  const areas = (plan.levels ?? []).filter((l) => l.kind || l.heightM !== 0);
   const clamp = (p: Point, m = 0.3): Point => r2({ x: Math.min(b.maxX - m, Math.max(b.minX + m, p.x)), y: Math.min(b.maxY - m, Math.max(b.minY + m, p.y)) });
   const base = new Map(plan.actors.map((a) => [a.characterId, a.position]));
   const pos = new Map(base);
@@ -111,8 +181,10 @@ export function blockingFromWords(plan: GeometryPlanData, panels: WordsPanel[], 
   };
   const placeOf = (t: Target, from: Point, on: boolean): Point => {
     if (t.kind === "prop") { const p = propAt.get(t.f.id) ?? t.f.position; return on ? clamp(p) : beside({ position: p, radiusM: t.f.radiusM }, from); }
+    if (t.kind === "area") return clamp(areaSpot(t.l, on ? "in" : "edge", from));
     return towardWall(from, t.v.directionDeg, 1.0, 9);
   };
+  const nameOf = (t: Target) => (t.kind === "prop" ? t.f.name : t.kind === "area" ? t.l.name : t.v.name);
 
   return panels.map((pn) => {
     const out: Record<string, AppBlock> = {};
@@ -142,6 +214,35 @@ export function blockingFromWords(plan: GeometryPlanData, panels: WordsPanel[], 
       } else out[id] = { at: where, gone: true, by: "app", why: "has left" };
     }
 
+    // Where the panel writer put each person (D80): "in the skate bowl", "on the far lip of the
+    // bowl", "beside Ava". It comes before the verbs below, which then leave that person be.
+    const placed = new Set<string>();
+    for (const [id, words0] of Object.entries(pn.places ?? {})) {
+      if (!pos.has(id) || own[id] || marked.has(id) || left.has(id)) continue;
+      const from = pos.get(id)!;
+      const { how, what } = readPlace(words0);
+      const person = byFirst(what.split(/\s+/)[0] ?? "");
+      let spot: Point | undefined, why = "";
+      if (person && person.id !== id && pos.has(person.id)) {
+        const tp = pos.get(person.id)!, d = { x: from.x - tp.x, y: from.y - tp.y }, l = Math.hypot(d.x, d.y) || 1;
+        if (l < 1.3) { placed.add(id); continue; } // already beside them
+        spot = clamp({ x: tp.x + (d.x / l) * 0.9, y: tp.y + (d.y / l) * 0.9 }); why = `beside ${person.name.split(/\s+/)[0]}`;
+      } else {
+        const t = resolve(what, props, views, areas);
+        if (!t) continue;
+        const rest = [...pos.entries()].filter(([k]) => k !== id && !left.has(k)).map(([, p]) => p);
+        const others = rest.length ? { x: rest.reduce((a, p) => a + p.x, 0) / rest.length, y: rest.reduce((a, p) => a + p.y, 0) / rest.length } : undefined;
+        if (t.kind === "area") spot = clamp(areaSpot(t.l, how === "beside" ? "edge" : how, from, others));
+        else if (how === "farWall") spot = placeOf(t, from, false);
+        else spot = placeOf(t, from, how === "in");
+        why = `${how === "in" ? (t.kind === "area" && isIn(t.l) ? "in" : "on") : how === "far" ? "across" : how === "farWall" ? "on the far wall of" : "at"} the ${nameOf(t)}`;
+      }
+      placed.add(id);
+      if (!spot || Math.hypot(spot.x - from.x, spot.y - from.y) < 0.3) continue;
+      out[id] = { at: spot, by: "app", why };
+      pos.set(id, spot);
+    }
+
     // The words, in order. Each match's person is the last name before it since the previous
     // match, or the one before carrying on ("she", "and"), or the panel's main person.
     const found: { kind: Rule["kind"]; m: RegExpExecArray }[] = [];
@@ -158,6 +259,7 @@ export function blockingFromWords(plan: GeometryPlanData, panels: WordsPanel[], 
       prevEnd = m.index + m[0].length;
       const id = actor;
       if (!id || !pos.has(id) || own[id] || marked.has(id)) continue;
+      if (placed.has(id) && kind !== "turn" && kind !== "face" && kind !== "turnAway" && kind !== "pick" && kind !== "put") continue;
       const from = pos.get(id)!;
       const set = (e: Omit<AppBlock, "by">) => {
         const n: AppBlock = { ...(out[id] ?? {}), ...e, by: "app" };
@@ -178,12 +280,13 @@ export function blockingFromWords(plan: GeometryPlanData, panels: WordsPanel[], 
         done.add(`${id}:move`);
       } else if (kind === "goto" || kind === "at") {
         if (done.has(`${id}:move`)) continue;
-        const t = resolve(kind === "goto" ? m[1] : m[2], props, views);
+        const t = resolve(kind === "goto" ? m[1] : m[2], props, views, areas);
         if (!t) continue;
-        const on = kind === "at" && /^(on|onto|on\s+to|in|into|over)$/i.test(m[1] ?? "") && t.kind === "prop";
+        // Into an area (D80): "drops into the bowl", "dives into the pool".
+        const on = (kind === "at" && /^(on|onto|on\s+to|in|into|over)$/i.test(m[1] ?? "") && t.kind !== "view") || (kind === "goto" && t.kind === "area" && /\b(?:into|in\s+to|onto|in)\s+/i.test(m[0]));
         const spot = placeOf(t, from, on);
         if (Math.hypot(spot.x - from.x, spot.y - from.y) < 0.3) continue;
-        const name = t.kind === "prop" ? t.f.name : t.v.name;
+        const name = nameOf(t);
         if (kind === "goto") set({ at: from, to: spot, why: `goes to the ${name}` });
         else set({ at: spot, ...(t.kind === "view" ? { facingDeg: t.v.directionDeg } : {}), why: `${on ? "on" : "at"} the ${name}` });
         pos.set(id, spot);
@@ -222,7 +325,7 @@ export function blockingFromWords(plan: GeometryPlanData, panels: WordsPanel[], 
         const at = out[id]?.at ?? from;
         const deg = tp ? degTo(at, tp) : t?.kind === "prop" ? degTo(at, propAt.get(t.f.id) ?? t.f.position) : t?.kind === "view" ? t.v.directionDeg : undefined;
         if (deg === undefined) continue;
-        set({ at, facingDeg: deg, why: `turns to ${who ? who.name.split(/\s+/)[0] : `the ${t!.kind === "prop" ? t!.f.name : t!.v.name}`}` });
+        set({ at, facingDeg: deg, why: `turns to ${who ? who.name.split(/\s+/)[0] : `the ${nameOf(t!)}`}` });
       } else if (kind === "turnAway") {
         if (out[id]?.to) continue;
         const who = m[1] ? byFirst(m[1]) : m[2] ? byFirst(m[2]) : undefined;
@@ -243,7 +346,7 @@ export function blockingFromWords(plan: GeometryPlanData, panels: WordsPanel[], 
         const spot = t.kind === "prop" ? clamp(propAt.get(t.f.id) ?? t.f.position) : placeOf(t, out[id]?.to ?? pos.get(id)!, false);
         held.delete(propId);
         propAt.set(propId, spot);
-        out[`prop:${propId}`] = { at: spot, by: "app", why: `put down on the ${t.kind === "prop" ? t.f.name : t.v.name}` };
+        out[`prop:${propId}`] = { at: spot, by: "app", why: `put down on the ${nameOf(t)}` };
       }
     }
     return out;

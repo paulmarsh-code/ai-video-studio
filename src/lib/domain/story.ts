@@ -4,11 +4,11 @@
 // clip lengths Kling can make, and a total close to the target length.
 
 import { boundsFor, DEFAULT_ROOM, groupCentre, type RoomSize } from "./room";
-import { levelsFromWords } from "./levels";
+import { levelsFromWords, withAreas } from "./levels";
 import { countWords, deriveDuration, LEAD_SECONDS, WORDS_PER_SECOND } from "./duration";
 import { cleanReply } from "./describe";
 import { hasQuotes, stripQuotes } from "./text";
-import { KLING_OMNI_PRESET, type GeometryPlanData, type PlanView, type ShotSpec } from "./types";
+import { ACTIONS, AREA_KINDS, KLING_OMNI_PRESET, type ActionKind, type AreaKind, type Doing, type GeometryPlanData, type PlanView, type ShotSpec } from "./types";
 
 export const TARGET_LENGTHS = [30, 60, 90] as const;
 export const MIN_CLIP_SEC = KLING_OMNI_PRESET.minDurationSec;
@@ -40,6 +40,14 @@ export interface KeyProp {
 export type CrowdLevel = "none" | "few" | "busy";
 
 /** The scene setting (D18c, D19): kept the same in every picture and clip of the scene. */
+/** A part of the ground the story happens on or in (D80): a skate bowl, a pool, a ski run, a stage. */
+export interface KeyArea {
+  name: string;
+  kind: AreaKind;
+  /** Size, depth, height or steepness, and surface, in words. */
+  detail: string;
+}
+
 export interface SceneStaging {
   /** Where the characters are, and whether they stand or sit. */
   spot: string;
@@ -48,6 +56,99 @@ export interface SceneStaging {
   /** How many other people: none, a few, or a busy crowd. */
   crowdLevel: CrowdLevel;
   props: KeyProp[];
+  /** Areas the action happens on or in (D80); none when the floor is flat. */
+  areas?: KeyArea[];
+}
+
+// Actions read from a panel's own words when the panel writer gave none (D80). English, as the
+// panels are; only clear verbs, with the usual figures of speech left out.
+const ACTION_WORDS: [RegExp, ActionKind, ((m: string) => string | undefined)?][] = [
+  [/\b(?:rides?|riding|rode|carv(?:es|ing)|skat(?:es|ing)|ollies|kickflips|grinds|pedals|cycles|cycling|surf(?:s|ing)|snowboards|snowboarding|ski(?:s|ing))\b/i, "ride",
+    (m) => (/skat|ollie|kickflip|grind/i.test(m) ? "skateboard" : /snowboard/i.test(m) ? "snowboard" : /ski/i.test(m) ? "skis" : /surf/i.test(m) ? "surfboard" : /cycl|pedal/i.test(m) ? "bike" : undefined)],
+  [/\b(?:swims|swimming|swam|treads? water|treading water|floats|floating)\b/i, "swim"],
+  [/\b(?:dives|diving|dove)\b/i, "dive"],
+  [/\b(?:runs|running|ran|sprints|sprinting|jogs|jogging)\b(?!\s+(?:his|her|their|a)\s+(?:hand|hands|fingers|eyes|finger|thumb|tongue))/i, "run"],
+  [/\b(?:jumps|jumping|jumped|leaps|leapt|leaping)\b(?!\s+(?:up\s+)?to\s+(?:his|her|their)\s+feet)/i, "jump"],
+  [/\b(?:falls|falling|fell|plummets|plummeting|free-?falls?|free-?falling)\b(?!\s+(?:silent|asleep|quiet|apart|in\s+love|for|back|into\s+(?:place|step|line)))/i, "fall"],
+  [/\b(?:climbs|climbing|climbed)\b/i, "climb"],
+  [/\b(?:drives|driving|drove)\b/i, "drive"],
+  [/\b(?:dances|dancing|danced)\b/i, "dance"],
+  [/\b(?:punches|punching|tackles|tackling|wrestles|wrestling|grapples|grappling)\b/i, "fight"],
+  [/\b(?:kicks|kicking)\b(?!\s+(?:off|back))/i, "kick"],
+  [/\b(?:throws|throwing|threw|hurls|hurling)\b(?!\s+(?:his|her|their)\s+(?:arms|head|hands))/i, "throw"],
+  [/\bon\s+(?:the|a|his|her|their)\s+phone\b|\bphone\s+(?:pressed\s+)?(?:to|against)\s+(?:his|her|their)\s+ear\b|\banswers\s+(?:the|his|her|their)\s+phone\b/i, "phone"],
+  [/\b(?:reads|reading)\b/i, "read"],
+  [/\b(?:writes|writing|scribbles|scribbling)\b/i, "write"],
+  [/\b(?:typing|types\s+(?:on|a|the|into|out))\b/i, "type"],
+  [/\b(?:eats|eating|bites\s+into)\b/i, "eat"],
+  [/\b(?:sips|sipping|gulps|drinks\s+(?:from|deeply|it)|takes\s+a\s+(?:sip|drink|swig))\b/i, "drink"],
+  [/\b(?:cooks|cooking|stirs|stirring|fries|frying)\b/i, "cook"],
+  [/\bplay(?:s|ing)\s+(?:the\s+)?(piano|guitar|violin|drums|cello|bass|keyboard|trumpet|saxophone|flute)\b/i, "play", (m) => m.match(/piano|guitar|violin|drums|cello|bass|keyboard|trumpet|saxophone|flute/i)?.[0].toLowerCase()],
+];
+
+/**
+ * What each person does in a panel's words (D80), when the panel writer gave no DOING: each
+ * clear action verb goes to the last person named before it. First action per person wins.
+ */
+export function actionsInWords(text: string, ids: string[]): Record<string, Doing> {
+  const out: Record<string, Doing> = {};
+  if (!text.trim() || !ids.length) return out;
+  const names = new RegExp(`\\b(${ids.map((id) => id.replace(/[^\w-]/g, "")).filter(Boolean).join("|")})\\b`, "gi");
+  for (const [re, action, thing] of ACTION_WORDS) {
+    const m = re.exec(text);
+    if (!m) continue;
+    let who: string | undefined;
+    for (const n of text.slice(0, m.index).matchAll(names)) who = n[1].toLowerCase();
+    if (!who || out[who]) continue;
+    const w = thing?.(m[0]);
+    out[who] = { action, ...(w ? { with: w } : {}) };
+  }
+  return out;
+}
+
+/** An area's kind from its words (D80): the fixed kinds, or a plain word for one. */
+export function areaKindOf(text: string): AreaKind | undefined {
+  const t = text.toLowerCase();
+  const exact = AREA_KINDS.find((k) => new RegExp(`\\b${k}\\b`).test(t));
+  if (exact) return exact;
+  if (/\b(sunken|pit|hollow|bowl|trench|ditch|crater|below)\b/.test(t)) return "lowered";
+  if (/\b(pool|sea|lake|river|pond|swamp|water)\b/.test(t)) return "water";
+  if (/\b(hill|ramp|piste|run|dune|incline|bank)\b/.test(t)) return "slope";
+  if (/\b(stage|platform|ring|podium|dais|deck)\b/.test(t)) return "raised";
+  if (/\b(stands?|tiers?|terraces?|seating|stairs?)\b/.test(t)) return "steps";
+  if (/\b(pitch|court|rink|lanes?|dance ?floor|field)\b/.test(t)) return "marked";
+  if (/\b(fence|glass|rope|tape|cordon|wall|moat)\b/.test(t)) return "barrier";
+  return undefined;
+}
+
+/**
+ * What someone is doing (D80), from the panel writer's words: one of the fixed actions, and
+ * what it's on or with ("ride (skateboard)"). Plain words for one are understood too.
+ */
+export function actionOf(text: string): Doing | undefined {
+  const t = text.trim().toLowerCase();
+  if (!t || NONE.test(t)) return undefined;
+  const withWhat = t.match(/\(([^)]+)\)/)?.[1]?.trim();
+  const head = t.replace(/\([^)]*\)/g, " ").trim();
+  const said = (ACTIONS as readonly string[]).find((a) => new RegExp(`^${a}\\b`).test(head)) as ActionKind | undefined;
+  const syn: [RegExp, ActionKind][] = [
+    [/^(on the phone|phone|call)/, "phone"], [/^(standing|stands)/, "stand"], [/^(walking|walks)/, "walk"], [/^(running|runs|sprint|jog)/, "run"],
+    [/^(sitting|sits|seated)/, "sit"], [/^(lying|lies)/, "lie"], [/^(kneeling|kneels)/, "kneel"], [/^(crouching|crouches|squat)/, "crouch"],
+    [/^(riding|rides|skat|skiing|skis|snowboard|surf|cycl|carv)/, "ride"], [/^(driving|drives)/, "drive"], [/^(swimming|swims|tread|float)/, "swim"],
+    [/^(diving|dives)/, "dive"], [/^(jumping|jumps|leap)/, "jump"], [/^(falling|falls|freefall|free-fall)/, "fall"], [/^(climbing|climbs)/, "climb"],
+    [/^(dancing|dances)/, "dance"], [/^(fighting|fights|punch|tackl|wrestl)/, "fight"], [/^(throwing|throws)/, "throw"], [/^(kicking|kicks)/, "kick"],
+    [/^(catching|catches)/, "catch"], [/^(reading|reads)/, "read"], [/^(writing|writes)/, "write"], [/^(typing|types)/, "type"], [/^(eating|eats)/, "eat"],
+    [/^(drinking|drinks|sips)/, "drink"], [/^(cooking|cooks)/, "cook"], [/^(playing|plays)/, "play"],
+  ];
+  const action = said ?? syn.find(([re]) => re.test(head))?.[1];
+  if (!action) return undefined;
+  // "riding a skateboard", "skiing": what it's on, from the words when no brackets say it.
+  const rest = head.replace(/^\S+\s*/, "").replace(/^(a|an|the|his|her|their)\s+/, "").trim();
+  const implied = action === "ride" ? (/^skat/.test(head) ? "skateboard" : /^ski/.test(head) ? "skis" : /^snowboard/.test(head) ? "snowboard" : /^surf/.test(head) ? "surfboard" : /^cycl/.test(head) ? "bike" : undefined) : undefined;
+  // Only actions done on or with a thing keep one: "stand filming" isn't standing on anything.
+  const takesThing = ["ride", "drive", "play", "throw", "kick", "catch", "eat", "drink", "read", "write", "type", "cook", "climb"].includes(action);
+  const w = withWhat ?? (takesThing ? rest || implied : undefined);
+  return { action, ...(w ? { with: w } : {}) };
 }
 
 /** "busy" for crowds, parties and big numbers; "few" for a handful; "none" for no one. */
@@ -71,7 +172,10 @@ export function asStaging(v: unknown): SceneStaging {
     })
     .filter((p) => p.name);
   const level = crowdLevelOf(crowd, o.crowdLevel);
-  return { spot: clean(o.spot), crowd: level === "none" ? "" : crowd, crowdLevel: level, props };
+  const areas = (Array.isArray(o.areas) ? o.areas : [])
+    .map((a) => ({ name: clean((a as KeyArea)?.name), kind: (AREA_KINDS as readonly string[]).includes((a as KeyArea)?.kind) ? (a as KeyArea).kind : areaKindOf(`${(a as KeyArea)?.name ?? ""} ${(a as KeyArea)?.detail ?? ""}`), detail: clean((a as KeyArea)?.detail) }))
+    .filter((a): a is KeyArea => !!a.name && !!a.kind);
+  return { spot: clean(o.spot), crowd: level === "none" ? "" : crowd, crowdLevel: level, props, ...(areas.length ? { areas } : {}) };
 }
 
 /**
@@ -139,6 +243,11 @@ export function propHeight(text: string, name?: string): number {
   scan(/\d+(?:\.\d+)?\s?m\s*(?:wide|across)?\s*[x×]\s*(\d(?:\.\d+)?)\s?m\s*(?:tall|high)/, (x) => Math.min(4, Number(x[1])));
   if (found.length) return found.sort((a, b) => a.at - b.at)[0].m;
   if (propKind(text) === "flat") return 2.2;
+  // Heights said against the body (D80): "knee-high" isn't "high" (a skate park's ledge stood 1.1 m).
+  if (/\bankle[- ]high\b/i.test(text)) return 0.15;
+  if (/\b(?:knee|shin)[- ](?:high|height)\b/i.test(text)) return 0.5;
+  if (/\b(?:hip|thigh)[- ](?:high|height)\b/i.test(text)) return 0.9;
+  if (/\bshoulder[- ](?:high|height)\b/i.test(text)) return 1.4;
   if (/\b(chest[- ]high|bar[- ]height|poseur|cocktail|high[- ]top|tall|high)\b/i.test(text)) return 1.1;
   if (/\bwaist[- ]high|counter\b/i.test(text)) return 0.95;
   if (/\b(coffee|low|side)\s+table\b|\bottoman\b/i.test(text)) return 0.45;
@@ -157,6 +266,10 @@ export interface DraftPanel {
   emotion: string;
   /** Clip length: derived from the line, or the silent length. */
   seconds: number;
+  /** Where each person is, by id, in the writer's words (D80). */
+  places?: Record<string, string>;
+  /** What each person is doing, by id (D80). */
+  doing?: Record<string, Doing>;
 }
 
 // ---------- The request to GPT ----------
@@ -210,6 +323,8 @@ export function storyPrompt(i: { story: string; characters: StoryCharacter[]; ve
     "PANEL 1",
     "ACTION: what we see, in one or two sentences",
     "IN FRAME: the characters we see, separated by commas",
+    `PLACE: where each character in frame is, as name - place, separated by semicolons, using the AREA, PROP and setting names (for example: Kai - in the skate bowl; Rosa - at the edge of the skate bowl; Ava - on the far edge of the pool; Ben - at the top of the ski run; Cy - beside Ava)`,
+    `DOING: what each character in frame is doing, as name - one of: ${ACTIONS.join(", ")}; what it's on or with in brackets (for example: Kai - ride (skateboard); Rosa - stand; Ava - phone)`,
     "SPEAKER: the one character who speaks, or none",
     "LINE: the exact spoken words without quote marks, or none",
     "EMOTION: one to three words",
@@ -281,6 +396,7 @@ const SCENE_FORMAT = [
   "SPOT: where the characters are and whether they stand or sit (for example: standing around the cocktail table, near the bar)",
   "PROP: name - size, height and colour, so it is drawn the same way every time (for example: cocktail table - round, about 70 cm across, chest-high at 110 cm, white floor-length cloth). Give a table the height people use it at: chest-high, about 110 cm, for standing round it; about 75 cm for sitting at it. One PROP line for each object that matters to the story or that the characters gather around; leave out ordinary furniture.",
   "OTHER PEOPLE: none, few or busy - who they are and what they are doing (for example: busy - about 40 well-dressed industry guests mingling with drinks)",
+  "AREA: name - kind - size and how high, deep or steep, for each part of the ground the action happens on or in that isn't flat floor (for example: skate bowl - lowered - round, about 5 m across and 2 m deep; pool - water - 10 m by 5 m, 1.4 m deep; ski run - slope - 40 m long, falls 8 m; stage - raised - 6 m by 4 m, 1 m high). The kind is one of: raised, lowered, slope, water, steps, marked. An area is not a PROP. Leave AREA out when the floor is flat.",
 ];
 
 /** Events, parties and busy places need people in the background, or every picture comes out empty. */
@@ -326,17 +442,25 @@ export function mergeSuggestion(current: SceneStaging, suggested: SceneStaging, 
     crowd: crowdEmpty ? suggested.crowd : current.crowd,
     crowdLevel: crowdEmpty ? suggested.crowdLevel : current.crowdLevel,
     props,
+    ...((current.areas?.length ? current.areas : suggested.areas)?.length ? { areas: current.areas?.length ? current.areas : suggested.areas } : {}),
   };
 }
 
 export function parseStaging(text: string): SceneStaging {
   const scene: Record<string, unknown> = {};
   const props: KeyProp[] = [];
+  const areas: KeyArea[] = [];
   for (const raw of cleanReply(text).split(/^\s*[#*_\s]*PANEL\s*\d+[^\n]*$/im)[0].split(/\r?\n/)) {
-    const m = raw.replace(/\*\*|__/g, "").replace(/^\s*[-*•]\s*/, "").trim().match(/^(SPOT|WHERE|BACKGROUND|CROWD|EXTRAS|OTHER PEOPLE|PROP|KEY PROP)\s*:\s*(.*)$/i);
+    const m = raw.replace(/\*\*|__/g, "").replace(/^\s*[-*•]\s*/, "").trim().match(/^(SPOT|WHERE|BACKGROUND|CROWD|EXTRAS|OTHER PEOPLE|PROP|KEY PROP|AREA)\s*:\s*(.*)$/i);
     if (!m) continue;
     const k = m[1].toUpperCase();
-    if (k === "SPOT" || k === "WHERE") scene.spot = m[2];
+    if (k === "AREA") {
+      // "skate bowl - lowered - round, about 5 m across and 2 m deep" (D80).
+      const [name, ...rest] = m[2].split(/\s+[—–-]\s+/);
+      const kindWord = rest.length > 1 ? rest[0] : "";
+      const kind = areaKindOf(kindWord) ?? areaKindOf(`${name} ${rest.join(" ")}`);
+      if (name && !NONE.test(name.trim()) && kind) areas.push({ name: stripQuotes(name).trim(), kind, detail: (rest.length > 1 && areaKindOf(kindWord) ? rest.slice(1) : rest).join(" - ").trim() });
+    } else if (k === "SPOT" || k === "WHERE") scene.spot = m[2];
     else if (k === "PROP" || k === "KEY PROP") {
       const [name, ...rest] = m[2].split(/\s+[—–-]\s+|:\s+/);
       if (name && !NONE.test(name.trim())) props.push({ name: name.trim(), detail: rest.join(" - ").trim() });
@@ -347,12 +471,12 @@ export function parseStaging(text: string): SceneStaging {
       else scene.crowd = m[2];
     }
   }
-  return asStaging({ ...scene, props });
+  return asStaging({ ...scene, props, areas });
 }
 
 // ---------- Reading the reply ----------
 
-const FIELD = /^(ACTION|IN FRAME|INFRAME|SPEAKER|LINE|DIALOGUE|EMOTION|SECONDS|LENGTH|DURATION)\s*:\s*(.*)$/i;
+const FIELD = /^(ACTION|IN FRAME|INFRAME|PLACES?|DOING|SPEAKER|LINE|DIALOGUE|EMOTION|SECONDS|LENGTH|DURATION)\s*:\s*(.*)$/i;
 const NONE = /^(none|no one|nobody|n\/a|-+|—|silent|\(none\)|\(silent\))\.?$/i;
 
 export interface StoryReply {
@@ -383,7 +507,7 @@ export function parseStoryReply(text: string, characters: StoryCharacter[]): Sto
       const m = line.match(FIELD);
       if (m) {
         const k = m[1].toUpperCase().replace(/\s/g, "");
-        current = k === "INFRAME" ? "frame" : k === "DIALOGUE" ? "line" : k === "LENGTH" || k === "DURATION" ? "seconds" : k.toLowerCase();
+        current = k === "INFRAME" ? "frame" : k === "DIALOGUE" ? "line" : k === "LENGTH" || k === "DURATION" ? "seconds" : k === "PLACES" ? "place" : k.toLowerCase();
         v[current] = m[2].trim();
       } else if (current && current !== "seconds") {
         v[current] = `${v[current]} ${line}`.trim();
@@ -394,6 +518,20 @@ export function parseStoryReply(text: string, characters: StoryCharacter[]): Sto
     const inFrame = (v.frame ?? "").split(/,|\band\b|&/i).map((x) => x.trim()).filter((x) => x && !NONE.test(x)).map(find).filter((x): x is string => !!x);
     if (speakerId && !inFrame.includes(speakerId)) inFrame.unshift(speakerId);
     const asked = Number.parseFloat((v.seconds ?? "").replace(/[^\d.]/g, ""));
+    // "Kai - in the skate bowl; Rosa - at its edge" (D80): per person, by name.
+    const perPerson = (raw?: string) => {
+      const out: Record<string, string> = {};
+      for (const part of (raw ?? "").split(/;|\n/)) {
+        const m = part.trim().match(/^([^-–—:]+?)\s*[-–—:]\s+(.+)$/);
+        if (!m || NONE.test(m[2].trim())) continue;
+        const n = stripQuotes(m[1]).replace(/[.()*]/g, "").trim().toLowerCase();
+        const id = characters.find((x) => x.name.toLowerCase() === n || x.id === n || x.name.toLowerCase().split(/\s+/)[0] === n.split(/\s+/)[0])?.id;
+        if (id) out[id] = m[2].trim().replace(/[.]$/, "");
+      }
+      return out;
+    };
+    const places = perPerson(v.place);
+    const doing = Object.fromEntries(Object.entries(perPerson(v.doing)).map(([id, w]) => [id, actionOf(w)]).filter(([, d]) => d)) as Record<string, Doing>;
     panels.push({
       action: stripQuotes(v.action ?? "").trim(),
       inFrame: [...new Set(inFrame)],
@@ -401,6 +539,8 @@ export function parseStoryReply(text: string, characters: StoryCharacter[]): Sto
       line: lineText,
       emotion: stripQuotes(v.emotion ?? "").replace(/[.]$/, "").trim(),
       seconds: panelSeconds(lineText, asked),
+      ...(Object.keys(places).length ? { places } : {}),
+      ...(Object.keys(doing).length ? { doing } : {}),
     });
   }
   return { staging: parseStaging(parts[0] ?? ""), panels, unknownNames: [...unknown] };
@@ -484,6 +624,8 @@ export function shotSpecFor(p: DraftPanel, i: { code: string; venueName: string;
     subjectId: p.line ? undefined : visible[0],
     actions: p.action, emotion: p.emotion || undefined, durationSec: p.seconds,
     audioMode: p.line ? "native-on" : "off", intensity: "natural",
+    ...(p.places && Object.keys(p.places).length ? { where: p.places } : {}),
+    ...(p.doing && Object.keys(p.doing).length ? { doing: p.doing } : {}),
   };
 }
 
@@ -519,7 +661,8 @@ export function defaultPlan(castIds: string[], panels: DraftPanel[], views: Plan
   const line: [string, string] | undefined = partner ? [partner, main] : undefined;
   const bounds = boundsFor(room);
   const levels = levelsFromWords(staging?.spot ?? "", venue?.text ?? "", bounds, C);
-  return {
+  // The setting's areas (D80), at their real size beside the group.
+  return withAreas({
     bounds,
     ...(levels.length ? { levels } : {}),
     furniture: planProps(staging, actors.length > 1, C),
@@ -527,7 +670,7 @@ export function defaultPlan(castIds: string[], panels: DraftPanel[], views: Plan
     views: views.map((v) => ({ name: v.name, directionDeg: v.directionDeg })),
     lineOfAction: line,
     aspect,
-  };
+  }, staging?.areas ?? [], staging?.spot);
 }
 
 // ---------- Movement marks (D19b) ----------

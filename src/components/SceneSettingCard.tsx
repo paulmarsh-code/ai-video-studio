@@ -83,6 +83,21 @@ export function StagingFields({ value, onChange, propsLocked, projectId }: {
             placeholder="who they are and what they're doing, e.g. about 40 well-dressed guests mingling with drinks" />
         )}
       </div>
+      {/* Areas the action happens in or on (D80): placed on the floor plan, where they can be moved. */}
+      {!!value.areas?.length && (
+        <div className="text-sm" data-testid="staging-areas">
+          <p className="font-medium">Areas</p>
+          <ul className="mt-1 space-y-1">
+            {value.areas.map((a, k) => (
+              <li key={k} className="flex items-start gap-2">
+                <span>{a.name} <span className="text-neutral-500">({a.kind}{a.detail ? `, ${a.detail}` : ""})</span></span>
+                <button type="button" className="text-xs text-red-700 underline" onClick={() => onChange({ ...value, areas: value.areas!.filter((_, i) => i !== k) })}>Remove</button>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1 text-xs text-neutral-500">Placed beside the group on the floor plan; move them there if they&apos;re in the wrong place.</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -115,7 +130,7 @@ export function SceneSettingCard({ sceneId, projectId, staging, hasPictures, sug
   // anything already written or attached here, saved or not, is kept (D19c).
   const use = async (text: string) => {
     const s = parseStaging(text);
-    if (!s.spot && !s.crowd && !s.props.length) { setMsg("Couldn't find SPOT, PROP or OTHER PEOPLE lines in that reply."); return false; }
+    if (!s.spot && !s.crowd && !s.props.length && !s.areas?.length) { setMsg("Couldn't find SPOT, PROP, OTHER PEOPLE or AREA lines in that reply."); return false; }
     const merged = mergeSuggestion(v, s, propsLocked);
     const changed = JSON.stringify(merged) !== JSON.stringify(v);
     const r = await save(merged, changed ? "Suggestions added where the setting was empty; everything you wrote was kept. Saved." : "Nothing to add: everything was already filled in, and your words were kept. Saved.");
