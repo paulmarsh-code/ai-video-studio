@@ -36,3 +36,18 @@ describe("The approved picture gives looks, never the shot (D63)", () => {
     expect(draw("front", "skyline").short).not.toMatch(/This camera faces/);
   });
 });
+
+describe("An approved picture from the same camera (D69)", () => {
+  const same = (cameraId: string, from: string) => panelPrompt({ description: "They talk.", shot: spec(cameraId), cast: cast as never, profiles: {}, plan, venueName: "roof", blockingHref: "/api/blocking/x", continuity: { assetId: "z", label: "approved scene picture (panel 3)", view: "skyline", cameraId: from } });
+  it("keeps everything behind the characters exactly as in it", () => {
+    const p = same("front", "front");
+    expect(p.short).toMatch(/is from this same camera: keep the clothes, the furniture, what stands on the tables, the light and everything behind the characters exactly as in it \(railings, walls, planters, lights and the view, the same shapes, sizes and thickness\)/);
+    expect(p.text).toMatch(/It is from this same camera: everything behind the characters stays exactly as in it/);
+    expect(p.short).not.toMatch(/never copy the approved picture's framing/);
+  });
+  it("from another camera, gives looks only, as before", () => {
+    const p = same("front", "ots");
+    expect(p.short).toMatch(/Image 1 decides where everyone and everything is, how big and how high, and what is behind them/);
+    expect(p.short).not.toMatch(/same camera/);
+  });
+});

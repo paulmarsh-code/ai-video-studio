@@ -1384,3 +1384,15 @@ Looking at the pictures, the table is with the two women, and they too are drawn
   - "Medium shot, two-shot" becomes "long shot, two-shot" for two seated people whole in frame. The over-the-shoulder shot's words are left alone.
   - A group drawn closer is named, with no table fail. A table in front of a group that's in place still fails. A group and table where image 1 has them pass.
   - The D55 prop tests are unchanged.
+
+### D69: An approved picture from the same camera keeps everything behind the characters (2026-11-12)
+
+Paul noticed that panels 1 and 3 share a camera and its background plate, yet the handrail along the planters is much thinner in panel 3 than in panel 1. GPT keeps about 92–94% of image 1's background (D68), and a rail's thickness falls in what's left. Two pictures from one camera are the same view a few seconds apart, so any difference behind the people shows when they're cut together.
+
+The approved picture already goes with every other panel (D18c). Since D63 it gives only looks, because a panel from another camera faces another side of the place. That was right for panel 2, but too little for a panel from the same camera.
+
+- **Failure fixed (D38).** The background differing between two panels from the same camera. It reaches generation through a prompt line.
+- **The storyboard page** now passes the approved picture's camera (`continuity.cameraId`).
+- **When it's this panel's camera,** the short request says: "The approved scene picture (panel 3) is from this same camera: keep the clothes, the furniture, what stands on the tables, the light and everything behind the characters exactly as in it (railings, walls, planters, lights and the view, the same shapes, sizes and thickness), each character with the same drink and things in front of them. Image 1 decides where everyone is and how they are posed in this moment." The full request says the same. The background guests still move on (D65).
+- **From another camera,** the request is unchanged (D63): looks only, and a turned camera is named.
+- **Tested.** Unit tests cover the same-camera line in both requests (without the "never copy its framing" clause) and the other-camera line unchanged.

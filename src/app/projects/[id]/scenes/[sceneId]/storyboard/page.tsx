@@ -133,7 +133,7 @@ export default async function StoryboardPage({ params, searchParams }: { params:
               // The blocking frame (D34): the shot itself, finished by GPT.
               blockingHref: shot?.spec.cameraId && hasRing(s.venue?.views as { imageAssetId?: string }[] | undefined) ? `/api/blocking/${shot.id}` : undefined,
               frame: frameVariant(),
-              continuity: anchor && anchor.panel.id !== p.id ? { assetId: anchor.panel.imageAssetId!, label: `approved scene picture (panel ${anchor.n})`, view: anchorView } : undefined,
+              continuity: anchor && anchor.panel.id !== p.id ? { assetId: anchor.panel.imageAssetId!, label: `approved scene picture (panel ${anchor.n})`, view: anchorView, cameraId: anchorShot?.spec.cameraId } : undefined,
             });
             return {
               id: p.id, code: p.code, description: p.description, seconds: p.durationSec, status: p.status, imageAssetId: p.imageAssetId ?? undefined,
