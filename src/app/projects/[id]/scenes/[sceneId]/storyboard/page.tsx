@@ -18,7 +18,8 @@ import { hasRing } from "@/lib/backgroundImage";
 import { ensureHeldItems } from "@/lib/heldItemsServer";
 import { suggestShots } from "@/lib/domain/shotSuggest";
 import { signsWithoutPicture } from "@/lib/domain/signage";
-import { panelCameraLabel, planForShot, readCamera } from "@/lib/domain/geometry";
+import { panelCameraLabel } from "@/lib/domain/geometry";
+import { continuityFor } from "@/lib/domain/continuity";
 
 export const dynamic = "force-dynamic";
 
@@ -71,15 +72,6 @@ export default async function StoryboardPage({ params, searchParams }: { params:
     );
   }
   // The approved picture showing the most people keeps the rest of the scene consistent (D18c).
-  const anchor = s.panels
-    .map((p, i) => ({ panel: p, n: i + 1, people: s.shots.find((x) => x.panelId === p.id)?.spec.visibleIds.length ?? 0 }))
-    .filter((x) => x.panel.status === "approved" && x.panel.imageAssetId)
-    .sort((a, b) => b.people - a.people || a.n - b.n)[0];
-  // Which side of the place is behind the people in the approved picture (D63).
-  const anchorShot = anchor && s.shots.find((x) => x.panelId === anchor.panel.id);
-  const anchorPlan = anchorShot && s.plan ? planForShot(s.plan.data, anchorShot.spec) : undefined;
-  const anchorCam = anchorPlan?.cameras.find((c) => c.id === anchorShot?.spec.cameraId);
-  const anchorView = anchorPlan && anchorCam ? readCamera(anchorPlan, anchorCam).backgroundView : undefined;
   let n = s.panels.length + 1;
   while (s.panels.some((p) => p.code.toLowerCase() === `p${n}`)) n++;
 
@@ -133,7 +125,8 @@ export default async function StoryboardPage({ params, searchParams }: { params:
               // The blocking frame (D34): the shot itself, finished by GPT.
               blockingHref: shot?.spec.cameraId && hasRing(s.venue?.views as { imageAssetId?: string }[] | undefined) ? `/api/blocking/${shot.id}` : undefined,
               frame: frameVariant(),
-              continuity: anchor && anchor.panel.id !== p.id ? { assetId: anchor.panel.imageAssetId!, label: `approved scene picture (panel ${anchor.n})`, view: anchorView, cameraId: anchorShot?.spec.cameraId } : undefined,
+              // The approved picture from this panel's camera if there is one (D72), else the fullest.
+              continuity: continuityFor(s.panels, s.shots, s.plan?.data, p.id),
             });
             return {
               id: p.id, code: p.code, description: p.description, seconds: p.durationSec, status: p.status, imageAssetId: p.imageAssetId ?? undefined,

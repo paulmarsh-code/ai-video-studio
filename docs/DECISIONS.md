@@ -1428,3 +1428,13 @@ With D68 in place, Paul drew all three T6 panels again on version C.
 - **Change.** The group's feet against the plan (D68) are still measured and recorded (`groupFeetShift` in `check.json`; + means drawn closer), and props among the people are still judged against them. But it is no longer a fail: with heads on the eye line and everyone at their place across, it is a tighter framing of the right blocking. Standing people drawn 1.5× too tall or short still fail (D53), and so does a camera that is too high or low.
 - **The handrail.** Panels 1 and 3 again differed (thin in 1 this time, thick in 3). None of the three was approved, so D69's same-camera line wasn't in play. Approve the panel with the right rail, then redraw the other.
 - **Tested.** Unit tests: a group drawn about 14% closer, with its table, passes and records the shift; a table well in front of a group that is in place still fails.
+
+### D72: A panel gets the approved picture from its own camera first (2026-11-12)
+
+Paul approved panels 2 and 3, then redrew panel 1. Panel 1 came back with no handrail along the planters and a table with a thinner base.
+
+Its record shows it was sent panel 2 as "the approved scene picture", not panel 3. The choice (D18c) was the approved picture with the most people, and both have two, so the lower panel number won. Panel 2 is the over-the-shoulder camera facing the decking, so the request gave looks only (D63). GPT took panel 2's table and chairs, and nothing told it to keep panel 3's background, though panel 3 shares panel 1's camera and was approved alongside it.
+
+- **Failure fixed (D38).** The background and furniture of panels from the same camera not matching, though one of them was approved. It reaches generation through which approved picture goes with the panel, and so which prompt line (D69).
+- **Change (`continuityFor`).** For each panel, the approved picture from the panel's own camera comes first. Among several, the one with the most people, then the lowest number, wins. With none from its camera, the choice is as before. It's never the panel's own picture. The storyboard page now chooses per panel instead of one picture for all.
+- **Tested.** Unit tests: panel 1 gets panel 3 (same camera, skyline view) though panel 2 is approved with a lower number; panel 2, with no approved picture from its camera, gets panel 1; and a panel never gets its own picture.
