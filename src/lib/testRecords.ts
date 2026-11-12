@@ -10,8 +10,15 @@ import type { PictureCheck } from "./domain/pictureCheck";
 
 export const testMode = () => /^(1|true|yes|on)$/i.test(process.env.STORYBOARD_TEST ?? "");
 export const requestVariant = (): "full" | "short" => (/^short$/i.test(process.env.STORYBOARD_REQUEST ?? "") ? "short" : "full");
-/** Image 1 drawn over the venue photo (A, the default) or as a grey-box room from the plan (B, D60): STORYBOARD_FRAME=box. */
-export const frameVariant = (): "photo" | "box" => (/^box$/i.test(process.env.STORYBOARD_FRAME ?? "") ? "box" : "photo");
+/**
+ * Image 1 drawn over the venue photo (A, the default), as a grey-box room from the plan (B, D60:
+ * STORYBOARD_FRAME=box), or over a finished background plate that is pasted back after GPT draws
+ * the people and props (C, D66: STORYBOARD_FRAME=fill).
+ */
+export const frameVariant = (): "photo" | "box" | "fill" => {
+  const v = process.env.STORYBOARD_FRAME ?? "";
+  return /^box$/i.test(v) ? "box" : /^(fill|plate|c)$/i.test(v) ? "fill" : "photo";
+};
 
 const root = () => path.join(process.cwd(), "data", "tests");
 const stamp = () => new Date().toISOString().replace(/[-:]/g, "").replace(/\..*$/, "").replace("T", "_");
@@ -19,7 +26,7 @@ const tag = (assetId: string) => assetId.replace(/-/g, "").slice(0, 8);
 
 export interface DrawRecord {
   panelCode: string;
-  kind: "draw" | "correction" | "redraw";
+  kind: "draw" | "correction" | "redraw" | "plate";
   variant: string;
   prompt: string;
   conflicts?: string[];
@@ -30,6 +37,8 @@ export interface DrawRecord {
   size: string;
   endpoint: string;
   output: { assetId: string; data: Buffer; note?: string };
+  /** More files to keep with the record (D66): the mask, GPT's own picture before the background went back, the plate, numbers. */
+  extras?: { name: string; data: Buffer | string }[];
 }
 
 /** Save everything a picture was drawn from (B4). Never stops a draw: a failed record is only logged. */
@@ -43,6 +52,7 @@ export function recordDraw(r: DrawRecord): void {
       fs.writeFileSync(path.join(dir, `input_${String(k + 1).padStart(2, "0")}_${x.name.replace(/[^\w.-]+/g, "_").replace(/\.(png|jpe?g|webp)$/i, "")}.${ext}`), x.data);
     });
     fs.writeFileSync(path.join(dir, "result.png"), r.output.data);
+    for (const x of r.extras ?? []) fs.writeFileSync(path.join(dir, x.name), x.data);
     fs.writeFileSync(path.join(dir, "settings.json"), JSON.stringify({
       panel: r.panelCode, kind: r.kind, requestVersion: r.variant, frame: frameVariant(), model: r.model, quality: r.quality, size: r.size, endpoint: r.endpoint,
       // The images API takes no seed, so repeat draws can't be made identical; each is its own sample.

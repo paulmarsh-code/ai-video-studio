@@ -1275,3 +1275,45 @@ T6, round 4. Paul approved panel 3 and redrew panels 1 and 2 with D64 in place.
   - "Each character keeps the same drink and things in front of them."
   - With a crowd: "A few seconds have passed: background guests have shifted a little and anyone walking is somewhere else; never copy their exact places."
 - **Tested.** Unit tests cover the two-sides sentence in both requests, the seated bag wording (and no hand), and the drink and moved-on lines. The moved-on line appears only with a crowd and an approved picture.
+
+### D66: Version C. Each camera's background made once as a finished plate, and pasted back after GPT draws the people and props (2026-11-12)
+
+Paul's three standing problems after T6:
+1. Characters and props not quite consistent.
+2. Characters and props out of place: the table moved away from the group, geometry wrong against the background.
+3. Camera angles not consistent in what they show behind the people.
+
+His hope was that the 360° views, cut for each camera, would give each shot a fixed background, and that the floor plan would fix where everyone is. Both are built, and image 1 was right every time in T6. The faults all come after: GPT redraws the whole picture on every draw, treating image 1 as a strong hint. With about six things to get right per picture, the hit rate stays near a half however each one improves. Since D62, 2 of 9 first draws passed. OpenAI's own guidance is that its edit mask is guidance, not a boundary, and that anything that must stay exact should be pasted back after. Paul agreed to build and test version C, with one condition: the clarity must be the same across the whole picture.
+
+- **Failures fixed (D38).** A background swapped for another panel's, or changed between draws from the same camera; a table or person drawn outside their planned place. These reach generation through image 1, the edit mask and pasting the plate back.
+- **The plate (`ensurePlate`, `platePrompt`).**
+  - Each camera's cut from the 360° ring is sent to GPT once and finished as one sharp photograph, the same clarity all over. Soft, blurred or mirrored parts are drawn sharp.
+  - The open floor in the middle and front is left empty for the main characters and props. The background guests are at the back and sides.
+  - The venue's light is applied.
+  - It costs one picture (about 7p) per camera, not per panel.
+  - It's kept in `data/plates`, named from its cut, its request and the model. Panels sharing a camera, room and crowd share it, which is why panels 1 and 3 get exactly the same background. Delete the file to have it made again.
+  - The cut is low resolution: a medium shot is about 400 ring pixels stretched to 1,024. Pasting it back as it is would have made the background blurrier than the people. Making the plate with the same model and quality as the pictures is how the clarity matches.
+- **Image 1** is drawn on the plate instead of the soft cut, so it is sharp too. The image 1 preview uses the plate once it has been made.
+- **Where GPT may draw (`drawArea`, `maskExtras`).**
+  - Image 1's stand-ins, props, arrows and tags, plus extra room so nothing gets cut off by the plate:
+    - a box about a metre wide round each person, from the floor to 30 cm above their head, for hair, gestures and a chair (not for someone within 2 m of the lens, such as an over-the-shoulder back, whose own outline already fills the picture);
+    - room round each person's feet and each prop's foot for shadows.
+  - The whole area is grown by about 1% of the width.
+- **Sending it.** The edit mask goes with the request (clear where GPT may draw), and image 1 is sent full size so the result lines up with it. If a model refuses the mask, the request is sent again without it; the plate goes back either way.
+- **Pasted back (`onPlate`).** GPT's picture is kept inside the area and the plate is used everywhere else, joined over about 2% of the width so a small difference fades instead of showing as an edge.
+- **The request.**
+  - The full request adds: "Everything in image 1 outside the stand-ins and the outlined props is the finished background photograph, with its background guests: keep it exactly as it is, as sharp as it is, and add no one to it. Draw only the main characters, the props and their shadows, as sharp as the background."
+  - The short request says the same.
+  - The crowd lines and the "a few seconds have passed" line (D65) are left out, because the guests are already in the plate.
+- **Test records.**
+  - A plate is recorded as `Pn_plate_…`, with its request and cut.
+  - Each draw also keeps `gpt_picture.png` (GPT's own picture), `draw_area.png`, `plate.png` and `pasted.json`. The numbers in `pasted.json` are:
+    - how much of the picture GPT drew;
+    - how far GPT's own background strayed from the plate (0 = not at all);
+    - how sharp the drawn and pasted parts are (they should be close).
+  - The panel's test line now names the version: A (venue photo), B (grey room) or C (background pasted back).
+- **Run with** `STORYBOARD_FRAME=fill`. A and B are unchanged.
+- **Tested.**
+  - Unit tests cover the plate request, the extra draw areas (only for people in the shot), the C wording and the crowd left out, the paste-back (GPT's picture inside, the plate outside, and how much changed), and OpenAI's mask.
+  - The draw route was run against the stand-in API on a copy of Paul's T6 scene. Panel 1 made the first camera's plate, panel 3 reused it, and panel 2 made its own: two plates for three panels. Every record had its mask, plate and numbers. GPT may draw about 32% of panel 1 and 58% of panel 2 (an over-the-shoulder shot, whose foreground back fills most of the picture).
+- **Not yet known.** Whether GPT's people look pasted in (lighting at the join), and whether GPT keeps the framing with the mask. Paul's draws will show both, and `pasted.json` will put numbers on them.

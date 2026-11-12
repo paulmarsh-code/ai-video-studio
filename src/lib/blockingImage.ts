@@ -17,6 +17,8 @@ import { mainSubjectId } from "./domain/composer";
 import { carriedItems, heldProps } from "./domain/imagePrompts";
 import { WALK_OFF } from "./domain/gestures";
 import { backgroundForFrame } from "./backgroundImage";
+import { cachedPlate, drawArea } from "./plateImage";
+import { maskExtras } from "./domain/plate";
 import { outfitColours } from "./domain/outfitColour";
 import * as repo from "./repo";
 import * as studio from "./studioRepo";
@@ -56,6 +58,23 @@ async function flatPropPictures(db: DB, plan: { furniture?: { id: string; name: 
 }
 
 export async function renderBlockingForShot(db: DB, shotId: string, extraHeld?: Record<string, { side: "left" | "right"; what: string; where: string }[]>): Promise<Buffer | null> {
+  return (await blockingParts(db, shotId, { extraHeld }))?.png ?? null;
+}
+
+/**
+ * Image 1 for version C (D66), drawn on the camera's plate, with where GPT may draw: the
+ * stand-ins, props, arrows and tags, and room round them for chairs and shadows.
+ */
+export async function renderBlockingOnPlate(db: DB, shotId: string, plate: Buffer): Promise<{ png: Buffer; area: Buffer; W: number; H: number } | null> {
+  const parts = await blockingParts(db, shotId, { background: plate });
+  if (!parts) return null;
+  const ids = parts.plan.actors.filter((a) => parts.peopleIds.includes(a.characterId)).map((a) => a.characterId);
+  const area = await drawArea(parts.over, maskExtras(parts.plan, parts.cam, ids, parts.W, parts.H), parts.W, parts.H);
+  return { png: parts.png, area, W: parts.W, H: parts.H };
+}
+
+async function blockingParts(db: DB, shotId: string, opts: { extraHeld?: Record<string, { side: "left" | "right"; what: string; where: string }[]>; background?: Buffer }) {
+  const extraHeld = opts.extraHeld;
   const shot = repo.getShot(db, shotId);
   if (!shot?.spec.cameraId) return null;
   const scene = repo.getScene(db, shot.sceneId);
@@ -68,7 +87,10 @@ export async function renderBlockingForShot(db: DB, shotId: string, extraHeld?: 
   const portrait = !aspect.startsWith("16");
   const W = portrait ? 1024 : 1536, H = portrait ? 1536 : 1024;
   // Test B (D60): the room as a grey box from the plan, with the venue's look sent separately.
-  const bg = frameVariant() === "box" ? await sharp(Buffer.from(greyBoxSvg(full, cam, W, H, { outdoors: scene.venue?.setting === "exterior" }))).png().toBuffer() : await backgroundForFrame(db, shotId, W, H);
+  // Version C (D66): the camera's finished plate, given, or the one already made for a preview.
+  const plate = opts.background ?? (frameVariant() === "fill" ? await cachedPlate(db, shotId) : null);
+  const bg = plate ? await sharp(plate).resize({ width: W, height: H, fit: "fill" }).png().toBuffer()
+    : frameVariant() === "box" ? await sharp(Buffer.from(greyBoxSvg(full, cam, W, H, { outdoors: scene.venue?.setting === "exterior" }))).png().toBuffer() : await backgroundForFrame(db, shotId, W, H);
   if (!bg) return null; // no 360° view: the plain layout sketch is used instead
   const cast = repo.getCast(db, scene.scene.projectId);
   const profiles = studio.getApprovedProfiles(db, scene.scene.projectId) as Record<string, CharacterProfile>;
@@ -80,13 +102,15 @@ export async function renderBlockingForShot(db: DB, shotId: string, extraHeld?: 
     const seen = new Set<string>();
     held[a.characterId] = items.filter((x) => { const k = `${x.what.split(/\s+/).slice(-1)[0]}`; if (seen.has(k)) return false; seen.add(k); return true; });
   }
+  const peopleIds = plan.actors.filter((a) => shot.spec.presentIds.includes(a.characterId) && !shot.spec.excludedIds.includes(a.characterId)).map((a) => a.characterId);
   const svg = layoutSketchSvg({
     plan, camera: cam, size: portrait ? "portrait" : "landscape", overlay: true,
-    people: plan.actors.filter((a) => shot.spec.presentIds.includes(a.characterId) && !shot.spec.excludedIds.includes(a.characterId))
+    people: plan.actors.filter((a) => peopleIds.includes(a.characterId))
       .map((a) => ({ id: a.characterId, name: cast.find((c) => c.id === a.characterId)?.name ?? a.characterId, colours: outfitColours(profiles[a.characterId]?.wardrobe) })),
     subjectId: mainSubjectId(shot.spec), backgroundView: readCamera(plan, cam).backgroundView,
     moves: movesFor(full, shot.spec, plan, text), held, propPictures: await flatPropPictures(db, plan),
   });
   const over = await sharp(Buffer.from(svg)).resize({ width: W, height: H, fit: "fill" }).png().toBuffer();
-  return sharp(bg).composite([{ input: over, left: 0, top: 0 }]).png().toBuffer();
+  const png = await sharp(bg).composite([{ input: over, left: 0, top: 0 }]).png().toBuffer();
+  return { png, over, W, H, plan, cam, peopleIds };
 }

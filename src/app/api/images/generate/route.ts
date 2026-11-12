@@ -9,7 +9,8 @@ import { getImageProvider, imageSettings, SIZES } from "@/lib/providers/images";
 import { frameVariant, recordDraw, testMode } from "@/lib/testRecords";
 import { renderLayoutForShot } from "@/lib/layoutImage";
 import { renderBackgroundForShot } from "@/lib/backgroundImage";
-import { renderBlockingForShot } from "@/lib/blockingImage";
+import { renderBlockingForShot, renderBlockingOnPlate } from "@/lib/blockingImage";
+import { ensurePlate, onPlate, openAIMask } from "@/lib/plateImage";
 import { ensureHeldItems } from "@/lib/heldItemsServer";
 import * as repo from "@/lib/repo";
 
@@ -28,10 +29,24 @@ export async function POST(req: Request) {
   }
   // The blocking frame (D34) goes first, as the shot to finish; it already holds the
   // background and the layout, so those aren't sent separately.
+  // Version C (D66): image 1 on the camera's finished plate, which goes back after GPT draws.
+  let onPlateOf: { plate: Buffer; area: Buffer; W: number; H: number } | undefined;
   if (body.blockingShotId) {
     const shot = repo.getShot(db, body.blockingShotId);
     if (shot) await ensureHeldItems(db, body.projectId);
-    const png = await renderBlockingForShot(db, body.blockingShotId);
+    let png: Buffer | null = null;
+    if (frameVariant() === "fill") {
+      try {
+        const plate = await ensurePlate(db, body.blockingShotId, provider, body.test ? { panelCode: body.test.panelCode, variant: body.test.variant } : undefined);
+        const on = plate ? await renderBlockingOnPlate(db, body.blockingShotId, plate) : null;
+        if (plate && on) { png = on.png; onPlateOf = { plate, area: on.area, W: on.W, H: on.H }; }
+      } catch (e) {
+        const error = e instanceof Error ? e.message : String(e);
+        console.error(`[images/generate] background plate for ${body.baseCode}: ${error}`);
+        return NextResponse.json({ error: `Couldn't make this camera's background: ${error}` }, { status: 502 });
+      }
+    }
+    png ??= await renderBlockingForShot(db, body.blockingShotId);
     if (png) {
       const at = body.baseAssetId ? 1 : 0;
       refs.splice(at, 0, { data: Buffer.from(png), mime: "image/png", name: "blocking_frame.png" });
@@ -56,9 +71,12 @@ export async function POST(req: Request) {
     if (png) refs.push({ data: Buffer.from(png), mime: "image/png", name: "layout_sketch.png" });
   }
   try {
-    const img = await provider.generate(body.prompt, refs, body.size ?? "portrait");
+    const img = await provider.generate(body.prompt, refs, body.size ?? "portrait", onPlateOf ? { mask: await openAIMask(onPlateOf.area, onPlateOf.W, onPlateOf.H) } : undefined);
+    // Version C (D66): the plate goes back everywhere but the people and props.
+    const put = onPlateOf ? await onPlate(img.data, onPlateOf.plate, onPlateOf.area, onPlateOf.W, onPlateOf.H) : undefined;
+    const data = put?.png ?? img.data;
     const saved = storeAsset(db, {
-      projectId: body.projectId, baseCode: cleanBaseCode(body.baseCode), kind: body.kind ?? "image", ext: "png", mime: img.mime, data: img.data, note: img.providerNote,
+      projectId: body.projectId, baseCode: cleanBaseCode(body.baseCode), kind: body.kind ?? "image", ext: "png", mime: put ? "image/png" : img.mime, data, note: `${img.providerNote}${put ? "; background plate pasted back" : ""}`,
     });
     // Test mode (B4): keep exactly what this picture was drawn from.
     if (testMode() && body.test) {
@@ -68,7 +86,13 @@ export async function POST(req: Request) {
         panelCode: body.test.panelCode, kind: body.test.kind, variant: body.test.variant, prompt: body.prompt, conflicts: body.test.conflicts,
         inputs: refs.map((r) => { const a = ids.map((id) => repo.getAsset(db, id)).find((x) => x?.assetCode === r.name); return { name: r.name, data: r.data, mime: r.mime, assetId: a?.id, assetCode: a?.assetCode }; }),
         model: s.model, quality: s.quality, size: SIZES[body.size ?? "portrait"], endpoint: refs.length ? "images/edits" : "images/generations",
-        output: { assetId: saved.id, data: img.data, note: img.providerNote },
+        output: { assetId: saved.id, data, note: img.providerNote },
+        extras: onPlateOf && put ? [
+          { name: "gpt_picture.png", data: img.data },
+          { name: "draw_area.png", data: onPlateOf.area },
+          { name: "plate.png", data: onPlateOf.plate },
+          { name: "pasted.json", data: JSON.stringify(put.numbers, null, 2) },
+        ] : undefined,
       });
     }
     return NextResponse.json(saved);

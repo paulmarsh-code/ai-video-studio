@@ -110,7 +110,7 @@ export default async function StoryboardPage({ params, searchParams }: { params:
       </div>}
 
       {part === "board" && <div className="mt-5">
-        <StoryboardBoard canCheck={!!getTextProvider()} testMode={testMode()} requestVariant={requestVariant()} locks={{ positions: !!locks.positions, cameras: !!locks.cameras }}
+        <StoryboardBoard canCheck={!!getTextProvider()} testMode={testMode()} frame={frameVariant()} requestVariant={requestVariant()} locks={{ positions: !!locks.positions, cameras: !!locks.cameras }}
           heldWarnings={cast.filter((c) => (s.scene.cast as string[] | undefined)?.length ? (s.scene.cast as string[]).includes(c.id) : true).flatMap((c) => heldConflicts(c.name, profiles[c.id], c.pronoun))}
           signsNoPicture={signsWithoutPicture(s.plan?.data.furniture?.length ? s.plan.data.furniture : asStaging(s.scene.staging).props)} settingHref="?part=setting"
           propMoves={s.panels.flatMap((p) => { const m = propMoves(p.description, (s.plan?.data.furniture ?? []).map((f) => f.name)); return m.length ? [`${p.code} moves the ${m.join(" and the ")}`] : []; })}
