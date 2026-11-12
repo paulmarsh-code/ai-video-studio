@@ -1232,3 +1232,26 @@ The continuity line (D18c, D62) asked GPT to keep "how the room, the furniture â
 - **Tested.**
   - Unit tests cover the looks-only wording in both requests and the turned-camera sentence (only when the sides differ).
   - On a copy of Paul's scene, panels 1 and 3 read "glass balustrade and skyline" and panel 2 reads "raised decking and slatted windscreen", so panel 2's request now carries the sentence.
+
+### D64: References in image 1's left-to-right order; image 1 padded out without a blurred band (2026-11-12)
+
+T6, round 3. Paul redrew panel 3 and got the sides and a normal-height table; the check passed it. Panel 2 kept its decking view and passed (D63). Panel 1 swapped Nina and Jade again, and had a thinner table base. Panels 1 and 3 had a blurred roof at the top.
+
+- **Sides.**
+  - Panels 1 and 3 share the same camera and the same image 1, yet the swaps all came in panels 1 and 2.
+  - The test records show the difference is the order of the reference pictures. Panels 1 and 2 attached Jade's reference first, though Jade is on the right. Panel 3 attached Nina's first, and she's on the left.
+  - With the right-hand person's reference first, the women swapped in 5 of 9 draws. With the left-hand person's first, they swapped in none of 2. GPT tends to put the first reference on the left.
+- **Blurred roof.** Portrait frames see more height than the venue pictures hold. Above and below the ring, image 1 was filled with the whole strip stretched and heavily blurred. That made a hard-edged blurred band, which GPT copied as an out-of-focus pergola.
+- **Failure fixed (D38).** People swapping sides, and a blurred band copied into the picture. These reach generation through the order of the attached pictures and through image 1.
+- **Left to right.**
+  - The character references are now attached in image 1's left-to-right order, the same order as the request's "left to right" line.
+  - The short request adds "the people in image 1's left-to-right order" to its list of pictures.
+  - It costs nothing per picture.
+- **Padding (`paddedOut`).**
+  - Above and at the sides, the picture is mirrored across its edge (repeated beyond its own size) and softened a little, with a short fade so there's no seam. More pergola above, more room at the sides.
+  - Below, the floor's last band is drawn out and softened. Mirrored, it had shown the planters and their lights again under the people.
+  - This is used in the frame and in each view's share of the ring.
+- **Table base.** Panel 1 was drawn with no approved picture, so its table was its own. The fix is the existing one: approve panel 3, and every other panel takes its furniture's look from it (D63).
+- **Tested.**
+  - Unit tests check that the references come in the order named left to right, for a camera and its reverse, and that the reverse turns the order round. They also check that the padding fills to size, mirrored above and drawn out below.
+  - Image 1 was rendered for panels 1 and 2 from a copy of Paul's scene. There's no blurred band; the pergola carries on above and the floor below.

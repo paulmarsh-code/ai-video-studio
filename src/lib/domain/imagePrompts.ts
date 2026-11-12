@@ -187,7 +187,12 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   // The short request (B3), filled as the same values are worked out below.
   const S: Record<string, string[]> = { refs: [], people: [], props: [], moment: [], camera: [], keep: [] };
   const attach: PanelPrompt["attach"] = [];
-  for (const c of [...visible, ...edge]) {
+  // References in image 1's left-to-right order (D64). With them the other way round, GPT put the
+  // first reference on the left: in T6 the two women swapped in 5 of 9 draws with the right-hand
+  // one's reference first, and in none of 2 with the left-hand one's first.
+  const across = new Map((reading?.actors ?? []).map((a) => [a.characterId, a.angleDeg]));
+  const leftToRight = [...visible, ...edge].map((c, k) => ({ c, k })).sort((a, b) => (across.get(a.c.id) ?? 0) - (across.get(b.c.id) ?? 0) || a.k - b.k).map((x) => x.c);
+  for (const c of leftToRight) {
     const refs = i.profiles[c.id]?.refs ?? {};
     if (fromBehind.has(c.id) && refs.back) {
       attach.push({ label: `${c.name} back`, assetId: refs.back });
@@ -230,7 +235,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   const people = attach.slice(peopleFrom, peopleFrom + peopleCount);
   if (people.length) lines.push(`Use the attached reference images for ${joinNames([...new Set(people.map((a) => a.label.replace(/ (reference|back)$/, "")))])}; keep their faces, hair and clothes identical, every pattern, stripe and colour block included. Bags and anything carried stay exactly as in the reference, in the same hand or on the same shoulder. Mind the mirror: a bag in someone's left hand is on the right of the picture when they face the camera, and on the left of the picture when they are seen from behind.`);
   const backs = people.filter((a) => a.label.endsWith(" back")).map((a) => a.label.replace(/ back$/, ""));
-  if (blocking) S.refs.push(`The other images show only how people and props look (${attach.slice(box ? 2 : 1).map((a) => a.label).join(", ")}): copy faces, hair, clothes, carried things and props exactly; never take positions or background from them.`);
+  if (blocking) S.refs.push(`The other images show only how people and props look (${attach.slice(box ? 2 : 1).map((a) => a.label).join(", ")}${leftToRight.length > 1 ? "; the people in image 1's left-to-right order" : ""}): copy faces, hair, clothes, carried things and props exactly; never take positions or background from them.`);
   if (backs.length) S.refs.push(`${joinNames(backs)} ${backs.length === 1 ? "is" : "are"} seen from behind: copy the back of the clothes, hair and bag from the back ${backs.length === 1 ? "image" : "images"}.`);
   // The approved picture gives looks, never the shot (D63). Asked to keep "the room" the same, GPT
   // kept its skyline behind a panel whose camera faces the other way, and its chest-high table

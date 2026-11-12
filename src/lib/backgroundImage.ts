@@ -63,12 +63,51 @@ async function sectorImage(v0: RingView, w: number): Promise<Buffer> {
   const top = await sharp(sharpPart).removeAlpha().joinChannel(alpha, { raw: { width: sw, height: sh, channels: 1 } }).png().toBuffer();
   const scaled = await sharp(soft).composite([{ input: top, left: 0, top: 0 }]).png().toBuffer();
   const left = Math.round(w / 2 - sw / 2), top0 = Math.round(H / 2 - horizonOf(v.calib) * sh);
-  const under = await sharp(scaled).resize({ width: w, height: H, fit: "fill" }).blur(40).modulate({ brightness: 0.9 }).png().toBuffer();
   const cl = Math.max(0, -left), ct = Math.max(0, -top0);
   const vw = Math.min(sw - cl, w - Math.max(0, left)), vh = Math.min(sh - ct, H - Math.max(0, top0));
-  if (vw <= 0 || vh <= 0) return under;
+  if (vw <= 0 || vh <= 0) return sharp(scaled).resize({ width: w, height: H, fit: "fill" }).blur(40).modulate({ brightness: 0.9 }).png().toBuffer();
   const part = await sharp(scaled).extract({ left: cl, top: ct, width: vw, height: vh }).png().toBuffer();
-  return sharp(under).composite([{ input: part, left: Math.max(0, left), top: Math.max(0, top0) }]).png().toBuffer();
+  const pad = { top: Math.max(0, top0), left: Math.max(0, left) };
+  const more = { bottom: H - pad.top - vh, right: w - pad.left - vw };
+  if (!pad.top && !pad.left && more.bottom <= 0 && more.right <= 0) return part;
+  return paddedOut(part, vw, vh, { ...pad, bottom: Math.max(0, more.bottom), right: Math.max(0, more.right) });
+}
+
+/**
+ * A view picture padded out to its share of the ring where it runs out (D64): the picture mirrored
+ * across its edge and gently softened, so the room carries on (more pergola above, more floor
+ * below). The old fill was the whole picture stretched and heavily blurred, which made a hard-edged
+ * blurred band across the top of the frame; GPT copied it as an out-of-focus roof.
+ */
+export async function paddedOut(part: Buffer, vw: number, vh: number, e: { top: number; left: number; bottom: number; right: number }): Promise<Buffer> {
+  // Below, the floor is drawn out from its last line: mirrored, it showed the planters and their
+  // lights again under the people. Above and at the sides, the room is mirrored, as far as the
+  // picture reaches and repeated beyond that.
+  let img = part;
+  if (e.bottom) {
+    const k = Math.max(2, Math.min(vh, Math.round(vh * 0.04)));
+    const floor = await sharp(part).extract({ left: 0, top: vh - k, width: vw, height: k }).resize({ width: vw, height: e.bottom, fit: "fill" }).blur(12).png().toBuffer();
+    img = await sharp(part).extend({ bottom: e.bottom, background: { r: 0, g: 0, b: 0, alpha: 1 } }).composite([{ input: floor, left: 0, top: vh }]).png().toBuffer();
+  }
+  let cw = vw, ch = vh + e.bottom;
+  const left = { ...e, bottom: 0 };
+  while (left.top || left.left || left.right) {
+    const step = { top: Math.min(left.top, ch - 1), left: Math.min(left.left, cw - 1), right: Math.min(left.right, cw - 1) };
+    img = await sharp(img).extend({ ...step, extendWith: "mirror" }).png().toBuffer();
+    cw += step.left + step.right; ch += step.top;
+    left.top -= step.top; left.left -= step.left; left.right -= step.right;
+  }
+  const W = cw, Hh = ch;
+  // Soft only in the padding, fading in over a short band so there's no seam.
+  const soft = await sharp(img).blur(5).png().toBuffer();
+  const f = 24;
+  const mask = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${Hh}"><defs>`
+    + `<linearGradient id="v" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000"/><stop offset="${(e.top / Hh).toFixed(4)}" stop-color="#000"/><stop offset="${((e.top + (e.top ? f : 0)) / Hh).toFixed(4)}" stop-color="#fff"/><stop offset="${((e.top + vh - (e.bottom ? f : 0)) / Hh).toFixed(4)}" stop-color="#fff"/><stop offset="${((e.top + vh) / Hh).toFixed(4)}" stop-color="#000"/><stop offset="1" stop-color="#000"/></linearGradient>`
+    + `<linearGradient id="h" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#000"/><stop offset="${(e.left / W).toFixed(4)}" stop-color="#000"/><stop offset="${((e.left + (e.left ? f : 0)) / W).toFixed(4)}" stop-color="#fff"/><stop offset="${((e.left + vw - (e.right ? f : 0)) / W).toFixed(4)}" stop-color="#fff"/><stop offset="${((e.left + vw) / W).toFixed(4)}" stop-color="#000"/><stop offset="1" stop-color="#000"/></linearGradient>`
+    + `<mask id="m"><rect width="100%" height="100%" fill="url(#h)"/></mask></defs><rect width="100%" height="100%" fill="url(#v)" mask="url(#m)"/></svg>`);
+  const alpha = await sharp(mask).resize({ width: W, height: Hh }).greyscale().raw().toBuffer();
+  const sharpOnTop = await sharp(img).removeAlpha().joinChannel(alpha, { raw: { width: W, height: Hh, channels: 1 } }).png().toBuffer();
+  return sharp(soft).composite([{ input: sharpOnTop, left: 0, top: 0 }]).png().toBuffer();
 }
 
 /** The ring, twice round so any slice can be cut without wrapping. x = (startDeg - angle) * PX_PER_DEG. */
@@ -226,14 +265,13 @@ export async function backgroundForFrame(db: DB, shotId: string, W: number, Hf: 
   const horizon = Hf / 2 + Math.tan(((cam.tiltDeg ?? 0) * Math.PI) / 180) * focal;
   const top = Math.round(horizon - ringH / 2);
   // Beyond the ring's height (portrait frames see more ceiling and floor than the view
-  // pictures hold): a soft, blurred continuation of the room's own colours, so nothing new is
-  // invented there and GPT fills it in naturally.
-  const under = await sharp(strip).resize({ width: W, height: Hf, fit: "fill" }).blur(30).modulate({ brightness: 0.9 }).png().toBuffer();
+  // pictures hold): the room carried on, mirrored across the edge and gently softened (D64). It
+  // was a heavy blur of the whole strip, a hard-edged band that GPT drew as a blurred roof.
   const visTop = Math.max(0, top), cutTop = Math.max(0, -top);
   const visH = Math.min(ringH - cutTop, Hf - visTop);
-  if (visH <= 0) return under;
+  if (visH <= 0) return sharp(strip).resize({ width: W, height: Hf, fit: "fill" }).blur(30).modulate({ brightness: 0.9 }).png().toBuffer();
   const part = await sharp(strip).extract({ left: 0, top: cutTop, width: W, height: visH }).png().toBuffer();
-  const framed = await sharp(under).composite([{ input: part, left: 0, top: visTop }]).png().toBuffer();
+  const framed = visTop || Hf - visTop - visH > 0 ? await paddedOut(part, W, visH, { top: visTop, left: 0, right: 0, bottom: Hf - visTop - visH }) : part;
   // Furniture standing in the venue pictures that the plan doesn't have (D56): GPT copied a real
   // table from the bar view instead of the plan's cocktail table among the group. The plan's own
   // props stay; the rest are softened into the room, as the floor beyond the views already is.
