@@ -1396,3 +1396,22 @@ The approved picture already goes with every other panel (D18c). Since D63 it gi
 - **When it's this panel's camera,** the short request says: "The approved scene picture (panel 3) is from this same camera: keep the clothes, the furniture, what stands on the tables, the light and everything behind the characters exactly as in it (railings, walls, planters, lights and the view, the same shapes, sizes and thickness), each character with the same drink and things in front of them. Image 1 decides where everyone is and how they are posed in this moment." The full request says the same. The background guests still move on (D65).
 - **From another camera,** the request is unchanged (D63): looks only, and a turned camera is named.
 - **Tested.** Unit tests cover the same-camera line in both requests (without the "never copy its framing" clause) and the other-camera line unchanged.
+
+### D70: The newer image model is the default; spend measured (2026-11-12)
+
+Paul's OpenAI usage page, by category, for 1 to 12 November:
+- **gpt-image-2:** $13.83 for pictures out, $10.61 for pictures sent in, $3.40 for request text. Nearly all of it came on 10 and 11 November.
+- **gpt-image-2.6-sunburst:** $1.39 out, $0.94 in, $0.17 text, all on 11 and 12 November.
+- **gpt-5-mini** (the checks and the writing steps): $1.27 out and $0.58 in.
+
+The days:
+- **11 November ($8.59):** about $6.70 of it went on gpt-image-2. That was the T1 and T2 runs, with 8 pictures sent with every draw, plus the venue work done without the model setting.
+- **12 November ($1.62):** about $1.47 for some 27 sunburst pictures, so about 5–6 US cents each with its check.
+- **Sunburst on 11 November:** 14 draws, each sending 8 pictures, came to about $1, so about 7 cents each.
+
+The older model, not the number of pictures sent, is what made the spend.
+
+- **What's fixed.** The cost of every picture made without `OPENAI_IMAGE_MODEL` set: character sheets, venue sheets and any draw started with the plain command. The newer model also fixed the camera in T3 (heads 45–49% down against 48% planned, against 21–27% with gpt-image-2).
+- **Change.** `OPENAI_IMAGE_MODEL` now defaults to `gpt-image-2.6-sunburst`, with quality still medium. Setting the variable still chooses another model. `.env.example` says so.
+- **The "about 7p" labels stay** as a safe upper figure until more days are measured.
+- **Tested.** All unit tests pass. Nothing else names the model.

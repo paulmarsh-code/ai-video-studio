@@ -2,7 +2,7 @@
 // Without OPENAI_API_KEY the app is manual: it writes the prompts, the user works in ChatGPT.
 // With a key, "Create with GPT" does the round trip: description (text model) then the
 // image board (image model). Settings, all optional apart from the key:
-//   OPENAI_IMAGE_MODEL   default gpt-image-2
+//   OPENAI_IMAGE_MODEL   default gpt-image-2.6-sunburst (D70)
 //   OPENAI_IMAGE_QUALITY default medium (low | medium | high)
 //   OPENAI_TEXT_MODEL    default gpt-5-mini
 //   OPENAI_BASE_URL      default https://api.openai.com/v1 (tests point this at a stand-in)
@@ -66,7 +66,9 @@ export interface ImageProvider {
 export const SIZES = { portrait: "1024x1536", landscape: "1536x1024", square: "1024x1024" } as const;
 
 /** The image model and quality in use (OPENAI_IMAGE_MODEL, OPENAI_IMAGE_QUALITY), for test records (B4). */
-export const imageSettings = () => ({ model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-2", quality: process.env.OPENAI_IMAGE_QUALITY || "medium" });
+// The newer model by default (D70): it fixed the camera in T3, and at about 5–7 US cents a picture
+// it costs a fraction of gpt-image-2, which made most of the spend on 10 and 11 November.
+export const imageSettings = () => ({ model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-2.6-sunburst", quality: process.env.OPENAI_IMAGE_QUALITY || "medium" });
 
 /** OpenAI Images API (generations, or edits when reference images are given). */
 export function openAIProvider(apiKey: string, model = imageSettings().model, quality = imageSettings().quality): ImageProvider {
