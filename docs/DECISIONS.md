@@ -1836,3 +1836,15 @@ Paul re-ran the two short clips himself at 5 seconds (D87).
   - A panel with real physical action gets 5 seconds (D87).
   - If its words also have a build-up from stillness, it gets 3 more, so 8 seconds. Build-up words include: "ready to", "sets his board", "lines up", "gets set", "crouches", "steps onto", "puts his front foot", "positions himself", "winds up", "takes a run-up", "stands at the top / edge / rim / lip / start".
   - The panel-writing request says the same.
+
+### D89: In a video clip the people shown stay to the end, and an action clip's background moves simply (2026-11-13)
+
+Paul ran clip 1 at 9 seconds and clip 3 at 6 seconds (D88). Both actions now happen: the drop-in and carve, and the ride up with the landing. Two faults:
+- **A stranger took over clip 1.** Kai dropped in and carved away from the middle of the picture. A young man in a black hoodie then rode in from the front, and Kai was gone for the last third.
+- **Background people moved oddly.** One walked as if skating without a board.
+
+- **Failures fixed (D38).** A main character replaced by someone new, and strange background movement during action. They reach generation through the video prompt's closing lines (`composeKlingPrompt`).
+- **Lines added.**
+  - "[Names] stay in the picture to the end of the clip; no one else comes into the foreground or takes their place." This is left out when the panel has someone walking off, leaving or going out of frame.
+  - In a clip with real physical action (D87) and background people: "Background people stay in the distance and move simply: standing, talking or walking normally."
+- **Not known yet.** Whether Kling keeps to these lines in long action clips. A re-run of clip 1 will show it.

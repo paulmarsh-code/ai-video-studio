@@ -9,6 +9,7 @@ import { describeFrame, PRESET_FOV, planForShot, presetText, readCamera } from "
 import { aimDetail, exitFrom, gestureDetail } from "./gestures";
 import { GENRE_PROFILES, type Genre } from "./genre";
 import { capitalise, joinNames, stripQuotes } from "./text";
+import { physicalAction } from "./duration";
 import { noTextRule } from "./signage";
 import {
   KLING_OMNI_PRESET,
@@ -246,6 +247,16 @@ export function composeKlingPrompt(
       : `Only ${visible[0].name} is in frame. No other people visible.`);
   } else if (visible.length > 1) {
     guards.push(`Exactly one of each person: ${joinNames(visible.map((c) => c.name))}.`);
+  }
+  // Nobody new takes over (D89). In a 9-second drop-in, Kai rode out of the middle of the picture
+  // and a stranger in a black hoodie rode in from the front and finished the clip; in another,
+  // background people walked as if skating without a board.
+  // Not when someone leaves the picture in this clip.
+  const leaving = /\b(?:walks?|storms?|heads?|hurries|rushes|runs?|strides?|wanders?)\s+(?:off|out|away)\b|\b(?:leaves|exits|disappears)\b|out\s+of\s+(?:frame|shot|the\s+picture)/i.test(shot.actions ?? "");
+  if (visible.length && !leaving) {
+    const names = joinNames(visible.map((c) => c.name));
+    guards.push(`${names} ${visible.length === 1 ? "stays" : "stay"} in the picture to the end of the clip; no one else comes into the foreground or takes their place.`);
+    if (shot.crowd?.trim() && physicalAction(shot.actions)) guards.push("Background people stay in the distance and move simply: standing, talking or walking normally.");
   }
   // A logo or sign that is part of the scene is the one exception (D47).
   guards.push(noTextRule(keptProps));
