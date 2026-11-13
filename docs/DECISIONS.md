@@ -1874,3 +1874,16 @@ Paul's verdict on the cut scene: "they are all ok … they don't quite join up, 
 - **Video prompt (`composeKlingPrompt`).** The speaker guard now reads: "Only [Name] has intelligible dialogue, and only the line above, once. Before and after it nobody speaks, mumbles, murmurs or makes any vocal sound; [Name] stays silent until the moment of the line. No repeated words or additional speech."
 - **Panel writing.** A new rule: "Make the panels join up: each panel's action ends where the next panel's picture starts (the same people in the same places, doing what the next panel begins with). If someone moves somewhere, they get there within the panel."
 - **Not done yet.** Using the next panel as Kling's end frame, which Kling 3.0 supports, would force the join. It's worth testing on the ski scene, where shots share a camera.
+
+### D92: Who the product is for: frequent short-form producers, not cinema (2026-11-13)
+
+Paul, after the first video test: "this product market are frequent content producers looking to post short reels, be that product demos or ads or mini drama. This is not for someone trying to create a hugely cinematic experience."
+
+- **For:** people who post often: 15–60 second vertical reels, product demos, ads, mini-drama episodes. The same characters, presenters, products and places come back post after post.
+- **What they need:** a usable reel quickly, in one or two passes; the same faces, products and places every time; low cost per reel. The skate park test showed the clips were good enough as individual clips, and cheap: about £2 for the scene on Kling 3.0 at 720p.
+- **What this changes.**
+  - **Speed over precision.** Panels are judged "right enough by eye". The layout guides the picture rather than acting as a pass/fail test, and no more effort goes into exact blocking.
+  - **Reuse is the core.** The character and venue library, which worked from the start, is the main value. Products should join it: a product reference that looks the same in every clip.
+  - **Real photos.** Uploaded photos of a real shop, product or place should come before any further invented-venue work.
+  - **The finished reel.** Clips that join up (D91), and later captions, music and export at reel sizes, count under D38's "makes the finished video better to watch".
+- **Not the aim:** feature-film cinematography, exact floor plans and fine 180-degree staging. The rules already built stay, but nothing more is added for these.
