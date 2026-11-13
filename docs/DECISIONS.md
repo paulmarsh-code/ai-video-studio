@@ -1918,3 +1918,40 @@ Paid On Time scene 1, panels 8 and 9: Chase drawn lying flat on the floor of the
 - **Rule (`posturesFromWords`).** "Lies", "lying" or "lay" means lying down only with a body word (down, back, flat, still, face up or down, on his back) or something to lie on (on the bed, in the grass). "Lies to her" and a bare "lies" are left alone.
 - **Rule (`planForShot`).** When the panel writer's DOING line says someone stands or walks, a lying, sitting, kneeling or crouching posture read from the words is dropped. This works on saved scenes at once: Paul's panels 8 and 9 show Chase standing with no layout update.
 - **Checked** on a copy of Paul's database: Chase is standing in every panel of scene 1.
+
+### D95: A scene's fixed cameras, measured from the table; people stay put at it (2026-11-13)
+
+Paul's pipeline, after the first video test and today's redraws ("we can't keep redrawing; we have to get some stuff fixed across the board"):
+1. story and characters;
+2. the venue with a locked 360 view;
+3. key props fixed with pictures;
+4. the layout fixed, with cameras placed from it and measured from one reference point (the table);
+5. the storyboard drawn.
+
+Steps 1, 2 and 5 were working. This decision is step 4. Step 3 comes next.
+
+- **What was wrong, found on a copy of Paul's scene 1.**
+  - **People moved round the table.** The writer's PLACE line "Chase - at the cocktail table" in every panel moved Chase to a new spot on each read: (−0.1, 9.8), (1.6, 9.1), (0.3, 9.4), (2.2, 9.9), (1.5, 11.2). Every camera saw a different layout, faces turned away, and someone else's shoulder filled an over-the-shoulder shot.
+  - **Every panel got a camera of its own.** Nine panels had eight or nine set-ups, some 6–10 m from a two-person line, each needing a new background.
+- **Failures fixed (D38).** A layout that changes between panels when nobody moves, and cameras that differ shot to shot and stand too far off. They reach generation through image 1 and the camera choice.
+- **Staying put (`blockingFromWords`).** A PLACE line naming a prop someone is already at (within the prop's size plus 1.4 m) leaves them where they are. Their verbs can still move them.
+- **The fixed set (`sceneAnchor`, `coverageFor`, `withCoverage`).**
+  - **Anchor.** The point everything is measured from: the table, bar, counter, desk, bench, booth, fire, bed or sofa within 2.5 m of the group; otherwise the middle of the group.
+  - **Side.** Every camera stands on the side of the line of action the scene's design chose (R-180).
+  - **Set-ups.** They are built once, from where everyone stands in the layout:
+    - a wide of everyone, about 4 m or more from the anchor;
+    - a group shot, about 2.4 m or more;
+    - an over-the-shoulder camera for each speaker, over the other's shoulder, 1 m behind;
+    - a two-shot of a pair, when the panel or the genre (comedy) asks for one;
+    - a close shot of one person, about 1.6 m away.
+  - **Choosing.** Each panel takes one by who it shows: three or more, or an establishing or wide shot, takes the wide or group; two people takes an over-the-shoulder on the speaker; one person takes the close shot. The same set-up is reused whenever it still sees every needed face from where people stand in that panel, turning slightly to follow if someone has shifted. If it can't, the nearest variant that does (another angle, lens or distance) becomes the set-up.
+  - **Left to the old rules.** Arrivals and exits (a mark, or a walk of more than 1.5 m), anyone more than 3.5 m from the anchor, and shots the panel names that the set doesn't hold: point of view, profile, insert, close-up and extreme close-up.
+  - **Size words.** The panel's size word still goes on the camera, so the prompts say medium shot, cowboy shot and so on.
+- **`LAYOUT_RULES` = 17**, so a scene with nothing approved updates itself once.
+- **Checked** on a copy of Paul's scene 1 through the same update the page runs:
+  - nobody moves between panels 2 and 8;
+  - panels 2, 3 and 6 share one wide (about 5 m);
+  - panels 4 and 7 share the over-the-shoulder on Jade;
+  - panels 5 and 8 share the over-the-shoulder on Chase;
+  - panels 1 (Jade arriving) and 9 (Jade walking off) keep their own;
+  - that is five set-ups for nine panels, all on one side and none further than about 6 m.

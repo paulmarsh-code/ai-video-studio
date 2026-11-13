@@ -251,6 +251,9 @@ export function blockingFromWords(plan: GeometryPlanData, panels: WordsPanel[], 
       } else {
         const t = resolve(what, props, views, areas);
         if (!t) continue;
+        // Already at the thing they're said to be at (D95): "at the cocktail table" in every panel
+        // walked Chase round the table, a new spot each panel, and every camera saw a new layout.
+        if (t.kind === "prop" && !["far", "farWall", "mid", "top", "bottom"].includes(how) && Math.hypot(t.f.position.x - from.x, t.f.position.y - from.y) <= (t.f.radiusM ?? 0.5) + 1.4) continue;
         const rest = [...pos.entries()].filter(([k]) => k !== id && !left.has(k)).map(([, p]) => p);
         const others = rest.length ? { x: rest.reduce((a, p) => a + p.x, 0) / rest.length, y: rest.reduce((a, p) => a + p.y, 0) / rest.length } : undefined;
         if (t.kind === "area") spot = clamp(areaSpot(t.l, how === "beside" ? "edge" : how, from, others));

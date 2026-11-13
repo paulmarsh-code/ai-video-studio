@@ -4,7 +4,7 @@
 
 import { deriveDuration } from "./duration";
 import { mainSubjectId } from "./composer";
-import { cameraPlacementProblem, facingOf, horizontalFov, PRESET_FOV, occlusions, planForShot, propsBlocking, readCamera, type CameraReading } from "./geometry";
+import { cameraPlacementProblem, facingOf, horizontalFov, PRESET_FOV, occlusions, pictureXY, planForShot, propsBlocking, readCamera, type CameraReading } from "./geometry";
 import { GENRE_PROFILES, genreBonus, type Genre } from "./genre";
 import { povFor, verticalFor } from "./vertical";
 import { cameraZ, floorZ, insideLevel, levelAt } from "./levels";
@@ -657,6 +657,185 @@ export function verticalCamera(cam0: PlanCamera, v: { kind: string; heightM: num
  * establishing shot… Adds the camera it needs, puts the matching options first, and sets the
  * lens so the named size frames the subject. Panels that name nothing are left as they are.
  */
+// ---------- The scene's fixed cameras (D95) ----------
+//
+// Paul's pipeline: the layout is fixed, and the cameras are a small set placed once, measured
+// from one reference point (the table the group stands at). Every panel takes one of them, as a
+// real edit cuts between the same few set-ups. Before this, each panel got a camera of its own:
+// nine panels, nine positions, some 6-10 m from a two-person line, and each a new background.
+
+const COVER_WHY = "R-COVERAGE: one of the scene's fixed cameras, measured from";
+const WIDE_WORDS = /\b(?:establishing|wide|long\s+shot|full\s+shot|extreme\s+long|master|tracking)\b/i;
+
+/** The point everything is measured from: the table (or bar, counter, desk) the people gather at, else their middle. */
+export function sceneAnchor(plan: GeometryPlanData): { at: Point; what: string } | undefined {
+  const pts = plan.actors.map((a) => a.position);
+  if (!pts.length) return undefined;
+  const mid = { x: pts.reduce((t, p) => t + p.x, 0) / pts.length, y: pts.reduce((t, p) => t + p.y, 0) / pts.length };
+  const gather = (plan.furniture ?? []).filter((f) => !f.heldBy && /\b(?:table|bar|counter|desk|island|bench|booth|fire|campfire|bed|sofa|couch)\b/i.test(f.name))
+    .map((f) => ({ f, d: Math.hypot(f.position.x - mid.x, f.position.y - mid.y) })).filter((x) => x.d < 2.5).sort((a, b) => a.d - b.d)[0];
+  return gather ? { at: gather.f.position, what: `the ${gather.f.name}` } : { at: mid, what: "the middle of the group" };
+}
+
+/** Someone on their way somewhere in this panel (arriving, walking off): the fixed set isn't for them. */
+function movesInPanel(plan: GeometryPlanData, sh: ShotInput): boolean {
+  // On an arrival or exit mark (D19b): on the way in or out.
+  if (sh.spec.at && Object.keys(sh.spec.at).length) return true;
+  const sp = planForShot(plan, sh.spec);
+  return sp.actors.some((a) => {
+    const step = a.to ? Math.hypot(a.to.x - a.position.x, a.to.y - a.position.y) : 0;
+    return step > 1.5;
+  });
+}
+
+const joinNamesShort = (xs: string[]) => xs.map((x) => x.split(/\s+/)[0]).join(" and ");
+const rotDeg = (v: Point, deg: number): Point => { const r = (deg * Math.PI) / 180; return { x: v.x * Math.cos(r) - v.y * Math.sin(r), y: v.x * Math.sin(r) + v.y * Math.cos(r) }; };
+
+function coverageFor(plan: GeometryPlanData, sh: ShotInput, side: number, line: [string, string] | undefined, name: (id: string) => string, made: Map<string, CameraOption>, moment: MomentKind, genre: Genre): CameraOption | undefined {
+  const dbg = (_why: string) => undefined;
+  const anchor = sceneAnchor(plan);
+  if (!anchor || !line) return dbg("no anchor or line");
+  if (movesInPanel(plan, sh)) return dbg("someone moves");
+  // A shot the panel or user names that the set doesn't hold (a point of view, a profile, an
+  // insert, a true close-up on a long lens) is designed by its words as before.
+  const named = namedShot(`${sh.description ?? ""} ${sh.spec.actions ?? ""} ${sh.spec.shot ?? ""}`);
+  if (named.framing && !["ots", "reverse", "two-shot", "three-shot", "master", "establishing", "reaction", "single"].includes(named.framing)) return dbg("named framing");
+  if (named.size === "ecu" || named.size === "cu") return dbg("close-up by name");
+  const sp = planForShot(plan, sh.spec);
+  // The set is built once from where everyone stands in the layout (Paul: "the layout is done and
+  // fixed"), so every panel's cameras are the same few set-ups on the same side; a panel where
+  // someone has shifted a little is checked as it is, and the camera turns to follow.
+  const pos = (id: string) => plan.actors.find((a) => a.characterId === id)?.position;
+  const here = (id: string) => sp.actors.find((a) => a.characterId === id)?.position;
+  const A = pos(line[0]), B = pos(line[1]);
+  if (!A || !B) return dbg("line pair missing");
+  const u = { x: B.x - A.x, y: B.y - A.y };
+  const ul = Math.hypot(u.x, u.y) || 1;
+  // The cameras' side of the line (R-180), pointing away from the people towards the lens.
+  let n = { x: -u.y / ul, y: u.x / ul };
+  if (Math.sign(sideOf(A, B, { x: anchor.at.x + n.x, y: anchor.at.y + n.y })) !== side) n = { x: -n.x, y: -n.y };
+  const vis = sh.spec.visibleIds.filter((id) => pos(id) && here(id));
+  if (!vis.length) return dbg("nobody visible");
+  // Someone the panel shows away from the group (still arriving, at the door): their own camera.
+  if (vis.some((id) => { const p0 = here(id)!; return Math.hypot(p0.x - anchor.at.x, p0.y - anchor.at.y) > 3.5; })) return dbg("someone away from the group");
+  const words = `${sh.description ?? ""} ${sh.spec.shot ?? ""}`;
+  const why = `${COVER_WHY} ${anchor.what}`;
+  const all = sp.actors.map((a) => a.characterId);
+  const speaker = sh.spec.speakerId && vis.includes(sh.spec.speakerId) ? sh.spec.speakerId : undefined;
+  const subj = speaker ?? (sh.spec.subjectId && vis.includes(sh.spec.subjectId) ? sh.spec.subjectId : vis[0]);
+  const other = vis.length === 2 ? vis.find((id) => id !== subj)! : undefined;
+
+  // Does a camera work for this panel: a sensible place, everyone it must show in the picture, no needed face hidden.
+  const works = (o: CameraOption): boolean => {
+    if (cameraPlacementProblem(sp, o.camera)) return false;
+    // Not on the far side of the line (R-180).
+    if (Math.sign(sideOf(A, B, o.camera.position)) !== side) return false;
+    const must = o.camera.preset === "main-ots" ? [subj] : vis;
+    for (const id of must) {
+      const a = sp.actors.find((x) => x.characterId === id);
+      const q = a && pictureXY(sp, o.camera, a.position, 1.5);
+      if (!q || q.x < 0.08 || q.x > 0.92 || q.depth <= 0.3) return false;
+    }
+    const blockers = sp.actors.map((a) => a.characterId).filter((id) => o.camera.preset !== "main-ots" || id !== other);
+    if (occlusions(readCamera(sp, o.camera), must, blockers).some((x) => x.level === "face")) return false;
+    if (propsBlocking(sp, o.camera, must).some((x) => x.face)) return false;
+    return true;
+  };
+  const centre = (ids: string[]) => { const ps = ids.map(pos).filter((p): p is Point => !!p); return { x: ps.reduce((t, p) => t + p.x, 0) / ps.length, y: ps.reduce((t, p) => t + p.y, 0) / ps.length }; };
+  const spread = (ids: string[]) => { const ps = ids.map(pos).filter((p): p is Point => !!p); return ps.reduce((m, p) => Math.max(m, ...ps.map((q) => Math.hypot(p.x - q.x, p.y - q.y))), 0); };
+
+  // Candidate set-ups for a role, nearest the ideal first.
+  const facingTries = (kind: string, preset: CameraPreset, fovs: number[], ids: string[], minD: number, maxD: number): CameraOption[] => {
+    const look = ids.length === all.length ? anchor.at : centre(ids);
+    const out: CameraOption[] = [];
+    for (const ang of [0, 20, -20, 40, -40, 60, -60, 75, -75]) for (const fov of fovs) {
+      const probe: PlanCamera = { id: "", name: "", preset, fovDeg: fov, position: look, lookAt: look };
+      const hf = horizontalFov(plan, probe);
+      const d = Math.min(maxD, Math.max(minD, (spread(ids) + 1.0) / 2 / Math.tan((hf * Math.PI) / 360) + 0.6));
+      const dir = rotDeg(n, ang);
+      const cam = makeCam("cov", kind, preset, { x: look.x + dir.x * d, y: look.y + dir.y * d }, look);
+      out.push({ camera: { ...cam, fovDeg: fov }, kind, score: 0, reasons: [`${why}: ${kind.toLowerCase()} at about ${d.toFixed(1)} m`] });
+    }
+    return out;
+  };
+  const shoulderTries = (s0: string, over: string): CameraOption[] => {
+    const S = pos(s0)!, P = pos(over)!;
+    const v = { x: S.x - P.x, y: S.y - P.y }; const vl = Math.hypot(v.x, v.y) || 1;
+    const uu = { x: v.x / vl, y: v.y / vl };
+    let off = { x: -uu.y, y: uu.x };
+    if (off.x * n.x + off.y * n.y < 0) off = { x: -off.x, y: -off.y };
+    const kind = `Over-the-shoulder on ${name(s0)}`;
+    const out: CameraOption[] = [];
+    for (const back of [1.0, 0.8, 1.3]) for (const o of [0.35, 0.5, 0.2]) {
+      const cam = makeCam("cov", kind, "main-ots", { x: P.x - uu.x * back + off.x * o, y: P.y - uu.y * back + off.y * o }, S);
+      out.push({ camera: cam, kind: `${kind} (over ${name(over)})`, score: 0, reasons: [`${why}: over ${name(over)}'s shoulder, about ${(vl + back).toFixed(1)} m from ${name(s0)}`] });
+    }
+    return out;
+  };
+  const singleTries = (who: string): CameraOption[] => {
+    const W = pos(who)!;
+    const partner = line[0] === who ? pos(line[1]) : line[1] === who ? pos(line[0]) : anchor.at;
+    const t = partner ? { x: partner.x - W.x, y: partner.y - W.y } : { x: 0, y: 0 }; const tl = Math.hypot(t.x, t.y) || 1;
+    const kind = `Close on ${name(who)}`;
+    const out: CameraOption[] = [];
+    for (const lean of [0.6, 0.3, 1.0, 0]) for (const d of [1.6, 1.9]) {
+      const dir = { x: n.x + (t.x / tl) * lean, y: n.y + (t.y / tl) * lean }; const dl = Math.hypot(dir.x, dir.y) || 1;
+      const cam = makeCam("cov", kind, "single-cu", { x: W.x + (dir.x / dl) * d, y: W.y + (dir.y / dl) * d }, W);
+      out.push({ camera: cam, kind, score: 0, reasons: [`${why}: a close shot on ${name(who)}, about ${d.toFixed(1)} m away`] });
+    }
+    return out;
+  };
+
+  let key: string, tries: () => CameraOption[];
+  const pairWords = named.framing === "two-shot" || (vis.length === 2 && genre === "comedy");
+  if (vis.length >= 3 || WIDE_WORDS.test(words) || moment === "establishing") {
+    const wide = WIDE_WORDS.test(words) || moment === "establishing";
+    key = wide ? "wide" : "group";
+    // Either way, the other one if the first can't see every face from this side.
+    const w = () => facingTries("Wide", "wide", [60, 70], all, 4.0, 9), g = () => facingTries("Group shot", "two-shot", [45, 55, 65], all, 2.4, 6);
+    tries = () => wide ? [...w(), ...g()] : [...g(), ...w()];
+  } else if (vis.length === 2 && pairWords) {
+    key = `pair:${[...vis].sort().join(",")}`;
+    tries = () => facingTries(`Two-shot on ${joinNamesShort(vis.map(name))}`, "two-shot", [40, 50, 60], vis, 1.8, 5);
+  } else if (vis.length === 2) {
+    key = `ots:${subj}:${other}`;
+    tries = () => shoulderTries(subj, other!);
+  } else {
+    key = `cu:${subj}`;
+    tries = () => singleTries(subj);
+  }
+  // Turned to where the people are in this panel; unchanged when they haven't really moved.
+  const aimed = (o0: CameraOption): CameraOption => {
+    const target = o0.camera.preset === "main-ots" || o0.camera.preset === "single-cu" ? here(subj) : key === "wide" || key === "group" ? (() => { const ps = vis.map(here).filter((p): p is Point => !!p); return ps.length === all.length ? anchor.at : { x: ps.reduce((t, p) => t + p.x, 0) / ps.length, y: ps.reduce((t, p) => t + p.y, 0) / ps.length }; })() : (() => { const ps = vis.map(here).filter((p): p is Point => !!p); return { x: ps.reduce((t, p) => t + p.x, 0) / ps.length, y: ps.reduce((t, p) => t + p.y, 0) / ps.length }; })();
+    if (!target) return o0;
+    const c = o0.camera;
+    const a0 = Math.atan2(c.lookAt.y - c.position.y, c.lookAt.x - c.position.x), a1 = Math.atan2(target.y - c.position.y, target.x - c.position.x);
+    const diff = Math.abs(((a1 - a0 + 3 * Math.PI) % (2 * Math.PI)) - Math.PI);
+    return diff < (4 * Math.PI) / 180 ? o0 : { ...o0, camera: { ...c, lookAt: round(target) } };
+  };
+  // The set-up already made for this role, if it still works here; else the nearest that does.
+  const kept = made.get(key);
+  const keptHere = kept && aimed(kept);
+  let o = keptHere && works(keptHere) ? keptHere : tries().map((t) => ({ t, a: aimed(t) })).find((x) => works(x.a))?.a;
+  if (o && !kept) { const base = tries().find((t) => aimed(t) === o || (t.camera.position.x === o!.camera.position.x && t.camera.position.y === o!.camera.position.y)); if (base) made.set(key, base); }
+  if (!o) return dbg(`no ${key} set-up works here`);
+  if (genre === "comedy" && key.startsWith("pair:") && named.framing !== "two-shot") o = { ...o, reasons: [...o.reasons, "Comedy: both of them in the picture, so the reaction plays with the line"] };
+  // The size the panel asks for is said in its prompts; the set-up stays the same.
+  if (named.size) o = { ...o, camera: { ...o.camera, size: named.size } };
+  return o;
+}
+
+/** Each panel's first choice from the scene's fixed cameras, where one fits (D95). Panels with someone on the move keep their own. */
+function withCoverage(designs: ShotDesign[], plan: GeometryPlanData, shots: ShotInput[], side: number, line: [string, string] | undefined, name: (id: string) => string, genre: Genre): ShotDesign[] {
+  const made = new Map<string, CameraOption>();
+  return designs.map((d) => {
+    const sh = shots.find((x) => x.id === d.shotId);
+    if (!sh) return d;
+    const o = coverageFor(plan, sh, side, line, name, made, d.moment, genre);
+    return o ? { ...d, options: [o, ...d.options.filter((x) => x.camera.preset !== o.camera.preset || Math.hypot(x.camera.position.x - o.camera.position.x, x.camera.position.y - o.camera.position.y) > 0.3)].slice(0, 3) } : d;
+  });
+}
+
 function namedShotDesign(d: ShotDesign, plan: GeometryPlanData, sh: ShotInput, line: [string, string] | undefined, name: (id: string) => string): ShotDesign {
   // The panel's own words plus its chosen shot (D28).
   const text = `${sh.description ?? ""} ${sh.spec.actions ?? ""} ${sh.spec.shot ?? ""}`;
@@ -865,12 +1044,15 @@ export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (i
   const best = !line ? { side: 1, ...a } : a.total + 2 * open >= b.total ? { side: 1, ...a } : { side: -1, ...b };
   // Up and down (D25): a moment about looking down or up gets a high or low camera, on whichever
   // position and direction was chosen. Said in the reasons, so it shows on the camera.
+  const coverage = new Map(withCoverage(best.designs, plan, shots, best.side, line, name, genre).filter((d, k) => d !== best.designs[k]).map((d) => [d.shotId, d] as const));
   const designs = best.designs.map((d0) => {
     const sh = shots.find((x) => x.id === d0.shotId);
     if (!sh) return d0;
     // Named shots first (D27), then height, tilt and Dutch roll (D25-D27). A point of view
     // keeps the eyes' own height.
-    const d = namedShotDesign(d0, plan, sh, line, name);
+    // The scene's fixed cameras first (D95); a panel none of them fits gets its own, by its words.
+    const covered = coverage.get(d0.shotId);
+    const d = covered ?? namedShotDesign(d0, plan, sh, line, name);
     // A posture carried on from earlier panels counts (D37): still lying on the bed.
     const poser = sh.spec.subjectId ?? sh.spec.speakerId ?? sh.spec.visibleIds[0];
     const pe = poser ? sh.spec.posture?.[poser] : undefined;
@@ -898,9 +1080,10 @@ export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (i
  * their real extent (D21b); 7 = high and low cameras for looking down or up (D25);
  * 14 = positions per panel from the words: walking off, going places, turning, props in hand (D36);
  * 15 = areas, actions and places in them, cameras that see the action (D80-D82);
- * 16 = down a slope from the words, own gear with its owner, a grown room kept (D86).
+ * 16 = down a slope from the words, own gear with its owner, a grown room kept (D86);
+ * 17 = the scene's fixed cameras, measured from the table (D95).
  */
-export const LAYOUT_RULES = 16;
+export const LAYOUT_RULES = 17;
 
 export function applyDesign(plan: GeometryPlanData, choices: { shotId: string; shotCode: string; option: CameraOption }[], line?: [string, string]) {
   const cameras: PlanCamera[] = [];
