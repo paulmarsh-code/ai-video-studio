@@ -608,8 +608,12 @@ export function planForShot(plan: GeometryPlanData, shot?: { at?: Record<string,
   const po = shot?.posture;
   // What each person is doing (D80): the panel writer's DOING, else clear verbs in the panel's words.
   const doing = shot?.doing && Object.keys(shot.doing).length ? shot.doing : actionsInWords(shot?.actions ?? "", plan.actors.map((a) => a.characterId));
+  const said = !!(shot?.doing && Object.keys(shot.doing).length);
   const withDoing = (a: PlanActor): PlanActor => {
     const d = doing[a.characterId];
+    // The writer's own DOING "stand" wins over a posture read from the words (D94): "he lies and
+    // dismisses her" had Chase lying on the floor while his DOING line said he stood.
+    if (d && said && (d.action === "stand" || d.action === "walk") && a.pose && a.pose !== "standing") { const { pose: _p, poseOn: _o, ...rest } = a; return rest; }
     if (!d || d.action === "stand" || d.action === "walk") return a;
     // Sitting, lying, kneeling or crouching said as an action is a posture too (D37), unless one is set.
     const pose = ({ sit: "sitting", drive: "sitting", lie: "lying", kneel: "kneeling", crouch: "crouching" } as Partial<Record<ActionKind, Pose>>)[d.action];

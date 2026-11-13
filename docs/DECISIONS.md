@@ -1909,3 +1909,12 @@ Paid On Time scene 1, rewritten with the D87–D92 rules and drawn. Paul:
   The others are still present and can be seen at the edge. The panel-writing request asks for the same: the speaker, the person spoken to, and anyone whose reaction is described.
 - **Dutch angle (`dutchFor`).** Only when the panel or the user names one. Mood words no longer tilt the frame (D27's mood rule removed).
 - **Not fixed.** GPT moving the table forward in wide group shots. The check flags it and "Try one more fix" redraws it. Closer framing on lines should make it rarer.
+
+### D94: Telling a lie isn't lying down; the writer's "stand" wins (2026-11-13)
+
+Paid On Time scene 1, panels 8 and 9: Chase drawn lying flat on the floor of the launch party. Panel 8's words: "Chase scoffs, leans back a little … he lies and dismisses her while speaking in a bored tone." The posture rule (D37) read the bare "lies" as lying down. The posture then carried into panel 9, the image 1 stand-in was drawn lying, GPT drew him on the floor, and the check passed it because it matched the layout. The writer's own DOING line for Chase in both panels said "stand".
+
+- **Failure fixed (D38).** A person drawn in a posture the story never meant, from a word with two senses. It reaches generation through image 1's stand-in and the posture words.
+- **Rule (`posturesFromWords`).** "Lies", "lying" or "lay" means lying down only with a body word (down, back, flat, still, face up or down, on his back) or something to lie on (on the bed, in the grass). "Lies to her" and a bare "lies" are left alone.
+- **Rule (`planForShot`).** When the panel writer's DOING line says someone stands or walks, a lying, sitting, kneeling or crouching posture read from the words is dropped. This works on saved scenes at once: Paul's panels 8 and 9 show Chase standing with no layout update.
+- **Checked** on a copy of Paul's database: Chase is standing in every panel of scene 1.

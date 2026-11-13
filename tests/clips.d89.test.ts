@@ -54,3 +54,22 @@ describe("Lines framed on speaker and listener (D93)", () => {
     expect(out[3].inFrame).toEqual(["chase", "marcus", "nina"]);
   });
 });
+
+import { posturesFromWords } from "../src/lib/domain/panelWords";
+import { planForShot } from "../src/lib/domain/geometry";
+
+describe("Telling a lie isn't lying down (D94)", () => {
+  const plan = { bounds: { minX: -5, maxX: 5, minY: 0, maxY: 10 }, actors: [{ characterId: "chase", position: { x: 0, y: 5 } }], furniture: [{ id: "b", name: "bed", position: { x: 2, y: 5 }, radiusM: 1 }], cameras: [], views: [] };
+  const P = [{ id: "chase", name: "Chase" }];
+  const pose = (a: string) => posturesFromWords(plan as never, [{ action: a, visibleIds: ["chase"] }] as never, P)[0].chase?.pose;
+  it("needs a body word or something to lie on", () => {
+    expect(pose("Chase leans back a little; he lies and dismisses her in a bored tone.")).toBeUndefined();
+    expect(pose("Chase lies on the bed.")).toBe("lying");
+    expect(pose("Chase lies down.")).toBe("lying");
+    expect(pose("Chase lies to her face.")).toBeUndefined();
+  });
+  it("the writer's DOING 'stand' wins over a posture from the words", () => {
+    const sp = planForShot(plan as never, { posture: { chase: { pose: "lying" } } as never, doing: { chase: { action: "stand" } }, visibleIds: ["chase"] });
+    expect(sp.actors[0].pose).toBeUndefined();
+  });
+});

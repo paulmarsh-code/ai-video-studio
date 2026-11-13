@@ -461,7 +461,9 @@ const ON_WHAT = String.raw`(?:\s+(?:on|in|across|upon|at|onto|into)\s+(?:(?:the|
 const POSES: { pose: Pose; re: RegExp }[] = [
   // Lying: "lies on his bed", "is lying down", "lies back", "in bed", "curled up on the sofa".
   // Not "lies to her" or "lays the table".
-  { pose: "lying", re: new RegExp(String.raw`\b(?:lie(?:s)?|lying|lay)\b(?!\s+(?:to|about)\b)(?:\s+(?:down|back|flat|still|awake|motionless|there|face\s+(?:up|down)|curled\s+up|on\s+(?:his|her|their)\s+(?:back|front|side|stomach)))*${ON_WHAT}|\b(?:gets?|got|climbs?|climbed|crawls?|crawled|slips?|slipped)\s+(?:back\s+)?(?:into|in)\s+(?:(?:his|her|their|the)\s+)?(bed)\b|\b(?:curl(?:s|ed)?\s+up|stretch(?:es|ed)?\s+out|sprawl(?:s|ed)?|flop(?:s|ped)?\s+(?:down|back))${ON_WHAT}|\b(?:in\s+bed|asleep\s+(?:on|in)\s+the\s+\w+)\b`, "g") },
+  // A bare "lies" is telling a lie (D94): "he lies and dismisses her" put Chase flat on the
+  // floor. Lying down needs a body word (down, back, flat…) or something to lie on.
+  { pose: "lying", re: new RegExp(String.raw`\b(?:lie(?:s)?|lying|lay)\b(?!\s+(?:to|about)\b)(?:(?:\s+(?:down|back|flat|still|awake|motionless|face\s+(?:up|down)|curled\s+up|on\s+(?:his|her|their)\s+(?:back|front|side|stomach)))+${ON_WHAT}|${ON_WHAT.replace(/\)\?$/, ")")})|\b(?:gets?|got|climbs?|climbed|crawls?|crawled|slips?|slipped)\s+(?:back\s+)?(?:into|in)\s+(?:(?:his|her|their|the)\s+)?(bed)\b|\b(?:curl(?:s|ed)?\s+up|stretch(?:es|ed)?\s+out|sprawl(?:s|ed)?|flop(?:s|ped)?\s+(?:down|back))${ON_WHAT}|\b(?:in\s+bed|asleep\s+(?:on|in)\s+the\s+\w+)\b`, "g") },
   // Sitting: "sits up", "sits on the edge of the bed", "is sitting", "sat at the table", "perched on".
   { pose: "sitting", re: new RegExp(String.raw`\b(?:sit(?:s)?|sitting|sat|seated|perch(?:es|ed|ing)?)\b(?:\s+(?:up|down|back|bolt\s+upright|upright|forward|alone|quietly|still))*${ON_WHAT}`, "g") },
   // Standing: "gets up", "stands up", "gets out of bed", "rises", "jumps to his feet", "stands".
