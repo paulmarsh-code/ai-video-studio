@@ -8,8 +8,8 @@ import fs from "node:fs";
 import path from "node:path";
 import sharp from "sharp";
 import type { DB } from "@/db/client";
-import { backgroundForFrame } from "./backgroundImage";
-import { PLATE_RULES, platePrompt, SAME_PLACE, structureMatch } from "./domain/plate";
+import { backgroundForFrame, frameJoins } from "./backgroundImage";
+import { PLATE_RULES, platePrompt, SAME_PLACE, SEAM_SHOWS, seamStrength, structureMatch } from "./domain/plate";
 import { lightingOf } from "./domain/imagePrompts";
 import { imageSettings, SIZES, type ImageProvider } from "./providers/images";
 import { recordDraw, testMode } from "./testRecords";
@@ -39,10 +39,11 @@ async function plateInput(db: DB, shotId: string) {
   const W = portrait ? 1024 : 1536, H = portrait ? 1536 : 1024;
   const cut = await backgroundForFrame(db, shotId, W, H);
   if (!cut) return null;
-  const prompt = platePrompt({ venueName: scene.venue?.name ?? "venue", aspect, light: lightingOf(scene.venue?.description ?? ""), style: brief.style });
+  const joins = await frameJoins(db, shotId);
+  const prompt = platePrompt({ venueName: scene.venue?.name ?? "venue", aspect, light: lightingOf(scene.venue?.description ?? ""), style: brief.style, joins });
   const s = imageSettings();
   const key = crypto.createHash("sha1").update(cut).update(prompt).update(`${s.model}|${s.quality}|${PLATE_RULES}`).digest("hex").slice(0, 16);
-  return { cut, prompt, key, W, H, size: (portrait ? "portrait" : "landscape") as "portrait" | "landscape" };
+  return { cut, prompt, key, W, H, joins, size: (portrait ? "portrait" : "landscape") as "portrait" | "landscape" };
 }
 
 /** The shot's plate if it has been made, without making one (for previews of image 1). */
@@ -78,11 +79,16 @@ export async function ensurePlate(db: DB, shotId: string, provider: ImageProvide
 async function makePlate(p: NonNullable<Awaited<ReturnType<typeof plateInput>>>, file: string, provider: ImageProvider, test?: { panelCode: string; variant: string }): Promise<Buffer | null> {
   const strayed = path.join(plates(), `${p.key}.strayed`);
   if (fs.existsSync(strayed)) return null;
+  // A plate that keeps the place but still shows a join is kept in reserve: one more try, and if
+  // that is no better it's used anyway, as the cut it came from shows the same join (D84).
+  let reserve: Buffer | null = null;
   for (let attempt = 1; attempt <= 2; attempt++) {
     const img = await provider.generate(p.prompt, [{ data: p.cut, mime: "image/png", name: "camera_view.png" }], p.size, { firstFullSize: true });
     const png = await sharp(img.data).resize({ width: p.W, height: p.H, fit: "fill" }).removeAlpha().png().toBuffer();
     const match = await samePlace(p.cut, png);
-    const ok = match >= SAME_PLACE;
+    const seams = await seamsIn(png, p.W, p.H, p.joins);
+    const joined = seams.every((x) => x < SEAM_SHOWS);
+    const ok = match >= SAME_PLACE && joined;
     if (testMode() && test) {
       const s = imageSettings();
       recordDraw({
@@ -90,18 +96,27 @@ async function makePlate(p: NonNullable<Awaited<ReturnType<typeof plateInput>>>,
         inputs: [{ name: "camera_view.png", data: p.cut, mime: "image/png" }],
         model: s.model, quality: s.quality, size: SIZES[p.size], endpoint: "images/edits",
         output: { assetId: `plate-${p.key}-${attempt}`, data: png, note: img.providerNote },
-        extras: [{ name: "plate.json", data: JSON.stringify({ key: p.key, attempt, samePlace: match, used: ok, needs: SAME_PLACE }, null, 2) }],
+        extras: [{ name: "plate.json", data: JSON.stringify({ key: p.key, attempt, samePlace: match, needs: SAME_PLACE, joins: p.joins, seams, seamShows: SEAM_SHOWS, used: ok || (attempt === 2 && match >= SAME_PLACE) }, null, 2) }],
       });
     }
-    if (ok) {
+    if (match >= SAME_PLACE && !joined && !reserve) reserve = png;
+    const use = ok ? png : attempt === 2 ? reserve : null;
+    if (use) {
       fs.mkdirSync(plates(), { recursive: true });
-      fs.writeFileSync(file, png);
-      return png;
+      fs.writeFileSync(file, use);
+      return use;
     }
   }
   fs.mkdirSync(plates(), { recursive: true });
   fs.writeFileSync(strayed, "GPT changed the place twice; the cut from the venue's views is used.\n");
   return null;
+}
+
+/** How strongly each join still shows as a line in a plate (D84). */
+export async function seamsIn(png: Buffer, W: number, H: number, joins: number[]): Promise<number[]> {
+  if (!joins.length) return [];
+  const grey = await sharp(png).resize({ width: W, height: H, fit: "fill" }).greyscale().raw().toBuffer();
+  return joins.map((f) => seamStrength(grey, W, H, f * W));
 }
 
 /**

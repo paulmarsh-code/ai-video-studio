@@ -1743,3 +1743,16 @@ STORYBOARD_FRAME=box npx tsx scripts/exercise.ts <folder>
 **Checked** on a copy of Paul's database as it stands, through the real page: first open updates (bowl area in, four cameras chosen, rules 15); second open does nothing.
 
 **Working rule from tonight.** A fix isn't done until it works from Paul's saved scene with no extra steps, checked on a copy of his database through the page he'll open.
+
+### D84: Joins between venue views fade into each other, and the plate is asked to close them (2026-11-13)
+
+T7 panel 2 on the updated layout: the bowl and Kai's line were right, but on the right of the picture the bowl stopped at a hard vertical line and a second, different bowl wall began.
+- **Cause.** A camera's background is cut from the 360° ring, which joined the venue's four views edge to edge. Panel 2's camera looks across the join between the "deep bowl" view and the "viaduct arches" view, 86% of the way across. The plate request says "change nothing", so GPT kept the line, and the picture kept the plate. The measured line in that plate is 2.6 times the picture's usual column change; ordinary edges are under 1.9.
+- **Failure fixed (D38).** Any camera whose view crosses from one venue picture to the next: a wall, ramp, railing or floor breaking off at a line. It reaches generation through the plate, which is image 1's background.
+- **Fix.**
+  - The ring overlaps neighbouring views by 4° each side of a join and cross-fades them, instead of butting them together. On panel 2's cut the line drops from 2.4 to 1.4.
+  - `frameJoins` works out where the joins fall across each camera's frame. The plate request names them: "image 1 is joined from photographs of the same place … they meet about 86% of the way across. Make it one continuous photograph there: every floor, ramp, rim, edge, wall, railing and roofline carries on smoothly across the join … with no line, step, break or double image." That is the one change the plate may make.
+  - After each plate, `seamStrength` measures each join. Above 2.3 the plate is made once more; if the second is no better, the first that kept the place is used. `plate.json` records the joins and the measures.
+  - `PLATE_RULES` is 3, so every camera's plate is made again once (about 7p each).
+- **Checked** on a copy of Paul's database with his skate park views: the predicted join for panel 2 is 0.861, where the line sits in his picture (0.86). Joins for panels 1, 3 and 4 are at 0.72, 0.78 and 0.56, all now cross-faded.
+- **Known limit.** The cross-fade leaves a short ghosted strip (two rims faintly overlapping) for the plate request to resolve; the check measures hard lines, not ghosting. The venue's views are still 768 pixels wide; "Make them full size" on the venue page would sharpen every background.

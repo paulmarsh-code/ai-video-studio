@@ -9,7 +9,7 @@ import { pictureXY } from "./geometry";
 import type { GeometryPlanData, PlanCamera, Point } from "./types";
 
 /** Bump when the plate request or how it's made changes, so plates are made again. */
-export const PLATE_RULES = 2;
+export const PLATE_RULES = 3;
 
 /**
  * The request for a camera's plate (D66, D67): the empty place from this camera, finished as a
@@ -18,16 +18,52 @@ export const PLATE_RULES = 2;
  * people (the guests are drawn in each picture, as in version A) and the request is a clean-up:
  * the same photograph, sharper. It's checked against the cut before it's used (`structureMatch`).
  */
-export function platePrompt(i: { venueName: string; aspect?: string; light?: string; style?: string }): string {
+export function platePrompt(i: { venueName: string; aspect?: string; light?: string; style?: string; joins?: number[] }): string {
   return [
     `Image 1 is a real photograph of the ${i.venueName}, seen from one fixed camera, but soft and low in detail. Return the same photograph, sharp and clean, for a ${i.aspect ?? "9:16"} ${(i.style ?? "photorealistic").toLowerCase()} video.`,
     "Change nothing in it: the framing, camera height, eye level and perspective stay exactly as they are, and every wall, railing, screen, planter, counter, door, light, the view beyond and the floor stay exactly where they are, at the same size, with the same materials and colours. Add nothing and remove nothing. Do not move, zoom, tilt or re-frame.",
     "Only sharpen it and add fine detail, with the same clarity all over: everything from near to far in focus. Any soft, blurred or mirrored strip along an edge carries on what is next to it, sharp.",
+    joinLine(i.joins),
     "No people anywhere, and no tables, chairs or other free-standing furniture on the open floor.",
     i.light ? `Light, as it is in image 1: ${i.light}` : "",
     "No text, no logos, no watermark.",
   ].filter(Boolean).join("\n");
 }
+
+/**
+ * Where image 1 is joined from two of the venue's views (D84). The one change the plate may make:
+ * at a join the two photographs fade into each other, and a ramp, rim, wall or railing can stop
+ * at it or show twice. Left alone, GPT kept a hard line there and drew a skate bowl breaking off.
+ */
+export function joinLine(joins?: number[]): string {
+  if (!joins?.length) return "";
+  const at = joins.map((f) => `${Math.round(f * 100)}%`);
+  const where = at.length === 1 ? `about ${at[0]} of the way across from the left` : `about ${at.slice(0, -1).join(", ")} and ${at[at.length - 1]} of the way across from the left`;
+  return `The one exception: image 1 is joined from photographs of the same place taken from the same spot, and they meet ${where}. Make it one continuous photograph there: every floor, ramp, rim, edge, wall, railing and roofline carries on smoothly across the join at the same height and curve, with no line, step, break or double image.`;
+}
+
+/**
+ * How strong a vertical line is in a picture near a join (D84): the biggest change between
+ * neighbouring columns within `reach` pixels of `x`, against the picture's usual column change.
+ * A hard join left in a plate measured 2.7; the strongest ordinary edges about 1.8.
+ */
+export function seamStrength(grey: ArrayLike<number>, W: number, H: number, x: number, reach = 12): number {
+  const col = (c: number) => {
+    let d = 0;
+    for (let r = 0; r < H; r++) d += Math.abs(grey[r * W + c + 1] - grey[r * W + c - 1]);
+    return d / H;
+  };
+  const all: number[] = [];
+  for (let c = 1; c < W - 1; c += 2) all.push(col(c));
+  all.sort((a, b) => a - b);
+  const usual = all[Math.floor(all.length / 2)] || 1;
+  let worst = 0;
+  for (let c = Math.max(1, Math.round(x) - reach); c <= Math.min(W - 2, Math.round(x) + reach); c++) worst = Math.max(worst, col(c));
+  return +(worst / usual).toFixed(2);
+}
+
+/** Above this, a join is still showing as a line (D84). */
+export const SEAM_SHOWS = 2.3;
 
 /**
  * The request to redraw one small venue view at full size (D67). A venue's four views came as

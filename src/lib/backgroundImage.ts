@@ -21,7 +21,7 @@ import * as repo from "./repo";
 const H = 1152; // ring height in pixels
 const PX_PER_DEG = 1536 / 90;
 
-const ringCache = new Map<string, { data: Buffer; width: number; startDeg: number }>();
+const ringCache = new Map<string, { data: Buffer; width: number; startDeg: number; joins: number[] }>();
 
 type RingView = { name: string; directionDeg: number; path: string; calib?: ViewCalibration; wallM?: number };
 
@@ -121,25 +121,46 @@ export async function paddedOut(part: Buffer, vw: number, vh: number, e: { top: 
   return sharp(soft).composite([{ input: sharpOnTop, left: 0, top: 0 }]).png().toBuffer();
 }
 
-/** The ring, twice round so any slice can be cut without wrapping. x = (startDeg - angle) * PX_PER_DEG. */
+/**
+ * The ring, twice round so any slice can be cut without wrapping. x = (startDeg - angle) * PX_PER_DEG.
+ * Neighbouring views overlap by a few degrees and fade into each other (D84): joined edge to edge,
+ * the skate park's bowl stopped dead at a hard vertical line where the arches view began, the plate
+ * kept it ("change nothing") and GPT drew the bowl's rim breaking off at it.
+ */
+const JOIN_BLEND = Math.round(4 * PX_PER_DEG); // each side of a join, pixels
+
 async function ringFor(views: RingView[]) {
   const key = views.map((v) => `${v.name}@${v.directionDeg}:${v.path}:${v.calib ? `${v.calib.horizon}/${v.calib.floor}/${v.wallM?.toFixed(2)}` : "-"}`).join("|");
   const hit = ringCache.get(key);
   if (hit) return hit;
   const sectors = ringSectors(views);
-  const parts: { input: Buffer; left: number; top: number }[] = [];
+  const B = JOIN_BLEND;
+  const pieces: { input: Buffer; x: number }[] = [];
+  const joins: number[] = [];
   let x = 0;
   for (const s of sectors) {
     const v = views.find((y) => y.name === s.name)!;
     const w = Math.max(8, Math.round((s.leftDeg - s.rightDeg) * PX_PER_DEG));
-    // The view's centre sits at the sector's centre.
-    parts.push({ input: await sectorImage(v, w), left: x, top: 0 });
+    joins.push(x);
+    // The view a little wider than its share, its left edge fading in over the neighbour's own
+    // extra: the two pictures cross-fade across the join instead of meeting at a line.
+    const ww = w + 2 * B;
+    const img = await sectorImage(v, ww);
+    const fade = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${ww}" height="${H}"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#000"/><stop offset="${((2 * B) / ww).toFixed(4)}" stop-color="#fff"/><stop offset="1" stop-color="#fff"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#g)"/></svg>`);
+    const alpha = await sharp(fade).resize({ width: ww, height: H }).extractChannel(0).raw().toBuffer();
+    // Plain colour first: removeAlpha in the same chain as joinChannel drops the joined fade too.
+    const rgb = await sharp(img).resize({ width: ww, height: H, fit: "fill" }).removeAlpha().png().toBuffer();
+    const input = await sharp(rgb).joinChannel(alpha, { raw: { width: ww, height: H, channels: 1 } }).png().toBuffer();
+    pieces.push({ input, x: x - B });
     x += w;
   }
   const width = x;
-  const doubled = parts.flatMap((p) => [p, { ...p, left: p.left + width }]);
-  const data = await sharp({ create: { width: width * 2, height: H, channels: 3, background: "#808080" } }).composite(doubled).png().toBuffer();
-  const out = { data, width, startDeg: sectors[0].leftDeg };
+  // Three copies laid left to right, the first only so the second's first join has something to
+  // fade over; the second and third are the ring, twice round.
+  const parts = [0, 1, 2].flatMap((c) => pieces.map((p) => ({ input: p.input, left: B + c * width + p.x, top: 0 })));
+  const canvas = await sharp({ create: { width: 3 * width + 2 * B, height: H, channels: 3, background: "#808080" } }).composite(parts).png().toBuffer();
+  const data = await sharp(canvas).extract({ left: B + width, top: 0, width: 2 * width, height: H }).png().toBuffer();
+  const out = { data, width, startDeg: sectors[0].leftDeg, joins };
   ringCache.set(key, out);
   return out;
 }
@@ -291,6 +312,33 @@ export async function backgroundForFrame(db: DB, shotId: string, W: number, Hf: 
     return kind && foot ? [{ kind, x: foot.x, baseY: foot.y }] : [];
   });
   return clearLooseFurniture(framed, spots, horizon / Hf).catch(() => framed);
+}
+
+/**
+ * Where the joins between venue views fall across this camera's frame, 0 (left) to 1 (right)
+ * (D84). The plate request names them so GPT makes one continuous place across each, and the
+ * plate is checked for a line left there.
+ */
+export async function frameJoins(db: DB, shotId: string): Promise<number[]> {
+  const shot = repo.getShot(db, shotId);
+  if (!shot?.spec.cameraId) return [];
+  const scene = repo.getScene(db, shot.sceneId);
+  const full = scene?.plan?.data;
+  const plan = full ? planForShot(full, shot.spec) : undefined;
+  const cam = plan?.cameras.find((c) => c.id === shot.spec.cameraId);
+  if (!plan || !cam) return [];
+  const ring = await ringForScene(db, shot.sceneId);
+  if (!ring) return [];
+  const slice = viewSlice(plan, cam);
+  let x0 = Math.round((ring.startDeg - slice.leftDeg) * PX_PER_DEG);
+  x0 = ((x0 % ring.width) + ring.width) % ring.width;
+  const w = Math.max(16, Math.min(ring.width, Math.round((slice.leftDeg - slice.rightDeg) * PX_PER_DEG)));
+  return joinsAcross(ring.joins, ring.width, x0, w);
+}
+
+/** Ring joins (pixels round the ring) as fractions across a cut from `x0`, `w` wide. Not within 3% of an edge. */
+export function joinsAcross(joins: number[], ringWidth: number, x0: number, w: number): number[] {
+  return joins.flatMap((j) => [j, j + ringWidth]).map((j) => (j - x0) / w).filter((f) => f > 0.03 && f < 0.97).map((f) => +f.toFixed(3)).sort((a, b) => a - b);
 }
 
 /** The loose furniture in a background that isn't the plan's (D56): standing on the floor, below the horizon, and nowhere near a planned prop of its kind. */
