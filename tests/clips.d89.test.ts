@@ -20,3 +20,17 @@ describe("Nobody new takes over a clip (D89)", () => {
     expect(make("She walks off towards the door.")).not.toMatch(/to the end of the clip/);
   });
 });
+
+import { storyPrompt } from "../src/lib/domain/story";
+
+describe("Silence around the line, and panels that join up (D91)", () => {
+  it("a spoken clip forbids mumbling before and after the line", () => {
+    const spoken = SCENE.find((s) => s.spec.speakerId)!;
+    const t = composeKlingPrompt(spoken.spec, CAST, PLAN).text;
+    expect(t).toMatch(/Before and after it nobody speaks, mumbles, murmurs or makes any vocal sound/);
+  });
+  it("the panel-writing request asks for each panel to end where the next begins", () => {
+    const p = storyPrompt({ story: "Ava teaches Bo to skate.", characters: [{ name: "Ava" }, { name: "Bo" }] as never, venue: "skate park", targetSec: 15 });
+    expect(p).toMatch(/each panel's action ends where the next panel's picture starts/);
+  });
+});

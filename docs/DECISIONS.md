@@ -1862,3 +1862,15 @@ The clip's prompt asked for "a few skaters and BMX riders … riding the street 
   - the scene line keeps the setting's own description of them, but says that "during this moment they have stopped to watch, standing still", far off and out of focus;
   - the closing line (D89's second line, replaced) says: "Background people stay small, far off and still; nobody else rides, skates, cycles or crosses the picture, and every bike, board and person in the background stays one of each."
 - **Clips without action** keep the background as written.
+
+### D91: Silence around the line, and panels that join up (2026-11-13)
+
+Paul's verdict on the cut scene: "they are all ok … they don't quite join up, but as individual clips they are ok." Two faults, and the cost:
+- **Mumbling before the line.** In the 6-second clip 3, Rosa said something unintelligible early on. Her line comes at the end, after Kai lands. The prompt's guard said only that "Only Rosa has intelligible dialogue", which leaves room for unintelligible sound before it.
+- **Clips don't join up.** The panels were written as separate moments, so where a clip ends isn't where the next one's picture starts.
+- **Cost.** About 300 credits for the four usable clips (about 23 seconds), including the learning re-runs.
+
+- **Failures fixed (D38).** Sound before or after the line, and cuts that jump. They reach generation through the video prompt and the panel-writing request.
+- **Video prompt (`composeKlingPrompt`).** The speaker guard now reads: "Only [Name] has intelligible dialogue, and only the line above, once. Before and after it nobody speaks, mumbles, murmurs or makes any vocal sound; [Name] stays silent until the moment of the line. No repeated words or additional speech."
+- **Panel writing.** A new rule: "Make the panels join up: each panel's action ends where the next panel's picture starts (the same people in the same places, doing what the next panel begins with). If someone moves somewhere, they get there within the panel."
+- **Not done yet.** Using the next panel as Kling's end frame, which Kling 3.0 supports, would force the join. It's worth testing on the ski scene, where shots share a camera.

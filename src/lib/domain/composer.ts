@@ -241,7 +241,9 @@ export function composeKlingPrompt(
   // 8. Guard lines.
   const guards: string[] = [];
   if (speaker) {
-    guards.push(`Only ${speaker.name} has intelligible dialogue. No repeated words or additional speech.`);
+    // "Intelligible" let Kling fill the seconds before the line with mumbling (D91): Rosa said
+    // something unclear early in a 6-second clip whose line came at the end.
+    guards.push(`Only ${speaker.name} has intelligible dialogue, and only the line above, once. Before and after it nobody speaks, mumbles, murmurs or makes any vocal sound; ${speaker.name} stays silent until the moment of the line. No repeated words or additional speech.`);
   } else {
     guards.push("No one speaks. No dialogue, no humming, no vocal sounds.");
   }

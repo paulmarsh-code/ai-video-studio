@@ -333,6 +333,7 @@ export function storyPrompt(i: { story: string; characters: StoryCharacter[]; ve
     "- Keep the story's order and do not add new plot.",
     "- Give no camera directions; the app chooses the cameras.",
     `- A panel with real physical action (a drop-in, a trick, a jump, a run, a fall, a tackle) lasts at least ${ACTION_MIN_SEC} seconds, so it has time to happen; ${ACTION_MIN_SEC + BUILD_UP_SEC} if it starts from standing still and has to get ready first.`,
+    "- Make the panels join up: each panel's action ends where the next panel's picture starts (the same people in the same places, doing what the next panel begins with). If someone moves somewhere, they get there within the panel.",
     "- Show every action the story depends on, in the panel where it happens: if someone reacts to it (\"That was clean!\", a cheer, a gasp), an earlier panel or the same panel, before the line, must show it happening. Never leave it between panels.",
     "- Describe gestures precisely: which hand, which way the palm faces and how it moves (for example: flicks the back of his hand outwards to shoo her away, not just a dismissive wave).",
     "- Say plainly who moves, sits, lies down, gets up, turns or leaves, naming them each time, in everyday words (D40): for example, Ava walks over to the bar; Ben sits on the sofa; Ava lies on her bed; Ben gets up; Ava turns to Ben; Ben walks off; Ava picks up the phone; Ben puts it down on the table. The app places everyone from these words, and they stay put until a panel says they move.",
