@@ -116,7 +116,9 @@ const MOOD_BIRDS = /\b(?:isolated|isolation|utterly\s+alone|all\s+alone|tiny\s+f
 /** A Dutch angle for this moment: named, or from the feeling (D27). Degrees, or undefined. */
 export function dutchFor(text: string): number | undefined {
   if (DUTCH.test(text)) return 20;
-  if (MOOD_DUTCH.test(text)) return 15;
+  // Not from mood any more (D93): an "uneasy" look tilted a dialogue shot 20° and the stand-ins
+  // drew as falling over. A Dutch angle only when the panel or the user names one.
+  void MOOD_DUTCH;
   return undefined;
 }
 

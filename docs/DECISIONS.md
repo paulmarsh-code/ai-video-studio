@@ -1887,3 +1887,25 @@ Paul, after the first video test: "this product market are frequent content prod
   - **Real photos.** Uploaded photos of a real shop, product or place should come before any further invented-venue work.
   - **The finished reel.** Clips that join up (D91), and later captions, music and export at reel sizes, count under D38's "makes the finished video better to watch".
 - **Not the aim:** feature-film cinematography, exact floor plans and fine 180-degree staging. The rules already built stay, but nothing more is added for these.
+
+### D93: Lines framed on speaker and listener; Dutch angles only when asked for (2026-11-13)
+
+Paid On Time scene 1, rewritten with the D87–D92 rules and drawn. Paul:
+- "Shot director: the people are falling over." Panel 7's viewfinder was rolled 20°.
+- Panel 6 "seems a far away shot for dialogue between Chase and Jade".
+- Panel 7 "is all wrong".
+- In panels 3 and 5, the table is a long way from the group.
+
+- **Causes.**
+  - The writer listed all four of the group as in frame for every line. So every spoken panel was a four-person group shot from 5–7 m, and the line between two people played as a wide group picture.
+  - Panel 7's words had Marcus and Nina's "uneasy looks". The mood rule (D27) read "uneasy" as a reason for a Dutch angle, which tilted the frame and the stand-ins.
+  - In the group shots, GPT pulled the cocktail table towards the camera, away from where image 1 has it. The check caught it (panel 3, "Room and props").
+- **Failures fixed (D38, D92).** Dialogue shot too wide to read faces, and frames tilted without being asked for. They reach generation through the camera choice and the panel writing.
+- **Closer for lines (`closerForLines`).** Applied when the writer's reply is read. A spoken panel with three or more people in frame keeps:
+  - the speaker;
+  - anyone the panel's words name, such as a described reaction;
+  - if no one else is named, the last person who spoke before (the one being answered).
+
+  The others are still present and can be seen at the edge. The panel-writing request asks for the same: the speaker, the person spoken to, and anyone whose reaction is described.
+- **Dutch angle (`dutchFor`).** Only when the panel or the user names one. Mood words no longer tilt the frame (D27's mood rule removed).
+- **Not fixed.** GPT moving the table forward in wide group shots. The check flags it and "Try one more fix" redraws it. Closer framing on lines should make it rarer.

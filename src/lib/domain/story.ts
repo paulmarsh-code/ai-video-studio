@@ -333,6 +333,7 @@ export function storyPrompt(i: { story: string; characters: StoryCharacter[]; ve
     "- Keep the story's order and do not add new plot.",
     "- Give no camera directions; the app chooses the cameras.",
     `- A panel with real physical action (a drop-in, a trick, a jump, a run, a fall, a tackle) lasts at least ${ACTION_MIN_SEC} seconds, so it has time to happen; ${ACTION_MIN_SEC + BUILD_UP_SEC} if it starts from standing still and has to get ready first.`,
+    "- For a spoken panel, IN FRAME is the speaker and the person they are talking to, plus anyone whose reaction that panel describes. The others are still there but not the subject of the shot. Keep lines close and personal: this is a short reel, not a wide stage.",
     "- Make the panels join up: each panel's action ends where the next panel's picture starts (the same people in the same places, doing what the next panel begins with). If someone moves somewhere, they get there within the panel.",
     "- Show every action the story depends on, in the panel where it happens: if someone reacts to it (\"That was clean!\", a cheer, a gasp), an earlier panel or the same panel, before the line, must show it happening. Never leave it between panels.",
     "- Describe gestures precisely: which hand, which way the palm faces and how it moves (for example: flicks the back of his hand outwards to shoo her away, not just a dismissive wave).",
@@ -512,6 +513,29 @@ export interface StoryReply {
   unknownNames: string[];
 }
 
+/**
+ * A spoken panel shows who is talking and who they are talking to (D93), not everyone at the
+ * table: the writer put all four of the launch-party group in every line, so each was framed as a
+ * four-person group shot from five to seven metres, and Paul found the dialogue "far away".
+ * Kept in frame: the speaker, anyone the panel's words name, and the person spoken to (the last
+ * one to speak before, if no one else is named). The others are still there, at the edge.
+ */
+export function closerForLines(panels: DraftPanel[], characters: StoryCharacter[]): DraftPanel[] {
+  let lastSpeaker: string | undefined;
+  return panels.map((p) => {
+    const before = lastSpeaker;
+    if (p.speakerId) lastSpeaker = p.speakerId;
+    if (!p.speakerId || !p.line.trim() || p.inFrame.length < 3) return p;
+    // A reaction the panel describes ("Marcus and Nina look shocked") keeps those people in.
+    const named = characters.filter((c) => c.id !== p.speakerId && new RegExp(String.raw`\b${c.name.split(/\s+/)[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\b`).test(p.action)).map((c) => c.id);
+    const keep = new Set([p.speakerId, ...named.filter((id) => p.inFrame.includes(id))]);
+    if (keep.size === 1 && before && before !== p.speakerId && p.inFrame.includes(before)) keep.add(before);
+    if (keep.size === 1) return p;
+    if (keep.size >= p.inFrame.length) return p;
+    return { ...p, inFrame: p.inFrame.filter((id) => keep.has(id)) };
+  });
+}
+
 export function parseStoryReply(text: string, characters: StoryCharacter[]): StoryReply {
   const unknown = new Set<string>();
   const find = (raw: string): string | undefined => {
@@ -569,7 +593,7 @@ export function parseStoryReply(text: string, characters: StoryCharacter[]): Sto
       ...(Object.keys(doing).length ? { doing } : {}),
     });
   }
-  return { staging: parseStaging(parts[0] ?? ""), panels, unknownNames: [...unknown] };
+  return { staging: parseStaging(parts[0] ?? ""), panels: closerForLines(panels, characters), unknownNames: [...unknown] };
 }
 
 /** A spoken panel is sized to its line (D10); a silent one is kept inside Kling's range; real action gets time to happen (D87). */

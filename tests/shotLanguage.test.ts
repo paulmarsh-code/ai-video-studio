@@ -63,11 +63,12 @@ describe("Named and mood angles (D27)", () => {
     ["She is utterly alone in the vast hall", "birds-eye"],
     ["She smiles at Ben", undefined],
   ])("%s", (text, kind) => { expect(verticalFor(text)?.kind).toBe(kind); });
-  it("Dutch angle: named or from the feeling", () => {
+  it("Dutch angle: only when named (D93: no longer from the feeling)", () => {
     expect(dutchFor("Dutch angle on the doorway")).toBe(20);
-    expect(dutchFor("He staggers, drunk and dizzy")).toBe(15);
+    expect(dutchFor("He staggers, drunk and dizzy")).toBeUndefined();
     expect(dutchFor("She smiles at Ben")).toBeUndefined();
-    expect(verticalFor("Ava panics and looks down at the street below")).toMatchObject({ kind: "high", rollDeg: 15 });
+    expect(verticalFor("Ava panics and looks down at the street below")).toMatchObject({ kind: "high" });
+    expect(verticalFor("Ava panics and looks down at the street below")?.rollDeg).toBeUndefined();
   });
   it("prompt words for each height and angle", () => {
     expect(verticalText({ heightM: 1.45, tiltDeg: 0 })).toContain("shoulder-level");

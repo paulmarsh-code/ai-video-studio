@@ -34,3 +34,23 @@ describe("Silence around the line, and panels that join up (D91)", () => {
     expect(p).toMatch(/each panel's action ends where the next panel's picture starts/);
   });
 });
+
+import { closerForLines } from "../src/lib/domain/story";
+
+describe("Lines framed on speaker and listener (D93)", () => {
+  const chars = [{ id: "jade", name: "Jade" }, { id: "chase", name: "Chase Whitmore" }, { id: "marcus", name: "Marcus" }, { id: "nina", name: "Nina" }] as never;
+  const all = ["jade", "chase", "marcus", "nina"];
+  const panel = (speakerId: string | undefined, action: string, line = "x") => ({ action, inFrame: all, speakerId, line: speakerId ? line : "", emotion: "", seconds: 4 });
+  it("keeps the speaker and the person they answer; keeps anyone whose reaction is described", () => {
+    const out = closerForLines([
+      panel(undefined, "Jade walks to the table."),
+      panel("jade", "Jade asks Chase about the promo."),
+      panel("chase", "Chase gives a quick, false correction."),
+      panel("chase", "Chase smirks while Marcus and Nina look shocked."),
+    ], chars);
+    expect(out[0].inFrame).toEqual(all);
+    expect(out[1].inFrame).toEqual(["jade", "chase"]);
+    expect(out[2].inFrame).toEqual(["jade", "chase"]);
+    expect(out[3].inFrame).toEqual(["chase", "marcus", "nina"]);
+  });
+});
