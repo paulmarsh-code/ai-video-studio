@@ -1756,3 +1756,14 @@ T7 panel 2 on the updated layout: the bowl and Kai's line were right, but on the
   - `PLATE_RULES` is 3, so every camera's plate is made again once (about 7p each).
 - **Checked** on a copy of Paul's database with his skate park views: the predicted join for panel 2 is 0.861, where the line sits in his picture (0.86). Joins for panels 1, 3 and 4 are at 0.72, 0.78 and 0.56, all now cross-faded.
 - **Known limit.** The cross-fade leaves a short ghosted strip (two rims faintly overlapping) for the plate request to resolve; the check measures hard lines, not ghosting. The venue's views are still 768 pixels wide; "Make them full size" on the venue page would sharpen every background.
+
+### D85: Two-shots keep the pair off the frame's edges; the check no longer fails someone drawn in from an edge (2026-11-13)
+
+T7 after D84. Panel 1 redrawn and right, panel 2's bowl continuous, panel 3 passed or nearly. Panel 2 was still failed: "Kai is about 75% of the way across the picture; image 1 has them about 97% across." GPT's picture was the better framed of the two.
+- **Cause.** A named two-shot sized its lens to the pair's spread plus 45 cm each side, so a pair five metres apart sat at the frame's very edges: Kai 97% across in panel 2, 101% in panel 3, Rosa 13–16%. GPT pulls people in from the edge, and the check then failed it.
+- **Failures fixed (D38).** Image 1 with the main people squeezed against the sides, and good pictures failed for framing them better. These reach generation through the camera choice and the picture check.
+- **Fix.**
+  - The named two-shot's lens allows two-fifths of the pair's spread more, plus the 45 cm. On Paul's skate scene: panel 2 Kai 86% and Rosa 24%; panel 3 Kai 88% and Rosa 23%.
+  - In the camera scoring, anyone the panel needs whose middle is beyond about 85% across costs 1.5, so a camera with room round them wins.
+  - The check: someone image 1 puts within 12% of a side edge, drawn further in but still on that side, isn't marked out of place.
+- **Not applied to existing layouts.** `LAYOUT_RULES` isn't raised: that would update the skate scene's cameras and mark its three drawn panels as out of date. New scenes, and "Update the layout", use it.

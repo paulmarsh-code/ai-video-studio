@@ -380,7 +380,10 @@ export function judgePicture(e: PictureExpectation, reply: string, plan?: string
       if (want.feetY <= 0.97) feetShifts.push(Math.min(box.y1, 1) - want.feetY);
       // Place across: off by more than their own planned width, and at least 15% of the picture.
       const plannedTall = Math.min(want.feetY, 1) - want.headY;
-      if (Math.abs(cx - want.x) > Math.max(0.15, 0.28 * plannedTall * plan.aspect)) {
+      // Someone image 1 puts right at a side edge, drawn further in but still on that side, is
+      // framed better, not wrongly (D85): Kai planned 97% across, drawn 75%, failed a good picture.
+      const pulledIn = (want.x > 0.88 && cx < want.x && cx >= 0.55) || (want.x < 0.12 && cx > want.x && cx <= 0.45);
+      if (!pulledIn && Math.abs(cx - want.x) > Math.max(0.15, 0.28 * plannedTall * plan.aspect)) {
         m.fit = "elsewhere";
         add("blocking", `${want.name} is about ${pct(cx)} of the way across the picture; image 1 has them about ${pct(want.x)} across.`, true);
         continue;

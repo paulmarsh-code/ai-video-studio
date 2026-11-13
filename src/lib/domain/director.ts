@@ -447,6 +447,15 @@ function score(
     if (required.includes(a.characterId) || a.foreground || a.depthM <= 0) continue;
     if (Math.abs(Math.abs(a.angleDeg) - halfFov) < bodyDeg(a)) s -= 1;
   }
+  // Someone the panel needs, squeezed against a side edge (D85): inside the frame, but their
+  // middle beyond about 85% across. GPT drew Kai further in than image 1 had him, and the check
+  // failed a good picture. A small cost each, so a camera with room round them wins.
+  const tanHalf = Math.tan((halfFov * Math.PI) / 180);
+  for (const id of required) {
+    const a = reading.actors.find((x) => x.characterId === id);
+    if (!a || a.foreground || a.depthM <= 0) continue;
+    if (Math.abs(Math.tan((a.angleDeg * Math.PI) / 180)) > 0.7 * tanHalf) s -= 1.5;
+  }
   const excludedInView = shot.excludedIds.filter((id) => reading.actors.find((a) => a.characterId === id)?.inView).length;
   s -= 0.4 * excludedInView;
 
@@ -718,7 +727,9 @@ function namedShotDesign(d: ShotDesign, plan: GeometryPlanData, sh: ShotInput, l
           && Math.min(Math.hypot(a.position.x - A.x, a.position.y - A.y), Math.hypot(a.position.x - B.x, a.position.y - B.y)) < 1.6).map((a) => a.position);
         const build = (k: number): PlanCamera => {
           const cpos = { x: M.x + dir.x * k, y: M.y + dir.y * k };
-          let wide = 2 * Math.atan((half + 0.45) / k);
+          // Room round the pair (D85): a fixed 45 cm left a pair far apart at 92-97% across, at the
+          // frame's edges. Two-fifths of their spread more keeps them nearer 20% and 85%.
+          let wide = 2 * Math.atan((half * 1.4 + 0.45) / k);
           for (const o of nearby) {
             const rel = { x: o.x - cpos.x, y: o.y - cpos.y };
             const ahead = -(rel.x * dir.x + rel.y * dir.y), lateral = Math.abs(rel.x * dir.y - rel.y * dir.x);
