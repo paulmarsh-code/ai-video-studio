@@ -548,7 +548,15 @@ function settleProps(plan: GeometryPlanData): GeometryPlanData {
   const owner = (f: { name: string; detail?: string }) => {
     const m = `${f.name} ${f.detail ?? ""}`.match(/\b(?:held|carried|used|ridden|worn|pushed|played)\s+by\s+([\p{L}][\p{L}'’-]*)/iu);
     const id = m?.[1].toLowerCase();
-    return id ? plan.actors.find((a) => a.characterId === id) : undefined;
+    if (id) return plan.actors.find((a) => a.characterId === id);
+    // Someone's own gear (D86), "Tom's skis", "Elin's poles", "Kai's phone": with them, not a
+    // thing on the ground. A ski resort's skis stood as a 1.6 m drum in front of the pair, which
+    // GPT drew as a disc of ice. Not their car, boat, table or anything else they don't carry.
+    const pm = f.name.match(/^([\p{L}][\p{L}-]*)['’]s?\s+(.+)$/u);
+    if (pm && !/\b(?:car|van|truck|lorry|bus|coach|boat|yacht|ship|plane|jet|helicopter|house|home|flat|room|office|desk|table|bed|sofa|couch|chair|stool|bench|stall|stand|shop|tent|caravan|cabin|horse|bike|bicycle|motorbike|motorcycle|scooter|kayak|canoe|wall|door|fence|garden|pool|truck)\b/i.test(pm[2])) {
+      return plan.actors.find((a) => a.characterId === pm[1].toLowerCase());
+    }
+    return undefined;
   };
   const out = furniture.map((f0) => {
     let f = f0;

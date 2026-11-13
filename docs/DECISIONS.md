@@ -1767,3 +1767,38 @@ T7 after D84. Panel 1 redrawn and right, panel 2's bowl continuous, panel 3 pass
   - In the camera scoring, anyone the panel needs whose middle is beyond about 85% across costs 1.5, so a camera with room round them wins.
   - The check: someone image 1 puts within 12% of a side edge, drawn further in but still on that side, isn't marked out of place.
 - **Not applied to existing layouts.** `LAYOUT_RULES` isn't raised: that would update the skate scene's cameras and mark its three drawn panels as out of date. New scenes, and "Update the layout", use it.
+
+### D86: Down a slope from the words; someone's own gear goes with them; a plan grown for its areas keeps its size (2026-11-13)
+
+T8, the ski resort, five panels. Paul: "ok, not great". Three faults:
+- **A disc of ice** in front of the pair in panels 2, 3 and 5. The setting listed "Tom's skis" and "Elin's skis" as props. With no "held by", each stood on the snow as a drum 1.6 m across in front of them, and GPT drew a round slab.
+- **Panel 5: Elin wasn't further down the slope.** Panel 4 says she "pushes off and starts down the slope", with PLACE "on the ski run". She was already standing in the run's area at its top, so the place counted as done and the verbs were never read. Panel 5's Tom "follows after Elin … down the slope" stayed at the top too.
+- **Everything looks flat.** With nobody moved down the run, no camera was ever on the slope or looking along it.
+
+Found while checking:
+- "Update the layout" (and the D83 automatic update) would have wrecked this scene. `syncRoom` put the plan back to the venue's 30 × 30 m, cutting the 40 m ski run to 0.8 m and moving both skiers 13 m.
+
+- **Failures fixed (D38).**
+  - Gear drawn as an object on the ground.
+  - People left standing when the words take them down a slope or after someone.
+  - A layout update that shrinks the scene's areas.
+
+  These reach generation through image 1's positions and props, and the camera choice.
+- **Own gear (`settleProps`).** A prop named "Name's thing", where Name is in the cast, is that person's: in their hands or on them, not on the ground. Not for a car, van, boat, plane, bike, table, chair, sofa, tent, house and the like, which people don't carry.
+- **Down a slope (`blockingFromWords`, rule "downhill").**
+  - A move verb (or "starts", "pushes off", "sets off", "skis", "shuffles", "follows", "heads", "snowboards") followed within the sentence by "down the …" or "downhill" moves the person down the scene's slope along its fall line.
+  - About 5 m for a proper start, or 2 m for slow words ("shuffles", "tentative", "inches", "careful", "walks", "steps").
+  - Following someone puts them 2.2 m above that person on the slope.
+  - Never past the foot of the slope.
+  - Only where the scene has a slope area: "walks down the street" on the flat moves nobody.
+  - A PLACE line that names the area someone is already in no longer stops their verbs being read.
+- **Room kept (`syncRoom`).** A plan that has areas keeps at least its own size when brought to the venue's room.
+- **`LAYOUT_RULES` = 16**, so a scene with nothing approved updates itself once.
+- **Checked** on a copy of Paul's ski scene through the same update as the page:
+  - the run is kept at 40 m, and both pairs of skis go with their owners;
+  - panel 4: Elin is 5 m down the run;
+  - panel 5: Tom is 2.2 m above her, following;
+  - panels 1 to 3: cameras stand a few metres down the run, looking up at the pair.
+- **Not fixed.**
+  - Panel 5's shot has only Tom in it, as the panel was written, so Elin is out of frame. To show her turned to watch him, the panel needs Elin in the picture and words for it.
+  - The venue's own pictures show a flat beginner area. Backgrounds come from them, so the slope shows only in where people stand and how the cameras look up at them.

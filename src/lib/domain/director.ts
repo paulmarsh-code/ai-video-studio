@@ -897,9 +897,10 @@ export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (i
  * positions for anyone moving (D20); 6 = movement marks worked out afresh, props seen across
  * their real extent (D21b); 7 = high and low cameras for looking down or up (D25);
  * 14 = positions per panel from the words: walking off, going places, turning, props in hand (D36);
- * 15 = areas, actions and places in them, cameras that see the action (D80-D82).
+ * 15 = areas, actions and places in them, cameras that see the action (D80-D82);
+ * 16 = down a slope from the words, own gear with its owner, a grown room kept (D86).
  */
-export const LAYOUT_RULES = 15;
+export const LAYOUT_RULES = 16;
 
 export function applyDesign(plan: GeometryPlanData, choices: { shotId: string; shotCode: string; option: CameraOption }[], line?: [string, string]) {
   const cameras: PlanCamera[] = [];

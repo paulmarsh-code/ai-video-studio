@@ -832,9 +832,13 @@ export function syncRoom(db: DB, sceneId: string): boolean {
   const plan = db.select().from(t.plans).where(eq(t.plans.sceneId, sceneId)).orderBy(desc(t.plans.version)).get();
   if (!plan) return false;
   const venue = scene.venueId ? db.select().from(t.venues).where(eq(t.venues.id, scene.venueId)).get() : undefined;
-  const { room, text } = venueRoom(venue);
+  const { room: room0, text } = venueRoom(venue);
   const data = plan.data as GeometryPlanData;
   const now = roomOf(data);
+  // A plan grown to hold its areas (D86) keeps that room: put back to the venue's 30 × 30 m, a
+  // ski scene's 40 m run was cut to 0.8 m and its two skiers moved 13 m down the slope.
+  const grown = (data.levels ?? []).some((l) => l.kind);
+  const room = grown ? { ...room0, widthM: Math.max(room0.widthM, now.widthM), depthM: Math.max(room0.depthM, now.depthM) } : room0;
   let next = data;
   if (Math.abs(now.widthM - room.widthM) > 0.05 || Math.abs(now.depthM - room.depthM) > 0.05) {
     next = applyRoom(data, room);

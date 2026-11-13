@@ -32,11 +32,15 @@ const NAME = String.raw`([A-Z][a-z]+)`;
 const MOVE = String.raw`(?:walk(?:s|ed|ing)?|go(?:es|ing)?|went|head(?:s|ed|ing)?|wander(?:s|ed|ing)?|mov(?:e|es|ed|ing)|cross(?:es|ed|ing)?|step(?:s|ped|ping)?|stroll(?:s|ed|ing)?|hurr(?:y|ies|ied|ying)|rush(?:es|ed|ing)?|run(?:s|ning)?|ran|dash(?:es|ed|ing)?|march(?:es|ed|ing)?|strid(?:e|es|ing)|strode|mak(?:e|es|ing)\s+(?:her|his|their)\s+way|made\s+(?:her|his|their)\s+way|retreat(?:s|ed|ing)?|back(?:s|ed|ing)?\s+away|drop(?:s|ped|ping)?(?:\s+in)?|rid(?:e|es|ing)|rode|skat(?:e|es|ed|ing)|swim(?:s|ming)?|swam|div(?:e|es|ed|ing)|dove|jump(?:s|ed|ing)?|leap(?:s|t|ing)?|slid(?:e|es|ing)?|climb(?:s|ed|ing)?|wad(?:e|es|ed|ing)|cycl(?:e|es|ed|ing)|paddl(?:e|es|ed|ing)|carv(?:e|es|ed|ing)|plung(?:e|es|ed|ing)|fall(?:s|ing)?|fell)`;
 const ADV = String.raw`(?:\s+(?:slowly|quickly|briskly|calmly|angrily|nervously|confidently|purposefully|casually|back|over|across|straight|up|down|off|round|around|upstairs|downstairs|inside))*`;
 
-type Rule = { kind: "leave" | "goto" | "gotoPerson" | "closer" | "turn" | "turnAway" | "face" | "at" | "pick" | "put" | "part"; re: RegExp };
+type Rule = { kind: "downhill" | "leave" | "goto" | "gotoPerson" | "closer" | "turn" | "turnAway" | "face" | "at" | "pick" | "put" | "part"; re: RegExp };
 const RULES: Rule[] = [
   // A part of an area (D82): "at the near rim of the bowl", "toward the far lip of the bowl",
   // "to the top of the slope", "up the far wall". Read by `readPlace`.
   { kind: "part", re: new RegExp(String.raw`\b(?:(?:on|at|to|onto|towards?|up\s+to|up|by|along)\s+)(?:the\s+)?(?:(?:near|far|other|opposite)\s+)?(?:rim|lip|edge|side|wall|bank|shore|top|bottom|foot|head|crest)\s+of\s+${TGT}|\b(?:on|at|to|onto|towards?|up)\s+the\s+(?:far|other|opposite)\s+(?:rim|lip|edge|side|wall|bank|shore)\b`, "g") },
+  // Down a slope (D86): "pushes off and starts down the slope", "shuffles forward and follows
+  // after Elin down the run". Read only where the scene has a slope; "walks down the street"
+  // on the flat moves nobody.
+  { kind: "downhill", re: new RegExp(String.raw`\b(?:${MOVE}|start(?:s|ed|ing)?|push(?:es|ed|ing)?\s+off|set(?:s|ting)?\s+off|ski(?:s|ed|ing)?|shuffl(?:e|es|ed|ing)|sledg?(?:e|es|ed|ing)|roll(?:s|ed|ing)?|follow(?:s|ed|ing)?|head(?:s|ed|ing)?|snowboard(?:s|ed|ing)?|board(?:s|ed|ing)?)\b[^.;!?]{0,90}?\b(?:down(?:hill)?\s+(?:the|a)\s+([a-z][\w-]*(?:\s+[a-z][\w-]*)?)|downhill)\b`, "g") },
   // A step towards someone: "steps closer", "moves in on Chase", "edges nearer to Mia".
   { kind: "closer", re: new RegExp(String.raw`\b(?:step(?:s|ped|ping)?|mov(?:e|es|ed|ing)|edg(?:e|es|ed|ing)|inch(?:es|ed|ing)?|draw(?:s|ing)?|drew|press(?:es|ed|ing)?)\s+(?:a\s+(?:step|little|bit)\s+)?(?:closer|nearer|forward|in\s+on|in)\b(?:\s+(?:to(?:wards?)?|on)\s+${NAME})?`, "g") },
   // Leaving: "walks off", "storms out", "leaves the kitchen", "heads for the door", "goes upstairs".
@@ -252,6 +256,9 @@ export function blockingFromWords(plan: GeometryPlanData, panels: WordsPanel[], 
         if (t.kind === "area") spot = clamp(areaSpot(t.l, how === "beside" ? "edge" : how, from, others));
         else if (how === "farWall" || how === "mid") spot = placeOf(t, from, false);
         else spot = placeOf(t, from, how === "in");
+        // Already in the area they're said to be in (D86): their verbs still move them, "on the
+        // ski run" with "starts down the slope" left Elin standing at the top.
+        if (t.kind === "area" && how === "in" && Math.hypot(spot.x - from.x, spot.y - from.y) < 0.3) continue;
         why = `${how === "in" ? (t.kind === "area" && isIn(t.l) ? "in" : "on") : how === "far" ? "across" : how === "farWall" ? "on the far wall of" : how === "mid" ? "out on" : "at"} the ${nameOf(t)}`;
       }
       placed.add(id);
@@ -299,7 +306,36 @@ export function blockingFromWords(plan: GeometryPlanData, panels: WordsPanel[], 
         if (n.to) delete n.facingDeg; // walking: they face the way they walk
         out[id] = n;
       };
-      if (kind === "part") {
+      if (kind === "downhill") {
+        if (done.has(`${id}:move`)) continue;
+        const slopes = areas.filter((l) => l.dropM);
+        const named = resolve(m[1], [], [], slopes);
+        const dist0 = (l: PlanLevel) => insideLevel(l, from) ? 0 : Math.hypot(l.x + l.w / 2 - from.x, l.y + l.d / 2 - from.y);
+        const l = named?.kind === "area" ? named.l : [...slopes].sort((x, y) => dist0(x) - dist0(y))[0];
+        if (!l) continue;
+        const u = { x: Math.cos(((l.fallDeg ?? 90) * Math.PI) / 180), y: Math.sin(((l.fallDeg ?? 90) * Math.PI) / 180) };
+        // How far: a few tentative paces, or a proper start down it.
+        const slow = /\b(?:shuffl\w*|tentative\w*|inch\w*|edg(?:e|es|ed|ing)|creep\w*|careful\w*|slow\w*|step\w*|walk\w*|wobbl\w*)\b/i.test(m[0]);
+        let spot = { x: from.x + u.x * (slow ? 2 : 5), y: from.y + u.y * (slow ? 2 : 5) };
+        // Following someone down: a couple of metres above them on the slope.
+        const fm = /\bfollow(?:s|ed|ing)?\s+(?:after\s+|behind\s+)?([A-Z][a-z]+)/.exec(m[0]);
+        const lead = fm ? byFirst(fm[1]) : undefined;
+        const lp = lead && lead.id !== id && !left.has(lead.id) ? pos.get(lead.id) : undefined;
+        let why = `${slow ? "a few paces" : "on the way"} down the ${l.name}`;
+        if (lp) {
+          const behind = { x: lp.x - u.x * 2.2, y: lp.y - u.y * 2.2 };
+          if ((behind.x - from.x) * u.x + (behind.y - from.y) * u.y > 0.3) { spot = behind; why = `following ${lead!.name.split(/\s+/)[0]} down the ${l.name}`; }
+        }
+        // Not past the foot of the slope.
+        const foot = areaSpot(l, "bottom", from);
+        const along = (spot.x - foot.x) * u.x + (spot.y - foot.y) * u.y;
+        if (along > 0) spot = { x: spot.x - u.x * along, y: spot.y - u.y * along };
+        spot = clamp(spot);
+        done.add(`${id}:move`);
+        if (Math.hypot(spot.x - from.x, spot.y - from.y) < 0.3) continue;
+        set({ at: spot, why });
+        pos.set(id, spot);
+      } else if (kind === "part") {
         if (done.has(`${id}:move`)) continue;
         const said = m[0].replace(/^(?:towards?|up\s+to|up|by|along)\s+/i, "on ");
         const { how, what } = readPlace(/\bof\s/i.test(said) ? said : `${said} of area`);
