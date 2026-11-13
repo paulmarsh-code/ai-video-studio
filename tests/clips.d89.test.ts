@@ -12,10 +12,11 @@ describe("Nobody new takes over a clip (D89)", () => {
   it("the people shown stay to the end, and in an action clip the background moves simply", () => {
     const t = make("She drops in and carves across the bowl.");
     expect(t).toMatch(/stay in the picture to the end of the clip; no one else comes into the foreground or takes their place\./);
-    expect(t).toMatch(/Background people stay in the distance and move simply/);
+    expect(t).toMatch(/Background people stay small, far off and still; nobody else rides/);
+    expect(t).toMatch(/they have stopped to watch, standing still/);
   });
   it("no background line without action, and no stay line when someone walks off", () => {
-    expect(make("They talk quietly.")).not.toMatch(/move simply/);
+    expect(make("They talk quietly.")).not.toMatch(/far off and still|stopped to watch/);
     expect(make("She walks off towards the door.")).not.toMatch(/to the end of the clip/);
   });
 });

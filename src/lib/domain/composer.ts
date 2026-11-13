@@ -89,7 +89,11 @@ export function composeKlingPrompt(
   s.scene = stripQuotes(shot.sceneContext);
   // Scene setting (D18c): the same spot and background people in every clip of the scene.
   if (shot.spot?.trim()) s.scene += ` They are ${stripQuotes(shot.spot).trim().replace(/[.]$/, "")}.`;
-  if (shot.crowd?.trim()) s.scene += ` In the background: ${stripQuotes(shot.crowd).trim().replace(/[.]$/, "")}, out of focus.`;
+  // During real action the background people stop and watch (D90): left "riding the street
+  // section", a skater's legs walked while his board slid and a BMX bike became two and back.
+  if (shot.crowd?.trim()) s.scene += physicalAction(shot.actions)
+    ? ` In the background, out of focus and far off: ${stripQuotes(shot.crowd).trim().replace(/[.]$/, "")}, but during this moment they have stopped to watch, standing still.`
+    : ` In the background: ${stripQuotes(shot.crowd).trim().replace(/[.]$/, "")}, out of focus.`;
   {
     // Who looks at whom (D21b).
     const gz = gazeFor({ shot, description: shot.actions ?? "", people: cast.map((c) => ({ id: c.id, name: c.name })), line: plan?.lineOfAction });
@@ -256,7 +260,7 @@ export function composeKlingPrompt(
   if (visible.length && !leaving) {
     const names = joinNames(visible.map((c) => c.name));
     guards.push(`${names} ${visible.length === 1 ? "stays" : "stay"} in the picture to the end of the clip; no one else comes into the foreground or takes their place.`);
-    if (shot.crowd?.trim() && physicalAction(shot.actions)) guards.push("Background people stay in the distance and move simply: standing, talking or walking normally.");
+    if (shot.crowd?.trim() && physicalAction(shot.actions)) guards.push("Background people stay small, far off and still; nobody else rides, skates, cycles or crosses the picture, and every bike, board and person in the background stays one of each.");
   }
   // A logo or sign that is part of the scene is the one exception (D47).
   guards.push(noTextRule(keptProps));

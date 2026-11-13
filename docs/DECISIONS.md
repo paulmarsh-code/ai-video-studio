@@ -1848,3 +1848,17 @@ Paul ran clip 1 at 9 seconds and clip 3 at 6 seconds (D88). Both actions now hap
   - "[Names] stay in the picture to the end of the clip; no one else comes into the foreground or takes their place." This is left out when the panel has someone walking off, leaving or going out of frame.
   - In a clip with real physical action (D87) and background people: "Background people stay in the distance and move simply: standing, talking or walking normally."
 - **Not known yet.** Whether Kling keeps to these lines in long action clips. A re-run of clip 1 will show it.
+
+### D90: During real action, background people stop and watch (2026-11-13)
+
+Paul's 9-second drop-in (clip 1), background frame by frame:
+- **The BMX group changed count.** One rider and a bike became two bikes, then one again, and the riders swapped places.
+- **A skater walked.** A man in a blue cap "walked" with his legs while his board slid along under him.
+
+The clip's prompt asked for "a few skaters and BMX riders … riding the street section". That asked Kling to animate several hard movements at once, in the background of a clip whose main subject was itself skating.
+
+- **Failure fixed (D38).** Background people and things that multiply, swap or move impossibly while the main action plays. It reaches generation through the video prompt (`composeKlingPrompt`).
+- **Rule.** When the panel has real physical action (D87) and background people:
+  - the scene line keeps the setting's own description of them, but says that "during this moment they have stopped to watch, standing still", far off and out of focus;
+  - the closing line (D89's second line, replaced) says: "Background people stay small, far off and still; nobody else rides, skates, cycles or crosses the picture, and every bike, board and person in the background stays one of each."
+- **Clips without action** keep the background as written.
