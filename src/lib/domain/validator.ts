@@ -135,7 +135,7 @@ export function validateShot(
   }
 
   // Duration.
-  const derived = deriveDuration(shot.dialogue, preset);
+  const derived = deriveDuration(shot.dialogue, preset, shot.actions);
   if (shot.durationSec < preset.minDurationSec || shot.durationSec > preset.maxDurationSec) {
     out.push({
       code: "DURATION_OUT_OF_RANGE", severity: "error", field: "durationSec",

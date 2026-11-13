@@ -51,3 +51,17 @@ describe("Someone's own gear is with them (D86)", () => {
     expect(f.find((x) => x.id === "c")!.heldBy).toBeUndefined();
   });
 });
+
+import { deriveDuration, physicalAction } from "../src/lib/domain/duration";
+import { panelSeconds } from "../src/lib/domain/story";
+
+describe("Time for real action (D87)", () => {
+  it("a panel with a drop-in, trick or jump gets at least 5 seconds; talk alone keeps its own length", () => {
+    expect(physicalAction("Kai stands at the rim, ready to drop in")).toBe(true);
+    expect(physicalAction("Chase shrugs, showing off to the group")).toBe(false);
+    expect(panelSeconds("", 3, "Kai pops an ollie off the far lip")).toBe(5);
+    expect(panelSeconds("", 3, "Ava smiles at Bo")).toBe(3);
+    expect(panelSeconds("That was clean!", undefined, "Kai lands a kickflip; Rosa cheers")).toBe(5);
+    expect(deriveDuration("That was clean!")).toBe(3);
+  });
+});

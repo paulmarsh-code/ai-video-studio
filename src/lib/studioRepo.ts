@@ -11,7 +11,7 @@ import { persist, type DB } from "@/db/client";
 import * as t from "@/db/schema";
 import type { CharacterProfile, RefView } from "./domain/imagePrompts";
 import { approvalProblems } from "./domain/approval";
-import { deriveDuration } from "./domain/duration";
+import { ACTION_MIN_SEC, deriveDuration, physicalAction } from "./domain/duration";
 import { hasQuotes } from "./domain/text";
 import type { GeometryPlanData, PanelBlock, PlanCamera, PlanView, Point, Pronoun, ShotSpec } from "./domain/types";
 import { asGenre, type Genre } from "./domain/genre";
@@ -248,7 +248,7 @@ export function addPanel(db: DB, sceneId: string, input: PanelInput) {
   const venue = scene.venueId ? db.select().from(t.venues).where(eq(t.venues.id, scene.venueId)).get() : undefined;
   const cast = getCast(db, scene.projectId);
   const order = (panelsOf(db, sceneId).at(-1)?.order ?? 0) + 1;
-  const durationSec = line ? deriveDuration(line) : Math.max(3, Math.min(15, input.durationSec ?? 4));
+  const durationSec = line ? deriveDuration(line, undefined, input.description) : Math.max(physicalAction(input.description) ? ACTION_MIN_SEC : 3, Math.min(15, input.durationSec ?? 4));
   const panelId = randomUUID();
   db.insert(t.panels).values({
     id: panelId, sceneId, code, order, description: input.description.trim(), emotion: input.emotion.trim(),
@@ -290,7 +290,7 @@ export function updatePanel(db: DB, panelId: string, input: PanelInput): PanelCh
   const newD = line ? { characterId: input.speakerId!, text: line } : undefined;
   const dialogueChanged = (oldD?.text ?? "") !== (newD?.text ?? "") || (oldD?.characterId ?? "") !== (newD?.characterId ?? "");
   const changed = dialogueChanged || code !== panel.code || input.description.trim() !== panel.description || input.emotion.trim() !== panel.emotion;
-  const durationSec = dialogueChanged && newD ? deriveDuration(newD.text) : (input.durationSec ?? panel.durationSec);
+  const durationSec = dialogueChanged && newD ? deriveDuration(newD.text, undefined, input.description) : (input.durationSec ?? panel.durationSec);
   db.update(t.panels).set({
     code, description: input.description.trim(), emotion: input.emotion.trim(), dialogue: newD ? [newD] : [], durationSec,
     status: changed ? "draft" : panel.status, version: changed ? panel.version + 1 : panel.version,

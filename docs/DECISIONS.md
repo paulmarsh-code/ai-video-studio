@@ -1802,3 +1802,25 @@ Found while checking:
 - **Not fixed.**
   - Panel 5's shot has only Tom in it, as the panel was written, so Elin is out of frame. To show her turned to watch him, the panel needs Elin in the picture and words for it.
   - The venue's own pictures show a flat beginner area. Backgrounds come from them, so the slope shows only in where people stand and how the cameras look up at them.
+
+### D87: Real action gets time to happen, and the writer shows every action a line reacts to (2026-11-13)
+
+First video test: four clips from the approved skate park panels, using the app's own prompts and settings (Kling 3.0, 720p, one shot).
+- Clips 2 and 4 were usable first time.
+- Clip 1 (3 s): Kai crouched at the rim and the clip ended.
+- Clip 3 (3 s): Rosa says "That was clean! Do it again!" but no clip shows a trick. It fell between panels 2 and 3.
+- Kai, Rosa and the place were the same in all four clips.
+
+- **Failures fixed (D38).**
+  - A clip too short for its action.
+  - A line reacting to something never shown.
+
+  These reach generation through the clip length and the panel-writing request.
+- **Length (`deriveDuration`, `panelSeconds`).**
+  - A panel whose words have real physical action gets at least 5 seconds (`ACTION_MIN_SEC`). That covers dropping in, riding, a trick, a flip, a jump, a dive, swimming, running, chasing, kicking, throwing, catching, falling, climbing, skiing, pushing off, tackling, fighting, dancing, crashing, spinning, surfing and the like.
+  - A spoken panel is still sized to its line, but never below that floor.
+  - The check matches lower-case words only, so a name such as Chase isn't read as an action.
+- **Writing (panel request).** Two new rules:
+  - a panel with real physical action lasts at least 5 seconds;
+  - every action the story depends on is shown in the panel where it happens, and anything someone reacts to is shown before the line, never left between panels.
+- **Not changed.** The validator and the shot director use the same floor, so a 5-second action panel with a short line isn't flagged as too long.

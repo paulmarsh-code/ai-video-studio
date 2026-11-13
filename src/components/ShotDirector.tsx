@@ -56,7 +56,7 @@ export function ShotDirector(props: {
     () => [...validateShot(spec, cast, plan), ...validatePrompt(composed.text, spec, cast)],
     [spec, cast, plan, composed.text],
   );
-  const suggested = deriveDuration(spec.dialogue);
+  const suggested = deriveDuration(spec.dialogue, undefined, spec.actions);
   const speaker = cast.find((c) => c.id === spec.speakerId);
   const dirty = JSON.stringify(spec) !== JSON.stringify(saved);
   const hasErrors = findings.some((f) => f.severity === "error");
