@@ -5,7 +5,7 @@
 
 import { boundsFor, DEFAULT_ROOM, groupCentre, type RoomSize } from "./room";
 import { levelsFromWords, withAreas } from "./levels";
-import { ACTION_MIN_SEC, countWords, deriveDuration, LEAD_SECONDS, physicalAction, WORDS_PER_SECOND } from "./duration";
+import { ACTION_MIN_SEC, actionFloor, BUILD_UP_SEC, countWords, deriveDuration, LEAD_SECONDS, WORDS_PER_SECOND } from "./duration";
 import { cleanReply } from "./describe";
 import { hasQuotes, stripQuotes } from "./text";
 import { ACTIONS, AREA_KINDS, KLING_OMNI_PRESET, type ActionKind, type AreaKind, type Doing, type GeometryPlanData, type PlanView, type ShotSpec } from "./types";
@@ -332,7 +332,7 @@ export function storyPrompt(i: { story: string; characters: StoryCharacter[]; ve
     `- The setting is: ${i.venue}.`,
     "- Keep the story's order and do not add new plot.",
     "- Give no camera directions; the app chooses the cameras.",
-    `- A panel with real physical action (a drop-in, a trick, a jump, a run, a fall, a tackle) lasts at least ${ACTION_MIN_SEC} seconds, so it has time to happen.`,
+    `- A panel with real physical action (a drop-in, a trick, a jump, a run, a fall, a tackle) lasts at least ${ACTION_MIN_SEC} seconds, so it has time to happen; ${ACTION_MIN_SEC + BUILD_UP_SEC} if it starts from standing still and has to get ready first.`,
     "- Show every action the story depends on, in the panel where it happens: if someone reacts to it (\"That was clean!\", a cheer, a gasp), an earlier panel or the same panel, before the line, must show it happening. Never leave it between panels.",
     "- Describe gestures precisely: which hand, which way the palm faces and how it moves (for example: flicks the back of his hand outwards to shoo her away, not just a dismissive wave).",
     "- Say plainly who moves, sits, lies down, gets up, turns or leaves, naming them each time, in everyday words (D40): for example, Ava walks over to the bar; Ben sits on the sofa; Ava lies on her bed; Ben gets up; Ava turns to Ben; Ben walks off; Ava picks up the phone; Ben puts it down on the table. The app places everyone from these words, and they stay put until a panel says they move.",
@@ -575,7 +575,7 @@ export function parseStoryReply(text: string, characters: StoryCharacter[]): Sto
 export function panelSeconds(line: string, asked?: number, action?: string): number {
   if (line.trim()) return deriveDuration(line, undefined, action);
   const s = Number.isFinite(asked) && asked! > 0 ? Math.round(asked!) : 4;
-  return Math.min(MAX_CLIP_SEC, Math.max(physicalAction(action) ? ACTION_MIN_SEC : MIN_CLIP_SEC, s));
+  return Math.min(MAX_CLIP_SEC, Math.max(actionFloor(action), MIN_CLIP_SEC, s));
 }
 
 // ---------- Guide rails ----------

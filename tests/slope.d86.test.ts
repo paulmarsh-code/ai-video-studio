@@ -65,3 +65,15 @@ describe("Time for real action (D87)", () => {
     expect(deriveDuration("That was clean!")).toBe(3);
   });
 });
+
+import { actionFloor } from "../src/lib/domain/duration";
+
+describe("An action from a standing start gets time to get ready (D88)", () => {
+  it("drop-in from the rim: 8 s; a trick already moving: 5 s; no action: 0", () => {
+    expect(actionFloor("Kai sets the tail of his board on the coping, puts his front foot down, leans forward and drops in")).toBe(8);
+    expect(actionFloor("Kai stands at the near rim of the bowl, ready to drop in")).toBe(8);
+    expect(actionFloor("Kai rides up the far wall and pops an ollie off the lip")).toBe(5);
+    expect(actionFloor("Ava smiles at Bo")).toBe(0);
+    expect(panelSeconds("", 3, "Kai stands at the near rim of the bowl, ready to drop in")).toBe(8);
+  });
+});

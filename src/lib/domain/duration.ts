@@ -29,8 +29,22 @@ const PHYSICAL = /\b(?:drop(?:s|ped|ping)?\s+in(?:to)?|rid(?:e|es|ing)|rode|skat
 /** At least this long for a panel with real physical action (D87). */
 export const ACTION_MIN_SEC = 5;
 
+/**
+ * An action from a standing start (D88): the getting-ready comes first, then the action. At 5
+ * seconds Kai set his board on the coping, leaned and the clip ended before he dropped in; the
+ * ollie that started already moving was fine at 5.
+ */
+const BUILD_UP = /\b(?:ready\s+to|sets?\s+(?:the|his|her|their)\b|setting\s+(?:the|his|her|their)\b|lines?\s+up|lining\s+up|gets?\s+set|crouch(?:es|ed|ing)?|steps?\s+on(?:to)?|puts?\s+(?:his|her|their)\s+(?:front\s+)?foot|plac(?:e|es|ing)\s+(?:his|her|their)\s+(?:front\s+)?foot|position(?:s|ed|ing)?\s+(?:himself|herself|themselves)|winds?\s+up|takes?\s+a\s+run[-\s]up|stands?\s+at\s+the\s+(?:top|edge|rim|lip|start))\b/;
+export const BUILD_UP_SEC = 3;
+
 export function physicalAction(text: string | undefined): boolean {
   return !!text && PHYSICAL.test(text);
+}
+
+/** The shortest a panel's clip should be for its action: 0, 5 s, or 8 s from a standing start (D87, D88). */
+export function actionFloor(text: string | undefined): number {
+  if (!physicalAction(text)) return 0;
+  return ACTION_MIN_SEC + (BUILD_UP.test(text!) ? BUILD_UP_SEC : 0);
 }
 
 /**
@@ -42,7 +56,7 @@ export function deriveDuration(
   preset: ProviderPreset = KLING_OMNI_PRESET,
   action?: string,
 ): number {
-  const floor = physicalAction(action) ? ACTION_MIN_SEC : preset.minDurationSec;
+  const floor = Math.max(preset.minDurationSec, actionFloor(action));
   if (!dialogue || countWords(dialogue) === 0) return Math.min(preset.maxDurationSec, floor);
   const raw = Math.round(spokenSeconds(dialogue) + LEAD_SECONDS);
   return Math.min(preset.maxDurationSec, Math.max(floor, raw));

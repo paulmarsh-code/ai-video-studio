@@ -1824,3 +1824,15 @@ First video test: four clips from the approved skate park panels, using the app'
   - a panel with real physical action lasts at least 5 seconds;
   - every action the story depends on is shown in the panel where it happens, and anything someone reacts to is shown before the line, never left between panels.
 - **Not changed.** The validator and the shot director use the same floor, so a 5-second action panel with a short line isn't flagged as too long.
+
+### D88: An action from a standing start gets 3 seconds more (2026-11-13)
+
+Paul re-ran the two short clips himself at 5 seconds (D87).
+- Clip 3 (Kai already riding, ollie off the lip, then Rosa's line) was good.
+- Clip 1 was still too short: Kai set his board on the coping, leaned, and the clip ended before he dropped in.
+
+- **Failure fixed (D38).** An action that starts from standing still runs out of time while the person gets ready. It reaches generation through the clip length.
+- **Rule (`actionFloor`).**
+  - A panel with real physical action gets 5 seconds (D87).
+  - If its words also have a build-up from stillness, it gets 3 more, so 8 seconds. Build-up words include: "ready to", "sets his board", "lines up", "gets set", "crouches", "steps onto", "puts his front foot", "positions himself", "winds up", "takes a run-up", "stands at the top / edge / rim / lip / start".
+  - The panel-writing request says the same.
