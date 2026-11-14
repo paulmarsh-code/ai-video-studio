@@ -2174,3 +2174,17 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
 ### D111: A set piece's approved picture is its one look, on the set or not (2026-11-14)
 
 - **Paul:** the table in Build the set "is as it should be". It shouldn't matter whether a scene is drawn on the set: once a set piece has its own approved picture in Build the set, the storyboard's requests and the picture check use that picture for it in every scene at that venue. The prop picture in Scene setting is used only for a piece that has no approved picture.
+
+### D112: First clip from Kling Elements: it worked (2026-11-14)
+
+- **The test.** Jade's Entrance panels 3–5 as one 11 s multi-shot clip.
+  - Settings: Kling 4.0 Omni-Ref, 9:16, 720p, sound on, one take, 110 credits (10 a second).
+  - Elements: the venue set, made from the four wall pictures in Build the set; the table, Paul's cut-out plus three angles; Jade; Chase; Marcus; Nina.
+  - No start frame and no storyboard picture.
+  - The prompt: the venue and table by Element, who stands where around the table, then each shot with its time, size, over whose shoulder, the action and the one speaker's exact line, then the voices.
+- **Result.** Paul: "it worked out really well." In the frames:
+  - The table is his cut-out in all three shots (lavender hydrangeas, three gold votives, floor-length cream cloth).
+  - The bar and balcony are those of the set.
+  - Jade, Chase, Marcus and Nina are themselves, with nobody swapped.
+  - The two over-the-shoulder shots are framed as asked.
+- **What it means.** Working back from Kling (Paul): the clips' consistency comes from Elements (characters, props, venue) plus a prompt built from the plan. The storyboard is the plan and the cheap preview (D107). Next: the app builds these clip requests from a scene's panels and its Elements.
