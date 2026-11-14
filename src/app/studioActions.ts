@@ -8,6 +8,9 @@ import { getDb } from "@/db/client";
 import type { RefView } from "@/lib/domain/imagePrompts";
 import type { Pronoun } from "@/lib/domain/types";
 import * as studio from "@/lib/studioRepo";
+import * as coreRepo from "@/lib/repo";
+import { buildSceneClips } from "@/lib/sceneClips";
+import { jobId, putJobs } from "@/lib/klingJobs";
 import { chooseCameras, updateLayout } from "@/lib/layoutUpdate";
 import { fullSizeViews } from "@/lib/venueFullSize";
 import { getImageProvider } from "@/lib/providers/images";
@@ -243,4 +246,35 @@ export async function setSceneOnSetAction(sceneId: string, on: boolean): Promise
 /** Link a Kling Element to a character, the venue or a prop (D113). */
 export async function setKlingElementAction(projectId: string, key: string, id: string, name: string): Promise<Result> {
   return run((db) => { studio.setKlingElement(db, projectId, key, id.trim() ? { id, name } : null); return undefined; });
+}
+
+/** Which picture of a panel Kling gets (D123): an asset id, "none", or "" for the storyboard's own. */
+export async function setClipPictureAction(sceneId: string, panelId: string, value: string): Promise<Result> {
+  return run((db) => { studio.setClipPicture(db, sceneId, panelId, value || null); return undefined; });
+}
+
+/**
+ * Hand clips to Claude to make in Kling (D123): each one's request, Elements and pictures, written
+ * to data/kling_jobs.json. `clips` are 1-based clip numbers; none means all of the scene's.
+ */
+export async function createClipJobsAction(sceneId: string, clips?: number[]): Promise<Result<{ count: number; credits: number }>> {
+  return run((db) => {
+    const v = buildSceneClips(db, sceneId);
+    if (!v) throw new Error("This scene needs a venue and a floor plan first.");
+    const s = coreRepo.getScene(db, sceneId)!;
+    const now = new Date().toISOString();
+    const chosen = v.clips.map((c, k) => ({ c, n: k + 1 })).filter((x) => !clips?.length || clips.includes(x.n));
+    for (const { c, n } of chosen) {
+      if (!c.elements.length) throw new Error(`Clip ${n} has no Kling Elements linked yet: pick them in the list above first.`);
+    }
+    const jobs = chosen.map(({ c, n }) => ({
+      id: jobId(sceneId, c.panels), projectId: s.scene.projectId, sceneId, sceneTitle: v.sceneTitle, clip: n, panels: c.panels, seconds: c.seconds,
+      aspect: v.aspect, model: "kling-video-v4_0", resolution: "720p", sound: true, prompt: c.prompt,
+      elements: c.elements.map((e) => ({ id: e.id, name: e.name })),
+      pictures: c.pictures.map((x, i) => ({ n: i + 1, shot: x.shot, panel: x.panel, assetId: x.assetId, path: coreRepo.getAsset(db, x.assetId)?.path ?? "" })),
+      missing: c.missing, credits: c.credits, status: "ready" as const, requestedAt: now,
+    }));
+    putJobs(jobs);
+    return { count: jobs.length, credits: jobs.reduce((t, j) => t + j.credits, 0) };
+  });
 }

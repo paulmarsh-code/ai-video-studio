@@ -204,6 +204,21 @@ export function setSceneOnSet(db: DB, sceneId: string, on: boolean) {
 }
 
 /**
+ * Which picture of a panel Kling gets for its shot (D123): another version (an asset id), none
+ * ("none"), or, with null, the storyboard's own.
+ */
+export function setClipPicture(db: DB, sceneId: string, panelId: string, value: string | null) {
+  const s = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();
+  if (!s) throw new Error("Scene not found");
+  const staging = { ...((s.staging ?? {}) as Record<string, unknown>) };
+  const pics = { ...((staging.clipPictures ?? {}) as Record<string, string>) };
+  if (value) pics[panelId] = value; else delete pics[panelId];
+  staging.clipPictures = pics;
+  db.update(t.scenes).set({ staging }).where(eq(t.scenes.id, sceneId)).run();
+  persist(db);
+}
+
+/**
  * Use (or, with null, stop using) one of the set's own pictures (D98). The venue stays approved:
  * its views and words are unchanged, and these pictures are only the set built from them.
  */

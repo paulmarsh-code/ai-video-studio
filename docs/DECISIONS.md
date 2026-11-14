@@ -2326,3 +2326,44 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
 - **Fix, for any clip (`clips.ts`).** The closing rules now say: "Each person keeps the feeling their shot gives them to its very last frame, walking off included: nobody smiles or softens unless the shot says so."
 - **Note.** That clip used the earlier panel 11 picture (the third angle, from before D121). The new clip 4 (panels 8–11) uses the redrawn one.
 - **Reaches the generation through:** a prompt line.
+
+### D123: Create the clips from the app; pictures picked per shot (2026-11-14)
+
+- **Paul:** "the added pics made a difference. What I need is that after clicking create clips, the elements (all, incl. pics) are referenced in the prompt, and you then create from the set elements (dropdowns, incl. the 3 pics for that clip)."
+- **Built, for any scene.**
+  - **One builder for the clips** (`lib/sceneClips.ts`, `buildSceneClips`). The page shows exactly what is sent.
+  - **Pictures per shot.** Each shot of each clip has a picture slot with a dropdown:
+    - the storyboard's picture (the default);
+    - one of that panel's last 8 versions;
+    - "No picture (words only)".
+    - Saved per panel in the scene's staging (`clipPictures`). The request's 图片N numbering follows what's picked.
+  - **Create.** "Create this clip" and "Create all clips" write each clip's request (Elements as `<<<id>>>`, pictures as 图片N), Elements, pictures in order (with the file's path on Paul's computer), length, model (Kling 4.0, 720p, sound on) and credits to `data/kling_jobs.json` (`lib/klingJobs.ts`).
+    - A clip asked for again with the same request keeps its result, so it isn't paid for twice. A changed one is ready to send again.
+  - **Status.** Each clip shows how its job stands: waiting for Claude, being made, made (with the link), or failed with Kling's reason.
+- **Claude's part.** When Paul says "make the clips", Claude:
+  - reads the jobs file through the device bridge;
+  - stages the pictures and uploads them to Kling through Kling's own connection;
+  - submits each clip (Omni-Ref, the Elements, `image_1..n`);
+  - writes back the status, generation id and video link.
+- **Blocker.** Uploading the pictures to kling.ai from Claude's workspace is refused by its network allowlist (403). Until kling.ai is allowed in Claude's network settings, Claude can't attach the pictures, and the clips page's Copy plus the Kling app remain the way.
+- **Reaches the generation through:** the clip's input images, Elements and prompt.
+
+### D124: The app in the order that gives reliable clips (2026-11-14)
+
+- **Paul:** "the flow should be: story (what it is, who it's for, media type), characters, venue, scenes/props, floor plan, storyboard, clips … order it in what will work best to give us reliable Kling output."
+- **Worked back from Kling.** A clip needs:
+  - Elements for the characters, the venue and the key props;
+  - a picture per shot, drawn on the fixed set from the floor plan;
+  - a request built from the plan.
+- **So the order is:**
+  1. Story brief: what it is, who it's for, the format and shape (9:16 or 16:9), the style.
+  2. Characters: approved looks and voices, which become their Elements.
+  3. Venues: their views, which become the venue Element and the set's walls.
+  4. Each scene:
+     1. Scene and props: the story moments in words; props with pictures, which become prop Elements.
+     2. Floor plan and cameras: who stands where, then the cameras, two angles at most per clip.
+     3. Build the set: walls, floor, and pieces from the approved prop pictures.
+     4. Storyboard: pictures on the set, checked and approved.
+     5. Make the clips: Elements linked, pictures per shot, created through Claude.
+- **Nav.** The side menu now shows the scene's steps numbered in that order. Scene set-up, Shot design and Animatic sit below as extras. "Brief" is now "Story brief".
+- **Not changed.** The pages themselves and their dependencies: the storyboard page still holds the positions and cameras approval steps.

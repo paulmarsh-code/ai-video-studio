@@ -1,8 +1,8 @@
 "use client";
 
-// The left-hand navigation (D22): projects open like folders, in the order the work flows:
-// brief, characters, venues, then each scene with its floor plan and cameras, storyboard,
-// shot design and animatic. The project and scene you're in open by themselves; anything
+// The left-hand navigation (D22): projects open like folders, in the order the work flows
+// (Paul, D124): the story brief (what it is, who it's for, the format), characters, venues, then
+// each scene: its setting and props, floor plan and cameras, the set, the storyboard, the clips. The project and scene you're in open by themselves; anything
 // you open or close is remembered in this browser.
 
 import Link from "next/link";
@@ -75,7 +75,7 @@ export function SideNav({ projects }: { projects: NavProject[] }) {
                 {pOpen && (
                   <ul className="ml-2 border-l border-neutral-700 pl-2">
                     <li>{item(base, "Overview", undefined, true)}</li>
-                    <li>{item(`${base}/brief`, "Brief")}</li>
+                    <li>{item(`${base}/brief`, "Story brief")}</li>
                     <li>{item(`${base}/characters`, "Characters", `nav-characters-${p.id}`)}</li>
                     <li>
                       {twisty(`v:${p.id}`, venuesOpen, `Venues (${p.venues.length})`)}
@@ -98,12 +98,12 @@ export function SideNav({ projects }: { projects: NavProject[] }) {
                                 {twisty(`sc:${s.id}`, sOpen, s.label, `nav-scene-${s.id}`)}
                                 {sOpen && (
                                   <ul className="ml-2 border-l border-neutral-700 pl-2">
-                                    <li>{item(sb, "Scene set-up", undefined, true)}</li>
-                                    <li>{item(`${sb}/storyboard?part=setting`, "Scene setting", `nav-setting-${s.id}`)}</li>
-                                    <li>{item(`${sb}/storyboard?part=board`, "Storyboard", `nav-storyboard-${s.id}`)}</li>
-                                    <li>{item(`${sb}/plan`, "Floor plan & cameras", `nav-plan-${s.id}`)}</li>
-                                    <li>{item(`${sb}/set`, "Build the set")}</li>
-                                    <li>{item(`${sb}/clips`, "Make the clips")}</li>
+                                    <li>{item(`${sb}/storyboard?part=setting`, "1. Scene and props", `nav-setting-${s.id}`)}</li>
+                                    <li>{item(`${sb}/plan`, "2. Floor plan & cameras", `nav-plan-${s.id}`)}</li>
+                                    <li>{item(`${sb}/set`, "3. Build the set")}</li>
+                                    <li>{item(`${sb}/storyboard?part=board`, "4. Storyboard", `nav-storyboard-${s.id}`)}</li>
+                                    <li>{item(`${sb}/clips`, "5. Make the clips")}</li>
+                                    <li className="mt-1 border-t border-neutral-800 pt-1">{item(sb, "Scene set-up", undefined, true)}</li>
                                     <li>{item(`${sb}/design`, "Shot design")}</li>
                                     <li>{item(`${sb}/animatic`, "Animatic")}</li>
                                   </ul>
