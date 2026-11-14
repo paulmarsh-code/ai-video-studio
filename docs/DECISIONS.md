@@ -2367,3 +2367,13 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
      5. Make the clips: Elements linked, pictures per shot, created through Claude.
 - **Nav.** The side menu now shows the scene's steps numbered in that order. Scene set-up, Shot design and Animatic sit below as extras. "Brief" is now "Story brief".
 - **Not changed.** The pages themselves and their dependencies: the storyboard page still holds the positions and cameras approval steps.
+
+### D125: The pictures upload from Paul's computer with Claude's Kling tickets (2026-11-14)
+
+- **Problem.** Claude can't upload the storyboard pictures to Kling: its workspace's network allowlist refuses kling.ai. Paul couldn't find where to change the allowed domains for this session in his app's settings.
+- **Fix: Paul's computer does the upload.** It can reach kling.ai, Claude's workspace can't, so the two split the job.
+  - Claude gets a one-time upload ticket from Kling for each picture, through Kling's own connection, and writes it into `data/kling_jobs.json` on Paul's computer.
+  - The clips page, while open, calls `/api/kling-uploads` every 5 seconds. That route uploads each picture with its ticket (multipart: `ticket`, `file`) and keeps Kling's address (`klingUrl`). A ticket that ran out, or a refused upload, is shown on the clip.
+  - Claude then submits each clip with its Elements and the uploaded pictures, and writes the status and link back to the file. The page shows them.
+- **No setting to change.** Allowing kling.ai in the cloud environment's network access would also work: Claude would then upload directly.
+- **For Claude:** the steps are in `docs/KLING_CLIPS_RUNBOOK.md`, linked from `CLAUDE.md`. Tested in `klingUploads.d125.test.ts`.

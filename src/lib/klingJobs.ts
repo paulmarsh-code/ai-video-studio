@@ -24,7 +24,7 @@ export interface KlingJob {
   prompt: string;
   elements: { id: string; name: string }[];
   /** In order: picture N is 图片N. `path` is the file on this computer. */
-  pictures: { n: number; shot: number; panel: number; assetId: string; path: string; klingUrl?: string }[];
+  pictures: KlingJobPicture[];
   missing: string[];
   credits: number;
   status: KlingJobStatus;
@@ -33,6 +33,20 @@ export interface KlingJob {
   videoUrl?: string;
   error?: string;
   updatedAt?: string;
+}
+
+export interface KlingJobPicture {
+  n: number; shot: number; panel: number; assetId: string;
+  /** The file on this computer. */
+  path: string;
+  /** Where Kling keeps it once uploaded. */
+  klingUrl?: string;
+  /**
+   * A one-time upload ticket Claude got from Kling (D125). Claude's workspace can't reach kling.ai,
+   * this computer can: the app uploads the file with it while the clips page is open.
+   */
+  upload?: { ticket: string; url: string; expireAt: number };
+  uploadError?: string;
 }
 
 export interface KlingJobsFile { updatedAt?: string; jobs: KlingJob[] }
@@ -51,6 +65,12 @@ export function readJobs(): KlingJobsFile {
 
 /** What makes a clip the same clip to send again: its request and its pictures. */
 const sameRequest = (a: KlingJob, b: KlingJob) => a.prompt === b.prompt && a.seconds === b.seconds && a.pictures.map((x) => x.assetId).join() === b.pictures.map((x) => x.assetId).join();
+
+/** Write the file as it now is (the app's own uploads, D125). */
+export function writeJobs(f: KlingJobsFile) {
+  fs.mkdirSync(path.dirname(file()), { recursive: true });
+  fs.writeFileSync(file(), JSON.stringify({ ...f, updatedAt: new Date().toISOString() }, null, 1));
+}
 
 /**
  * Add or replace these clips' jobs. A clip already made with the same request keeps its result

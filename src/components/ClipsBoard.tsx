@@ -4,7 +4,7 @@
 // then copy each clip's request into Kling (Omni-Ref, multi-shot).
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createClipJobsAction, setClipPictureAction, setKlingElementAction } from "@/app/studioActions";
 import type { Clip, KlingElement } from "@/lib/domain/clips";
 import type { KlingListed } from "@/lib/klingList";
@@ -94,6 +94,23 @@ export function ClipsBoard({ projectId, sceneId, rows, clips, list, pictures, jo
     router.refresh();
   };
   const jobOf = (c: Clip) => jobs.find((j) => j.panels.join() === c.panels.join());
+  // While clips are waiting or being made, the page uploads their pictures with Claude's tickets
+  // (D125) and picks up the results Claude writes back.
+  const active = jobs.some((j) => j.status === "ready" || j.status === "sent");
+  useEffect(() => {
+    if (!active) return;
+    let stop = false;
+    const tick = async () => {
+      try {
+        const r = await fetch("/api/kling-uploads", { method: "POST" });
+        const j = (await r.json()) as { uploaded: number; failed: number };
+        if (!stop && (j.uploaded || j.failed)) router.refresh();
+      } catch { /* try again next time */ }
+    };
+    void tick();
+    const t = setInterval(() => { void tick(); router.refresh(); }, 5000);
+    return () => { stop = true; clearInterval(t); };
+  }, [active, router]);
   return (
     <div className="mt-6 space-y-8">
       <section>
@@ -130,6 +147,8 @@ export function ClipsBoard({ projectId, sceneId, rows, clips, list, pictures, jo
                 return (
                   <p className={`mt-1 text-sm ${j.status === "failed" ? "text-red-700" : j.status === "done" ? "text-green-700" : "text-blue-800"}`}>
                     {STATUS[j.status]}{j.error ? `: ${j.error}` : ""}
+                    {j.pictures.some((p) => p.uploadError) && <> · {j.pictures.filter((p) => p.uploadError).map((p) => `picture ${p.n}: ${p.uploadError}`).join("; ")}</>}
+                    {j.status !== "done" && j.pictures.length > 0 && <> · pictures sent to Kling: {j.pictures.filter((p) => p.klingUrl).length} of {j.pictures.length}</>}
                     {j.videoUrl && <> · <a className="underline" href={j.videoUrl} target="_blank" rel="noreferrer">watch or download</a> (the link lasts 24 hours)</>}
                   </p>
                 );

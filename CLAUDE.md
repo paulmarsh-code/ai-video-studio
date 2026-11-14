@@ -10,3 +10,5 @@ Standing rules:
 - Fixes are general, for any scene and any project; never fitted to one story (Paid On Time is a test case, not the product).
 - The app does the heavy lifting from the user's words. Manual controls are for corrections and stay out of the way.
 - Every decision goes in `docs/DECISIONS.md`.
+
+- When Paul says "make the clips", follow `docs/KLING_CLIPS_RUNBOOK.md`.
