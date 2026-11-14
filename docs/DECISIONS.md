@@ -2230,3 +2230,14 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
   - The camera jumps angle to show the Jade–Chase exchange. That's acceptable, to be sorted in the edit.
   - Jade's second line was "a bit flat, robotic", where the two earlier clips had it better.
 - **Fix (`clips.ts`).** Each line now carries its panel's feeling where it is said: "Line 2, Jade says, happy, confident, expectant, naturally, never flat: …". Before, the feeling sat only on the action before it. A speaker's voice is also kept to a little more of its voice lock (up to about 320 characters, was 240), so its rhythm and pitch notes survive.
+
+### D117: Clip requests carry the floor plan itself; over-the-shoulders keep both people (2026-11-14)
+
+- **Paul on clip 2 (panels 5–8):** "everything seems consistent", but "is the floor plan being used?"
+  - Jade had the bar beside her where the plan puts the screen.
+  - Chase seemed to have come round the table and to be leaning on it, where he and Jade face each other across it.
+  - The exchange cut from one face to the other; Paul would rather have both in the shot.
+- **Honest answer.** Only partly. The request gave the left-to-right order as seen from the room, nothing more.
+- **Fixes, for any scene (`clips.ts`).**
+  - Each clip now gives the floor plan, which no camera changes: "From the floor plan: Chase and Jade face each other across the cocktail table. Seen from across the cocktail table: behind Chase, the bar; behind Jade, the lounge seating; …". The pair is the scene's line of action. What's behind each person is the venue view in the direction from the scene's anchor to them, so each over-the-shoulder gets the right background.
+  - An over-the-shoulder now says both people are in the picture: "over Jade's shoulder on Chase, both of them in the picture: Jade's shoulder and the side of their head in the foreground".

@@ -121,6 +121,11 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput): Clip {
     // order from clip to clip.
     const order = leftToRight(i.master ?? panels[0], i.plan, inClip);
     if (order.length > 1) L.push(`Their places${anchor ? ` around the ${anchor.name}` : ""}, left to right as seen from the room: ${order.map((id) => first(nameOf(id))).join(", ")}. Anyone arriving takes their place there; nobody changes places.`);
+    // The floor plan itself, which no camera changes (D117): who faces whom across the table, and
+    // which part of the venue is behind each person. With only the order, Kling put the bar beside
+    // Jade and had Chase come round the table.
+    const plan = floorPlanLines(i.plan, inClip, (id) => first(nameOf(id)), anchor?.name);
+    if (plan) L.push(plan);
     // Each line said once, in its own shot (D115): with two lines for Jade in shots 3 and 4, Kling
     // had her say the first one twice and never the second.
     const lines = panels.flatMap((p) => p.dialogue);
@@ -189,7 +194,9 @@ function shotWords(p: ClipPanel, plan: GeometryPlanData, name: (id: string) => s
     const line: string[] = plan.lineOfAction ?? [];
     const other = line.includes(subj) ? line.find((x) => x !== subj) : p.spec.visibleIds.find((x) => x !== subj);
     const size = shot.replace(/,?\s*over[-\s]the[-\s]shoulder( shot)?/, "").trim();
-    return `${size ? `${size} ` : ""}over ${other ? `${name(other)}'s` : "the listener's"} shoulder on ${name(subj)}`.trim();
+    // Both of them in the picture (D117): Kling cut from one face to the other, Paul wants the two
+    // together, the listener's shoulder and the side of their head in the foreground.
+    return `${size ? `${size} ` : ""}over ${other ? `${name(other)}'s` : "the listener's"} shoulder on ${name(subj)}, both of them in the picture: ${other ? `${name(other)}'s` : "the listener's"} shoulder and the side of their head in the foreground`.trim();
   }
   if (/two-shot/.test(shot) && p.spec.visibleIds.length === 2) return `${shot} on ${name(p.spec.visibleIds[0])} and ${name(p.spec.visibleIds[1])}`;
   if (subj && /close-up|close up|medium shot|single/.test(shot) && p.spec.visibleIds.length <= 2) return `${shot} on ${name(subj)}`;
@@ -202,4 +209,26 @@ export function voiceShort(v: string, max = 320): string {
   let out = "";
   for (const x of sentences) { if (out && (out + " " + x).length > max) break; out = out ? `${out} ${x}` : x; }
   return out.replace(/[.!?]$/, "");
+}
+
+/** Who faces whom across the anchor, and the venue view behind each person, from the floor plan. */
+export function floorPlanLines(plan: GeometryPlanData, ids: string[], name: (id: string) => string, anchorName?: string): string {
+  const a = sceneAnchor(plan);
+  if (!a) return "";
+  const out: string[] = [];
+  const line = (plan.lineOfAction ?? []) as string[];
+  if (line.length === 2 && line.every((x) => ids.includes(x))) out.push(`${name(line[0])} and ${name(line[1])} face each other${anchorName ? ` across the ${anchorName}` : ""}.`);
+  const views = plan.views ?? [];
+  if (views.length) {
+    const behind = ids.flatMap((id) => {
+      const p = plan.actors.find((x) => x.characterId === id)?.position;
+      if (!p || Math.hypot(p.x - a.at.x, p.y - a.at.y) < 0.2) return [];
+      const ang = (Math.atan2(p.y - a.at.y, p.x - a.at.x) * 180) / Math.PI;
+      const off = (d: number) => Math.abs(((d - ang + 540) % 360) - 180);
+      const v = [...views].sort((x, y) => off(x.directionDeg) - off(y.directionDeg))[0];
+      return v ? [`behind ${name(id)}, the ${v.name}`] : [];
+    });
+    if (behind.length) out.push(`Seen from across the ${anchorName ?? "group"}: ${behind.join("; ")}.`);
+  }
+  return out.length ? `From the floor plan: ${out.join(" ")}` : "";
 }

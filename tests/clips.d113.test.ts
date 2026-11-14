@@ -31,7 +31,8 @@ describe("Clips from Kling Elements (D113)", () => {
     expect(c.prompt).toContain("stands <<<444>>>.");
     expect(c.prompt).not.toContain("two candles"); // the Element is the table's look
     expect(c.prompt).toContain("left to right as seen from the room: Bo, Ava");
-    expect(c.prompt).toContain('Shot 2 (4–7 s), medium close-up over Bo\'s shoulder on Ava: Ava turns to Bo. Ava says: "You\'re late."');
+    expect(c.prompt).toContain("Shot 2 (4–7 s), medium close-up over Bo's shoulder on Ava, both of them in the picture: Bo's shoulder and the side of their head in the foreground: Ava turns to Bo.");
+    expect(c.prompt).toContain("From the floor plan: Ava and Bo face each other across the bar table.");
     expect(c.webPrompt).toContain("Ava is @Ava");
     expect(c.seconds).toBe(7);
     expect(c.credits).toBe(70);
