@@ -31,6 +31,8 @@ export interface KlingJob {
   requestedAt: string;
   generationId?: string;
   videoUrl?: string;
+  /** The finished clip saved on this computer, in data/clips/ (D126): Kling's link lasts 24 hours. */
+  localFile?: string;
   error?: string;
   updatedAt?: string;
 }
@@ -81,7 +83,7 @@ export function putJobs(next: KlingJob[]): KlingJobsFile {
   const jobs = cur.jobs.filter((j) => !next.some((n) => n.id === j.id));
   for (const n of next) {
     const old = cur.jobs.find((j) => j.id === n.id);
-    jobs.push(old && sameRequest(old, n) && old.status !== "failed" ? { ...n, status: old.status, generationId: old.generationId, videoUrl: old.videoUrl, requestedAt: old.requestedAt, pictures: n.pictures.map((p) => ({ ...p, klingUrl: old.pictures.find((q) => q.assetId === p.assetId)?.klingUrl })) } : n);
+    jobs.push(old && sameRequest(old, n) && old.status !== "failed" ? { ...n, status: old.status, generationId: old.generationId, videoUrl: old.videoUrl, localFile: old.localFile, requestedAt: old.requestedAt, pictures: n.pictures.map((p) => ({ ...p, klingUrl: old.pictures.find((q) => q.assetId === p.assetId)?.klingUrl })) } : n);
   }
   const out = { updatedAt: new Date().toISOString(), jobs: jobs.sort((a, b) => a.sceneId.localeCompare(b.sceneId) || a.clip - b.clip) };
   fs.mkdirSync(path.dirname(file()), { recursive: true });

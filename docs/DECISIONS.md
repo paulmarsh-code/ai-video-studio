@@ -2377,3 +2377,14 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
   - Claude then submits each clip with its Elements and the uploaded pictures, and writes the status and link back to the file. The page shows them.
 - **No setting to change.** Allowing kling.ai in the cloud environment's network access would also work: Claude would then upload directly.
 - **For Claude:** the steps are in `docs/KLING_CLIPS_RUNBOOK.md`, linked from `CLAUDE.md`. Tested in `klingUploads.d125.test.ts`.
+
+### D126: Claude reaches Kling directly; finished clips saved on Paul's computer (2026-11-14)
+
+- **Paul allowed Kling for Claude.** He added `kling.ai`, `*.kling.ai` and `*.klingai.com` under Claude's Settings → Capabilities → Allowed websites.
+  - kling.ai answers from Claude's workspace (200).
+  - A real picture upload worked: the reply was `{"data":{"url":"https://s15-kling.klingai.com/kimg/…"}}`, which matches what the app's upload route reads.
+  - Kling's finished videos download too.
+- **What changes.**
+  - Claude uploads the pictures itself. The page upload (D125) stays as the fallback.
+  - Each finished clip is downloaded and saved on Paul's computer in `data/clips/`. The job records it as `localFile`, and the clips page plays it through `/api/kling-clip/<name>`, so a clip outlives Kling's 24-hour link.
+- **Steps for Claude:** `docs/KLING_CLIPS_RUNBOOK.md`.

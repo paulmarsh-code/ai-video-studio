@@ -149,7 +149,8 @@ export function ClipsBoard({ projectId, sceneId, rows, clips, list, pictures, jo
                     {STATUS[j.status]}{j.error ? `: ${j.error}` : ""}
                     {j.pictures.some((p) => p.uploadError) && <> · {j.pictures.filter((p) => p.uploadError).map((p) => `picture ${p.n}: ${p.uploadError}`).join("; ")}</>}
                     {j.status !== "done" && j.pictures.length > 0 && <> · pictures sent to Kling: {j.pictures.filter((p) => p.klingUrl).length} of {j.pictures.length}</>}
-                    {j.videoUrl && <> · <a className="underline" href={j.videoUrl} target="_blank" rel="noreferrer">watch or download</a> (the link lasts 24 hours)</>}
+                    {j.localFile ? <> · <a className="underline" href={`/api/kling-clip/${encodeURIComponent(j.localFile)}`} target="_blank" rel="noreferrer">watch</a> (saved in data/clips/{j.localFile})</>
+                      : j.videoUrl && <> · <a className="underline" href={j.videoUrl} target="_blank" rel="noreferrer">watch or download</a> (the link lasts 24 hours)</>}
                   </p>
                 );
               })()}
