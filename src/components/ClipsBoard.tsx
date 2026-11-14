@@ -69,7 +69,7 @@ export function ClipsBoard({ projectId, rows, clips, list }: { projectId: string
           <label className="flex items-center gap-2 text-sm text-neutral-600"><input type="checkbox" checked={api} onChange={(e) => setApi(e.target.checked)} /> Show the version with Element ids (for the API)</label>
         </div>
         <p className="text-sm text-neutral-600">
-          In Kling: Video → Omni-Ref, model 4.0, 9:16, add the Elements listed, then each clip&apos;s storyboard pictures in order, paste the request, set the length, sound on. About {total} credits for the whole scene at 720p (10 a second).
+          In Kling: Video → Omni-Ref, model 4.0, 9:16, add the Elements listed, then each clip&apos;s storyboard pictures in order, paste the request, set the length, sound on. About {total} credits for the whole scene at 720p (10 a second). A clip holds at most two camera angles, so a panel that would bring a third starts the next clip.
         </p>
         <div className="mt-3 space-y-4">
           {clips.map((c, k) => (

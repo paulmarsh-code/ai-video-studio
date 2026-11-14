@@ -2292,3 +2292,28 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
   - Clip 3 is now 2 + 4 + 2 = 8 s (80 credits, was 100).
   - Grouping into clips still uses the panel times, so the clips stay as they are.
 - **Reaches the generation through:** each shot's time range in the request, and the clip's length.
+
+### D121: At most two camera angles in a clip; shots that work together (2026-11-14)
+
+- **Paul:** "3 camera shots in 8–10 sec is too many, 2 or 1 should be maximum … we need to think about what shots work well together." Agreed to the rule below ("yes").
+- **Shots that work together in one short clip:**
+  - one angle: a wide, then closer along the same line (a punch-in);
+  - shot and reverse: over one shoulder, then the other, on the same side of the line;
+  - a wide, then a cut-in on the speaker from much the same side.
+- **To avoid:** a third angle; coming back to a wide from a new spot; crossing the line.
+- **What "the same angle" means.** Two cameras looking within 20° of each other, one standing within 0.75 m of the other's line of view.
+  - Clip 3's last wide looked only 30° off the first but stood 1.6 m to the side. The background changed completely, and Paul saw it as a camera switch.
+- **Fixes, for any scene.**
+  - **Choosing the cameras** (`director.ts` → `clipCameras.ts`, `limitClipAngles`).
+    - The scene's panels are grouped into clips as the clips page groups them.
+    - A wide shot that would bring a third angle goes back to the clip's wide or group shot, at its own size, if that camera shows everyone it needs.
+    - A closer shot (a line over a shoulder, a close-up) keeps its own angle: a wide would lose the face, and the other shoulder would show the wrong one.
+    - Each change is given in the camera's reasons (R-CLIP-ANGLES).
+  - **Making the clips** (`groupClips`, `groupByTime`).
+    - A panel that would bring a third angle starts the next clip, so no clip ever holds three.
+    - The clips page says so.
+- **Paul's scenes, checked on copies of his data.** Nothing changes until he presses "Choose again" on the cameras.
+  - **Jade's Entrance, as it is now:** the clips page splits at the third angles into [1,2] [3,4] [5,6] [7,8] [9,10] [11].
+  - **Jade's Entrance after Choose again:** panel 3 goes back to panel 2's wide. Panel 11 goes back to panel 9's line, further back ("full shot, tracking shot", the suggestion for her walking off). Clips become [1,2,3] [4,5] [6,7] [8,9,10,11]. Panels 3 and 11 need redrawing.
+  - **Jade joins the group and walks off, after Choose again:** panel 6 goes back to panel 4's wide. Clips become [1,2] [3,4,5,6]. Panel 6 needs redrawing.
+- **Reaches the generation through:** the camera choice, hence the storyboard pictures Kling stages each shot from (D119), and the clip grouping. Tested in `clipCameras.d121.test.ts`.

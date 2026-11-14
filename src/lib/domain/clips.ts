@@ -10,6 +10,7 @@ import { planForShot, pictureXY } from "./geometry";
 import { sceneAnchor } from "./director";
 import { isSetPiece } from "./setRender";
 import { actionFloor, spokenSeconds } from "./duration";
+import { groupByTime } from "./clipCameras";
 
 export interface KlingElement { id: string; name: string }
 /** Elements by what they stand for: "char:<slug>", "venue:<id>", "prop:<name in lower case>". */
@@ -65,21 +66,15 @@ export interface Clip {
 
 /** Kling Omni-Ref takes up to this many Elements in one clip. */
 export const MAX_ELEMENTS = 7;
-/** A clip runs at most this long here, and at most this many shots, so each shot keeps its time. */
-export const CLIP_MAX_SEC = 15;
-export const CLIP_MAX_SHOTS = 4;
+export { CLIP_MAX_SEC, CLIP_MAX_SHOTS } from "./clipCameras";
 
-/** Consecutive panels in clips of up to 15 s and 4 shots; a panel longer than that is a clip alone. */
-export function groupClips(panels: ClipPanel[], maxSec = CLIP_MAX_SEC, maxShots = CLIP_MAX_SHOTS): ClipPanel[][] {
-  const out: ClipPanel[][] = [];
-  let cur: ClipPanel[] = [], sec = 0;
-  for (const p of [...panels].sort((a, b) => a.order - b.order)) {
-    const d = Math.max(1, p.durationSec);
-    if (cur.length && (sec + d > maxSec || cur.length >= maxShots)) { out.push(cur); cur = []; sec = 0; }
-    cur.push(p); sec += d;
-  }
-  if (cur.length) out.push(cur);
-  return out;
+/**
+ * Consecutive panels in clips of up to 15 s and 4 shots, and at most two camera angles (D121): a
+ * panel that would bring a third starts the next clip. A panel longer than that is a clip alone.
+ */
+export function groupClips(panels: ClipPanel[], plan?: GeometryPlanData): ClipPanel[][] {
+  const angle = (p: ClipPanel) => plan?.cameras.find((x) => x.id === p.spec.cameraId);
+  return groupByTime([...panels].sort((a, b) => a.order - b.order), (p) => p.durationSec, plan ? angle : undefined);
 }
 
 const first = (name: string) => name.split(/\s+/)[0];
@@ -208,7 +203,7 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput): Clip {
 /** The scene's clips. */
 export function sceneClips(i: ClipInput): Clip[] {
   const master = i.master ?? [...i.panels].sort((a, b) => b.spec.visibleIds.length - a.spec.visibleIds.length || a.order - b.order)[0];
-  return groupClips(i.panels).map((g) => clipPrompt(g, { ...i, master }));
+  return groupClips(i.panels, i.plan).map((g) => clipPrompt(g, { ...i, master }));
 }
 
 function cameraOf(p: ClipPanel, plan: GeometryPlanData): { sp: GeometryPlanData; cam?: PlanCamera } {

@@ -11,6 +11,7 @@ import { cameraZ, floorZ, insideLevel, levelAt } from "./levels";
 import { fovForSize, namedShot, presetsFor, SHOT_SIZES } from "./shotLanguage";
 import { gazeFor } from "./gaze";
 import type { CameraPreset, GeometryPlanData, PlanCamera, Point, ShotSpec } from "./types";
+import { limitClipAngles } from "./clipCameras";
 
 export type MomentKind = "establishing" | "dialogue" | "peak" | "reaction" | "exit";
 
@@ -1093,7 +1094,26 @@ export function designScene(plan: GeometryPlanData, shots: ShotInput[], name: (i
     const S = sp.actors.find((a) => a.characterId === subj)?.position;
     return { ...d, options: d.options.map((o) => o.camera.povId ? o : ({ ...o, camera: verticalCamera(o.camera, v, S, sp), reasons: [...o.reasons, `R-VERTICAL: ${v.why}`] })) };
   }).map((d) => aimAcrossLevels(d, plan, shots.find((x) => x.id === d.shotId), name));
-  return { side: best.side, lineOfAction: line, shots: designs, multiShot: groupMultiShot(shots) };
+  return { side: best.side, lineOfAction: line, shots: twoAnglesPerClip(designs, plan, shots), multiShot: groupMultiShot(shots) };
+}
+
+/**
+ * At most two camera angles in each clip (D121): a shot that would bring a third takes the clip's
+ * earlier camera at its own size, a wider shot the clip's wide. Clip 3 cut wide, reverse, then a
+ * wide from a third spot, and looked odd.
+ */
+function twoAnglesPerClip(designs: ShotDesign[], plan: GeometryPlanData, shots: ShotInput[]): ShotDesign[] {
+  const { replace, problems } = limitClipAngles(plan, designs.map((d) => ({ id: d.shotId, spec: shots.find((x) => x.id === d.shotId)!.spec, camera: d.options[0]?.camera })).filter((x) => x.spec));
+  return designs.map((d) => {
+    const cam = replace.get(d.shotId);
+    const bad = problems.find((x) => x.id === d.shotId);
+    if (cam) {
+      const o0 = d.options[0];
+      const o: CameraOption = { camera: cam, kind: `${o0.kind.split(" (")[0]} (from the clip's earlier angle)`, score: o0.score, reasons: [...o0.reasons, "R-CLIP-ANGLES: back to an angle this clip already has, so the clip holds two at most"] };
+      return { ...d, options: [o, ...d.options].slice(0, 3) };
+    }
+    return bad ? { ...d, warning: d.warning ?? bad.why } : d;
+  });
 }
 
 /**
