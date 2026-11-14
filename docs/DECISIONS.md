@@ -2163,3 +2163,8 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
 - **The check looks for mix-ups (`pictureCheck.ts`).** It now asks for any case of one character drawn with another's face, hair, outfit, bag or jewellery, or in another's place. Any such case fails the picture with "Characters mixed up: …" and asks for a redraw, which the board does once by itself.
 - **Never approvable.** A picture whose check found a mix-up shows a red note instead of Approve: "Characters are mixed up in this picture (…). It can't be approved: redraw it."
 - **For the clips.** In Kling each character is an Element bound by name in the prompt (`<<<id>>>`), which is Kling's own way of keeping them apart.
+
+### D110: The picture check compares a prop with the same picture the request used (2026-11-14)
+
+- **Failure.** Paul's panel 8 failed with "The cocktail table doesn't look like its picture: … missing the two champagne flutes shown in the reference prop." The request (D108) had used the set's approved cut-out as the table's look, which has no flutes. The check still compared the table with the scene setting's older prop picture, which has them.
+- **Fix (`pictureCheckServer.ts`).** On the fixed set, the check's prop reference is the same approved cut-out the request used, so the two can't disagree. Off the set, it's the prop picture as before.
