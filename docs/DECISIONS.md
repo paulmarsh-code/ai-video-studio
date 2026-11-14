@@ -2099,3 +2099,20 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
 
   It still gives no sizes, metres from the camera, light, room description or left-to-right list.
 - **General.** The anchor is whatever the scene's focal set piece is, and the background is whichever venue view is behind the subject. Every rule from D103–D104 is the same for any venue and story: room height from the venue's own words, no venue name, framing held, one retry.
+
+### D106: On the set, GPT is guided by four pictures and told the shot (2026-11-14)
+
+- **Paul's design.** GPT works from:
+  - the background, with the camera position and shot the app chose deciding how much of it is seen and how big (a close-up on Chase shows a little of the bar, large; a wide shot of the group shows a lot of it, smaller);
+  - the characters, consistent;
+  - the props, which like the characters never change their look;
+  - where people and props are, from the floor plan.
+
+  The request describes the shot and what everyone, extras included, is doing. GPT creates only that; the rest comes from the pictures.
+- **What changes from D103.**
+  - Props' pictures go with image 1 again, like the characters' references. D103 had left them out for fear of disagreement, but they show only how a prop looks, never where it is, and the request says so ("never take positions, sizes or background from them").
+  - The set request now names the shot: "Shot: …" with its framing, lens and angle lines. The size named is what this camera really frames (`framedSize`, D48), so it agrees with image 1. In a test, a panel named "medium shot" whose camera frames people head to toe is called a "full shot".
+- **So, on the set:**
+  - image 1 is the background from this camera, with the floor plan's stand-ins;
+  - then the characters' and props' pictures;
+  - then the words: the shot, where each person is relative to the scene's fixed set piece and background, the moment, what each person does and where they look, what they hold, and the extras.

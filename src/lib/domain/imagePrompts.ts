@@ -193,7 +193,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     ...shotPlan.actors.filter((x) => x.to).map((x) => x.characterId),
   ] : [];
   // The short request (B3), filled as the same values are worked out below.
-  const S: Record<string, string[]> = { refs: [], people: [], props: [], moment: [], camera: [], keep: [], place: [] };
+  const S: Record<string, string[]> = { refs: [], people: [], props: [], moment: [], camera: [], keep: [], place: [], shot: [] };
   const attach: PanelPrompt["attach"] = [];
   // References in image 1's left-to-right order (D64). With them the other way round, GPT put the
   // first reference on the left: in T6 the two women swapped in 5 of 9 draws with the right-hand
@@ -221,7 +221,8 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   // Props come from this panel's plan (D35): one taken away on an earlier panel isn't here.
   const seenProps = cam && shotPlan ? readProps(shotPlan, cam).filter((p) => p.inView).map((p) => p.name) : undefined;
   const propPics = ((shotPlan ?? i.plan)?.furniture ?? []).filter((f) => f.imageAssetId && (!seenProps || seenProps.includes(f.name)));
-  if (!onSet) for (const f of propPics) attach.push({ label: `${f.name} picture`, assetId: f.imageAssetId! });
+  // Props, like characters, keep one look (Paul, D106): their pictures go on the set too.
+  for (const f of propPics) attach.push({ label: `${f.name} picture`, assetId: f.imageAssetId! });
   const bgView = reading?.backgroundView;
   // The ring background (D20) replaces the single nearest view: it is exactly what this camera
   // sees behind the people, from where it stands, at its angle and lens.
@@ -484,6 +485,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     // A still has no camera move (B3): "tracking shot" is for the video, not the picture.
     const shotWords = withoutMove(fix ? withSize(shot.shot?.trim() ?? "", fix) : shot.shot?.trim() ?? "");
     if (shotWords) lines.push(`Shot: ${shotWords}.`);
+    if (shotWords) S.shot.push(`Shot: ${shotWords}.`);
     // Shot size, named framing, lens, point of view and what the angle means (D27).
     const camLines = shotLines({ cam: camW, kind: verticalOf(cam).kind, fovDeg: cam.fovDeg ?? PRESET_FOV[cam.preset], text: withoutMove(`${i.description} ${shot.actions ?? ""} ${shotWords}`), name })
       .map((l) => (cutFull && !fix && l.startsWith("Framing:") ? `Framing: full shot, but the bottom edge cuts ${name(subjectId!)} at the ankles, exactly as in the layout; do not move the camera back or tilt it down to show the feet.` : l));
@@ -646,7 +648,11 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     // GLOWVANE sign the set doesn't have. Image 1 is the venue.
     `${(i.style ?? "photorealistic").replace(/^./, (m) => m.toUpperCase())} storyboard frame for a ${i.aspect ?? "9:16"} video.`,
     setInstruction(coloured),
-    `The other images show only how each person looks (${attach.slice(1).map((a) => a.label).join(", ")}${leftToRight.length > 1 ? "; in image 1's left-to-right order" : ""}): copy faces, hair, clothes and anything carried exactly; never take positions or background from them.`,
+    `The other images show only how each person and prop looks (${attach.slice(1).map((a) => a.label).join(", ")}${leftToRight.length > 1 ? "; the people in image 1's left-to-right order" : ""}): copy faces, hair, clothes, anything carried and every prop exactly; never take positions, sizes or background from them.`,
+    // The shot the app chose for this camera (Paul, D106): image 1 is that shot, so the size and
+    // lens named here are what image 1 already frames.
+    ...S.shot,
+    ...S.camera,
     ...(S.keep.length ? [`Keep: ${S.keep.join("; ")}.`] : []),
     // Where people are, said against the fixed set (Paul, D105): from the same floor plan as image
     // 1's stand-ins, so the words and the picture agree.

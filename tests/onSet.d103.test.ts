@@ -27,9 +27,11 @@ describe("Drawing on the fixed set (D103)", () => {
     expect(p.image).toContain("Moment: Ava laughs at Bo's joke.");
     expect(p.image).toContain("a few guests");
     expect(p.image).not.toMatch(/Where:|Lighting|Key props|Sizes:|left to right|metres|near the glowing display, /);
-    // Only the people's references go with image 1: no earlier picture, no prop picture.
+    // The people's and props' pictures go with image 1 (D106), never an earlier picture.
     expect(p.attach.map((a) => a.label)).not.toContain("approved scene picture (panel 3)");
-    expect(p.attach.map((a) => a.label)).not.toContain("small round table picture");
+    expect(p.attach.map((a) => a.label)).toContain("small round table picture");
+    // The shot the app chose is described (D106).
+    expect(p.image).toMatch(/^Shot: full shot\.$/m); // what this camera really frames (D48), not the panel's "medium shot"
     expect(draw().image).toBeUndefined();
   });
   it("set pieces are drawn in the key colour, so the set's own table goes back in front of whoever is behind it", () => {
