@@ -32,7 +32,7 @@ export default async function ClipsPage({ params }: { params: Promise<{ id: stri
   }));
   const panels: ClipPanel[] = [...s.panels].sort((a, b) => a.order - b.order).flatMap((p) => {
     const shot = s.shots.find((x) => x.panelId === p.id);
-    return shot ? [{ order: p.order, durationSec: p.durationSec, description: p.description, emotion: p.emotion, dialogue: (p.dialogue ?? []) as ClipPanel["dialogue"], spec: shot.spec }] : [];
+    return shot ? [{ order: p.order, durationSec: p.durationSec, description: p.description, emotion: p.emotion, dialogue: (p.dialogue ?? []) as ClipPanel["dialogue"], spec: shot.spec, imageAssetId: p.imageAssetId ?? undefined }] : [];
   });
   const crowd = (s.scene.staging as { crowd?: string } | null)?.crowd;
   const clips = sceneClips({ panels, cast, plan, venue: { id: s.venue.id, name: s.venue.name }, crowd, elements });

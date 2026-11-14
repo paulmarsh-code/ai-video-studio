@@ -2258,3 +2258,19 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
   - Every clip now says that each person appears once, never twice, and that no guest looks or dresses like any of them.
   - Every clip now says: "Every shot is of this same group at the {anchor}: a closer shot frames part of it, and whoever is out of frame is still standing in their place."
 - **Reaches the generation through:** the clip request (prompt lines). Tested in `clips.d113.test.ts`.
+
+### D119: Each clip carries its storyboard pictures, one per shot (2026-11-14)
+
+- **Paul:** "Can Kling adhere to the floor plans we give it in each shot?"
+  - **Honest answer:** not reliably from words. Clip 1 followed the floor plan, clip 2 partly, clip 3 not at all. Kling holds looks with Elements, but takes written places as a suggestion and stages each shot of a multi-shot clip afresh.
+  - **Why pictures:** a picture holds places far better than words. The storyboard panels are already drawn on the fixed set with everyone where the floor plan puts them (D103–D111), which is the storyboard's job (D107).
+- **Fix, for any scene (`clips.ts`, clips page, `ClipsBoard`).**
+  - Each clip lists its panels' storyboard pictures in shot order (`pictures`). The clips page shows each one, saveable, to add as images in Kling after the Elements.
+  - The request names them and points each shot at its own: "图片1, 图片2, 图片3 are the storyboard pictures for shots 1, 2, 3 in turn: each shot keeps its picture's camera angle, framing, background and who stands where. Faces, clothes, the cocktail table and the venue come from their Elements, not from the pictures." Each shot reads "Shot 2 (3–7 s), medium shot, as in 图片2: …".
+    - The web version says "picture 1, 2, …", in the order they are added.
+  - A panel with no picture yet is staged from the words alone, and the page says so.
+- **Limits.**
+  - The pictures are references, not exact frames. Kling 4.0's frame-exact route (`image_to_video` first frame and keyframes) can't use Elements, so looks would come from the picture alone. That is the fallback if references aren't enough.
+  - Kling 4.0 Omni-Ref takes up to 15 inputs: 7 Elements plus 4 pictures fits.
+- **Reaches the generation through:** the clip's input images and its prompt lines. Tested in `clips.d113.test.ts`.
+- **To test:** clip 3 (panels 9–11) with its three pictures.

@@ -85,3 +85,16 @@ describe("One circle round the table, one of each (D118)", () => {
     expect(c.prompt).toContain("whoever is out of frame is still standing in their place at the bar table.");
   });
 });
+
+describe("Storyboard pictures stage each shot (D119)", () => {
+  it("lists each shot's picture in order and points the shot at it; looks stay with the Elements", () => {
+    const panels = [{ ...P(1, 4, {}), imageAssetId: "a1" }, P(2, 3, {}), { ...P(3, 3, {}), imageAssetId: "a3" }];
+    const [c] = sceneClips({ panels, cast: cast as never, plan: plan as never, venue: { id: "v1", name: "Roof bar" }, elements });
+    expect(c.pictures).toEqual([{ shot: 1, panel: 1, assetId: "a1" }, { shot: 3, panel: 3, assetId: "a3" }]);
+    expect(c.prompt).toContain("图片1, 图片2 are the storyboard pictures for shots 1, 3 in turn: each shot keeps its picture's camera angle, framing, background and who stands where. Faces, clothes, the bar table and the venue come from their Elements, not from the pictures.");
+    expect(c.prompt).toContain("Shot 1 (0–4 s), full shot, as in 图片1:");
+    expect(c.prompt).toContain("Shot 3 (7–10 s), full shot, as in 图片2:");
+    expect(c.prompt).toMatch(/Shot 2 \(4–7 s\), full shot: /);
+    expect(c.webPrompt).toContain("Shot 1 (0–4 s), full shot, as in picture 1:");
+  });
+});

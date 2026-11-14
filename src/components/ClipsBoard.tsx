@@ -69,7 +69,7 @@ export function ClipsBoard({ projectId, rows, clips, list }: { projectId: string
           <label className="flex items-center gap-2 text-sm text-neutral-600"><input type="checkbox" checked={api} onChange={(e) => setApi(e.target.checked)} /> Show the version with Element ids (for the API)</label>
         </div>
         <p className="text-sm text-neutral-600">
-          In Kling: Video → Omni-Ref, model 4.0, 9:16, add the Elements listed, paste the request, set the length, sound on. About {total} credits for the whole scene at 720p (10 a second).
+          In Kling: Video → Omni-Ref, model 4.0, 9:16, add the Elements listed, then each clip&apos;s storyboard pictures in order, paste the request, set the length, sound on. About {total} credits for the whole scene at 720p (10 a second).
         </p>
         <div className="mt-3 space-y-4">
           {clips.map((c, k) => (
@@ -79,6 +79,20 @@ export function ClipsBoard({ projectId, rows, clips, list }: { projectId: string
                 <Copy text={api ? c.prompt : c.webPrompt} label="Copy the request" />
               </div>
               <p className="mt-1 text-sm text-neutral-600">Elements: {c.elements.length ? c.elements.map((e) => e.name).join(", ") : "none linked yet"}</p>
+              {c.pictures.length > 0 && (
+                <div className="mt-2">
+                  <p className="text-sm text-neutral-600">Then add these storyboard pictures as images, in this order: Kling stages each shot from its picture (who stands where, the camera angle). {c.pictures.length < c.panels.length && <span className="text-amber-800">Panels without a picture yet are staged from the words alone.</span>}</p>
+                  <div className="mt-1 flex flex-wrap gap-2">
+                    {c.pictures.map((x, n) => (
+                      <a key={x.assetId} href={`/api/assets/${x.assetId}`} download={`clip${k + 1}_picture${n + 1}_panel${x.panel}.png`} className="w-24 text-xs text-neutral-600 hover:underline">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={`/api/assets/${x.assetId}`} alt={`Picture ${n + 1}`} className="w-full rounded border border-neutral-200" />
+                        Picture {n + 1}: shot {x.shot} (panel {x.panel}) · save
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
               {c.missing.length > 0 && <p className="mt-1 text-sm text-amber-800">No Element for {c.missing.join(", ")}: drawn from the words alone, so {c.missing.length === 1 ? "it" : "they"} may not match from clip to clip.</p>}
               <pre className="mt-2 whitespace-pre-wrap rounded bg-neutral-50 p-2 text-xs text-neutral-800">{api ? c.prompt : c.webPrompt}</pre>
             </div>

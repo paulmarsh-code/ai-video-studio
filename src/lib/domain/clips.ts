@@ -27,6 +27,8 @@ export interface ClipPanel {
   emotion?: string;
   dialogue: { characterId: string; text: string }[];
   spec: ShotSpec;
+  /** The panel's storyboard picture, drawn on the fixed set from the floor plan (D119). */
+  imageAssetId?: string;
 }
 
 export interface ClipInput {
@@ -53,6 +55,11 @@ export interface Clip {
   /** What the clip shows that has no Element yet: drawn from words, so it may not match. */
   missing: string[];
   credits: number;
+  /**
+   * The storyboard pictures to add to the job, in this order (D119): picture 1 is shot 1's panel,
+   * and so on. Kling stages each shot from its picture; words alone it treats as a suggestion.
+   */
+  pictures: { shot: number; panel: number; assetId: string }[];
 }
 
 /** Kling Omni-Ref takes up to this many Elements in one clip. */
@@ -100,7 +107,10 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput): Clip {
   const api = (key: string, plain: string) => { const e = used.find((u) => u.key === key); return e ? `<<<${e.id}>>>` : plain; };
   const web = (key: string, plain: string) => { const e = used.find((u) => u.key === key); return e ? `@${e.name}` : plain; };
 
-  const build = (ref: (key: string, plain: string) => string) => {
+  // The storyboard pictures, one for each shot that has one (D119). Words alone gave Kling the floor
+  // plan as a suggestion: clip 3 put Marcus and Nina behind Jade, away from the table.
+  const pictures = panels.flatMap((p, k) => p.imageAssetId ? [{ shot: k + 1, panel: p.order, assetId: p.imageAssetId }] : []);
+  const build = (ref: (key: string, plain: string) => string, pic: (n: number) => string) => {
     const who = (id: string) => ref(elementKey.character(id), first(nameOf(id)));
     const L: string[] = [];
     const venue = ref(elementKey.venue(i.venue.id), i.venue.name);
@@ -134,6 +144,7 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput): Clip {
     // Jade and had Chase come round the table.
     const plan = floorPlanLines(i.plan, inClip, (id) => first(nameOf(id)), anchor?.name);
     if (plan) L.push(plan);
+    if (pictures.length) L.push(`${pictures.length === 1 ? `${pic(1)} is the storyboard picture for shot ${pictures[0].shot}` : `${pictures.map((x, n) => pic(n + 1)).join(", ")} are the storyboard pictures for shots ${pictures.map((x) => x.shot).join(", ")} in turn`}: each shot keeps its picture's camera angle, framing, background and who stands where. Faces, clothes${pieces.length ? `, the ${pieces.map((f) => f.name).join(" and ")}` : ""} and the venue come from their Elements, not from the pictures.`);
     // Each line said once, in its own shot (D115): with two lines for Jade in shots 3 and 4, Kling
     // had her say the first one twice and never the second.
     const lines = panels.flatMap((p) => p.dialogue);
@@ -151,7 +162,8 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput): Clip {
       // group is ahead of them. Kling had Jade walk past them, then turn back to greet them.
       const onTheWay = Object.entries(p.spec.at ?? {}).filter(([, m]) => /^(?:arriving|crossing|approaching)$/.test(m)).map(([id]) => id).filter((id) => inClip.includes(id));
       const way = onTheWay.map((id) => `${first(nameOf(id))} has not reached ${anchor ? `the ${anchor.name}` : "the others"} yet: ${anchor ? "it is" : "they are"} ahead of ${first(nameOf(id))}, further into the room, and ${first(nameOf(id))} walks towards ${anchor ? "it" : "them"}, never past.`).join(" ");
-      L.push(`Shot ${k + 1} (${t}–${t + d} s)${words ? `, ${words}` : ""}: ${p.description.trim().replace(/\.$/, "")}${p.emotion ? ` (${p.emotion.trim().replace(/\.$/, "")})` : ""}.${way ? ` ${way}` : ""} ${speech}`);
+      const pn = pictures.findIndex((x) => x.shot === k + 1);
+      L.push(`Shot ${k + 1} (${t}–${t + d} s)${words ? `, ${words}` : ""}${pn >= 0 ? `, as in ${pic(pn + 1)}` : ""}: ${p.description.trim().replace(/\.$/, "")}${p.emotion ? ` (${p.emotion.trim().replace(/\.$/, "")})` : ""}.${way ? ` ${way}` : ""} ${speech}`);
       t += d;
     });
     const speakers = [...new Set(panels.flatMap((p) => p.dialogue.map((x) => x.characterId)))];
@@ -173,7 +185,7 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput): Clip {
     return L.join("\n");
   };
   const seconds = panels.reduce((s, p) => s + Math.max(1, p.durationSec), 0);
-  return { panels: panels.map((p) => p.order), seconds, prompt: build(api), webPrompt: build(web), elements: used, missing, credits: seconds * (i.creditsPerSecond ?? 10) };
+  return { panels: panels.map((p) => p.order), seconds, prompt: build(api, (n) => `图片${n}`), webPrompt: build(web, (n) => `picture ${n}`), elements: used, missing, credits: seconds * (i.creditsPerSecond ?? 10), pictures };
 }
 
 /** The scene's clips. */
