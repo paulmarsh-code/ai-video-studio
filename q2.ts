@@ -1,0 +1,5 @@
+import { openDb } from "./src/db/client"; import * as repo from "./src/lib/repo"; import { planForShot } from "./src/lib/domain/geometry"; import { updateLayout } from "./src/lib/layoutUpdate";
+(async()=>{ const db=await openDb(process.argv[2]); const id="99a2f9df-8da1-47b7-954b-fd0b2961f6a6"; await updateLayout(db,id); const s=repo.getScene(db,id)!; const cast=repo.getCast(db,s.scene.projectId); const nm=(id:string)=>cast.find(c=>c.id===id)?.name.split(" ")[0]; const p0=s.plan!.data;
+ for (const p of s.panels.sort((a,b)=>a.order-b.order)) { const sh=s.shots.find(x=>x.panelId===p.id)!; const sp=planForShot(p0,sh.spec); const c=sp.cameras.find(c=>c.id===sh.spec.cameraId)!;
+  const vis=sh.spec.visibleIds.map(v=>sp.actors.find(a=>a.characterId===v)).filter(Boolean).map(a=>`${nm(a!.characterId)}${Math.hypot(a!.position.x-c.position.x,a!.position.y-c.position.y).toFixed(1)}`);
+  const j=sp.actors.find(a=>nm(a.characterId)==="Jade")!; console.log(p.order, JSON.stringify(sh.spec.shot), "|", c.name, "fov", c.fovDeg, "|", vis.join(" "), "| Jade@", j.position.x.toFixed(1), j.position.y.toFixed(1), JSON.stringify(sh.spec.blocking?.[j.characterId]?.why ?? "")); } })();

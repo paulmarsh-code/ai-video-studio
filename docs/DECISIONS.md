@@ -2039,3 +2039,13 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
   - A set piece keeps its own clear background. A picture without one is cut out from a plain background, as GPT's are, and is then trimmed to the piece. If it can't be cut out, a note says it will stand as a rectangle.
   - Walls and the floor take the picture as it is.
 - **Checked.** Paul's table PNG, sent to the page on a copy of his data, was kept with its clear background, trimmed, and stands at its place in the 360° from panel 2's camera.
+
+### D102: Cameras close enough for the shot (2026-11-14)
+
+- **Failure.** On the fixed set (D98), the wide shots of Jade's Entrance showed the group tiny and far off, because that is where the floor plan put the cameras. GPT had been quietly moving the cameras closer when it drew the pictures, and the picture check flagged it ("drawn about 2.2 times the planned height"). Paul: only Jade's approach should be wide; "the rest should be much closer showing group or even closer for some of the dialogue shots". This reaches generation through the camera choice: once only the people are drawn on the set (stage 3), the set's view decides the size.
+- **Three causes, three general fixes.**
+  - **On the way in, for that panel only (`panelWords.ts`).** An "arriving", "crossing" or "approaching" mark is where someone is in that panel only. The next panel without a mark has them at their place. Before, Jade's crossing spot, 4 m from the group, was carried into every later panel, after the panel in which she reached them. "Turns to Chase" then kept her there, so every two-shot of her and Chase had to stand back to fit 4 m of floor.
+  - **A group measured across the view (`coverageFor`).** How far back a group shot stands now comes from how wide the people are across the picture from that direction, not from the widest gap on the floor plan. Seen at an angle a group overlaps, so the nearest working set-up is chosen first, with a small preference for square-on views.
+  - **Close sizes in 9:16 group panels.** A panel with three or more people that names a medium close-up, medium shot or cowboy shot frames the subject and the one they're with (their line partner, else the nearest) whole. The rest of the group may be cut by the picture's edges.
+- **Jade's Entrance on a copy of Paul's data, with the layout updated.** Panels 1, 2 and 11 stay wide (arriving, crossing, walking off). The group shots come in from 6–11 m to 2–4.5 m, and the over-the-shoulders from up to 11 m to about 3 m, with Jade at the table from panel 3 on.
+- **Saved scenes don't change by themselves (D96).** The snapshot shows no differences until a scene's layout is updated, which is done only when Paul asks.

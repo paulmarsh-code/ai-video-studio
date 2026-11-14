@@ -725,12 +725,24 @@ function coverageFor(plan: GeometryPlanData, sh: ShotInput, side: number, line: 
   const subj = speaker ?? (sh.spec.subjectId && vis.includes(sh.spec.subjectId) ? sh.spec.subjectId : vis[0]);
   const other = vis.length === 2 ? vis.find((id) => id !== subj)! : undefined;
 
+  // A group panel that names a close size (medium shot, cowboy, medium close-up) in a tall 9:16
+  // picture (D102): the subject and the one they're with are framed whole, and the rest of the
+  // group may be cut by the edges. Fitting four people across a 9:16 frame put the camera 6 m
+  // back, the group small, for lines the story plays close.
+  const tightSize = named.size === "mcu" || named.size === "ms" || named.size === "cowboy";
+  const partnerOf = (who: string) => {
+    if (line.includes(who)) { const o = line[0] === who ? line[1] : line[0]; if (vis.includes(o)) return o; }
+    const W = pos(who)!;
+    return vis.filter((id) => id !== who).sort((a, b) => { const pa = pos(a)!, pb = pos(b)!; return Math.hypot(pa.x - W.x, pa.y - W.y) - Math.hypot(pb.x - W.x, pb.y - W.y); })[0];
+  };
+  const focusPartner = plan.aspect === "9:16" && tightSize && vis.length >= 3 ? partnerOf(subj) : undefined;
+  const focus = focusPartner ? [subj, focusPartner] : undefined;
   // Does a camera work for this panel: a sensible place, everyone it must show in the picture, no needed face hidden.
   const works = (o: CameraOption): boolean => {
     if (cameraPlacementProblem(sp, o.camera)) return false;
     // Not on the far side of the line (R-180).
     if (Math.sign(sideOf(A, B, o.camera.position)) !== side) return false;
-    const must = o.camera.preset === "main-ots" ? [subj] : vis;
+    const must = o.camera.preset === "main-ots" ? [subj] : focus ?? vis;
     for (const id of must) {
       const a = sp.actors.find((x) => x.characterId === id);
       const q = a && pictureXY(sp, o.camera, a.position, 1.5);
@@ -748,15 +760,23 @@ function coverageFor(plan: GeometryPlanData, sh: ShotInput, side: number, line: 
   const facingTries = (kind: string, preset: CameraPreset, fovs: number[], ids: string[], minD: number, maxD: number): CameraOption[] => {
     const look = ids.length === all.length ? anchor.at : centre(ids);
     const out: CameraOption[] = [];
+    // How wide the people are across the picture from this direction (D102): seen at an angle a
+    // group overlaps, so the camera can come closer. Measured across the view, not as the widest
+    // gap on the floor plan, which put every 9:16 group shot 6 m back with everyone small.
+    const across = (dir: Point) => {
+      const ps = ids.map(pos).filter((p): p is Point => !!p).map((p) => (p.x - look.x) * -dir.y + (p.y - look.y) * dir.x);
+      return ps.length ? Math.max(...ps) - Math.min(...ps) : 0;
+    };
     for (const ang of [0, 20, -20, 40, -40, 60, -60, 75, -75]) for (const fov of fovs) {
       const probe: PlanCamera = { id: "", name: "", preset, fovDeg: fov, position: look, lookAt: look };
       const hf = horizontalFov(plan, probe);
-      const d = Math.min(maxD, Math.max(minD, (spread(ids) + 1.0) / 2 / Math.tan((hf * Math.PI) / 360) + 0.6));
       const dir = rotDeg(n, ang);
+      const d = Math.min(maxD, Math.max(minD, (across(dir) + 1.0) / 2 / Math.tan((hf * Math.PI) / 360) + 0.6));
       const cam = makeCam("cov", kind, preset, { x: look.x + dir.x * d, y: look.y + dir.y * d }, look);
-      out.push({ camera: { ...cam, fovDeg: fov }, kind, score: 0, reasons: [`${why}: ${kind.toLowerCase()} at about ${d.toFixed(1)} m`] });
+      out.push({ camera: { ...cam, fovDeg: fov }, kind, score: d + Math.abs(ang) / 60, reasons: [`${why}: ${kind.toLowerCase()} at about ${d.toFixed(1)} m`] });
     }
-    return out;
+    // Nearest first (D102), a little against turning far off the line's square-on view.
+    return out.sort((a, b) => (a.score ?? 0) - (b.score ?? 0)).map((o) => ({ ...o, score: 0 }));
   };
   const shoulderTries = (s0: string, over: string): CameraOption[] => {
     const S = pos(s0)!, P = pos(over)!;
@@ -792,7 +812,8 @@ function coverageFor(plan: GeometryPlanData, sh: ShotInput, side: number, line: 
     const wide = WIDE_WORDS.test(words) || moment === "establishing";
     key = wide ? "wide" : "group";
     // Either way, the other one if the first can't see every face from this side.
-    const w = () => facingTries("Wide", "wide", [60, 70], all, 4.0, 9), g = () => facingTries("Group shot", "two-shot", [45, 55, 65], all, 2.4, 6);
+    const w = () => facingTries("Wide", "wide", [60, 70], all, 4.0, 9), g = () => facingTries("Group shot", "two-shot", [45, 55, 65], focus ?? all, focus ? 1.8 : 2.4, 6);
+    if (focus && !wide) key = `group:${[...focus].sort().join(",")}`;
     tries = () => wide ? [...w(), ...g()] : [...g(), ...w()];
   } else if (vis.length === 2 && pairWords) {
     key = `pair:${[...vis].sort().join(",")}`;
@@ -806,7 +827,7 @@ function coverageFor(plan: GeometryPlanData, sh: ShotInput, side: number, line: 
   }
   // Turned to where the people are in this panel; unchanged when they haven't really moved.
   const aimed = (o0: CameraOption): CameraOption => {
-    const target = o0.camera.preset === "main-ots" || o0.camera.preset === "single-cu" ? here(subj) : key === "wide" || key === "group" ? (() => { const ps = vis.map(here).filter((p): p is Point => !!p); return ps.length === all.length ? anchor.at : { x: ps.reduce((t, p) => t + p.x, 0) / ps.length, y: ps.reduce((t, p) => t + p.y, 0) / ps.length }; })() : (() => { const ps = vis.map(here).filter((p): p is Point => !!p); return { x: ps.reduce((t, p) => t + p.x, 0) / ps.length, y: ps.reduce((t, p) => t + p.y, 0) / ps.length }; })();
+    const target = o0.camera.preset === "main-ots" || o0.camera.preset === "single-cu" ? here(subj) : focus && key.startsWith("group:") ? (() => { const ps = focus.map(here).filter((p): p is Point => !!p); return { x: ps.reduce((t, p) => t + p.x, 0) / ps.length, y: ps.reduce((t, p) => t + p.y, 0) / ps.length }; })() : key === "wide" || key === "group" ? (() => { const ps = vis.map(here).filter((p): p is Point => !!p); return ps.length === all.length ? anchor.at : { x: ps.reduce((t, p) => t + p.x, 0) / ps.length, y: ps.reduce((t, p) => t + p.y, 0) / ps.length }; })() : (() => { const ps = vis.map(here).filter((p): p is Point => !!p); return { x: ps.reduce((t, p) => t + p.x, 0) / ps.length, y: ps.reduce((t, p) => t + p.y, 0) / ps.length }; })();
     if (!target) return o0;
     const c = o0.camera;
     const a0 = Math.atan2(c.lookAt.y - c.position.y, c.lookAt.x - c.position.x), a1 = Math.atan2(target.y - c.position.y, target.x - c.position.x);

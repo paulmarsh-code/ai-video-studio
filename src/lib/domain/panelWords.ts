@@ -207,10 +207,17 @@ export function blockingFromWords(plan: GeometryPlanData, panels: WordsPanel[], 
   };
   const nameOf = (t: Target) => (t.kind === "prop" ? t.f.name : t.kind === "area" ? t.l.name : t.v.name);
 
+  // On the way in (D102): an "arriving", "crossing" or "approaching" mark is where someone is in
+  // that panel only. The next panel without a mark has them at their place, arrived. Carried on,
+  // Jade's crossing spot 4 m from the group stayed hers for the rest of the scene, after the panel
+  // in which she reached them.
+  let onTheWay = new Set<string>();
   return panels.map((pn) => {
     const out: Record<string, AppBlock> = {};
     const own = pn.own ?? {};
     const marked = new Set(Object.keys(pn.at ?? {}));
+    for (const id of onTheWay) if (!marked.has(id) && !own[id] && !left.has(id) && base.has(id)) pos.set(id, base.get(id)!);
+    onTheWay = new Set([...marked].filter((id) => /^(?:arriving|crossing|approaching)$/.test(pn.at![id])));
     // What the user set on this panel stands; their end spot is where the next panel starts.
     for (const [k, e] of Object.entries(own)) {
       if (k.startsWith("prop:")) { const id = k.slice(5); if (e.gone) propAt.delete(id); else propAt.set(id, e.to ?? e.at); held.delete(id); continue; }
