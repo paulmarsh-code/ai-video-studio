@@ -8,7 +8,9 @@ import { cleanBaseCode, storeAsset } from "@/lib/assetStore";
 import { getImageProvider, imageSettings, SIZES } from "@/lib/providers/images";
 import { frameVariant, recordDraw, testMode } from "@/lib/testRecords";
 import { renderLayoutForShot } from "@/lib/layoutImage";
-import { renderBackgroundForShot } from "@/lib/backgroundImage";
+import { framePadding, renderBackgroundForShot } from "@/lib/backgroundImage";
+import { softBandLine } from "@/lib/domain/plate";
+import sharp from "sharp";
 import { renderBlockingForShot, renderBlockingOnPlate } from "@/lib/blockingImage";
 import { ensurePlate, plateNumbers, withoutGuests } from "@/lib/plateImage";
 import { ensureHeldItems } from "@/lib/heldItemsServer";
@@ -50,6 +52,15 @@ export async function POST(req: Request) {
     }
     png ??= await renderBlockingForShot(db, body.blockingShotId);
     imageOne = !!png;
+    // Not on a finished plate (D100): image 1's soft bands above and below the venue views are
+    // unfinished, and the request says so, or GPT keeps them as a blurred roof.
+    if (png && !onPlateOf && frameVariant() !== "box") {
+      const meta = await sharp(png).metadata();
+      const pad = meta.width && meta.height ? framePadding(db, body.blockingShotId, meta.width, meta.height) : null;
+      const venue = shot ? repo.getScene(db, shot.sceneId)?.venue : undefined;
+      const line = pad ? softBandLine(pad, venue?.setting === "exterior") : "";
+      if (line) body.prompt = `${body.prompt}\n${line}`;
+    }
     // An approved picture from this same camera goes without its background guests (D74), so GPT
     // can't copy their places: they are filled from the camera's plate, the same empty view.
     if (onPlateOf && shot) {

@@ -160,3 +160,17 @@ function hull(pts: { x: number; y: number }[]): { x: number; y: number }[] {
   for (const q of [...p].reverse()) { while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], q) <= 0) upper.pop(); upper.push(q); }
   return [...lower.slice(0, -1), ...upper.slice(0, -1)];
 }
+
+/**
+ * Image 1's unfinished bands (D100), when it isn't drawn on a finished plate: above and below the
+ * venue views the room is drawn out from its edge and softened, and GPT copied that as a blurred
+ * band over a launch party's balcony. Bands under 4% of the frame aren't worth a line.
+ */
+export function softBandLine(pad: { top: number; bottom: number }, outdoors: boolean): string {
+  const pc = (x: number) => `${Math.round(x * 100)}%`;
+  const parts: string[] = [];
+  if (pad.top >= 0.04) parts.push(`the top ${pc(pad.top)} of image 1 is unfinished: a soft blur standing in for more of the place above. Draw it sharp and in focus as the place carries on upwards, in the same light and perspective as what is just below it (${outdoors ? "the skyline and sky" : "its ceiling, beams and lights"})`);
+  if (pad.bottom >= 0.04) parts.push(`the bottom ${pc(pad.bottom)} of image 1 is unfinished in the same way: draw it as more of the same ${outdoors ? "ground" : "floor"}, sharp and in focus, with nothing new standing on it`);
+  if (!parts.length) return "";
+  return `The one part of the room to draw rather than keep: ${parts.join("; and ")}. No blurred band anywhere in the picture.`;
+}

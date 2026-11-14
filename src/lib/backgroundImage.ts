@@ -315,6 +315,26 @@ export async function backgroundForFrame(db: DB, shotId: string, W: number, Hf: 
 }
 
 /**
+ * How much of a camera's frame lies beyond the venue views' height, top and bottom, as shares of
+ * the frame (D100). `backgroundForFrame` fills those bands with the room's edge drawn out and
+ * softened: the request has to say they are unfinished, or GPT keeps them as a blurred roof.
+ */
+export function framePadding(db: DB, shotId: string, W: number, Hf: number): { top: number; bottom: number } | null {
+  const shot = repo.getShot(db, shotId);
+  if (!shot?.spec.cameraId) return null;
+  const full = repo.getScene(db, shot.sceneId)?.plan?.data;
+  const plan = full ? planForShot(full, shot.spec) : undefined;
+  const cam = plan?.cameras.find((c) => c.id === shot.spec.cameraId);
+  if (!plan || !cam) return null;
+  const slice = viewSlice(plan, cam);
+  const w = Math.max(16, Math.round((slice.leftDeg - slice.rightDeg) * PX_PER_DEG));
+  const ringH = Math.round(H * (W / w));
+  const focal = W / 2 / Math.tan(((slice.leftDeg - slice.rightDeg) * Math.PI) / 180 / 2);
+  const top = Math.round(Hf / 2 + Math.tan(((cam.tiltDeg ?? 0) * Math.PI) / 180) * focal - ringH / 2);
+  return { top: Math.max(0, top) / Hf, bottom: Math.max(0, Hf - (top + ringH)) / Hf };
+}
+
+/**
  * Where the joins between venue views fall across this camera's frame, 0 (left) to 1 (right)
  * (D84). The plate request names them so GPT makes one continuous place across each, and the
  * plate is checked for a line left there.
