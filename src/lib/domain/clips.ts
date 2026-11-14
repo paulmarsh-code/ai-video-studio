@@ -120,7 +120,15 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput): Clip {
     // (its widest panel) sees them on the floor plan. Each clip's own first camera gave a different
     // order from clip to clip.
     const order = leftToRight(i.master ?? panels[0], i.plan, inClip);
-    if (order.length > 1) L.push(`Their places${anchor ? ` around the ${anchor.name}` : ""}, left to right as seen from the room: ${order.map((id) => first(nameOf(id))).join(", ")}. Anyone arriving takes their place there; nobody changes places.`);
+    // Round the table, one small circle (D118): a left-to-right line beside "face each other across
+    // the table" read as a row, and Kling stood Marcus and Nina behind Jade, away from the table.
+    const ring = anchor && a0 ? roundOrder(i.plan, a0.at, order) : [];
+    const gap = anchor && a0 && ring.length > 2 ? openSide(i.plan, a0.at, ring) : undefined;
+    const names = (ids: string[]) => ids.map((id) => first(nameOf(id)));
+    const and = (xs: string[]) => xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}` : xs.join("");
+    if (anchor && ring.length > 2) L.push(`${and(names(ring))} stand together in one small circle round the ${anchor.name}, each close enough to rest a hand on it, in this order going round it: ${names(ring).join(", ")}${gap ? `; the side of the ${anchor.name} between ${first(nameOf(gap[0]))} and ${first(nameOf(gap[1]))} is open, nobody stands there` : ""}. Anyone arriving takes their place in that circle; nobody changes places or steps back from the ${anchor.name}.`);
+    else if (anchor && ring.length === 2) L.push(`${and(names(ring))} stand at the ${anchor.name}, each close enough to rest a hand on it. Anyone arriving takes their place there; nobody changes places.`);
+    else if (order.length > 1) L.push(`Their places, left to right as seen from the room: ${names(order).join(", ")}. Anyone arriving takes their place there; nobody changes places.`);
     // The floor plan itself, which no camera changes (D117): who faces whom across the table, and
     // which part of the venue is behind each person. With only the order, Kling put the bar beside
     // Jade and had Chase come round the table.
@@ -155,6 +163,10 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput): Clip {
       // Sound under the voices (D115): Jade's heels were louder than the party.
       "Sound: the room's low murmur and soft music under the voices; footsteps and movement quiet, never louder than speech.",
       "Each person keeps their own face, clothes and anything they carry throughout.",
+      // One of each, always at the table (D118): Kling cut to closer shots with Marcus and Nina
+      // somewhere else, and dressed guests like them, so they showed twice.
+      inClip.length > 1 ? `${and(names(inClip))} each appear once in the picture, never twice; no guest looks or dresses like any of them.` : "",
+      anchor && inClip.length > 1 ? `Every shot is of this same group at the ${anchor.name}: a closer shot frames part of it, and whoever is out of frame is still standing in their place at the ${anchor.name}.` : "",
       pieces.length ? `${pieces.map((f) => `The ${f.name}`).join(" and ")} and everything on ${pieces.length === 1 ? "it" : "them"} stay exactly the same throughout.` : "",
       "No text, no logos.",
     ].filter(Boolean).join(" "));
@@ -173,6 +185,40 @@ export function sceneClips(i: ClipInput): Clip[] {
 function cameraOf(p: ClipPanel, plan: GeometryPlanData): { sp: GeometryPlanData; cam?: PlanCamera } {
   const sp = planForShot(plan, p.spec);
   return { sp, cam: sp.cameras.find((c) => c.id === p.spec.cameraId) };
+}
+
+/**
+ * Who stands where going round the anchor, from the floor plan (D118), started from the main
+ * view's leftmost person and turned the way that best keeps the main view's left-to-right order.
+ */
+export function roundOrder(plan: GeometryPlanData, at: { x: number; y: number }, order: string[]): string[] {
+  const ang = new Map<string, number>();
+  for (const id of order) {
+    const p = plan.actors.find((x) => x.characterId === id)?.position;
+    if (p) ang.set(id, Math.atan2(p.y - at.y, p.x - at.x));
+  }
+  const ids = order.filter((id) => ang.has(id));
+  if (ids.length < 2) return ids;
+  const start = ang.get(ids[0])!;
+  const turn = (dir: 1 | -1) => [...ids].sort((a, b) => {
+    const d = (id: string) => { let x = dir * (ang.get(id)! - start); while (x < 0) x += 2 * Math.PI; return x; };
+    return d(a) - d(b);
+  });
+  const swaps = (xs: string[]) => { let n = 0; for (let a = 0; a < xs.length; a++) for (let b = a + 1; b < xs.length; b++) if (ids.indexOf(xs[a]) > ids.indexOf(xs[b])) n++; return n; };
+  const cw = turn(1), ccw = turn(-1);
+  return swaps(cw) <= swaps(ccw) ? cw : ccw;
+}
+
+/** The widest empty side going round the anchor, if wider than a third of the way round: who is either side of it. */
+export function openSide(plan: GeometryPlanData, at: { x: number; y: number }, ring: string[]): [string, string] | undefined {
+  const a = ring.map((id) => { const p = plan.actors.find((x) => x.characterId === id)!.position; return Math.atan2(p.y - at.y, p.x - at.x); });
+  const T = 2 * Math.PI, mod = (x: number) => ((x % T) + T) % T;
+  // The ring goes one way round: the steps that add up to one turn are its steps.
+  const steps = (dir: 1 | -1) => a.map((v, k) => mod(dir * (a[(k + 1) % a.length] - v)));
+  const sum = (xs: number[]) => xs.reduce((x, y) => x + y, 0);
+  const st = Math.abs(sum(steps(1)) - T) < 1e-6 ? steps(1) : steps(-1);
+  const k = st.indexOf(Math.max(...st));
+  return st[k] > T / 3 ? [ring[k], ring[(k + 1) % ring.length]] : undefined;
 }
 
 function leftToRight(p: ClipPanel, plan: GeometryPlanData, ids: string[]): string[] {

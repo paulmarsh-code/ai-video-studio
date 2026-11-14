@@ -2241,3 +2241,20 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
 - **Fixes, for any scene (`clips.ts`).**
   - Each clip now gives the floor plan, which no camera changes: "From the floor plan: Chase and Jade face each other across the cocktail table. Seen from across the cocktail table: behind Chase, the bar; behind Jade, the lounge seating; …". The pair is the scene's line of action. What's behind each person is the venue view in the direction from the scene's anchor to them, so each over-the-shoulder gets the right background.
   - An over-the-shoulder now says both people are in the picture: "over Jade's shoulder on Chase, both of them in the picture: Jade's shoulder and the side of their head in the foreground".
+
+### D118: One circle round the table, one of each person, in every shot (2026-11-14)
+
+- **Paul on clip 3 (panels 9–11):** "this is all wrong, there are 2 sets of Nina and Marcus there, not round the table."
+  - In shots 1 and 2 (medium long, medium), Marcus and Nina stood behind Jade and Chase, with no table in sight.
+  - In shot 3 (long), the table appeared with Chase and Jade at it. Marcus and Nina, or guests dressed like them, stood both beside it and in the crowd.
+- **Why.**
+  - The request listed the places "left to right as seen from the room: Chase, Marcus, Nina, Jade" next to "Chase and Jade face each other across the cocktail table". Together these read as a row, not a circle.
+  - Nothing said that a closer shot is still the same group at the table, so Kling set up each shot afresh.
+  - Nothing stopped the crowd of 60–80 from containing look-alikes.
+- **Fixes, for any scene with an anchor (`clips.ts`).**
+  - Places are said going round the anchor, from the floor plan (`roundOrder`): "Chase, Marcus, Nina and Jade stand together in one small circle round the cocktail table, each close enough to rest a hand on it, in this order going round it: …".
+    - An empty side wider than a third of the way round is named (`openSide`): "the side … between Jade and Chase is open, nobody stands there".
+    - A scene with no anchor keeps the left-to-right order.
+  - Every clip now says that each person appears once, never twice, and that no guest looks or dresses like any of them.
+  - Every clip now says: "Every shot is of this same group at the {anchor}: a closer shot frames part of it, and whoever is out of frame is still standing in their place."
+- **Reaches the generation through:** the clip request (prompt lines). Tested in `clips.d113.test.ts`.

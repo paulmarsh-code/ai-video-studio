@@ -30,7 +30,7 @@ describe("Clips from Kling Elements (D113)", () => {
     expect(c.prompt).toContain("Ava is <<<111>>>; Bo is <<<222>>>.");
     expect(c.prompt).toContain("stands <<<444>>>.");
     expect(c.prompt).not.toContain("two candles"); // the Element is the table's look
-    expect(c.prompt).toContain("left to right as seen from the room: Bo, Ava");
+    expect(c.prompt).toContain("Bo and Ava stand at the bar table, each close enough to rest a hand on it.");
     expect(c.prompt).toContain("Shot 2 (4–7 s), medium close-up over Bo's shoulder on Ava, both of them in the picture: Bo's shoulder and the side of their head in the foreground: Ava turns to Bo.");
     expect(c.prompt).toContain("From the floor plan: Ava and Bo face each other across the bar table.");
     expect(c.webPrompt).toContain("Ava is @Ava");
@@ -67,5 +67,21 @@ describe("Lines said with feeling (D116)", () => {
     const p = { ...P(1, 4, {}, [{ characterId: "ava", text: "Well?" }]), emotion: "hopeful, expectant" };
     const [c] = sceneClips({ panels: [p], cast: cast as never, plan: plan as never, venue: { id: "v1", name: "Roof bar" }, elements });
     expect(c.prompt).toContain('Ava says, hopeful, expectant, naturally, never flat: "Well?"');
+  });
+});
+
+describe("One circle round the table, one of each (D118)", () => {
+  it("says the order going round the table, not a row, and keeps everyone at it in every shot", () => {
+    const four = {
+      ...plan,
+      actors: [{ characterId: "ava", position: { x: 0.7, y: 5 } }, { characterId: "bo", position: { x: -0.7, y: 5 } }, { characterId: "cy", position: { x: -0.4, y: 5.6 } }, { characterId: "di", position: { x: 0.4, y: 5.6 } }],
+    };
+    const c4 = [...cast, { id: "cy", name: "Cy Moss", pronoun: "he" as const }, { id: "di", name: "Di Roe", pronoun: "she" as const }];
+    const vis = { visibleIds: ["ava", "bo", "cy", "di"], presentIds: ["ava", "bo", "cy", "di"] };
+    const [c] = sceneClips({ panels: [P(1, 4, vis), P(2, 3, { ...vis, shot: "medium shot", speakerId: "bo" }, [{ characterId: "bo", text: "Go." }])], cast: c4 as never, plan: four as never, venue: { id: "v1", name: "Roof bar" }, elements });
+    expect(c.prompt).toContain("in this order going round it: Bo, Cy, Di, Ava; the side of the bar table between Ava and Bo is open, nobody stands there.");
+    expect(c.prompt).not.toContain("left to right as seen from the room");
+    expect(c.prompt).toContain("Ava, Bo, Cy and Di each appear once in the picture, never twice; no guest looks or dresses like any of them.");
+    expect(c.prompt).toContain("whoever is out of frame is still standing in their place at the bar table.");
   });
 });
