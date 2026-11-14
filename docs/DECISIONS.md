@@ -2170,3 +2170,7 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
 - **Fix (`pictureCheckServer.ts`).** On the fixed set, the check's prop reference is the same approved cut-out the request used, so the two can't disagree. Off the set, it's the prop picture as before.
 - **Props are named like characters (`namedRefs.ts`).** Paul asked for the same lock for props as for characters ("who is who"). Each prop's reference picture (its approved cut-out on the set, else its prop picture) now carries the prop's name in capitals above it ("COCKTAIL TABLE"), as its outline in image 1 does. The request says that prop looks exactly like its picture and nothing from one picture goes on another.
 - **General.** This works for any scene and project: every approved character and every key prop with a picture is named in the same way.
+
+### D111: A set piece's approved picture is its one look, on the set or not (2026-11-14)
+
+- **Paul:** the table in Build the set "is as it should be". It shouldn't matter whether a scene is drawn on the set: once a set piece has its own approved picture in Build the set, the storyboard's requests and the picture check use that picture for it in every scene at that venue. The prop picture in Scene setting is used only for a piece that has no approved picture.

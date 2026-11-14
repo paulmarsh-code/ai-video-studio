@@ -19,7 +19,6 @@ import { carriedItems, heldProps, itemNoun } from "./domain/imagePrompts";
 import { getCheckProvider } from "./providers/images";
 import * as repo from "./repo";
 import * as studio from "./studioRepo";
-import { drawsOnSet } from "./onSet";
 import { setPicturesOf } from "./domain/setPictures";
 import { recordCheck, testMode } from "./testRecords";
 
@@ -229,7 +228,7 @@ export async function checkPanelPicture(db: DB, panelId: string, assetId: string
   // On the fixed set the prop's look is its approved cut-out (D108): the check compares against the
   // same picture the request used. Against the old prop picture it failed a right table for
   // "missing the two champagne flutes" the cut-out doesn't have (D110).
-  const own = scene && drawsOnSet(db, scene.scene.id) ? setPicturesOf(scene.venue?.setPictures) : undefined;
+  const own = scene ? setPicturesOf(scene.venue?.setPictures) : undefined;
   for (const f of scene?.plan?.data.furniture ?? []) {
     const look = f.imageAssetId ? own?.pieces?.[f.imageAssetId] ?? f.imageAssetId : undefined;
     if (look && e.expect.props.includes(f.name)) refs.push({ label: `the ${f.name} (prop)`, asset: repo.getAsset(db, look) });

@@ -49,10 +49,10 @@ export default async function StoryboardPage({ params, searchParams }: { params:
   // Drawing on the fixed set (D103): the user turns it on per scene.
   const onSet = drawsOnSet(db, sceneId);
   const frame = onSet ? "set" as const : frameVariant();
-  // On the set (D108), each set piece's picture is its approved cut-out from Build the set, the one
-  // look used everywhere; without one, its prop picture as before.
+  // Each set piece's picture is its approved cut-out from Build the set (D108, D111: on the set or
+  // not), the one look used everywhere; without one, its prop picture as before.
   const own = setPicturesOf(s.venue?.setPictures);
-  const promptPlan = onSet && s.plan ? { ...s.plan.data, furniture: (s.plan.data.furniture ?? []).map((f) => (f.imageAssetId && own.pieces?.[f.imageAssetId] ? { ...f, imageAssetId: own.pieces[f.imageAssetId] } : f)) } : s.plan?.data;
+  const promptPlan = s.plan ? { ...s.plan.data, furniture: (s.plan.data.furniture ?? []).map((f) => (f.imageAssetId && own.pieces?.[f.imageAssetId] ? { ...f, imageAssetId: own.pieces[f.imageAssetId] } : f)) } : s.plan?.data;
   const pick = (pr: { text: string; short?: string; image?: string }) => onSet ? pr.image ?? pr.text : requestVariant() === "short" ? pr.short ?? pr.text : pr.text;
   const base = `${project.code}_EP${String(s.scene.episode).padStart(2, "0")}_S${String(s.scene.number).padStart(2, "0")}`;
   const recheck = repo.getAnimatic(db, sceneId)?.timeline.recheck ?? {};
