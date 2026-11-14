@@ -44,3 +44,19 @@ describe("Clips from Kling Elements (D113)", () => {
     expect(voiceShort("One. Two two two two two two two. Three.", 12)).toBe("One");
   });
 });
+
+describe("Clip requests after the first full clip (D115)", () => {
+  it("numbers lines said once each, keeps someone arriving short of the group, and keeps footsteps quiet", () => {
+    const panels = [
+      P(1, 4, { at: { ava: "arriving" } } as never, [], "Ava walks in."),
+      P(2, 3, {}, [{ characterId: "ava", text: "Hello." }]),
+      P(3, 3, { cameraId: "o", shot: "medium close-up, over-the-shoulder shot", speakerId: "ava" }, [{ characterId: "ava", text: "Well?" }]),
+    ];
+    const [c] = sceneClips({ panels, cast: cast as never, plan: plan as never, venue: { id: "v1", name: "Roof bar" }, elements });
+    expect(c.prompt).toContain('Line 1, Ava says: "Hello."');
+    expect(c.prompt).toContain('Line 2, Ava says: "Well?"');
+    expect(c.prompt).toContain("Each line is said once, in its own shot, word for word: 2 different lines in all.");
+    expect(c.prompt).toContain("Ava has not reached the bar table yet: it is ahead of Ava, further into the room, and Ava walks towards it, never past.");
+    expect(c.prompt).toContain("footsteps and movement quiet, never louder than speech");
+  });
+});

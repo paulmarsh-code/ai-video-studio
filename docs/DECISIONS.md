@@ -2212,3 +2212,14 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
 - **Paul:** select the Elements from dropdowns rather than typing them. A typed name can be misspelt, and "jadefull" is not the Element "Jadefull".
 - **The list.** The app has no Kling key, so Claude writes the list of the user's Kling Elements (name and id) from Kling's own connection into `data/kling_elements.json` whenever asked to "refresh my Kling Elements". It's a separate file, so it can be written while the app runs. The Make the clips page reads it each time it opens (`klingList.ts`) and shows when it was last refreshed.
 - **Picking.** Each character, the venue and each prop has a dropdown of those Elements, saved as soon as one is picked, name and id together. A name typed before the list came in is matched to its Element in the list, ignoring case, so its id is filled in for the clip requests.
+
+### D115: Clip requests: each line once, arrivals stay short of the group, quiet footsteps (2026-11-14)
+
+- **Paul on clip 1 (panels 1–4, 15 s, from the app's request).** "It is good, I like the start." But:
+  - Jade said her greeting and never asked about the promotion: two lines for one speaker in shots 3 and 4, and Kling used the first one twice.
+  - In shot 2 she walks past Chase's group, then turns back to greet them.
+  - Her shoes were loud.
+- **Fixes, for any clip (`clips.ts`).**
+  - When a clip has more than one line, each is numbered ("Line 2, Jade says: …"), and the closing rules say: "Each line is said once, in its own shot, word for word: N different lines in all."
+  - A shot where someone has an arriving, crossing or approaching mark says they haven't reached the group or its table yet: "it is ahead of Jade, further into the room, and Jade walks towards it, never past."
+  - Every clip asks for sound under the voices: "the room's low murmur and soft music under the voices; footsteps and movement quiet, never louder than speech."

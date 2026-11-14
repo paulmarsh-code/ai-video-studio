@@ -121,21 +121,32 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput): Clip {
     // order from clip to clip.
     const order = leftToRight(i.master ?? panels[0], i.plan, inClip);
     if (order.length > 1) L.push(`Their places${anchor ? ` around the ${anchor.name}` : ""}, left to right as seen from the room: ${order.map((id) => first(nameOf(id))).join(", ")}. Anyone arriving takes their place there; nobody changes places.`);
+    // Each line said once, in its own shot (D115): with two lines for Jade in shots 3 and 4, Kling
+    // had her say the first one twice and never the second.
+    const lines = panels.flatMap((p) => p.dialogue);
+    let lineNo = 0;
     let t = 0;
     panels.forEach((p, k) => {
       const d = Math.max(1, p.durationSec);
       const words = shotWords(p, i.plan, (id) => first(nameOf(id)));
       const speech = p.dialogue.length
-        ? p.dialogue.map((x) => `${first(nameOf(x.characterId))} says: "${x.text.trim()}"`).join(" Then ")
+        ? p.dialogue.map((x) => `${lines.length > 1 ? `Line ${++lineNo}, ` : ""}${first(nameOf(x.characterId))} says: "${x.text.trim()}"`).join(" Then ")
         : "No one speaks.";
-      L.push(`Shot ${k + 1} (${t}–${t + d} s)${words ? `, ${words}` : ""}: ${p.description.trim().replace(/\.$/, "")}${p.emotion ? ` (${p.emotion.trim().replace(/\.$/, "")})` : ""}. ${speech}`);
+      // On the way in (D115): someone arriving or crossing hasn't reached the group yet, so the
+      // group is ahead of them. Kling had Jade walk past them, then turn back to greet them.
+      const onTheWay = Object.entries(p.spec.at ?? {}).filter(([, m]) => /^(?:arriving|crossing|approaching)$/.test(m)).map(([id]) => id).filter((id) => inClip.includes(id));
+      const way = onTheWay.map((id) => `${first(nameOf(id))} has not reached ${anchor ? `the ${anchor.name}` : "the others"} yet: ${anchor ? "it is" : "they are"} ahead of ${first(nameOf(id))}, further into the room, and ${first(nameOf(id))} walks towards ${anchor ? "it" : "them"}, never past.`).join(" ");
+      L.push(`Shot ${k + 1} (${t}–${t + d} s)${words ? `, ${words}` : ""}: ${p.description.trim().replace(/\.$/, "")}${p.emotion ? ` (${p.emotion.trim().replace(/\.$/, "")})` : ""}.${way ? ` ${way}` : ""} ${speech}`);
       t += d;
     });
     const speakers = [...new Set(panels.flatMap((p) => p.dialogue.map((x) => x.characterId)))];
     const voices = speakers.map((id) => { const v = voiceShort(i.cast.find((c) => c.id === id)?.voiceLock ?? ""); return v ? `${first(nameOf(id))}: ${v}` : ""; }).filter(Boolean);
     if (voices.length) L.push(`Voices. ${voices.join(". ")}.`);
     L.push([
+      lines.length > 1 ? `Each line is said once, in its own shot, word for word: ${lines.length} different lines in all.` : "",
       "Only the speaker talks in each shot; the others listen with mouths closed.",
+      // Sound under the voices (D115): Jade's heels were louder than the party.
+      "Sound: the room's low murmur and soft music under the voices; footsteps and movement quiet, never louder than speech.",
       "Each person keeps their own face, clothes and anything they carry throughout.",
       pieces.length ? `${pieces.map((f) => `The ${f.name}`).join(" and ")} and everything on ${pieces.length === 1 ? "it" : "them"} stay exactly the same throughout.` : "",
       "No text, no logos.",
