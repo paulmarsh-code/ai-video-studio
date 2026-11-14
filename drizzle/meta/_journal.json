@@ -64,6 +64,13 @@
       "when": 1794650000000,
       "tag": "0008_venue_set",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1794690000000,
+      "tag": "0009_kling_elements",
+      "breakpoints": true
     }
   ]
 }

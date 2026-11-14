@@ -103,6 +103,7 @@ export function SideNav({ projects }: { projects: NavProject[] }) {
                                     <li>{item(`${sb}/storyboard?part=board`, "Storyboard", `nav-storyboard-${s.id}`)}</li>
                                     <li>{item(`${sb}/plan`, "Floor plan & cameras", `nav-plan-${s.id}`)}</li>
                                     <li>{item(`${sb}/set`, "Build the set")}</li>
+                                    <li>{item(`${sb}/clips`, "Make the clips")}</li>
                                     <li>{item(`${sb}/design`, "Shot design")}</li>
                                     <li>{item(`${sb}/animatic`, "Animatic")}</li>
                                   </ul>

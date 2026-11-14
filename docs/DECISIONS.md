@@ -2188,3 +2188,21 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
   - Jade, Chase, Marcus and Nina are themselves, with nobody swapped.
   - The two over-the-shoulder shots are framed as asked.
 - **What it means.** Working back from Kling (Paul): the clips' consistency comes from Elements (characters, props, venue) plus a prompt built from the plan. The storyboard is the plan and the cheap preview (D107). Next: the app builds these clip requests from a scene's panels and its Elements.
+
+### D113: Make the clips: Kling Elements linked in the app, clip requests written from the plan (2026-11-14)
+
+- **Why.** The first clip from Kling Elements worked (D112), but I wrote its request by hand. Paul: build it into the app, so any project works like that. The failure it prevents is clips that don't match each other (people, props and venue that change); it reaches the generation through the clip request.
+- **Kling Elements per project (`projects.kling_elements`, migration 0009).** Each character, the venue and each key prop can be linked to its Kling Element: the name as it is in Kling, and optionally its id, which only the API needs. They're kept by what they stand for (`char:<slug>`, `venue:<id>`, `prop:<name>`).
+- **Make the clips (`/scenes/[id]/clips`, `src/lib/domain/clips.ts`).**
+  - The scene's panels are grouped into multi-shot clips of up to 15 s and 4 shots.
+  - Each clip's request says, in order:
+    - the venue (Element) and its extras;
+    - who is who (each character's Element, once, so names can be used after);
+    - the fixed props by Element, without their words: the Element is their look, and words like "2 tumbler candels" could disagree with it;
+    - everyone's places left to right, the same for every clip of the scene (from its widest panel), with "nobody changes places";
+    - each shot with its time range and size, and for an over-the-shoulder whose shoulder and on whom, then the action and feeling and the one speaker's exact line;
+    - the speakers' voices in a sentence or two;
+    - the closing rules: only the speaker talks, each person keeps their own face, clothes and things, the props stay the same, no text.
+  - Each request comes in two forms: for the Kling web app with @Name, and for the API with `<<<id>>>`.
+  - The page lists the Elements used and anything with no Element (drawn from words, so it may not match), and estimates the credits at 10 a second, the Kling 4.0 rate at 720p with sound (D112).
+- **Not sent from the app.** The app has no Kling API key. The request is copied into Kling, or Claude sends it with Kling's own connection when asked.

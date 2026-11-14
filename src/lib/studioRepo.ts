@@ -16,6 +16,7 @@ import { hasQuotes } from "./domain/text";
 import type { GeometryPlanData, PanelBlock, PlanCamera, PlanView, Point, Pronoun, ShotSpec } from "./domain/types";
 import { asGenre, type Genre } from "./domain/genre";
 import { setPicturesOf } from "./domain/setPictures";
+import type { KlingElement, KlingElements } from "./domain/clips";
 import { addMovementMarks, asStaging, propsAsAreas, planProps, propHeight, propsFromFurniture, propKind, propWidth, checkStoryboard, defaultPlan, panelSeconds, shotSpecFor, type DraftPanel, type SceneStaging } from "./domain/story";
 import { LAYOUT_RULES } from "./domain/director";
 import { applyRoom, boundsFor, groupCentre, roomFor, roomOf, type RoomSize } from "./domain/room";
@@ -1091,4 +1092,18 @@ export function recarry(db: DB, sceneId: string): boolean {
     db.update(t.shots).set({ spec: next[k] }).where(eq(t.shots.id, sh.id)).run();
   });
   return changed;
+}
+
+/** The project's Kling Elements (D113), by what each stands for (see `elementKey`). */
+export function getKlingElements(db: DB, projectId: string): KlingElements {
+  const p = db.select().from(t.projects).where(eq(t.projects.id, projectId)).get();
+  return { ...((p?.klingElements ?? {}) as KlingElements) };
+}
+
+/** Link (or, with null, unlink) a Kling Element to a character, venue or prop. */
+export function setKlingElement(db: DB, projectId: string, key: string, el: KlingElement | null) {
+  const all = getKlingElements(db, projectId);
+  if (el && el.id.trim()) all[key] = { id: el.id.trim(), name: el.name.trim() || el.id.trim() }; else delete all[key];
+  db.update(t.projects).set({ klingElements: all }).where(eq(t.projects.id, projectId)).run();
+  persist(db);
 }

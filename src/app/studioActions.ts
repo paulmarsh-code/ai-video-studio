@@ -239,3 +239,8 @@ export async function chooseSetPictureAction(venueId: string, what: { kind: "wal
 export async function setSceneOnSetAction(sceneId: string, on: boolean): Promise<Result> {
   return run((db) => { studio.setSceneOnSet(db, sceneId, on); return undefined; });
 }
+
+/** Link a Kling Element to a character, the venue or a prop (D113). */
+export async function setKlingElementAction(projectId: string, key: string, id: string, name: string): Promise<Result> {
+  return run((db) => { studio.setKlingElement(db, projectId, key, id.trim() ? { id, name } : null); return undefined; });
+}

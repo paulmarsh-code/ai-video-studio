@@ -16,6 +16,8 @@ export const projects = sqliteTable("projects", {
   brief: text("brief", { mode: "json" }).notNull().default({}),
   briefApproved: integer("brief_approved", { mode: "boolean" }).notNull().default(false),
   generator: text("generator").notNull().default("kling-3.0-omni"),
+  /** Kling Elements by what they stand for (D113): "char:<slug>", "venue:<id>", "prop:<name>" → { id, name }. */
+  klingElements: text("kling_elements", { mode: "json" }),
   demo: integer("demo", { mode: "boolean" }).notNull().default(false),
   /** Saved to the library as a finished project (D22): off the live list, kept whole. */
   archivedAt: text("archived_at"),
