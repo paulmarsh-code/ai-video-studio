@@ -2018,3 +2018,9 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
   - A set piece with no picture uses the same-named prop's picture from the scene setting or another scene at the same venue: one table, one picture, one cut-out.
   - Someone's own things aren't set pieces ("Elin's skis", "skateboard … used by Kai"), nor are table-top things (cocktails).
 - **Checked.** Tests: 700 pass, including a stand-in GPT run from making to use. The page and previews were rendered on a copy of Paul's data; no scene, plan or panel is written by any of it.
+
+### D99: The app clears its build cache when it starts (2026-11-14)
+
+- **Failure.** Twice, after the app was stopped and its data file replaced (the restore on 13 November, the backdrop removal today), the first page failed with "ArrayBuffer is not detachable and could not be cloned" and the app showed nothing. Deleting `.next` fixed it each time. It doesn't happen on Node 22 here, so it is probably Next's cache on Paul's Node version.
+- **Fix.** `npm run dev` now clears `.next` first (`scripts/clean-next.cjs`, run as `predev`), so Paul never needs that step. The cost is about 10 seconds on the first page load after starting.
+- Not a picture fix (D38): it keeps the app usable after data changes.
