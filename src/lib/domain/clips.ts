@@ -9,6 +9,7 @@ import type { CastMember, GeometryPlanData, PlanCamera, ShotSpec } from "./types
 import { planForShot, pictureXY } from "./geometry";
 import { sceneAnchor } from "./director";
 import { isSetPiece } from "./setRender";
+import { actionFloor, spokenSeconds } from "./duration";
 
 export interface KlingElement { id: string; name: string }
 /** Elements by what they stand for: "char:<slug>", "venue:<id>", "prop:<name in lower case>". */
@@ -83,6 +84,18 @@ export function groupClips(panels: ClipPanel[], maxSec = CLIP_MAX_SEC, maxShots 
 
 const first = (name: string) => name.split(/\s+/)[0];
 
+/**
+ * A shot's time inside a multi-shot clip (D120): only what it needs, never more than its panel.
+ * Panels were timed as clips of their own, at least Kling's 3 s each; inside one clip a silent beat
+ * needs 2 s and a line its speaking time and half a second. Clip 3 ran 10 s where 8 flowed better.
+ */
+export function shotSeconds(p: ClipPanel): number {
+  const words = p.dialogue.map((d) => d.text).join(" ");
+  const talk = words.trim() ? Math.ceil(spokenSeconds(words) + 0.5) : 0;
+  const need = Math.max(2, talk, actionFloor(p.description));
+  return Math.max(1, Math.min(p.durationSec, need));
+}
+
 /** The request for one clip. */
 export function clipPrompt(panels: ClipPanel[], i: ClipInput): Clip {
   const nameOf = (id: string) => i.cast.find((c) => c.id === id)?.name ?? id;
@@ -109,6 +122,9 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput): Clip {
 
   // The storyboard pictures, one for each shot that has one (D119). Words alone gave Kling the floor
   // plan as a suggestion: clip 3 put Marcus and Nina behind Jade, away from the table.
+  // A single-shot clip keeps its panel's time; Kling makes nothing shorter than 3 s.
+  const times = panels.length > 1 ? panels.map(shotSeconds) : panels.map((p) => Math.max(1, p.durationSec));
+  while (times.reduce((a, b) => a + b, 0) < 3) times[times.length - 1]++;
   const pictures = panels.flatMap((p, k) => p.imageAssetId ? [{ shot: k + 1, panel: p.order, assetId: p.imageAssetId }] : []);
   const build = (ref: (key: string, plain: string) => string, pic: (n: number) => string) => {
     const who = (id: string) => ref(elementKey.character(id), first(nameOf(id)));
@@ -152,7 +168,7 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput): Clip {
     let lineNo = 0;
     let t = 0;
     panels.forEach((p, k) => {
-      const d = Math.max(1, p.durationSec);
+      const d = times[k];
       const words = shotWords(p, i.plan, (id) => first(nameOf(id)));
       const speech = p.dialogue.length
         // Said with the panel's feeling, in a natural voice (D116): line 2 came out flat and robotic
@@ -185,7 +201,7 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput): Clip {
     ].filter(Boolean).join(" "));
     return L.join("\n");
   };
-  const seconds = panels.reduce((s, p) => s + Math.max(1, p.durationSec), 0);
+  const seconds = times.reduce((a, b) => a + b, 0);
   return { panels: panels.map((p) => p.order), seconds, prompt: build(api, (n) => `图片${n}`), webPrompt: build(web, (n) => `picture ${n}`), elements: used, missing, credits: seconds * (i.creditsPerSecond ?? 10), pictures };
 }
 

@@ -1,7 +1,7 @@
 // D113: clips from Kling Elements. Panels grouped into multi-shot clips; each clip binds characters,
 // venue and fixed props as Elements and says, from the plan, places, shots, action, lines, voices.
 import { describe, expect, it } from "vitest";
-import { elementKey, groupClips, sceneClips, voiceShort, type ClipPanel } from "../src/lib/domain/clips";
+import { elementKey, groupClips, sceneClips, shotSeconds, voiceShort, type ClipPanel } from "../src/lib/domain/clips";
 
 const plan = {
   aspect: "9:16" as const, bounds: { minX: -5, maxX: 5, minY: 0, maxY: 10 }, views: [], lineOfAction: ["ava", "bo"] as [string, string],
@@ -31,11 +31,11 @@ describe("Clips from Kling Elements (D113)", () => {
     expect(c.prompt).toContain("stands <<<444>>>.");
     expect(c.prompt).not.toContain("two candles"); // the Element is the table's look
     expect(c.prompt).toContain("Bo and Ava stand at the bar table, each close enough to rest a hand on it.");
-    expect(c.prompt).toContain("Shot 2 (4–7 s), medium close-up over Bo's shoulder on Ava, both of them in the picture: Bo's shoulder and the side of their head in the foreground: Ava turns to Bo.");
+    expect(c.prompt).toContain("Shot 2 (2–4 s), medium close-up over Bo's shoulder on Ava, both of them in the picture: Bo's shoulder and the side of their head in the foreground: Ava turns to Bo.");
     expect(c.prompt).toContain("From the floor plan: Ava and Bo face each other across the bar table.");
     expect(c.webPrompt).toContain("Ava is @Ava");
-    expect(c.seconds).toBe(7);
-    expect(c.credits).toBe(70);
+    expect(c.seconds).toBe(4); // shots timed to need (D120)
+    expect(c.credits).toBe(40);
     expect(c.missing).toEqual([]);
   });
   it("says what has no Element, and keeps a voice short", () => {
@@ -92,10 +92,26 @@ describe("Storyboard pictures stage each shot (D119)", () => {
     const [c] = sceneClips({ panels, cast: cast as never, plan: plan as never, venue: { id: "v1", name: "Roof bar" }, elements });
     expect(c.pictures).toEqual([{ shot: 1, panel: 1, assetId: "a1" }, { shot: 3, panel: 3, assetId: "a3" }]);
     expect(c.prompt).toContain("图片1, 图片2 are the storyboard pictures for shots 1, 3 in turn: each shot keeps its picture's camera angle, framing, background and who stands where. Faces, clothes, the bar table and the venue come from their Elements, not from the pictures.");
-    expect(c.prompt).toContain("Shot 1 (0–4 s), full shot, as in 图片1:");
-    expect(c.prompt).toContain("Shot 3 (7–10 s), full shot, as in 图片2:");
-    expect(c.prompt).toMatch(/Shot 2 \(4–7 s\), full shot: /);
-    expect(c.webPrompt).toContain("Shot 1 (0–4 s), full shot, as in picture 1:");
+    expect(c.prompt).toContain("Shot 1 (0–2 s), full shot, as in 图片1:");
+    expect(c.prompt).toContain("Shot 3 (4–6 s), full shot, as in 图片2:");
+    expect(c.prompt).toMatch(/Shot 2 \(2–4 s\), full shot: /);
+    expect(c.webPrompt).toContain("Shot 1 (0–2 s), full shot, as in picture 1:");
     expect(c.webPrompt).toContain("\nPicture 1, picture 2 are the storyboard pictures");
+  });
+});
+
+describe("Shots timed to what they need inside a clip (D120)", () => {
+  it("a silent beat 2 s, a line its speaking time and half a second, never more than its panel", () => {
+    expect(shotSeconds(P(9, 3, {}, [], "Jade clenches her jaw."))).toBe(2);
+    expect(shotSeconds(P(10, 4, {}, [{ characterId: "bo", text: "I'm bored now — just go now, run along." }]))).toBe(4);
+    expect(shotSeconds(P(11, 3, {}, [{ characterId: "ava", text: "Unbelievable" }]))).toBe(2);
+    expect(shotSeconds(P(12, 2, {}, [{ characterId: "ava", text: "one two three four five six seven eight nine ten eleven" }]))).toBe(2);
+    const [c] = sceneClips({ panels: [P(9, 3, {}), P(10, 4, {}, [{ characterId: "bo", text: "I'm bored now — just go now, run along." }]), P(11, 3, {}, [{ characterId: "ava", text: "Unbelievable" }])], cast: cast as never, plan: plan as never, venue: { id: "v1", name: "Roof bar" }, elements });
+    expect(c.seconds).toBe(8);
+    expect(c.prompt).toContain("Shot 3 (6–8 s)");
+  });
+  it("a clip of one shot keeps its panel's time", () => {
+    const [c] = sceneClips({ panels: [P(1, 5, {})], cast: cast as never, plan: plan as never, venue: { id: "v1", name: "Roof bar" }, elements });
+    expect(c.seconds).toBe(5);
   });
 });

@@ -2274,3 +2274,21 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
   - Kling 4.0 Omni-Ref takes up to 15 inputs: 7 Elements plus 4 pictures fits.
 - **Reaches the generation through:** the clip's input images and its prompt lines. Tested in `clips.d113.test.ts`.
 - **To test:** clip 3 (panels 9–11) with its three pictures.
+
+### D120: Clip 3 with its pictures: places held; shots timed to what they need (2026-11-14)
+
+- **Result of D119.** Paul ran clip 3 in the Kling app with the six Elements, the three storyboard pictures and the short request: "everything is ok … the added venue shots helped consistency".
+  - Frame check: each shot matches its picture. Same circle and order, the table between Chase and Jade, the right backgrounds. Cuts at 3 s and 7 s, as asked.
+  - Positions from pictures work where words alone did not (D118).
+- **Two things Paul noticed.**
+  - "It starts off ok but then switches camera which makes it look a bit odd." The three panels use three camera positions: towards the screen, the reverse from behind Jade, then a third spot with the windows and screen on the right. That's the storyboard's choice, followed faithfully. Proposed rule (D121) waiting for Paul's go-ahead.
+  - "The clip is too long at 10 s; 8 s would flow better."
+- **Fix, for any scene (`clips.ts`, `shotSeconds`).**
+  - Panels were timed as clips of their own, each at least Kling's 3 s minimum. Inside a multi-shot clip a shot now takes only what it needs, never more than its panel:
+    - a silent beat: 2 s;
+    - a line: its speaking time (2.75 words a second) plus 0.5 s, rounded up, at least 2 s;
+    - physical action: still its D87/D88 minimum.
+  - A clip of one shot keeps its panel's time. A clip is never under 3 s.
+  - Clip 3 is now 2 + 4 + 2 = 8 s (80 credits, was 100).
+  - Grouping into clips still uses the panel times, so the clips stay as they are.
+- **Reaches the generation through:** each shot's time range in the request, and the clip's length.
