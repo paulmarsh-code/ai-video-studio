@@ -65,3 +65,31 @@ export async function makeSetPicture(db: DB, sceneId: string, what: SetPictureKi
   const saved = { assetId: stored.id, assetCode: stored.assetCode };
   return plain ? saved : { ...saved, note: "GPT didn't keep the background plain, so it couldn't be cut out. Try again." };
 }
+
+/**
+ * One of the set's pictures from a file of the user's own (D101): a cut-out made elsewhere, a
+ * photo of the real wall. A set piece keeps its own clear background; one without is cut out
+ * from a plain background as GPT's are. Kept as a candidate, like a made one.
+ */
+export async function uploadSetPicture(db: DB, sceneId: string, what: SetPictureKind, data: Buffer): Promise<{ assetId: string; assetCode: string; note?: string }> {
+  const { project, venue, plan } = sceneBits(db, sceneId);
+  const base = `${project.code}_SET_${venue.name.split(/\s+/).slice(0, 2).join("")}`;
+  if (what.kind !== "piece") {
+    const png = await sharp(data).rotate().removeAlpha().png().toBuffer();
+    const code = cleanBaseCode(`${base}_${what.kind === "wall" ? `WALL_${what.view.split(/\s+/).slice(0, 3).join("")}` : "FLOOR"}_OWN`);
+    const saved = storeAsset(db, { projectId: project.id, baseCode: code, kind: what.kind === "wall" ? "set-wall" : "set-floor", ext: "png", mime: "image/png", data: png, note: "uploaded" });
+    return { assetId: saved.id, assetCode: saved.assetCode };
+  }
+  const f = (plan.furniture ?? []).find((x) => x.id === what.furnitureId);
+  if (!f || !isSetPiece(f)) throw new Error("That isn't one of the scene's set pieces.");
+  const raw = await sharp(data).rotate().ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const tex = { data: new Uint8Array(raw.data), width: raw.info.width, height: raw.info.height };
+  let clear = 0;
+  for (let i = 3; i < tex.data.length; i += 16) if (tex.data[i] < 16) clear++;
+  const hasClear = clear / (tex.data.length / 16) > 0.02;
+  const cut = hasClear ? tex : cutOut(tex);
+  const done = trimClear(cut);
+  const png = await sharp(Buffer.from(done.data), { raw: { width: done.width, height: done.height, channels: 4 } }).png().toBuffer();
+  const saved = storeAsset(db, { projectId: project.id, baseCode: cleanBaseCode(`${base}_PIECE_${f.name.split(/\s+/).slice(0, 3).join("")}_OWN`), kind: "set-piece", ext: "png", mime: "image/png", data: png, note: "uploaded" });
+  return { assetId: saved.id, assetCode: saved.assetCode, ...(hasClear || cut !== tex ? {} : { note: "This picture has no clear or plain background, so it couldn't be cut out: it will stand in the set as a rectangle." }) };
+}

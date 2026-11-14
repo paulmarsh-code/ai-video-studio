@@ -1,12 +1,13 @@
 // The fixed set (D98). GET ?pos=<n>: the 360° around camera position n with its shots' slices
 // marked; GET ?shot=<id>: what that shot's camera sees of the set. POST makes one of the set's
-// own pictures with GPT ({ kind: "wall", view } | { kind: "floor" } | { kind: "piece", furnitureId }).
+// own pictures with GPT ({ kind: "wall", view } | { kind: "floor" } | { kind: "piece", furnitureId }),
+// or, sent as a form with a file, takes the user's own picture for it (D101).
 
 import { NextResponse } from "next/server";
 import { getDb } from "@/db/client";
 import { getImageProvider } from "@/lib/providers/images";
 import { cameraPositions, positionPreview, sceneSetCached, setView } from "@/lib/setImage";
-import { makeSetPicture, type SetPictureKind } from "@/lib/setPictures";
+import { makeSetPicture, uploadSetPicture, type SetPictureKind } from "@/lib/setPictures";
 import sharp from "sharp";
 
 const none = () => NextResponse.json({ error: "No set yet: the venue needs view pictures and the scene a floor plan." }, { status: 404 });
@@ -35,6 +36,18 @@ export async function GET(req: Request, { params }: { params: Promise<{ sceneId:
 
 export async function POST(req: Request, { params }: { params: Promise<{ sceneId: string }> }) {
   const { sceneId } = await params;
+  // A picture of the user's own (D101): multipart, the file plus what it's for.
+  if ((req.headers.get("content-type") ?? "").startsWith("multipart/form-data")) {
+    const form = await req.formData();
+    const f = form.get("file");
+    if (!(f instanceof Blob)) return NextResponse.json({ error: "No picture was sent." }, { status: 400 });
+    const db = await getDb();
+    try {
+      return NextResponse.json(await uploadSetPicture(db, sceneId, JSON.parse(String(form.get("what"))) as SetPictureKind, Buffer.from(await f.arrayBuffer())));
+    } catch (e) {
+      return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 400 });
+    }
+  }
   const provider = getImageProvider();
   if (!provider) return NextResponse.json({ error: "No image provider is connected, so the set's pictures can't be made here." }, { status: 501 });
   const what = (await req.json()) as SetPictureKind;

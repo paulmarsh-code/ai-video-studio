@@ -2031,3 +2031,11 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
 - **Fix (a prompt line).** `framePadding` measures the bands for the shot's camera. When image 1 isn't on a finished plate, the request gets one more line (`softBandLine`): "the top 20% of image 1 is unfinished: a soft blur standing in for more of the place above. Draw it sharp and in focus … No blurred band anywhere in the picture." It does the same for the floor. Bands under 4% get no line.
 - **Tried (Paul, 14 November).** Jade's Entrance panel 1 was redrawn with the line: the ceiling, beams and string lights above the balcony came out sharp, with no band, and there was no backdrop. Paul: "looks good". The picture check still flags the group as drawn about twice the planned size (closer to the camera than image 1).
 - **Later.** The fixed set (D97, D98) has a real ceiling and floor, so stage 3's image 1 has no such bands.
+
+### D101: The set takes the user's own pictures too (2026-11-14)
+
+- **Why.** Paul made a cut-out of the cocktail table himself (a PNG with a clear background) and asked what else was needed. The page could only make pictures with GPT. A good picture he already has should go straight into the set: the table stands at its place in every camera's view and the 360°s.
+- **What.** Each card on "Build the set" has "Use my own picture" beside "Make with GPT". The file becomes a candidate, with the same "Use this" and "Discard".
+  - A set piece keeps its own clear background. A picture without one is cut out from a plain background, as GPT's are, and is then trimmed to the piece. If it can't be cut out, a note says it will stand as a rectangle.
+  - Walls and the floor take the picture as it is.
+- **Checked.** Paul's table PNG, sent to the page on a copy of his data, was kept with its clear background, trimmed, and stands at its place in the 360° from panel 2's camera.

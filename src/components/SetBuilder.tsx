@@ -12,7 +12,7 @@ type What = { kind: "wall"; view: string } | { kind: "floor" } | { kind: "piece"
 const CHECKER = { backgroundImage: "repeating-conic-gradient(#e5e5e5 0% 25%, #ffffff 0% 50%)", backgroundSize: "16px 16px" };
 
 function Item(p: { title: string; sub?: string; what: What; sceneId: string; venueId: string; canMake: boolean; fallbackAssetId?: string; fallbackLabel: string; ownAssetId?: string; cutOut?: boolean; onChanged: () => void }) {
-  const [busy, setBusy] = useState<"" | "make" | "use">("");
+  const [busy, setBusy] = useState<"" | "make" | "use" | "upload">("");
   const [candidate, setCandidate] = useState<{ assetId: string; note?: string } | null>(null);
   const [error, setError] = useState("");
   const key = p.what.kind === "piece" ? { kind: "piece" as const, from: p.what.from } : p.what;
@@ -29,6 +29,27 @@ function Item(p: { title: string; sub?: string; what: What; sceneId: string; ven
       setError(e instanceof Error ? e.message : String(e));
     } finally { setBusy(""); }
   };
+  // A picture of their own (D101): a cut-out made elsewhere, a photo of the real wall.
+  const upload = async (file: File) => {
+    setBusy("upload"); setError("");
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("what", JSON.stringify(p.what.kind === "piece" ? { kind: "piece", furnitureId: p.what.furnitureId } : p.what));
+      const res = await fetch(`/api/set/${p.sceneId}`, { method: "POST", body: form });
+      const r = (await res.json()) as { assetId?: string; note?: string; error?: string };
+      if (!res.ok || !r.assetId) throw new Error(r.error ?? "The picture couldn't be read.");
+      setCandidate({ assetId: r.assetId, note: r.note });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally { setBusy(""); }
+  };
+  const ownFile = (
+    <label className={`cursor-pointer rounded border border-neutral-300 px-3 py-1 hover:bg-neutral-50 ${busy ? "pointer-events-none opacity-50" : ""}`}>
+      {busy === "upload" ? "Adding…" : "Use my own picture"}
+      <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void upload(f); }} />
+    </label>
+  );
   const use = async (assetId: string | null) => {
     setBusy("use"); setError("");
     const r = await chooseSetPictureAction(p.venueId, key, assetId);
@@ -68,12 +89,14 @@ function Item(p: { title: string; sub?: string; what: What; sceneId: string; ven
             <button type="button" disabled={!!busy} onClick={() => use(candidate.assetId)} className="rounded bg-green-700 px-3 py-1 text-white hover:bg-green-800 disabled:opacity-50">{busy === "use" ? "Using…" : "Use this"}</button>
             <button type="button" disabled={!!busy} onClick={() => setCandidate(null)} className="rounded border border-neutral-300 px-3 py-1 hover:bg-neutral-50">Discard</button>
             <button type="button" disabled={!!busy || !p.canMake} onClick={make} className="rounded border border-neutral-300 px-3 py-1 hover:bg-neutral-50 disabled:opacity-50">{busy === "make" ? "Making… (about a minute)" : "Try again"}</button>
+            {ownFile}
           </>
         ) : (
           <>
             <button type="button" disabled={!!busy || !p.canMake} onClick={make} className="rounded bg-blue-700 px-3 py-1 text-white hover:bg-blue-800 disabled:opacity-50">
               {busy === "make" ? "Making… (about a minute)" : p.ownAssetId ? "Make a new one" : "Make with GPT"}
             </button>
+            {ownFile}
             {p.ownAssetId && <button type="button" disabled={!!busy} onClick={() => use(null)} className="rounded border border-neutral-300 px-3 py-1 hover:bg-neutral-50">Go back to the venue&apos;s picture</button>}
           </>
         )}
@@ -121,7 +144,7 @@ export function SetBuilder(props: {
 
       <section>
         <h2 className="text-lg font-semibold">Set pieces</h2>
-        <p className="text-sm text-neutral-600">The things standing on the floor that stay where the floor plan puts them, each cut out from its prop picture.</p>
+        <p className="text-sm text-neutral-600">The things standing on the floor that stay where the floor plan puts them, each cut out from its prop picture. Your own picture works too: a PNG with a clear background is best.</p>
         {props.pieces.length === 0 && <p className="mt-2 text-sm text-neutral-500">This scene has no set pieces on its floor plan.</p>}
         <div className="mt-2 grid gap-3 md:grid-cols-2">
           {props.pieces.map((f) => f.propAssetId ? (
