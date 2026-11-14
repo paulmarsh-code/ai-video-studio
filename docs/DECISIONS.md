@@ -1965,3 +1965,33 @@ This is stage 0 of the fixed-set redesign agreed on 14 November (doc: "Storyboar
   - The out-of-date notice says newer rules are available, that this is optional, and that nothing changes unless Paul presses "Update the layout".
 - **Check (`scripts/snapshot.ts`).** It records, for every panel of every saved scene, where each person stands, their posture and doing, and the camera, as the app works them out. Run before and after a change against a copy of Paul's database: any difference is listed, and a change that moves people or cameras in a scene it wasn't meant for doesn't ship.
 - **Baseline** taken on Paul's restored database (5 scenes).
+
+### D97: The fixed set: a 360° around each camera position, sliced per shot (2026-11-14)
+
+Stages 1 and 2 of the fixed-set redesign, up to proof step 1. Paul's order of work: story, characters, props, basic venue views, a locked floor plan per scene (people, props, camera positions), then a 360° built around each camera position, and each shot cut from it by shot type.
+
+- **Failures it fixes (D38).** The background and props changing between panels, and changing size between cameras. It reaches generation through image 1's background.
+  - **The 360° had no depth.** There was one ring of views for the whole venue, centred nowhere, so a camera 5 m from the table and one 1 m away saw the back wall at the same size.
+  - **Props were drawn by GPT every panel.**
+- **The set (`src/lib/domain/setRender.ts`).**
+  - **The room shell:** floor, walls at the floor plan's bounds and a ceiling (none outdoors). Each wall is covered by the venue view whose look direction faces it.
+  - **Set pieces:** props that stand on the floor (not held, not on a table, 0.5 m or taller), each a picture at its fixed spot and real width and height. Flat things (backdrop, sign, screen, banner) face the scene's reference point; round things turn to the camera. Each has a soft shadow on the floor.
+- **Rendering.**
+  - `renderView` sees the set from a camera with the app's own camera model (`pictureXY` inverted), so a stand-in drawn by the layout picture lands on the floor spot the set shows. A test checks a set piece lands where `pictureXY` puts it.
+  - `render360` is the full 360° around a camera position; `sliceIn360` marks where each shot falls on it.
+  - Each shot is rendered fresh at full sharpness, which gives the same picture as cutting it from a stored 360°.
+  - Two shots from one position with the same lens are identical, pixel for pixel.
+- **Textures for now (`src/lib/setImage.ts`).**
+  - **Walls:** the upper 60% of each venue view, above where its floor starts. The wall height comes from the pictures' shape (7.4 m for GLOWVANE).
+  - **Floor and ceiling:** tiles from the nearest part of a view; the floor tile is blurred.
+  - **Set pieces:** their reference pictures, cut out where the background is plain.
+- **Proof step 1** (`scripts/set/proof.ts`, on a copy of Paul's restored launch-party scene with its fixed cameras): 9 camera positions, each with its 360° and the slices of its shots.
+  - Panels 5 and 8 share a position and come out identical, as do panels 7 and 10.
+  - The table, backdrop and plinth are the same objects at believable sizes from every position.
+- **Not good enough yet.**
+  - **Set pieces** use crops from other pictures, with the room still round them. They need proper cut-out pictures, made once with a clear background.
+  - **Walls** are photos with their own depth, so they read like murals.
+  - **The floor** is a blurred placeholder.
+
+  Each of these is a picture made once per venue: wall elevations (straight-on, floor to ceiling) and cut-out set pieces. They need GPT, so they run from Paul's app, with his key, once he approves.
+- **Saved scenes:** the snapshot (D96) shows no differences.
