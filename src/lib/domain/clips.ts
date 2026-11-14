@@ -191,6 +191,7 @@ function shotWords(p: ClipPanel, plan: GeometryPlanData, name: (id: string) => s
     const size = shot.replace(/,?\s*over[-\s]the[-\s]shoulder( shot)?/, "").trim();
     return `${size ? `${size} ` : ""}over ${other ? `${name(other)}'s` : "the listener's"} shoulder on ${name(subj)}`.trim();
   }
+  if (/two-shot/.test(shot) && p.spec.visibleIds.length === 2) return `${shot} on ${name(p.spec.visibleIds[0])} and ${name(p.spec.visibleIds[1])}`;
   if (subj && /close-up|close up|medium shot|single/.test(shot) && p.spec.visibleIds.length <= 2) return `${shot} on ${name(subj)}`;
   return shot;
 }
