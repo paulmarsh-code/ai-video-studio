@@ -149,7 +149,7 @@ export interface PanelPrompt {
 }
 
 /** References are named (D109): the names bind each look to one person. */
-const NAMED_REFS = "Each person's reference picture has their name written above it, the same name as on their stand-in in image 1: only that person has that face, hair, clothes and anything they carry. Never give one person's face, clothes, bag or jewellery to anyone else.";
+const NAMED_REFS = "Each person's reference picture has their name written above it, the same name as on their stand-in in image 1: only that person has that face, hair, clothes and anything they carry. Never give one person's face, clothes, bag or jewellery to anyone else. Each prop's picture is named the same way, as its outline in image 1 is: that prop looks exactly like its picture, and nothing from one picture goes on another.";
 
 export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   const genre = i.genre ?? "neutral";

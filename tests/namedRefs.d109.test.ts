@@ -21,3 +21,10 @@ describe("Characters linked to their names (D109)", () => {
     expect(judgePicture(e as never, JSON.stringify({ left_to_right: ["Jade", "Nina"], mixed_up: [] })).problems.join(" ")).not.toContain(MIXED_UP);
   });
 });
+
+describe("Props named like characters (D110)", () => {
+  it("a prop's picture is labelled with its whole name", async () => {
+    const pic = await sharp({ create: { width: 400, height: 300, channels: 3, background: "#888" } }).png().toBuffer();
+    expect((await sharp(await withNameBanner(pic, "the cocktail table")).metadata()).height).toBeGreaterThan(300);
+  });
+});

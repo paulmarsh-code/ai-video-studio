@@ -15,15 +15,22 @@ export async function withNameBanner(picture: Buffer, name: string): Promise<Buf
   const meta = await sharp(picture).metadata();
   const W = meta.width ?? 1024, H = meta.height ?? 1024;
   const band = Math.max(60, Math.round(H * 0.09));
-  const label = esc(name.split(/\s+/)[0].toUpperCase());
+  const label = esc(/^the\s/i.test(name) ? name.replace(/^the\s+/i, "").toUpperCase() : name.split(/\s+/)[0].toUpperCase());
   const svg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${band}"><rect width="${W}" height="${band}" fill="#fff"/><text x="${W / 2}" y="${Math.round(band * 0.74)}" font-size="${Math.round(band * 0.7)}" font-family="sans-serif" font-weight="bold" text-anchor="middle" fill="#111">${label}</text></svg>`);
   return sharp(picture).removeAlpha().extend({ top: band, background: { r: 255, g: 255, b: 255 } }).composite([{ input: svg, left: 0, top: 0 }]).png().toBuffer();
 }
 
 /** Puts the name on every reference that is one of an approved character's pictures, in place. */
-export async function nameCharacterRefs(db: DB, projectId: string, _ids: string[], refs: { data: Buffer; mime: string; name: string }[]): Promise<number> {
+export async function nameCharacterRefs(db: DB, projectId: string, _ids: string[], refs: { data: Buffer; mime: string; name: string }[], sceneId?: string): Promise<number> {
   // Matched by asset code, which each reference carries as its name.
   const owner = new Map<string, string>();
+  // Props too (D110): each prop's picture (its approved cut-out on the set) is named the same way,
+  // as its outline in image 1 is, so one look goes with one prop.
+  const scene = sceneId ? repo.getScene(db, sceneId) : undefined;
+  const pieces = (scene?.venue?.setPictures as { pieces?: Record<string, string> } | null)?.pieces ?? {};
+  for (const f of scene?.plan?.data.furniture ?? []) {
+    for (const id of [f.imageAssetId, f.imageAssetId ? pieces[f.imageAssetId] : undefined]) { const a = id ? repo.getAsset(db, id) : undefined; if (a) owner.set(a.assetCode, `the ${f.name}`); }
+  }
   for (const c of listCharacters(db, projectId)) {
     const r = (c.approved?.profile as { refs?: Record<string, string> } | undefined)?.refs ?? {};
     for (const id of Object.values(r)) { const a = id ? repo.getAsset(db, id) : undefined; if (a) owner.set(a.assetCode, c.name); }

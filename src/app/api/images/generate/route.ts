@@ -29,7 +29,8 @@ export async function POST(req: Request) {
   // Each character's reference carries their name across the top (D109), the same name their
   // stand-in in image 1 is labelled with, so a face and its clothes are bound to one name. Unnamed,
   // GPT drew Nina in Jade's place with Jade's satchel.
-  await nameCharacterRefs(db, body.projectId, body.refAssetIds ?? [], refs);
+  const sceneOfShot = body.blockingShotId ? repo.getShot(db, body.blockingShotId)?.sceneId : undefined;
+  await nameCharacterRefs(db, body.projectId, body.refAssetIds ?? [], refs, sceneOfShot);
   // A correction edits the picture itself (D34): it goes first, the shot to change.
   if (body.baseAssetId) {
     const a = repo.getAsset(db, body.baseAssetId);
