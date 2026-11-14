@@ -24,3 +24,19 @@ When he says "make the clips":
    - set `status` to `done` with `videoUrl` and `localFile` (the file name);
    - or, if it failed, set `failed` with Kling's error.
    - Commit the jobs file, then send Paul the clip and look at it against its pictures, shot by shot.
+
+# Making the Elements (D127)
+
+When Paul presses "Make … from the app's pictures" on the clips page, the app writes what to make to
+`data/kling_element_requests.json` on his computer. When he says "make the elements":
+
+1. **Read the requests.** Stage the requests file. Make the ones with status `ready`.
+2. **Upload each picture.** For each request, stage its pictures from their `path` and upload them (`file_upload`, then `curl`), as for the clips.
+3. **Make the Element.** Call `element_create` with:
+   - `name` and `description` from the request;
+   - `tags` from the request;
+   - `resource`: `cover` is picture 1's `klingUrl`; `secondary` is the rest, as `{name: role, inputType: "URL", url}`.
+4. **Write back.** Set `status` to `done` with the returned `id`, or `failed` with Kling's error.
+5. **Refresh the list.** Call `element_list` and write `data/kling_elements.json` as `{updatedAt, elements: [{id, name}]}`, so the dropdowns show the new Elements.
+6. **Commit both files.** The clips page links each made Element to its character, venue or prop the next time it opens (once; a later pick in the dropdown stands).
+7. **Check the cost.** Creating Elements costs nothing, as far as we know: check the balance before and after the first run and tell Paul.

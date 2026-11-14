@@ -2388,3 +2388,20 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
   - Claude uploads the pictures itself. The page upload (D125) stays as the fallback.
   - Each finished clip is downloaded and saved on Paul's computer in `data/clips/`. The job records it as `localFile`, and the clips page plays it through `/api/kling-clip/<name>`, so a clip outlives Kling's 24-hour link.
 - **Steps for Claude:** `docs/KLING_CLIPS_RUNBOOK.md`.
+
+### D127: Kling Elements made from the app's own approved pictures (2026-11-14)
+
+- **Paul agreed** ("yes") to taking the hand-made Elements out of the flow.
+  - Until now he made each Element in the Kling app by hand, from pictures he downloaded.
+  - Now that Claude can upload to Kling (D126), the app has them made from the very pictures the storyboard is drawn from, so clips and storyboard can't disagree on a face, a wall or the table.
+- **What each Element is made from** (`lib/klingElementRequests.ts`, `elementSources`):
+  - **A character in the scene:** their approved front as the cover, then face, back and side. Tag Characters. The description is their appearance and wardrobe.
+  - **The venue:** the set's own wall pictures (D98), else its views. Tag Scenes. The description is the venue's words.
+  - **A key prop:** the set's cut-out as the cover, then the prop's own picture; one picture serves as both when there's only one. Tag Items. The description is the prop's detail.
+  - **Names** fit Kling's 20-character box, cut at a word.
+- **How.**
+  - The clips page offers "Make the N missing Elements from the app's pictures", and per row "Make (again) from the app's pictures".
+  - That writes `data/kling_element_requests.json`. Paul then says "make the elements".
+  - Claude uploads the pictures, calls `element_create`, writes the id back and refreshes the Elements list (runbook).
+  - The clips page links each made Element to its row as it opens, once, so a later pick in the dropdown stands.
+- **Reaches the generation through:** the Elements bound to every clip.

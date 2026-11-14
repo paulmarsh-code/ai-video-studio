@@ -11,6 +11,7 @@ import * as studio from "@/lib/studioRepo";
 import * as coreRepo from "@/lib/repo";
 import { buildSceneClips } from "@/lib/sceneClips";
 import { jobId, putJobs } from "@/lib/klingJobs";
+import { elementSources, requestElements } from "@/lib/klingElementRequests";
 import { chooseCameras, updateLayout } from "@/lib/layoutUpdate";
 import { fullSizeViews } from "@/lib/venueFullSize";
 import { getImageProvider } from "@/lib/providers/images";
@@ -276,5 +277,22 @@ export async function createClipJobsAction(sceneId: string, clips?: number[]): P
     }));
     putJobs(jobs);
     return { count: jobs.length, credits: jobs.reduce((t, j) => t + j.credits, 0) };
+  });
+}
+
+/**
+ * Ask Claude to make Kling Elements from the app's own approved pictures (D127): the keys given,
+ * or every one of the scene's that has no Element linked yet.
+ */
+export async function requestElementsAction(sceneId: string, keys?: string[]): Promise<Result<{ count: number }>> {
+  return run((db) => {
+    const s = coreRepo.getScene(db, sceneId);
+    if (!s) throw new Error("Scene not found");
+    const linked = studio.getKlingElements(db, s.scene.projectId);
+    // None named: the ones still missing.
+    const want = keys?.length ? keys : elementSources(db, sceneId).map((x) => x.key).filter((k) => !linked[k]);
+    if (!want.length) throw new Error("Every Element is linked already, or nothing has an approved picture yet.");
+    const made = requestElements(db, sceneId, want);
+    return { count: made.length };
   });
 }

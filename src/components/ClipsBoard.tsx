@@ -5,15 +5,18 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { createClipJobsAction, setClipPictureAction, setKlingElementAction } from "@/app/studioActions";
+import { createClipJobsAction, requestElementsAction, setClipPictureAction, setKlingElementAction } from "@/app/studioActions";
 import type { Clip, KlingElement } from "@/lib/domain/clips";
 import type { KlingListed } from "@/lib/klingList";
 import type { PictureChoice } from "@/lib/sceneClips";
 import type { KlingJob } from "@/lib/klingJobs";
 
 type Row = { key: string; what: string; kind: string; element?: KlingElement };
+/** Whether the app can make a row's Element from its own pictures, and how the request stands (D127). */
+type Making = Record<string, { pictures: number; status?: "ready" | "sent" | "done" | "failed"; error?: string }>;
+const MAKING: Record<string, string> = { ready: "waiting for Claude", sent: "being made in Kling", done: "made from the app's pictures", failed: "couldn't be made" };
 
-function ElementRow({ projectId, row, list }: { projectId: string; row: Row; list: KlingListed[] }) {
+function ElementRow({ projectId, sceneId, row, list, making }: { projectId: string; sceneId: string; row: Row; list: KlingListed[]; making?: Making[string] }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -26,6 +29,12 @@ function ElementRow({ projectId, row, list }: { projectId: string; row: Row; lis
     if (!r.ok) setError(r.error); else router.refresh();
   };
   const current = row.element?.id && list.some((e) => e.id === row.element!.id) ? row.element.id : "";
+  const make = async () => {
+    setBusy(true); setError("");
+    const r = await requestElementsAction(sceneId, [row.key]);
+    setBusy(false);
+    if (!r.ok) setError(r.error); else router.refresh();
+  };
   return (
     <tr className="border-t border-neutral-100">
       <td className="py-1 pr-2 text-xs text-neutral-500">{row.kind}</td>
@@ -38,7 +47,15 @@ function ElementRow({ projectId, row, list }: { projectId: string; row: Row; lis
       </td>
       <td className="py-1">
         {busy ? <span className="text-xs text-neutral-500">Saving…</span> : row.element ? <span className="text-xs text-green-700">linked</span> : <span className="text-xs text-amber-700">no Element</span>}
+        {making?.status && <span className={`ml-2 text-xs ${making.status === "failed" ? "text-red-700" : "text-blue-800"}`}>{MAKING[making.status]}{making.error ? `: ${making.error}` : ""}</span>}
         {error && <span className="ml-2 text-xs text-red-700">{error}</span>}
+      </td>
+      <td className="py-1 pl-2">
+        {making && making.status !== "ready" && making.status !== "sent" && (
+          <button type="button" disabled={busy} onClick={() => void make()} className="text-xs text-blue-700 underline disabled:opacity-50">
+            {row.element ? "Make again from the app's pictures" : "Make from the app's pictures"}
+          </button>
+        )}
       </td>
     </tr>
   );
@@ -78,7 +95,7 @@ function PictureSlot({ sceneId, shot, choice }: { sceneId: string; shot: number;
 
 const STATUS: Record<KlingJob["status"], string> = { ready: "Waiting for Claude to make it", sent: "Being made in Kling", done: "Made", failed: "Failed" };
 
-export function ClipsBoard({ projectId, sceneId, rows, clips, list, pictures, jobs }: { projectId: string; sceneId: string; rows: Row[]; clips: Clip[]; list: { elements: KlingListed[]; updatedAt?: string }; pictures: PictureChoice[]; jobs: KlingJob[] }) {
+export function ClipsBoard({ projectId, sceneId, rows, clips, list, pictures, jobs, making }: { projectId: string; sceneId: string; rows: Row[]; clips: Clip[]; list: { elements: KlingListed[]; updatedAt?: string }; pictures: PictureChoice[]; jobs: KlingJob[]; making: Making }) {
   const router = useRouter();
   const [api, setApi] = useState(false);
   const [busy, setBusy] = useState<number | "all" | null>(null);
@@ -96,7 +113,15 @@ export function ClipsBoard({ projectId, sceneId, rows, clips, list, pictures, jo
   const jobOf = (c: Clip) => jobs.find((j) => j.panels.join() === c.panels.join());
   // While clips are waiting or being made, the page uploads their pictures with Claude's tickets
   // (D125) and picks up the results Claude writes back.
-  const active = jobs.some((j) => j.status === "ready" || j.status === "sent");
+  const active = jobs.some((j) => j.status === "ready" || j.status === "sent") || Object.values(making).some((m) => m.status === "ready" || m.status === "sent");
+  const missingEls = rows.filter((r) => !r.element && making[r.key] && !making[r.key].status);
+  const makeMissing = async () => {
+    setNote("");
+    const r = await requestElementsAction(sceneId);
+    if (!r.ok) { setNote(r.error); return; }
+    setNote(`${r.value?.count} Element${r.value?.count === 1 ? "" : "s"} ready to make from the app's pictures. Now tell Claude in the chat: "make the elements".`);
+    router.refresh();
+  };
   useEffect(() => {
     if (!active) return;
     let stop = false;
@@ -115,9 +140,10 @@ export function ClipsBoard({ projectId, sceneId, rows, clips, list, pictures, jo
     <div className="mt-6 space-y-8">
       <section>
         <h2 className="text-lg font-semibold">Kling Elements</h2>
-        <p className="text-sm text-neutral-600">Make each one once in Kling (Elements → Create, with its approved picture as the cover and 1–3 more angles), then pick it here.</p>
+        <p className="text-sm text-neutral-600">Each character, the venue and each key prop is one Kling Element, the same in every clip. The app can have Claude make them from its own approved pictures (the same ones the storyboard is drawn from); one you made yourself in Kling can be picked from the list.</p>
+        {missingEls.length > 0 && <button type="button" onClick={() => void makeMissing()} className="mt-2 rounded bg-blue-700 px-3 py-1 text-sm text-white hover:bg-blue-800">Make the {missingEls.length} missing Element{missingEls.length === 1 ? "" : "s"} from the app&apos;s pictures</button>}
         <p className="text-xs text-neutral-500">{list.elements.length ? `Your Kling Elements as of ${list.updatedAt ? new Date(list.updatedAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "the last refresh"}. Made a new one? Ask Claude to refresh your Kling Elements.` : "No list of your Kling Elements yet: ask Claude to refresh your Kling Elements."}</p>
-        <table className="mt-2 text-sm"><tbody>{rows.map((r) => <ElementRow key={r.key} projectId={projectId} row={r} list={list.elements} />)}</tbody></table>
+        <table className="mt-2 text-sm"><tbody>{rows.map((r) => <ElementRow key={r.key} projectId={projectId} sceneId={sceneId} row={r} list={list.elements} making={making[r.key]} />)}</tbody></table>
       </section>
       <section>
         <div className="flex flex-wrap items-baseline justify-between gap-2">
