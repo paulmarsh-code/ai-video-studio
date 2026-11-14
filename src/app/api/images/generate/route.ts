@@ -108,9 +108,15 @@ export async function POST(req: Request) {
   }
   try {
     // Image 1 (or the picture being fixed) goes full size (D67): GPT keeps a sharp background.
-    const img = await provider.generate(body.prompt, refs, body.size ?? "portrait", { firstFullSize: imageOne || !!body.baseAssetId });
-    // On the fixed set (D103): the set goes back over everything that isn't a person.
-    const pasted = onSetOf ? await pasteSet(img.data, onSetOf.set, onSetOf.area, onSetOf.W, onSetOf.H).catch(() => null) : null;
+    let img = await provider.generate(body.prompt, refs, body.size ?? "portrait", { firstFullSize: imageOne || !!body.baseAssetId });
+    // On the fixed set (D103): the set goes back over everything that isn't a person. If GPT moved
+    // the room too far for that, it draws once more, and the closer of the two is used.
+    let pasted = onSetOf ? await pasteSet(img.data, onSetOf.set, onSetOf.area, onSetOf.W, onSetOf.H).catch(() => null) : null;
+    if (onSetOf && pasted && !pasted.pasted) {
+      const again = await provider.generate(body.prompt, refs, body.size ?? "portrait", { firstFullSize: true }).catch(() => null);
+      const p2 = again ? await pasteSet(again.data, onSetOf.set, onSetOf.area, onSetOf.W, onSetOf.H).catch(() => null) : null;
+      if (again && p2 && p2.moved < pasted.moved) { img = { ...again, providerNote: `${again.providerNote ?? ""} (second try; the first moved the room ${pasted.moved.toFixed(3)})`.trim() }; pasted = p2; }
+    }
     const data = pasted?.png ?? img.data;
     // GPT's own picture is kept beside it, to see what the paste changed.
     if (pasted) storeAsset(db, { projectId: body.projectId, baseCode: cleanBaseCode(`${body.baseCode}_GPT`), kind: "image-raw", ext: "png", mime: img.mime, data: img.data, note: "before the set was pasted back" });

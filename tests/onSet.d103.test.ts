@@ -42,3 +42,17 @@ describe("Drawing on the fixed set (D103)", () => {
     expect(asStaging({ spot: "x" }).onSet).toBeUndefined();
   });
 });
+
+describe("Room height from its words (D104)", () => {
+  it("a warehouse is lofty, a flat isn't", async () => {
+    const { roomHeight } = await import("../src/lib/setImage");
+    expect(roomHeight("A converted industrial warehouse")).toBe(7);
+    expect(roomHeight("A small kitchen")).toBe(3);
+    expect(roomHeight("A loft-style flat with high ceilings")).toBe(7);
+  });
+  it("the request names no venue, and holds the framing", () => {
+    const p = draw("set").image!;
+    expect(p.split("\n")[0]).not.toContain("roof bar");
+    expect(p).toContain("Keep image 1's framing exactly");
+  });
+});

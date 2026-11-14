@@ -640,7 +640,9 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     ...S.people.filter((l) => !/^Sizes:|^Exactly \d+ main/.test(l)).map((l) => l.replace(/\bOut of focus, smaller\b/, "Smaller")),
   ] : [];
   const image = blocking && onSet ? [
-    lines[0],
+    // No venue name (D103): "GLOWVANE launch-party venue" was enough for GPT to put up a big
+    // GLOWVANE sign the set doesn't have. Image 1 is the venue.
+    `${(i.style ?? "photorealistic").replace(/^./, (m) => m.toUpperCase())} storyboard frame for a ${i.aspect ?? "9:16"} video.`,
     setInstruction(coloured),
     `The other images show only how each person looks (${attach.slice(1).map((a) => a.label).join(", ")}${leftToRight.length > 1 ? "; in image 1's left-to-right order" : ""}): copy faces, hair, clothes and anything carried exactly; never take positions or background from them.`,
     ...(S.keep.length ? [`Keep: ${S.keep.join("; ")}.`] : []),
@@ -823,6 +825,7 @@ export function setInstruction(coloured = false): string {
     "IMAGE 1 IS THIS SHOT, ALREADY FINISHED EXCEPT FOR THE PEOPLE. The room, its light and everything standing in it are the final photograph: keep them exactly, as sharp as they are.",
     `${coloured ? "Each stand-in (shaded in the colours of that person's clothes)" : "Each pale stand-in"} becomes the person named on it, standing exactly where it stands, exactly as big, turned the way its label says and doing what it says. An orange arrow only shows which way a walker is heading, never a second place for them, so everyone appears once. A yellow tag marks something held, on that side of the picture.`,
     "Remove every stand-in, label, arrow and tag. Draw everyone in the room's own light, with their shadows on the floor, as sharp as the room.",
+    "Keep image 1's framing exactly: the same camera position, angle, zoom and crop, so every wall, light, shelf and table stays exactly where and as big as it is in image 1. Add no signs, logos, screens, displays or furniture.",
   ].join("\n");
 }
 

@@ -123,13 +123,16 @@ export async function sceneSet(db: DB, sceneId: string, plan?: GeometryPlanData)
     }
   }
   if (!pics.length) return null;
-  const walls: SetWall[] = (["minX", "maxX", "minY", "maxY"] as const).map((side) => { const w = best.get(side); return { side, ...(w ? { texture: w.tex, name: w.name } : {}) }; });
-  // How tall the walls are: the wall pictures' own shape, across the walls they cover.
-  const heights = walls.filter((w) => w.texture).map((w) => {
-    const span = w.side === "minX" || w.side === "maxX" ? b.maxY - b.minY : b.maxX - b.minX;
-    return (span * w.texture!.height) / w.texture!.width;
-  }).sort((x, y) => x - y);
-  const wallM = Math.min(12, Math.max(3, heights[Math.floor(heights.length / 2)] ?? 4));
+  const spanOf = (side: SetWall["side"]) => (side === "minX" || side === "maxX" ? b.maxY - b.minY : b.maxX - b.minX);
+  let walls: SetWall[] = (["minX", "maxX", "minY", "maxY"] as const).map((side) => { const w = best.get(side); return { side, ...(w ? { texture: w.tex, name: w.name } : {}) }; });
+  // How tall the walls are. Indoors, from the venue's words (D103): stretched across an 18–22 m
+  // wall, a picture of the bar came out 12 m tall, its bottles the size of people. Outdoors, the
+  // scenery's own shape across the walls it covers, as before.
+  const heights = walls.filter((w) => w.texture).map((w) => (spanOf(w.side) * w.texture!.height) / w.texture!.width).sort((x, y) => x - y);
+  const wallM = outdoors ? Math.min(12, Math.max(3, heights[Math.floor(heights.length / 2)] ?? 4)) : roomHeight(`${scene.venue.name} ${scene.venue.description ?? ""}`);
+  // Indoors each picture keeps its own shape at that height (D103), centred on its wall and carried
+  // on to the corners by mirroring its edges, instead of being stretched to the wall's length.
+  if (!outdoors) walls = await Promise.all(walls.map(async (w) => (w.texture ? { ...w, texture: await atWallShape(w.texture, spanOf(w.side) / wallM) } : w)));
   const textures: Record<string, Texture | undefined> = {};
   for (const f of p.furniture ?? []) {
     const a = f.imageAssetId ? repo.getAsset(db, f.imageAssetId) : undefined;
@@ -147,6 +150,49 @@ export async function sceneSet(db: DB, sceneId: string, plan?: GeometryPlanData)
   const ceilingTexture = outdoors ? undefined : await tileFrom(pics[0], 0, 0.08, 0.3, 0.7);
   const set = setModel(p, { walls, textures, wallM, ceilingM: outdoors ? undefined : wallM, floor, ceiling: top, sky: top, floorTexture, ceilingTexture, tileM: floorFile ? 4 : 3, ...(anchor ? { anchor } : {}) });
   return { set, plan: p };
+}
+
+/** How tall a room's walls are, from its words (D103): a warehouse or hall is lofty, most rooms aren't. */
+export function roomHeight(words: string): number {
+  if (/\b(?:warehouse|hall|atrium|church|cathedral|chapel|barn|hangar|gym(?:nasium)?|ballroom|arena|factory|loft|mezzanine|auditorium|theatre|theater|terminal|station|concourse)\b/i.test(words)) return 7;
+  if (/\b(?:double[-\s]height|high[-\s]ceiling(?:ed|s)?|vaulted)\b/i.test(words)) return 5;
+  return 3;
+}
+
+/** A wall picture at the wall's shape, width over height `aspect`: cropped in the middle, or mirrored out at both sides. */
+async function atWallShape(t: Texture, aspect: number): Promise<Texture> {
+  const want = Math.round(t.height * aspect);
+  const img = sharp(Buffer.from(t.data), { raw: { width: t.width, height: t.height, channels: 4 } });
+  let out: Buffer, w: number;
+  if (want <= t.width) { w = want; out = await img.extract({ left: Math.round((t.width - want) / 2), top: 0, width: want, height: t.height }).raw().toBuffer(); }
+  else {
+    // Carried on from a strip at each edge only, mirrored back and forth (D103): mirroring the
+    // whole picture brought half the screen back at both ends of the screen wall.
+    const left = Math.floor((want - t.width) / 2), right = want - t.width - left;
+    const strip = Math.max(8, Math.round(t.width * 0.12));
+    // Column of the picture shown at distance x beyond an edge: back and forth across the strip.
+    const colAt = (x: number) => { const m = x % (2 * strip); return m < strip ? m : 2 * strip - 1 - m; };
+    const run = async (n: number, edgeLeft: boolean) => {
+      const o = Buffer.alloc(n * t.height * 4);
+      for (let x = 0; x < n; x++) {
+        const c = edgeLeft ? colAt(x) : t.width - 1 - colAt(x);
+        const ox = edgeLeft ? n - 1 - x : x;
+        for (let y = 0; y < t.height; y++) { const si = (y * t.width + c) * 4, di = (y * n + ox) * 4; o[di] = t.data[si]; o[di + 1] = t.data[si + 1]; o[di + 2] = t.data[si + 2]; o[di + 3] = t.data[si + 3]; }
+      }
+      return o;
+    };
+    const L = await run(left, true), R = await run(right, false);
+    w = want; out = Buffer.alloc(w * t.height * 4);
+    for (let y = 0; y < t.height; y++) {
+      L.copy(out, y * w * 4, y * left * 4, (y + 1) * left * 4);
+      Buffer.from(t.data.buffer, t.data.byteOffset, t.data.length).copy(out, (y * w + left) * 4, y * t.width * 4, (y + 1) * t.width * 4);
+      R.copy(out, (y * w + left + t.width) * 4, y * right * 4, (y + 1) * right * 4);
+    }
+  }
+  // Keep the texture a sensible size for rendering.
+  const maxW = 4096;
+  if (w > maxW) { const h2 = Math.round((t.height * maxW) / w); out = await sharp(out, { raw: { width: w, height: t.height, channels: 4 } }).resize(maxW, h2, { fit: "fill" }).raw().toBuffer(); return { data: out, width: maxW, height: h2 }; }
+  return { data: out, width: w, height: t.height };
 }
 
 /** A seamless square tile from part of a picture: the part, mirrored both ways. */

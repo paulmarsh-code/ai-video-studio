@@ -2071,3 +2071,14 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
 - **A switch per scene.** "Draw on the fixed set" on the storyboard is kept in the scene's setting (`staging.onSet`) and survives saving the setting. When it's off, nothing changes.
 - **Cameras: the panel's subject faces the camera (`coverageFor`).** Except over a partner's shoulder, a camera from behind the speaker or subject is refused. Panel 7's cowboy shot was from behind Jade, for her own angry line.
 - **Checked.** 707 tests pass. The snapshot shows no saved scene changes. On a copy of Paul's data, image 1 for panels 3, 5, 7 and 10 shows the real table in front of the people behind it. Panel 7 now sees Jade's face, and only panels 7 and 11's cameras change when the layout is updated.
+
+### D104: First test on the set: room height, no venue name, framing held, one retry (2026-11-14)
+
+- **Paul's first three pictures on the set.**
+  - Panel 5 kept the room; the set went back, with the room moved 0.078. But the bar was huge, its bottles the size of people.
+  - Panels 3 and 7 came out as a different room, wider than image 1, with a big GLOWVANE sign. The room had moved 0.177, so it wasn't pasted back.
+  - In all three GPT drew the people at its own sizes and places, not image 1's.
+- **The bar was huge.** Each wall picture was stretched along its wall, 18–22 m, so the walls came out 12 m tall. Indoors the walls are now as tall as the venue's words say: 7 m for a warehouse, hall, atrium, ballroom or the like; 5 m for "high ceilings" or "vaulted"; otherwise 3 m (`roomHeight`). Each wall picture keeps its own shape at that height, centred on its wall, and is carried on to the corners by mirroring a strip at each edge (`atWallShape`). Mirroring the whole picture brought half the screen back at both ends.
+- **The sign came from the venue's name.** The set request no longer names the venue ("set in the GLOWVANE launch-party venue" was enough for GPT to put up a GLOWVANE sign); image 1 is the venue. One line now holds the framing: "Keep image 1's framing exactly: the same camera position, angle, zoom and crop… Add no signs, logos, screens, displays or furniture."
+- **When GPT moves the room too far to paste back, it draws once more,** and the one that moved the room less is used.
+- **Still open.** GPT drew people at its own sizes and places in all three. To be seen on the next test.
