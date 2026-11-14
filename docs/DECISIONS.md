@@ -2116,3 +2116,21 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
   - image 1 is the background from this camera, with the floor plan's stand-ins;
   - then the characters' and props' pictures;
   - then the words: the shot, where each person is relative to the scene's fixed set piece and background, the moment, what each person does and where they look, what they hold, and the extras.
+
+### D107: The storyboard is the plan and preview for the clips: accurate, not perfect (2026-11-14)
+
+- **Paul's direction.** The objective is Kling producing a consistent set of clips with no retakes, and we work back from what Kling needs. Kling 4.0 Omni-Ref takes:
+  - up to 7 Elements, reusable characters and props with a fixed look;
+  - up to 10 reference images, such as the set from the clip's camera;
+  - up to 5 reference videos, such as the previous clip;
+  - up to 30 s, several shots in one job.
+
+  The clips get their consistency from those, not from a pixel-perfect storyboard picture. The storyboard's job is the plan and the cheap check before paying for video. What matters in it: venue consistency, characters, props and positions. It doesn't need to be perfect, but it must be accurate.
+- **No paste-back by default (`STORYBOARD_PASTE=1` to test it).** GPT redraws the whole picture whatever image 1 is (as found in D66 and again in D104). Pasting the set back over a room GPT had shifted made a patchwork: Paul's panel 3. On the set, image 1 still guides GPT with the right venue, the stand-ins from the floor plan, and the characters' and props' pictures. The request is still the shot, where people are relative to the set, the moment, the action and the extras.
+- **The picture check's tolerances (`pictureCheck.ts`).** A picture now fails for:
+  - someone more than 1.8× or less than 1/1.8 of their planned height (was 1.5×);
+  - heads more than 14% of the picture higher or lower on average (was 8%);
+  - a person or prop more than 20% of the width from their place (was 15%).
+
+  Order, who is in the picture, the props and the venue are checked as before.
+- **The switch** is now called "Use the fixed set as the background", with that job explained beside it.

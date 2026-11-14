@@ -5,6 +5,14 @@
 // is decided here, by rule.
 
 import { itemGroup } from "./imagePrompts";
+
+// How far a picture may be from image 1 and still pass (D107). The storyboard is the plan and the
+// preview for the clips: accurate, not perfect. Who is where, in what order, with which props, in
+// which part of the venue must be right; a head 10% higher or a person 1.5 times taller than
+// planned need not fail a picture that tells the clip what it needs.
+export const SIZE_OFF = 1.8; // times the planned height (was 1.5)
+export const EYE_OFF = 0.14; // of the picture's height, heads higher or lower on average (was 0.08)
+export const ACROSS_OFF = 0.2; // of the picture's width, a person or prop across from image 1 (was 0.15)
 import type { Person, Thing } from "./peopleDetect";
 
 /** The plan check measured (D53): everyone the detector found, numbered, and which number the model says is whom. */
@@ -383,7 +391,7 @@ export function judgePicture(e: PictureExpectation, reply: string, plan?: string
       // Someone image 1 puts right at a side edge, drawn further in but still on that side, is
       // framed better, not wrongly (D85): Kai planned 97% across, drawn 75%, failed a good picture.
       const pulledIn = (want.x > 0.88 && cx < want.x && cx >= 0.55) || (want.x < 0.12 && cx > want.x && cx <= 0.45);
-      if (!pulledIn && Math.abs(cx - want.x) > Math.max(0.15, 0.28 * plannedTall * plan.aspect)) {
+      if (!pulledIn && Math.abs(cx - want.x) > Math.max(ACROSS_OFF, 0.28 * plannedTall * plan.aspect)) {
         m.fit = "elsewhere";
         add("blocking", `${want.name} is about ${pct(cx)} of the way across the picture; image 1 has them about ${pct(want.x)} across.`, true);
         continue;
@@ -395,7 +403,7 @@ export function judgePicture(e: PictureExpectation, reply: string, plan?: string
       if (!atEdge && ((box.y1 - box.y0) * plan.aspect) / Math.max(0.001, box.x1 - box.x0) < 1.9) { unmeasured.blocking.push(`${want.name}: partly hidden, size not measured`); continue; }
       const tall = Math.min(box.y1, 1) - box.y0, ratio = tall / plannedTall;
       m.heightRatio = +ratio.toFixed(2);
-      m.fit = ratio >= 1.5 ? "bigger" : ratio <= 0.67 ? "smaller" : "fits";
+      m.fit = ratio >= SIZE_OFF ? "bigger" : ratio <= 1 / SIZE_OFF ? "smaller" : "fits";
       if (m.fit === "bigger") add("blocking", `${want.name} is drawn about ${ratio.toFixed(1)} times the planned height (${pct(tall)} of the picture's height, planned ${pct(plannedTall)}), so too close to the camera; in image 1 they are much smaller and further back.`, true);
       if (m.fit === "smaller") add("blocking", `${want.name} is drawn at about ${pct(tall)} of the picture's height, planned ${pct(plannedTall)}${want.feetY > 1.05 && !atEdge ? ": the camera has moved back to show the whole body, but image 1 cuts them at the bottom edge" : ", so too far away"}.`, true);
     }
@@ -440,8 +448,8 @@ export function judgePicture(e: PictureExpectation, reply: string, plan?: string
       // Heads higher in the picture than planned come from a camera pointed further down or set
       // lower (D62); lower heads from one pointed up or set higher. From heads alone the two
       // can't be told apart, so the message says both: "too high" had sent a low camera lower.
-      if (mid < -0.08) { eyeLevel = "above"; add("blocking", `Heads are higher in the picture than in image 1: about ${pct(avg("head"))} of the way down, but image 1 has them about ${pct(avg("planned"))} down. The camera is pointed further down, or set lower, than image 1's. Match image 1's camera height and angle, so heads sit where they are in image 1.`, true); }
-      else if (mid > 0.08) { eyeLevel = "below"; add("blocking", `Heads are lower in the picture than in image 1: about ${pct(avg("head"))} of the way down, but image 1 has them about ${pct(avg("planned"))} down. The camera is pointed further up, or set higher, than image 1's. Match image 1's camera height and angle, so heads sit where they are in image 1.`, true); }
+      if (mid < -EYE_OFF) { eyeLevel = "above"; add("blocking", `Heads are higher in the picture than in image 1: about ${pct(avg("head"))} of the way down, but image 1 has them about ${pct(avg("planned"))} down. The camera is pointed further down, or set lower, than image 1's. Match image 1's camera height and angle, so heads sit where they are in image 1.`, true); }
+      else if (mid > EYE_OFF) { eyeLevel = "below"; add("blocking", `Heads are lower in the picture than in image 1: about ${pct(avg("head"))} of the way down, but image 1 has them about ${pct(avg("planned"))} down. The camera is pointed further up, or set higher, than image 1's. Match image 1's camera height and angle, so heads sit where they are in image 1.`, true); }
       else eyeLevel = "on";
     } else unmeasured.blocking.push("eye level: not judged");
   }
@@ -470,10 +478,10 @@ export function judgePicture(e: PictureExpectation, reply: string, plan?: string
       const where = `its foot is about ${pct(foot)} of the way down the picture, but image 1 has it about ${pct(spot.baseY)} down${spot.among ? ", among the people" : ""}`;
       // Among the people: measured against them, so a group drawn closer takes its table with it.
       const rel = spot.among ? foot - groupShift : foot;
-      if (spot.among && Math.abs(rel - spot.baseY) <= 0.08) { if (Math.abs(cx - spot.x) > 0.15) add("room", `The ${spot.name} is about ${pct(cx)} of the way across the picture; image 1 has it about ${pct(spot.x)} across.`, true); continue; }
+      if (spot.among && Math.abs(rel - spot.baseY) <= 0.08) { if (Math.abs(cx - spot.x) > ACROSS_OFF) add("room", `The ${spot.name} is about ${pct(cx)} of the way across the picture; image 1 has it about ${pct(spot.x)} across.`, true); continue; }
       if (foot - spot.baseY > 0.08) add("room", `The ${spot.name} is well in front of where image 1 puts it: ${where}. Keep it where image 1 shows it.`, true);
       else if (spot.baseY - foot > 0.08) add("room", `The ${spot.name} is well behind where image 1 puts it: ${where}. Keep it where image 1 shows it.`, true);
-      else if (Math.abs(cx - spot.x) > 0.15) add("room", `The ${spot.name} is about ${pct(cx)} of the way across the picture; image 1 has it about ${pct(spot.x)} across.`, true);
+      else if (Math.abs(cx - spot.x) > ACROSS_OFF) add("room", `The ${spot.name} is about ${pct(cx)} of the way across the picture; image 1 has it about ${pct(spot.x)} across.`, true);
     }
   }
 

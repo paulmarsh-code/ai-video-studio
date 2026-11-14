@@ -111,8 +111,12 @@ export async function POST(req: Request) {
     let img = await provider.generate(body.prompt, refs, body.size ?? "portrait", { firstFullSize: imageOne || !!body.baseAssetId });
     // On the fixed set (D103): the set goes back over everything that isn't a person. If GPT moved
     // the room too far for that, it draws once more, and the closer of the two is used.
-    let pasted = onSetOf ? await pasteSet(img.data, onSetOf.set, onSetOf.area, onSetOf.W, onSetOf.H).catch(() => null) : null;
-    if (onSetOf && pasted && !pasted.pasted) {
+    // Not pasted back by default (D107): GPT redraws the whole picture, and the set pasted over a
+    // shifted room made a patchwork. The storyboard is the plan and preview for the clips, so the
+    // set guides GPT as image 1 and that is enough. STORYBOARD_PASTE=1 pastes it back, for tests.
+    const pasteBack = !!onSetOf && /^(1|true|yes)$/i.test(process.env.STORYBOARD_PASTE ?? "");
+    let pasted = onSetOf && pasteBack ? await pasteSet(img.data, onSetOf.set, onSetOf.area, onSetOf.W, onSetOf.H).catch(() => null) : null;
+    if (onSetOf && pasteBack && pasted && !pasted.pasted) {
       const again = await provider.generate(body.prompt, refs, body.size ?? "portrait", { firstFullSize: true }).catch(() => null);
       const p2 = again ? await pasteSet(again.data, onSetOf.set, onSetOf.area, onSetOf.W, onSetOf.H).catch(() => null) : null;
       if (again && p2 && p2.moved < pasted.moved) { img = { ...again, providerNote: `${again.providerNote ?? ""} (second try; the first moved the room ${pasted.moved.toFixed(3)})`.trim() }; pasted = p2; }
