@@ -2206,3 +2206,9 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
   - Each request comes in two forms: for the Kling web app with @Name, and for the API with `<<<id>>>`.
   - The page lists the Elements used and anything with no Element (drawn from words, so it may not match), and estimates the credits at 10 a second, the Kling 4.0 rate at 720p with sound (D112).
 - **Not sent from the app.** The app has no Kling API key. The request is copied into Kling, or Claude sends it with Kling's own connection when asked.
+
+### D114: Kling Elements picked from a list (2026-11-14)
+
+- **Paul:** select the Elements from dropdowns rather than typing them. A typed name can be misspelt, and "jadefull" is not the Element "Jadefull".
+- **The list.** The app has no Kling key, so Claude writes the list of the user's Kling Elements (name and id) from Kling's own connection into `data/kling_elements.json` whenever asked to "refresh my Kling Elements". It's a separate file, so it can be written while the app runs. The Make the clips page reads it each time it opens (`klingList.ts`) and shows when it was last refreshed.
+- **Picking.** Each character, the venue and each prop has a dropdown of those Elements, saved as soon as one is picked, name and id together. A name typed before the list came in is matched to its Element in the list, ignoring case, so its id is filled in for the clip requests.

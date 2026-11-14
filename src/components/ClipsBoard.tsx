@@ -7,31 +7,35 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { setKlingElementAction } from "@/app/studioActions";
 import type { Clip, KlingElement } from "@/lib/domain/clips";
+import type { KlingListed } from "@/lib/klingList";
 
 type Row = { key: string; what: string; kind: string; element?: KlingElement };
 
-function ElementRow({ projectId, row }: { projectId: string; row: Row }) {
+function ElementRow({ projectId, row, list }: { projectId: string; row: Row; list: KlingListed[] }) {
   const router = useRouter();
-  const [id, setId] = useState(row.element?.id ?? "");
-  const [name, setName] = useState(row.element?.name ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const dirty = id !== (row.element?.id ?? "") || name !== (row.element?.name ?? "");
-  const save = async () => {
+  // Picked from the list of your Kling Elements (D114); saved as soon as it's picked.
+  const pick = async (id: string) => {
+    const el = list.find((e) => e.id === id);
     setBusy(true); setError("");
-    const r = await setKlingElementAction(projectId, row.key, id, name);
+    const r = await setKlingElementAction(projectId, row.key, el?.id ?? "", el?.name ?? "");
     setBusy(false);
     if (!r.ok) setError(r.error); else router.refresh();
   };
+  const current = row.element?.id && list.some((e) => e.id === row.element!.id) ? row.element.id : "";
   return (
     <tr className="border-t border-neutral-100">
       <td className="py-1 pr-2 text-xs text-neutral-500">{row.kind}</td>
-      <td className="py-1 pr-2 font-medium">{row.what}</td>
-      <td className="py-1 pr-2"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Element name in Kling" className="w-48 rounded border border-neutral-300 px-2 py-1 text-sm" /></td>
-      <td className="py-1 pr-2"><input value={id} onChange={(e) => setId(e.target.value)} placeholder="Element id (optional)" className="w-48 rounded border border-neutral-300 px-2 py-1 font-mono text-xs" /></td>
+      <td className="py-1 pr-3 font-medium">{row.what}</td>
+      <td className="py-1 pr-2">
+        <select value={current} disabled={busy} onChange={(e) => void pick(e.target.value)} className="w-64 rounded border border-neutral-300 bg-white px-2 py-1 text-sm">
+          <option value="">{row.element && !current ? `${row.element.name} (not in the list)` : "— none —"}</option>
+          {list.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+        </select>
+      </td>
       <td className="py-1">
-        {dirty ? <button type="button" disabled={busy} onClick={save} className="rounded bg-blue-700 px-3 py-1 text-sm text-white disabled:opacity-50">{busy ? "Saving…" : "Save"}</button>
-          : row.element ? <span className="text-xs text-green-700">linked</span> : <span className="text-xs text-amber-700">no Element</span>}
+        {busy ? <span className="text-xs text-neutral-500">Saving…</span> : row.element ? <span className="text-xs text-green-700">linked</span> : <span className="text-xs text-amber-700">no Element</span>}
         {error && <span className="ml-2 text-xs text-red-700">{error}</span>}
       </td>
     </tr>
@@ -48,15 +52,16 @@ function Copy({ text, label }: { text: string; label: string }) {
   );
 }
 
-export function ClipsBoard({ projectId, rows, clips }: { projectId: string; rows: Row[]; clips: Clip[] }) {
+export function ClipsBoard({ projectId, rows, clips, list }: { projectId: string; rows: Row[]; clips: Clip[]; list: { elements: KlingListed[]; updatedAt?: string } }) {
   const [api, setApi] = useState(false);
   const total = clips.reduce((t, c) => t + c.credits, 0);
   return (
     <div className="mt-6 space-y-8">
       <section>
         <h2 className="text-lg font-semibold">Kling Elements</h2>
-        <p className="text-sm text-neutral-600">Make each one once in Kling (Elements → Create, with its approved picture as the cover and 1–3 more angles), then type its name here as it is in Kling. The id is only needed when Claude sends the clip for you.</p>
-        <table className="mt-2 text-sm"><tbody>{rows.map((r) => <ElementRow key={r.key} projectId={projectId} row={r} />)}</tbody></table>
+        <p className="text-sm text-neutral-600">Make each one once in Kling (Elements → Create, with its approved picture as the cover and 1–3 more angles), then pick it here.</p>
+        <p className="text-xs text-neutral-500">{list.elements.length ? `Your Kling Elements as of ${list.updatedAt ? new Date(list.updatedAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "the last refresh"}. Made a new one? Ask Claude to refresh your Kling Elements.` : "No list of your Kling Elements yet: ask Claude to refresh your Kling Elements."}</p>
+        <table className="mt-2 text-sm"><tbody>{rows.map((r) => <ElementRow key={r.key} projectId={projectId} row={r} list={list.elements} />)}</tbody></table>
       </section>
       <section>
         <div className="flex flex-wrap items-baseline justify-between gap-2">
