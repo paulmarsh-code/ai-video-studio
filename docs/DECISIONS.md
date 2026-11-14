@@ -2017,4 +2017,4 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
   - A prop with no height set takes it from its words. Scene 1's table had none, so it wasn't in the set.
   - A set piece with no picture uses the same-named prop's picture from the scene setting or another scene at the same venue: one table, one picture, one cut-out.
   - Someone's own things aren't set pieces ("Elin's skis", "skateboard … used by Kai"), nor are table-top things (cocktails).
-- **Checked.** Tests: 703 pass, including a stand-in GPT run from making to use. The page and previews were rendered on a copy of Paul's data; no scene, plan or panel is written by any of it.
+- **Checked.** Tests: 700 pass, including a stand-in GPT run from making to use. The page and previews were rendered on a copy of Paul's data; no scene, plan or panel is written by any of it.
