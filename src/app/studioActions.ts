@@ -229,3 +229,8 @@ export async function deleteProjectAction(projectId: string, confirmName: string
 export async function setVenueRoomAction(venueId: string, room: { widthM: number; depthM: number } | null) {
   return run((db) => studio.setVenueRoom(db, venueId, room));
 }
+
+/** Use one of the set's own pictures (D98), or with null go back to the venue's view. */
+export async function chooseSetPictureAction(venueId: string, what: { kind: "wall"; view: string } | { kind: "floor" } | { kind: "piece"; from: string }, assetId: string | null): Promise<Result> {
+  return run((db) => { studio.setVenueSetPicture(db, venueId, what, assetId); return undefined; });
+}

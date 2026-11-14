@@ -12,6 +12,7 @@
 import type { GeometryPlanData, PlanCamera, PlanFurniture, Point } from "./types";
 import { horizontalFov } from "./geometry";
 import { cameraZ, floorZ } from "./levels";
+import { propHeight, propKind } from "./story";
 
 export interface Texture { data: Uint8Array | Buffer; width: number; height: number }
 
@@ -48,10 +49,23 @@ export interface SetModel {
 }
 
 const FLAT = /\b(?:backdrop|back\s?drop|banner|sign|signage|screen|board|poster|wall|panel|step[-\s]and[-\s]repeat|curtain|flag|display|logo)\b/i;
-/** Props that stand on the floor and are worth fixing: not held, not small things on a table. */
+/** Someone's own thing, which goes where they go: "Elin's skis", "skateboard … used by Kai" (D98). */
+const PERSONAL = /\b(?:held|used|carried|ridden|worn)\s+by\b/i;
+const OWNED = /^[A-Z][\w-]*['’]s\b/;
+
+/**
+ * Props that stand on the floor and are worth fixing: not held, not someone's own thing, not small
+ * things on a table. A prop with no height set gets the one its words give (D98: the first scene's
+ * table had none, and so had no place in the set).
+ */
 export function isSetPiece(f: PlanFurniture): boolean {
-  return !f.heldBy && !f.onId && (f.heightM ?? 0) >= 0.5;
+  if (f.heldBy || f.onId) return false;
+  const text = `${f.name} ${f.detail ?? ""}`;
+  if (OWNED.test(f.name.trim()) || PERSONAL.test(text) || propKind(text, f.name) === "small") return false;
+  return pieceHeight(f) >= 0.5;
 }
+
+export const pieceHeight = (f: PlanFurniture) => f.heightM ?? propHeight(`${f.name} ${f.detail ?? ""}`, f.name);
 
 /** The point everything is measured from (D95): used as the facing point for flat set pieces. */
 export function setModel(plan: GeometryPlanData, opts: { walls: SetWall[]; textures: Record<string, Texture | undefined>; wallM: number; ceilingM?: number; floor: [number, number, number]; ceiling: [number, number, number]; sky: [number, number, number]; anchor?: Point; floorTexture?: Texture; ceilingTexture?: Texture; tileM?: number }): SetModel {
@@ -61,7 +75,7 @@ export function setModel(plan: GeometryPlanData, opts: { walls: SetWall[]; textu
     const flat = FLAT.test(f.name);
     return {
       id: f.id, name: f.name, at: f.position,
-      widthM: Math.max(0.2, f.radiusM * 2), heightM: f.heightM ?? 1,
+      widthM: Math.max(0.2, f.radiusM * 2), heightM: pieceHeight(f),
       texture: opts.textures[f.id],
       ...(flat ? { facing: mid } : {}),
     } satisfies SetPiece;

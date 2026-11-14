@@ -15,6 +15,7 @@ import { actionFloor, deriveDuration } from "./domain/duration";
 import { hasQuotes } from "./domain/text";
 import type { GeometryPlanData, PanelBlock, PlanCamera, PlanView, Point, Pronoun, ShotSpec } from "./domain/types";
 import { asGenre, type Genre } from "./domain/genre";
+import { setPicturesOf } from "./domain/setPictures";
 import { addMovementMarks, asStaging, propsAsAreas, planProps, propHeight, propsFromFurniture, propKind, propWidth, checkStoryboard, defaultPlan, panelSeconds, shotSpecFor, type DraftPanel, type SceneStaging } from "./domain/story";
 import { LAYOUT_RULES } from "./domain/director";
 import { applyRoom, boundsFor, groupCentre, roomFor, roomOf, type RoomSize } from "./domain/room";
@@ -188,6 +189,24 @@ export function saveVenue(db: DB, venueId: string, input: { name: string; descri
     imageAssetId: x.imageAssetId ?? v.views.find((o) => o.name === x.name.trim())?.imageAssetId,
   }));
   db.update(t.venues).set({ name: input.name.trim() || v.name, description: input.description.trim(), setting: input.setting ?? (v.setting === "exterior" ? "exterior" : "interior"), views, status: "draft" }).where(eq(t.venues.id, venueId)).run();
+  persist(db);
+}
+
+/**
+ * Use (or, with null, stop using) one of the set's own pictures (D98). The venue stays approved:
+ * its views and words are unchanged, and these pictures are only the set built from them.
+ */
+export function setVenueSetPicture(db: DB, venueId: string, what: { kind: "wall"; view: string } | { kind: "floor" } | { kind: "piece"; from: string }, assetId: string | null) {
+  const v = getVenue(db, venueId);
+  if (!v) throw new Error("Venue not found");
+  const s = setPicturesOf(v.setPictures);
+  const put = <T extends Record<string, string>>(m: T, k: string) => { if (assetId) (m as Record<string, string>)[k] = assetId; else delete (m as Record<string, string>)[k]; };
+  if (what.kind === "wall") {
+    if (!v.views.some((x) => x.name === what.view)) throw new Error(`No view called ${what.view}`);
+    put(s.walls!, what.view);
+  } else if (what.kind === "piece") put(s.pieces!, what.from);
+  else if (assetId) s.floor = assetId; else delete s.floor;
+  db.update(t.venues).set({ setPictures: s }).where(eq(t.venues.id, venueId)).run();
   persist(db);
 }
 

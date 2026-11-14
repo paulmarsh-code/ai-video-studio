@@ -1995,3 +1995,26 @@ Stages 1 and 2 of the fixed-set redesign, up to proof step 1. Paul's order of wo
 
   Each of these is a picture made once per venue: wall elevations (straight-on, floor to ceiling) and cut-out set pieces. They need GPT, so they run from Paul's app, with his key, once he approves.
 - **Saved scenes:** the snapshot (D96) shows no differences.
+
+### D98: Build the set: the set's own pictures, made once per venue and approved (2026-11-14)
+
+Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each scene (Scene → Build the set).
+
+- **Failures it fixes (D38).** Proof step 1 showed three faults in the set:
+  - walls covered by venue views read as murals: the views are in perspective, with tables in front;
+  - set pieces carry their old background (the GLOWVANE backdrop picture has a person's head in it);
+  - the floor is a blurred strip.
+
+  It reaches generation through image 1's background once stage 3 draws the people on the set's view. Until then it changes no panel picture and no floor plan.
+- **The pictures (`src/lib/domain/setPictures.ts`, `src/lib/setPictures.ts`).** One GPT picture each, about 7p:
+  - **A wall:** for each venue view, the wall it looks at, straight on, floor to ceiling, without people or anything standing in front of it. Outdoors, the scenery as a flat backdrop, ground to sky.
+  - **The floor:** seen from above, about 2 × 2 m, even enough to repeat.
+  - **A set piece:** drawn alone on a plain colour the prop doesn't have (green, or magenta for green things), then cut out, the colour's rim pulled back and trimmed to the piece, so it fills its real width and height.
+- **Approval.** A made picture is shown beside the one in use, with "Use this", "Discard" and "Try again". It is kept on the venue (new column `set_pictures`), so every scene at the venue shares it. Using one leaves the venue approved, and "Go back to the venue's picture" undoes it.
+- **The set uses them (`sceneSet`).** A wall with its own picture uses all of it; a piece uses its cut-out; the floor its picture. Anything without one falls back as in D97.
+- **Previews.** The page shows each camera position's 360° with its panels' slices framed, and what each panel sees, without people, rendered from the saved floor plan (no layout update).
+- **Set pieces, two general fixes found on the page.**
+  - A prop with no height set takes it from its words. Scene 1's table had none, so it wasn't in the set.
+  - A set piece with no picture uses the same-named prop's picture from the scene setting or another scene at the same venue: one table, one picture, one cut-out.
+  - Someone's own things aren't set pieces ("Elin's skis", "skateboard … used by Kai"), nor are table-top things (cocktails).
+- **Checked.** Tests: 703 pass, including a stand-in GPT run from making to use. The page and previews were rendered on a copy of Paul's data; no scene, plan or panel is written by any of it.

@@ -55,6 +55,8 @@ export const venues = sqliteTable("venues", {
   views: text("views", { mode: "json" }).notNull().default([]), // PlanView[]
   /** Room size in metres (D29): { widthM, depthM }; null means guessed from the venue's words. */
   room: text("room", { mode: "json" }),
+  /** The fixed set's own pictures (D98): wall pictures by view name, the floor, set-piece cut-outs. */
+  setPictures: text("set_pictures", { mode: "json" }),
 });
 
 export const scenes = sqliteTable("scenes", {

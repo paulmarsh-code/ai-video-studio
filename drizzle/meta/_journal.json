@@ -57,6 +57,13 @@
       "when": 1794341900937,
       "tag": "0007_venue_room",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1794650000000,
+      "tag": "0008_venue_set",
+      "breakpoints": true
     }
   ]
 }

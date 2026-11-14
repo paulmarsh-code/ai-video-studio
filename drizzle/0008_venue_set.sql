@@ -1,0 +1,1 @@
+ALTER TABLE `venues` ADD `set_pictures` text;
