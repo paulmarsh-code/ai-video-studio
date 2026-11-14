@@ -2082,3 +2082,20 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
 - **The sign came from the venue's name.** The set request no longer names the venue ("set in the GLOWVANE launch-party venue" was enough for GPT to put up a GLOWVANE sign); image 1 is the venue. One line now holds the framing: "Keep image 1's framing exactly: the same camera position, angle, zoom and crop… Add no signs, logos, screens, displays or furniture."
 - **When GPT moves the room too far to paste back, it draws once more,** and the one that moved the room less is used.
 - **Still open.** GPT drew people at its own sizes and places in all three. To be seen on the next test.
+
+### D105: On the set, where people are is said against the fixed background (2026-11-14)
+
+- **Paul's principle, restated.**
+  - The background is fixed and reusable.
+  - The props are as their uploaded pictures, fixed in look like the characters, so they're the same every time.
+  - What changes is the camera view.
+  - GPT adds the people (and small props) in the right perspective, and the request is relative to the fixed background.
+
+  Nothing may be fitted to one story (D38).
+- **The failure it fixes.** In the first test on the set (D104), GPT drew the people at its own sizes and places in all three panels. The set request said nothing about where anyone was, so the stand-ins alone had to carry it.
+- **What changes.** The set request now says where each person is relative to the scene's own fixed things, worked out from the same floor plan as image 1's stand-ins, so the words and the picture can't disagree:
+  - "Around the cocktail table: Chase at the cocktail table, on its left, facing Jade; …";
+  - "Behind Chase: the bar, as in image 1."
+
+  It still gives no sizes, metres from the camera, light, room description or left-to-right list.
+- **General.** The anchor is whatever the scene's focal set piece is, and the background is whichever venue view is behind the subject. Every rule from D103–D104 is the same for any venue and story: room height from the venue's own words, no venue name, framing held, one retry.

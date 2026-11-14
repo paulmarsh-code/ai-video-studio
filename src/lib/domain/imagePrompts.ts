@@ -193,7 +193,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     ...shotPlan.actors.filter((x) => x.to).map((x) => x.characterId),
   ] : [];
   // The short request (B3), filled as the same values are worked out below.
-  const S: Record<string, string[]> = { refs: [], people: [], props: [], moment: [], camera: [], keep: [] };
+  const S: Record<string, string[]> = { refs: [], people: [], props: [], moment: [], camera: [], keep: [], place: [] };
   const attach: PanelPrompt["attach"] = [];
   // References in image 1's left-to-right order (D64). With them the other way round, GPT put the
   // first reference on the left: in T6 the two women swapped in 5 of 9 draws with the right-hand
@@ -384,6 +384,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
       return `${name(a.characterId)} ${where}${faces}`;
     });
     if (parts.length) lines.push(`Around the ${focal.name}: ${parts.join("; ")}. Nobody stands anywhere else.`);
+    if (parts.length) S.place.push(`Around the ${focal.name}: ${parts.join("; ")}.`);
   }
   // The cast up on a stage or balcony (D29): the crowd stays down on the main floor.
   const castUp = i.plan?.levels?.length ? i.plan.levels.find((l) => l.heightM > 0 && i.plan!.actors.some((a) => levelAt(i.plan!, a.position) === l)) : undefined;
@@ -503,6 +504,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
       lines.push(`Exactly ${order.length} main characters in this picture, from left to right: ${who}.${sides} Keep this left-to-right order; do not swap anyone, and do not leave anyone out.`);
       S.people.unshift(`Exactly ${order.length} main characters, left to right: ${who}; background people apart.${sides}`);
       if (reading.backgroundView && subjectId) lines.push(`Behind ${name(subjectId)}, across the room several metres away: the ${reading.backgroundView}. Nothing stands right behind them.`);
+      if (reading.backgroundView && subjectId) S.place.push(`Behind ${name(subjectId)}: the ${reading.backgroundView}, as in image 1.`);
     } else {
       const frame = describeFrame(reading, i.cast, [...shownIds, ...edgeIds], subjectId);
       if (frame) lines.push(`Positions: ${frame}.`);
@@ -646,6 +648,9 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     setInstruction(coloured),
     `The other images show only how each person looks (${attach.slice(1).map((a) => a.label).join(", ")}${leftToRight.length > 1 ? "; in image 1's left-to-right order" : ""}): copy faces, hair, clothes and anything carried exactly; never take positions or background from them.`,
     ...(S.keep.length ? [`Keep: ${S.keep.join("; ")}.`] : []),
+    // Where people are, said against the fixed set (Paul, D105): from the same floor plan as image
+    // 1's stand-ins, so the words and the picture agree.
+    ...S.place,
     ...S.moment.filter((l) => !/^Shot effect:/.test(l)),
     ...setPeople,
     noText,
