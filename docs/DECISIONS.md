@@ -1955,3 +1955,13 @@ Steps 1, 2 and 5 were working. This decision is step 4. Step 3 comes next.
   - panels 5 and 8 share the over-the-shoulder on Chase;
   - panels 1 (Jade arriving) and 9 (Jade walking off) keep their own;
   - that is five set-ups for nine panels, all on one side and none further than about 6 m.
+
+### D96: A scene never changes by itself; saved scenes are snapshotted before changes ship (2026-11-14)
+
+This is stage 0 of the fixed-set redesign agreed on 14 November (doc: "Storyboard redesign: a fixed set like a video game").
+- **The failure.** On 13 November D83's automatic update rebuilt Paul's nearly finished launch-party scene when he opened it, and my rule changes ran on scenes they were never checked on.
+- **Rule.**
+  - The storyboard page no longer updates a layout by itself.
+  - The out-of-date notice says newer rules are available, that this is optional, and that nothing changes unless Paul presses "Update the layout".
+- **Check (`scripts/snapshot.ts`).** It records, for every panel of every saved scene, where each person stands, their posture and doing, and the camera, as the app works them out. Run before and after a change against a copy of Paul's database: any difference is listed, and a change that moves people or cameras in a scene it wasn't meant for doesn't ship.
+- **Baseline** taken on Paul's restored database (5 scenes).

@@ -13,7 +13,6 @@ import { StoryboardBoard } from "@/components/StoryboardBoard";
 import { SceneSettingCard } from "@/components/SceneSettingCard";
 import { asStaging, propMoves, propsFromFurniture, stagingPrompt } from "@/lib/domain/story";
 import { LAYOUT_RULES } from "@/lib/domain/director";
-import { updateLayout } from "@/lib/layoutUpdate";
 import { PanelEditor } from "@/components/PanelEditor";
 import { hasRing } from "@/lib/backgroundImage";
 import { ensureHeldItems } from "@/lib/heldItemsServer";
@@ -29,21 +28,12 @@ export default async function StoryboardPage({ params, searchParams }: { params:
   const sp = await searchParams;
   const db = await getDb();
   const project = repo.getProject(db, id);
-  let s = repo.getScene(db, sceneId);
+  const s = repo.getScene(db, sceneId);
   if (!project || !s || s.scene.projectId !== id) notFound();
-  // An out-of-date layout updates itself (D83) when no picture is approved yet, so there is
-  // nothing to protect: Paul redrew three times on an old layout because the update was a button
-  // he had no reason to press. With approved pictures, the notice and its button remain.
-  let updatedNote = "";
-  if (s.plan && (s.plan.data.rules ?? 0) < LAYOUT_RULES && studio.sceneLocks(db, sceneId).positions && !s.panels.some((p) => p.status === "approved")) {
-    try {
-      await updateLayout(db, sceneId);
-      updatedNote = "The app's layout rules have improved, so this scene's layout and cameras were updated for you. Pictures drawn before need drawing again.";
-    } catch (e) {
-      updatedNote = `The layout couldn't be updated by itself: ${e instanceof Error ? e.message : String(e)}`;
-    }
-    s = repo.getScene(db, sceneId)!;
-  }
+  // A scene's layout never changes by itself (D96, replacing D83's automatic update): on 13
+  // November an automatic update rebuilt Paul's nearly finished launch-party scene. Newer layout
+  // rules are offered by the notice below; the scene changes only when he presses its button.
+  const updatedNote = "";
   const cast = repo.getCast(db, id);
   const chars = studio.listCharacters(db, id);
   // Which hand holds what, read once from each reference picture (D34), so the storyboard can
