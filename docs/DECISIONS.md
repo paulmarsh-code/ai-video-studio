@@ -2136,3 +2136,21 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
 - **The switch** is now called "Use the fixed set as the background", with that job explained beside it.
 - **A plain "Redraw" on every panel** (about 7p, from the layout as it is now). Paul couldn't redraw panel 3: it had passed the check and nothing had changed, so the only way was "Need to change something?".
 - **Paul on panels 5 and 7 drawn this way: "these are fine".** The table is GPT's version of it (close, not the cut-out itself), and panel 7's order still differs from the plan.
+
+### D108: On the set: one look per fixed prop, the order of people said, the extras asked for (2026-11-14)
+
+- **Paul's redraw of all 11 panels on the set.**
+  - The venue changed from panel to panel, which he can live with.
+  - The table kept changing: a base in panel 1, sizes differing, two candles or three.
+  - In panel 7 Jade was drawn between Nina and Marcus.
+  - Panel 1 had no extras.
+
+  Paul: "venue look, characters, props and positions need to work."
+- **Causes.**
+  - The table had three looks in play. Its words said "2 tumbler candels". Its prop picture was the scene setting's. The set's own table was Paul's cut-out, with three votives. GPT mixed them.
+  - On the set, the request no longer gave the order of people across the picture; only the stand-ins did.
+  - The set instruction said the room in image 1 is finished and to keep it exactly, so GPT added no one to an empty room.
+- **Fixes, for any scene.**
+  - On the set, each set piece's reference picture is its approved cut-out from Build the set: one look, the same everywhere. The request says it once: "The cocktail table: exactly as in the cocktail table picture, every time: the same shape, cloth, colours and everything on it, the same number of each thing, nothing added or taken away." Its words aren't used, so a count in them can't disagree with the picture.
+  - The left-to-right order is said again, from the same floor plan as image 1: "Exactly 4 main characters, left to right: …; keep this order;". The picture check already redraws once when the order is wrong.
+  - When the scene has extras, the set instruction says the room in image 1 is empty and to add the background people described, standing and moving about on its floor.

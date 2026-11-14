@@ -26,7 +26,10 @@ describe("Drawing on the fixed set (D103)", () => {
     expect(p.image).toContain("ALREADY FINISHED EXCEPT FOR THE PEOPLE");
     expect(p.image).toContain("Moment: Ava laughs at Bo's joke.");
     expect(p.image).toContain("a few guests");
-    expect(p.image).not.toMatch(/Where:|Lighting|Key props|Sizes:|left to right|metres|near the glowing display, /);
+    expect(p.image).not.toMatch(/Where:|Lighting|Key props|Sizes:|metres|near the glowing display, /);
+    // Positions and props are said from the same plan and pictures as image 1 (D108).
+    expect(p.image).toMatch(/left to right: Bo and Ava; keep this order;/);
+    expect(p.image).toContain("The small round table: exactly as in the small round table picture");
     // The people's and props' pictures go with image 1 (D106), never an earlier picture.
     expect(p.attach.map((a) => a.label)).not.toContain("approved scene picture (panel 3)");
     expect(p.attach.map((a) => a.label)).toContain("small round table picture");

@@ -21,6 +21,7 @@ import { signsWithoutPicture } from "@/lib/domain/signage";
 import { panelCameraLabel } from "@/lib/domain/geometry";
 import { continuityFor } from "@/lib/domain/continuity";
 import { drawsOnSet } from "@/lib/onSet";
+import { setPicturesOf } from "@/lib/domain/setPictures";
 import { OnSetSwitch } from "@/components/OnSetSwitch";
 
 export const dynamic = "force-dynamic";
@@ -48,6 +49,10 @@ export default async function StoryboardPage({ params, searchParams }: { params:
   // Drawing on the fixed set (D103): the user turns it on per scene.
   const onSet = drawsOnSet(db, sceneId);
   const frame = onSet ? "set" as const : frameVariant();
+  // On the set (D108), each set piece's picture is its approved cut-out from Build the set, the one
+  // look used everywhere; without one, its prop picture as before.
+  const own = setPicturesOf(s.venue?.setPictures);
+  const promptPlan = onSet && s.plan ? { ...s.plan.data, furniture: (s.plan.data.furniture ?? []).map((f) => (f.imageAssetId && own.pieces?.[f.imageAssetId] ? { ...f, imageAssetId: own.pieces[f.imageAssetId] } : f)) } : s.plan?.data;
   const pick = (pr: { text: string; short?: string; image?: string }) => onSet ? pr.image ?? pr.text : requestVariant() === "short" ? pr.short ?? pr.text : pr.text;
   const base = `${project.code}_EP${String(s.scene.episode).padStart(2, "0")}_S${String(s.scene.number).padStart(2, "0")}`;
   const recheck = repo.getAnimatic(db, sceneId)?.timeline.recheck ?? {};
@@ -130,7 +135,7 @@ export default async function StoryboardPage({ params, searchParams }: { params:
               : sug ? { words: sug.shot, by: "app" as const, why: sug.why } : undefined;
             const d = p.dialogue[0];
             const prompt = panelPrompt({
-              description: p.description, emotion: p.emotion, shot: shot?.spec, cast, profiles, plan: s.plan?.data,
+              description: p.description, emotion: p.emotion, shot: shot?.spec, cast, profiles, plan: promptPlan,
               venueName: s.venue?.name ?? "venue", venueDescription: s.venue?.description, venueViews: s.venue?.views as { name: string; imageAssetId?: string }[] | undefined, aspect: brief.aspect, genre, style: brief.style,
               layoutHref: shot?.spec.cameraId ? `/api/layout/${shot.id}` : undefined,
               backgroundHref: shot?.spec.cameraId && hasRing(s.venue?.views as { imageAssetId?: string }[] | undefined) ? `/api/background/${shot.id}` : undefined,

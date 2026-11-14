@@ -637,17 +637,23 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   // say what is where and how it looks, the words only what no picture shows. Nothing about the
   // room, the props, the light, sizes, distances or order across the picture is said, so nothing
   // can contradict image 1.
-  // Who is where across the picture is image 1's to say; only how many is said. Background people
+  // Left to right, from the same floor plan as image 1 (Paul, D108: "positions need to work"; in
+  // panel 7 Jade was drawn between Nina and Marcus with only image 1 to go on). Background people
   // aren't blurred against a room that stays sharp.
+  const hasOrder = S.people.some((l) => /^Exactly \d+ main/.test(l));
   const setPeople = blocking ? [
-    `Exactly ${visible.length + edge.length} main ${visible.length + edge.length === 1 ? "character" : "characters"}, one of each; background people apart.`,
-    ...S.people.filter((l) => !/^Sizes:|^Exactly \d+ main/.test(l)).map((l) => l.replace(/\bOut of focus, smaller\b/, "Smaller")),
+    ...(hasOrder ? [] : [`Exactly ${visible.length + edge.length} main ${visible.length + edge.length === 1 ? "character" : "characters"}, one of each; background people apart.`]),
+    ...S.people.filter((l) => !/^Sizes:/.test(l)).map((l) => l.replace(/\bOut of focus, smaller\b/, "Smaller").replace(/^(Exactly \d+ main characters, left to right: [^;]*;)/, "$1 keep this order;")),
   ] : [];
+  // Each fixed prop exactly as its picture (D108): the table came out with a base, two candles or
+  // three, from its words ("2 tumbler candles") against a picture with three. On the set its look
+  // is its picture alone.
+  const fixedProps = onSet ? propPics.map((f) => `The ${f.name}: exactly as in the ${f.name} picture, every time: the same shape, cloth, colours and everything on it, the same number of each thing, nothing added or taken away.`) : [];
   const image = blocking && onSet ? [
     // No venue name (D103): "GLOWVANE launch-party venue" was enough for GPT to put up a big
     // GLOWVANE sign the set doesn't have. Image 1 is the venue.
     `${(i.style ?? "photorealistic").replace(/^./, (m) => m.toUpperCase())} storyboard frame for a ${i.aspect ?? "9:16"} video.`,
-    setInstruction(coloured),
+    setInstruction(coloured, !!crowd),
     `The other images show only how each person and prop looks (${attach.slice(1).map((a) => a.label).join(", ")}${leftToRight.length > 1 ? "; the people in image 1's left-to-right order" : ""}): copy faces, hair, clothes, anything carried and every prop exactly; never take positions, sizes or background from them.`,
     // The shot the app chose for this camera (Paul, D106): image 1 is that shot, so the size and
     // lens named here are what image 1 already frames.
@@ -657,6 +663,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     // Where people are, said against the fixed set (Paul, D105): from the same floor plan as image
     // 1's stand-ins, so the words and the picture agree.
     ...S.place,
+    ...fixedProps,
     ...S.moment.filter((l) => !/^Shot effect:/.test(l)),
     ...setPeople,
     noText,
@@ -831,13 +838,14 @@ export function blockingInstruction(refLabels: string[], box = false, coloured =
  * drawn. The room round them is pasted back afterwards, so this says plainly that nothing else
  * changes, and leaves where and how big to the picture.
  */
-export function setInstruction(coloured = false): string {
+export function setInstruction(coloured = false, crowd = false): string {
   return [
     "IMAGE 1 IS THIS SHOT, ALREADY FINISHED EXCEPT FOR THE PEOPLE. The room, its light and everything standing in it are the final photograph: keep them exactly, as sharp as they are.",
     `${coloured ? "Each stand-in (shaded in the colours of that person's clothes)" : "Each pale stand-in"} becomes the person named on it, standing exactly where it stands, exactly as big, turned the way its label says and doing what it says. An orange arrow only shows which way a walker is heading, never a second place for them, so everyone appears once. A yellow tag marks something held, on that side of the picture.`,
     "Remove every stand-in, label, arrow and tag. Draw everyone in the room's own light, with their shadows on the floor, as sharp as the room.",
+    crowd ? "The room in image 1 is empty: add the background people described below, standing and moving about on its floor, smaller the further away they are." : "",
     "Keep image 1's framing exactly: the same camera position, angle, zoom and crop, so every wall, light, shelf and table stays exactly where and as big as it is in image 1. Add no signs, logos, screens, displays or furniture.",
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 }
 
 /** Image 1's instruction in the short request (B3): the same meaning as `blockingInstruction`, said once. */
