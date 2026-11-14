@@ -10,13 +10,14 @@ import type { Clip, KlingElement } from "@/lib/domain/clips";
 import type { KlingListed } from "@/lib/klingList";
 import type { PictureChoice } from "@/lib/sceneClips";
 import type { KlingJob } from "@/lib/klingJobs";
+import { ofProject } from "@/lib/klingNames";
 
 type Row = { key: string; what: string; kind: string; element?: KlingElement };
 /** Whether the app can make a row's Element from its own pictures, and how the request stands (D127). */
 type Making = Record<string, { pictures: number; status?: "ready" | "sent" | "done" | "failed"; error?: string }>;
 const MAKING: Record<string, string> = { ready: "waiting for Claude", sent: "being made in Kling", done: "made from the app's pictures", failed: "couldn't be made" };
 
-function ElementRow({ projectId, sceneId, row, list, making }: { projectId: string; sceneId: string; row: Row; list: KlingListed[]; making?: Making[string] }) {
+function ElementRow({ projectId, projectCode, sceneId, row, list, making }: { projectId: string; projectCode: string; sceneId: string; row: Row; list: KlingListed[]; making?: Making[string] }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -42,7 +43,9 @@ function ElementRow({ projectId, sceneId, row, list, making }: { projectId: stri
       <td className="py-1 pr-2">
         <select value={current} disabled={busy} onChange={(e) => void pick(e.target.value)} className="w-64 rounded border border-neutral-300 bg-white px-2 py-1 text-sm">
           <option value="">{row.element && !current ? `${row.element.name} (not in the list)` : "— none —"}</option>
-          {list.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+          {/* This project's Elements first, by the code their names start with (D128). */}
+          <optgroup label={`This project (${projectCode})`}>{list.filter((e) => ofProject(e.name, projectCode)).map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}</optgroup>
+          <optgroup label="Other projects and unsorted">{list.filter((e) => !ofProject(e.name, projectCode)).map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}</optgroup>
         </select>
       </td>
       <td className="py-1">
@@ -95,7 +98,7 @@ function PictureSlot({ sceneId, shot, choice }: { sceneId: string; shot: number;
 
 const STATUS: Record<KlingJob["status"], string> = { ready: "Waiting for Claude to make it", sent: "Being made in Kling", done: "Made", failed: "Failed" };
 
-export function ClipsBoard({ projectId, sceneId, rows, clips, list, pictures, jobs, making }: { projectId: string; sceneId: string; rows: Row[]; clips: Clip[]; list: { elements: KlingListed[]; updatedAt?: string }; pictures: PictureChoice[]; jobs: KlingJob[]; making: Making }) {
+export function ClipsBoard({ projectId, projectCode, sceneId, rows, clips, list, pictures, jobs, making }: { projectId: string; projectCode: string; sceneId: string; rows: Row[]; clips: Clip[]; list: { elements: KlingListed[]; updatedAt?: string }; pictures: PictureChoice[]; jobs: KlingJob[]; making: Making }) {
   const router = useRouter();
   const [api, setApi] = useState(false);
   const [busy, setBusy] = useState<number | "all" | null>(null);
@@ -143,7 +146,7 @@ export function ClipsBoard({ projectId, sceneId, rows, clips, list, pictures, jo
         <p className="text-sm text-neutral-600">Each character, the venue and each key prop is one Kling Element, the same in every clip. The app can have Claude make them from its own approved pictures (the same ones the storyboard is drawn from); one you made yourself in Kling can be picked from the list.</p>
         {missingEls.length > 0 && <button type="button" onClick={() => void makeMissing()} className="mt-2 rounded bg-blue-700 px-3 py-1 text-sm text-white hover:bg-blue-800">Make the {missingEls.length} missing Element{missingEls.length === 1 ? "" : "s"} from the app&apos;s pictures</button>}
         <p className="text-xs text-neutral-500">{list.elements.length ? `Your Kling Elements as of ${list.updatedAt ? new Date(list.updatedAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "the last refresh"}. Made a new one? Ask Claude to refresh your Kling Elements.` : "No list of your Kling Elements yet: ask Claude to refresh your Kling Elements."}</p>
-        <table className="mt-2 text-sm"><tbody>{rows.map((r) => <ElementRow key={r.key} projectId={projectId} sceneId={sceneId} row={r} list={list.elements} making={making[r.key]} />)}</tbody></table>
+        <table className="mt-2 text-sm"><tbody>{rows.map((r) => <ElementRow key={r.key} projectId={projectId} projectCode={projectCode} sceneId={sceneId} row={r} list={list.elements} making={making[r.key]} />)}</tbody></table>
       </section>
       <section>
         <div className="flex flex-wrap items-baseline justify-between gap-2">

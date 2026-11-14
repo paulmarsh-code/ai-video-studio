@@ -54,8 +54,8 @@ function writeElementRequests(requests: ElementRequest[]) {
 
 const short = (s: string, n: number) => (s.length <= n ? s : `${s.slice(0, n - 1).trimEnd()}…`);
 const clean = (s: string) => s.replace(/\s+/g, " ").trim();
-/** A name in Kling's 20 characters, cut at a word. */
-export const nameOf = (s: string) => { const t = clean(s); if (t.length <= 20) return t; const cut = t.slice(0, 20); return (cut.slice(0, cut.lastIndexOf(" ")) || cut).replace(/[-–,:;]+$/, ""); };
+export { nameOf, ofProject } from "./klingNames";
+import { nameOf } from "./klingNames";
 
 /**
  * What each of a scene's Elements would be made from, by its key. A thing with no approved
@@ -65,6 +65,7 @@ export function elementSources(db: DB, sceneId: string): Omit<ElementRequest, "s
   const s = repo.getScene(db, sceneId);
   if (!s) return [];
   const projectId = s.scene.projectId;
+  const code = repo.getProject(db, projectId)?.code ?? "";
   const asset = (id?: string) => (id ? repo.getAsset(db, id) : undefined);
   const pic = (role: string, id?: string) => { const a = asset(id); return a && fs.existsSync(a.path) ? [{ role, assetId: a.id, path: a.path }] : []; };
   const out: Omit<ElementRequest, "status" | "requestedAt">[] = [];
@@ -78,7 +79,7 @@ export function elementSources(db: DB, sceneId: string): Omit<ElementRequest, "s
     const refs = p.refs ?? {};
     const pictures = [...pic("front", refs.front ?? refs.face), ...pic("face", refs.front ? refs.face : undefined), ...pic("back", refs.back), ...pic("side", refs.side)].slice(0, 4);
     if (pictures.length < 2) continue;
-    out.push({ key: elementKey.character(c.slug), projectId, kind: "Character", what: c.name, name: nameOf(c.name), description: short(clean(`${p.appearance ?? ""} ${p.wardrobe ?? ""}`), 400), tags: ["Characters"], pictures });
+    out.push({ key: elementKey.character(c.slug), projectId, kind: "Character", what: c.name, name: nameOf(c.name, code), description: short(clean(`${p.appearance ?? ""} ${p.wardrobe ?? ""}`), 400), tags: ["Characters"], pictures });
   }
 
   // The venue: the set's own wall pictures (what the storyboard is drawn on), else its views.
@@ -86,7 +87,7 @@ export function elementSources(db: DB, sceneId: string): Omit<ElementRequest, "s
     const views = (s.venue.views ?? []) as { name: string; imageAssetId?: string }[];
     const walls = setPicturesOf(s.venue.setPictures).walls ?? {};
     const pictures = views.flatMap((v) => pic(v.name, walls[v.name] ?? v.imageAssetId)).slice(0, 4);
-    if (pictures.length >= 2) out.push({ key: elementKey.venue(s.venue.id), projectId, kind: "Venue", what: s.venue.name, name: nameOf(s.venue.name), description: short(clean(s.venue.description ?? ""), 400), tags: ["Scenes"], pictures });
+    if (pictures.length >= 2) out.push({ key: elementKey.venue(s.venue.id), projectId, kind: "Venue", what: s.venue.name, name: nameOf(s.venue.name, code), description: short(clean(s.venue.description ?? ""), 400), tags: ["Scenes"], pictures });
   }
 
   // Props: the set's cut-out as the cover, then the prop's own picture (D108, D111).
@@ -105,7 +106,7 @@ export function elementSources(db: DB, sceneId: string): Omit<ElementRequest, "s
     if (pictures.length === 1) pictures = [pictures[0], { ...pictures[0], role: "picture" }];
     if (!pictures.length) continue;
     const detail = f?.detail ?? staged.find((x) => x.name.toLowerCase() === n.toLowerCase())?.detail ?? "";
-    out.push({ key: elementKey.prop(n), projectId, kind: "Prop", what: n, name: nameOf(n.charAt(0).toUpperCase() + n.slice(1)), description: short(clean(detail), 400), tags: ["Items"], pictures });
+    out.push({ key: elementKey.prop(n), projectId, kind: "Prop", what: n, name: nameOf(n.charAt(0).toUpperCase() + n.slice(1), code), description: short(clean(detail), 400), tags: ["Items"], pictures });
   }
   return out;
 }

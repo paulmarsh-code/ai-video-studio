@@ -2405,3 +2405,13 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
   - Claude uploads the pictures, calls `element_create`, writes the id back and refreshes the Elements list (runbook).
   - The clips page links each made Element to its row as it opens, once, so a later pick in the dropdown stands.
 - **Reaches the generation through:** the Elements bound to every clip.
+
+### D128: Kling Elements grouped by project (2026-11-14)
+
+- **Paul:** "is it possible to organise the elements into projects, i.e. History, POT, ski and skateboard?"
+- **What Kling offers.** Its connection gives each Element only an id, a name, a description and tags from a fixed list (Characters, Scenes, Items…). There are no folders, so the name is what can carry the project.
+- **Fix (`lib/klingNames.ts`).**
+  - Elements the app has made start with the project's code, cut at a word to Kling's 20 characters: "POT Jade", "POT GLOWVANE", "SKA Kai".
+  - Each Element dropdown on the clips page lists "This project (POT)" first: names starting with the project's code, followed by a space, `_`, `·`, `:` or `-`. Then "Other projects and unsorted".
+- **Paul's 43 existing Elements** have mixed names: POT ones such as "Jadefull", "chase full", "Table"; History Prism ones such as "HP_Judge_V01", "Pross-Jury", "Judgefav3". Claude offered to rename them with prefixes. Renaming in Kling rewrites the whole Element, so each would be read first and written back with only the name changed. Ids don't change, so the app's links stand.
+- **Reaches the generation through:** the right Element picked for each character, venue and prop.

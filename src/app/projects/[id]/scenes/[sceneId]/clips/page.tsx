@@ -39,7 +39,7 @@ export default async function ClipsPage({ params }: { params: Promise<{ id: stri
         Kling keeps the clips consistent with Elements: each character, the venue and each key prop, the same in every clip. Each shot is staged from its storyboard picture.
         Here the panels are grouped into clips of up to two camera angles, and each clip&apos;s request is written from the plan. Pick the Elements and pictures, then create the clips.
       </p>
-      <ClipsBoard projectId={s.scene.projectId} sceneId={sceneId} rows={v.rows} clips={v.clips} list={v.listed} pictures={v.pictures} jobs={jobs} making={making} />
+      <ClipsBoard projectId={s.scene.projectId} projectCode={repo.getProject(db, s.scene.projectId)?.code ?? ""} sceneId={sceneId} rows={v.rows} clips={v.clips} list={v.listed} pictures={v.pictures} jobs={jobs} making={making} />
     </div>
   );
 }
