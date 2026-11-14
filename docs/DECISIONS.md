@@ -2223,3 +2223,10 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
   - When a clip has more than one line, each is numbered ("Line 2, Jade says: …"), and the closing rules say: "Each line is said once, in its own shot, word for word: N different lines in all."
   - A shot where someone has an arriving, crossing or approaching mark says they haven't reached the group or its table yet: "it is ahead of Jade, further into the room, and Jade walks towards it, never past."
   - Every clip asks for sound under the voices: "the room's low murmur and soft music under the voices; footsteps and movement quiet, never louder than speech."
+
+### D116: Clip 1 redone: good; lines said with their feeling (2026-11-14)
+
+- **Paul on clip 1 redone with D115:** "I think it is good … the clip overall is good."
+  - The camera jumps angle to show the Jade–Chase exchange. That's acceptable, to be sorted in the edit.
+  - Jade's second line was "a bit flat, robotic", where the two earlier clips had it better.
+- **Fix (`clips.ts`).** Each line now carries its panel's feeling where it is said: "Line 2, Jade says, happy, confident, expectant, naturally, never flat: …". Before, the feeling sat only on the action before it. A speaker's voice is also kept to a little more of its voice lock (up to about 320 characters, was 240), so its rhythm and pitch notes survive.

@@ -60,3 +60,11 @@ describe("Clip requests after the first full clip (D115)", () => {
     expect(c.prompt).toContain("footsteps and movement quiet, never louder than speech");
   });
 });
+
+describe("Lines said with feeling (D116)", () => {
+  it("a line carries its panel's feeling", () => {
+    const p = { ...P(1, 4, {}, [{ characterId: "ava", text: "Well?" }]), emotion: "hopeful, expectant" };
+    const [c] = sceneClips({ panels: [p], cast: cast as never, plan: plan as never, venue: { id: "v1", name: "Roof bar" }, elements });
+    expect(c.prompt).toContain('Ava says, hopeful, expectant, naturally, never flat: "Well?"');
+  });
+});

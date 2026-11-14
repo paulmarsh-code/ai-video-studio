@@ -130,7 +130,9 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput): Clip {
       const d = Math.max(1, p.durationSec);
       const words = shotWords(p, i.plan, (id) => first(nameOf(id)));
       const speech = p.dialogue.length
-        ? p.dialogue.map((x) => `${lines.length > 1 ? `Line ${++lineNo}, ` : ""}${first(nameOf(x.characterId))} says: "${x.text.trim()}"`).join(" Then ")
+        // Said with the panel's feeling, in a natural voice (D116): line 2 came out flat and robotic
+        // with the feeling only on the action before it.
+        ? p.dialogue.map((x) => `${lines.length > 1 ? `Line ${++lineNo}, ` : ""}${first(nameOf(x.characterId))} says${p.emotion ? `, ${p.emotion.trim().replace(/\.$/, "")}, naturally, never flat` : ""}: "${x.text.trim()}"`).join(" Then ")
         : "No one speaks.";
       // On the way in (D115): someone arriving or crossing hasn't reached the group yet, so the
       // group is ahead of them. Kling had Jade walk past them, then turn back to greet them.
@@ -194,7 +196,7 @@ function shotWords(p: ClipPanel, plan: GeometryPlanData, name: (id: string) => s
 }
 
 /** A voice in a sentence or two (D113): the whole voice lock ran a clip's request past 3,000 characters. */
-export function voiceShort(v: string, max = 240): string {
+export function voiceShort(v: string, max = 320): string {
   const sentences = v.replace(/\s+/g, " ").trim().split(/(?<=[.!?])\s+/);
   let out = "";
   for (const x of sentences) { if (out && (out + " " + x).length > max) break; out = out ? `${out} ${x}` : x; }
