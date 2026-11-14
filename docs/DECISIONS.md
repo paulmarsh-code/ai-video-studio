@@ -2415,3 +2415,15 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
   - Each Element dropdown on the clips page lists "This project (POT)" first: names starting with the project's code, followed by a space, `_`, `·`, `:` or `-`. Then "Other projects and unsorted".
 - **Paul's 43 existing Elements** have mixed names: POT ones such as "Jadefull", "chase full", "Table"; History Prism ones such as "HP_Judge_V01", "Pross-Jury", "Judgefav3". Claude offered to rename them with prefixes. Renaming in Kling rewrites the whole Element, so each would be read first and written back with only the name changed. Ids don't change, so the app's links stand.
 - **Reaches the generation through:** the right Element picked for each character, venue and prop.
+- **Renaming done (Paul: "yes").** Kling's update rewrites an Element whole.
+  - It wants a non-empty name on each extra picture and a description.
+  - It accepts a voice only as an uploaded .mp3.
+  - So only picture Elements whose voice, if any, is an .mp3 can be renamed safely through the connection.
+- **Renamed (10):**
+  - POT: Table, GLOWVANE set, Chase full, Marcus, Nina, Jade full, Venue (old), Jade (old);
+  - HP: Pros-witness img, Pros-M-Jury.
+- **Left as they are (31):**
+  - POT: "Chaseupdated" (its voice is an .mp4), and the two video Elements "Chase" and "voice jade".
+  - All the History Prism video Elements (judges, barristers, voices): they're video subjects whose voices are .mp4, and rewriting them would drop the voice. Paul can rename them in the Kling app.
+  - The ones that already had a prefix.
+- **Ids unchanged:** the app's links stand. The dropdowns show the new names after the next "refresh my Kling Elements".
