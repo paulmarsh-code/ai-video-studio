@@ -148,6 +148,9 @@ export interface PanelPrompt {
   attach: { label: string; assetId: string; href?: string }[];
 }
 
+/** References are named (D109): the names bind each look to one person. */
+const NAMED_REFS = "Each person's reference picture has their name written above it, the same name as on their stand-in in image 1: only that person has that face, hair, clothes and anything they carry. Never give one person's face, clothes, bag or jewellery to anyone else.";
+
 export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   const genre = i.genre ?? "neutral";
   const shot = i.shot;
@@ -248,6 +251,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
   const coloured = blocking && visible.some((c) => outfitColours(i.profiles[c.id]?.wardrobe).length > 0);
   if (blocking) lines.push(blockingInstruction(attach.slice(box ? 2 : 1).map((a) => a.label), box, coloured, fill));
   const people = attach.slice(peopleFrom, peopleFrom + peopleCount);
+  if (people.length && blocking) lines.push(NAMED_REFS);
   if (people.length) lines.push(`Use the attached reference images for ${joinNames([...new Set(people.map((a) => a.label.replace(/ (reference|back)$/, "")))])}; keep their faces, hair and clothes identical, every pattern, stripe and colour block included. Bags and anything carried stay exactly as in the reference, in the same hand or on the same shoulder. Mind the mirror: a bag in someone's left hand is on the right of the picture when they face the camera, and on the left of the picture when they are seen from behind.`);
   const backs = people.filter((a) => a.label.endsWith(" back")).map((a) => a.label.replace(/ back$/, ""));
   if (blocking) S.refs.push(`The other images show only how people and props look (${attach.slice(box ? 2 : 1).map((a) => a.label).join(", ")}${leftToRight.length > 1 ? "; the people in image 1's left-to-right order" : ""}): copy faces, hair, clothes, carried things and props exactly; never take positions or background from them.`);
@@ -645,6 +649,12 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     ...(hasOrder ? [] : [`Exactly ${visible.length + edge.length} main ${visible.length + edge.length === 1 ? "character" : "characters"}, one of each; background people apart.`]),
     ...S.people.filter((l) => !/^Sizes:/.test(l)).map((l) => l.replace(/\bOut of focus, smaller\b/, "Smaller").replace(/^(Exactly \d+ main characters, left to right: [^;]*;)/, "$1 keep this order;")),
   ] : [];
+  // Who is speaking, tied to their stand-in and place in the picture (D109): in panel 4 GPT drew
+  // Nina, in the middle facing the camera, delivering Jade's line, and Jade at the side.
+  const spk = onSet && shot?.speakerId && shot.visibleIds.includes(shot.speakerId) ? shot.speakerId : undefined;
+  const spkSeen = spk ? reading?.actors.find((a) => a.characterId === spk) : undefined;
+  const spkCols = spk ? outfitColours(i.profiles[spk]?.wardrobe) : [];
+  const speakerLine = spk && spkSeen?.inView ? [`${name(spk)} is the one speaking in this moment, mouth open mid-word: the stand-in labelled ${name(spk).split(/\s+/)[0].toUpperCase()} in image 1, ${spkSeen.frame === "centre" ? "in the middle of the picture" : spkSeen.frame === "frame-left" ? "on the left of the picture" : "on the right of the picture"}${spkCols.length ? `, in ${joinNames(spkCols)}` : ""}, with ${name(spk).split(/\s+/)[0]}'s own face and clothes from ${name(spk).split(/\s+/)[0]}'s reference. Nobody else in that place; the others listen with mouths closed.`] : [];
   // Each fixed prop exactly as its picture (D108): the table came out with a base, two candles or
   // three, from its words ("2 tumbler candles") against a picture with three. On the set its look
   // is its picture alone.
@@ -655,6 +665,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     `${(i.style ?? "photorealistic").replace(/^./, (m) => m.toUpperCase())} storyboard frame for a ${i.aspect ?? "9:16"} video.`,
     setInstruction(coloured, !!crowd),
     `The other images show only how each person and prop looks (${attach.slice(1).map((a) => a.label).join(", ")}${leftToRight.length > 1 ? "; the people in image 1's left-to-right order" : ""}): copy faces, hair, clothes, anything carried and every prop exactly; never take positions, sizes or background from them.`,
+    NAMED_REFS,
     // The shot the app chose for this camera (Paul, D106): image 1 is that shot, so the size and
     // lens named here are what image 1 already frames.
     ...S.shot,
@@ -663,6 +674,7 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     // Where people are, said against the fixed set (Paul, D105): from the same floor plan as image
     // 1's stand-ins, so the words and the picture agree.
     ...S.place,
+    ...speakerLine,
     ...fixedProps,
     ...S.moment.filter((l) => !/^Shot effect:/.test(l)),
     ...setPeople,

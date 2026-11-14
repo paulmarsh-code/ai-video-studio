@@ -15,7 +15,7 @@ import type { GeometryPlanData } from "@/lib/domain/types";
 import { PlanThumb } from "./PlanThumb";
 import { uploadBlob } from "@/lib/clientUpload";
 import { imageChangePrompt } from "@/lib/domain/imagePrompts";
-import { AREA_LABEL, correctionPrompt, correctionRefs, type CheckArea, type PictureCheck } from "@/lib/domain/pictureCheck";
+import { AREA_LABEL, MIXED_UP, correctionPrompt, correctionRefs, type CheckArea, type PictureCheck } from "@/lib/domain/pictureCheck";
 import { ActionButton, DoneBadge } from "./ActionButton";
 import { ChangeRequest, type SubmittedChange } from "./ChangeRequest";
 import { SHOT_CHOICES, splitShot } from "@/lib/domain/shotSuggest";
@@ -114,6 +114,12 @@ async function drawPicture(p: { projectId: string; baseCode: string; prompt: str
   const body = (await res.json()) as { id?: string; error?: string };
   if (!res.ok || !body.id) throw new Error(body.error ?? "GPT didn't return a picture.");
   return body.id;
+}
+
+/** The mix-up between characters a picture's check found, if any (D109). */
+function mixedUp(p: { check?: { problems: string[]; areas?: PictureCheck["areas"] } }): string | undefined {
+  const all = [...(p.check?.problems ?? []), ...Object.values(p.check?.areas ?? {}).flatMap((a) => (a as { problems?: string[] } | undefined)?.problems ?? [])];
+  return all.find((x) => x.startsWith(MIXED_UP))?.slice(MIXED_UP.length).trim();
 }
 
 async function checkPicture(panelId: string, assetId: string): Promise<{ pass: boolean; problems: string[]; redraw?: boolean } | null> {
@@ -511,7 +517,13 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
             {failed[p.id] && <p className="mt-1 text-xs text-red-700" role="alert" data-testid={`board-${p.code}-failed`}>GPT couldn&apos;t draw this one. {plainReason(failed[p.id])}</p>}
 
             <div className="mt-3 space-y-2">
-              {p.imageAssetId && p.status !== "approved" && (
+              {/* Characters mixed up (D109): Paul's red line, never approved; redraw instead. */}
+              {p.imageAssetId && p.status !== "approved" && mixedUp(p) && (
+                <p className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800" data-testid={`board-${p.code}-mixed`}>
+                  Characters are mixed up in this picture ({mixedUp(p)}). It can&apos;t be approved: redraw it.
+                </p>
+              )}
+              {p.imageAssetId && p.status !== "approved" && !mixedUp(p) && (
                 <ActionButton variant="approve" label="Approve" busyLabel="Approving…" doneLabel="Approved" testId={`board-${p.code}-approve`}
                   onAction={async () => { const r = await approvePanelAction(p.id); router.refresh(); return r; }} />
               )}

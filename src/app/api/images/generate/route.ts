@@ -16,6 +16,7 @@ import { renderBlockingForShot, renderBlockingOnPlate } from "@/lib/blockingImag
 import { ensurePlate, plateNumbers, withoutGuests } from "@/lib/plateImage";
 import { ensureHeldItems } from "@/lib/heldItemsServer";
 import * as repo from "@/lib/repo";
+import { nameCharacterRefs } from "@/lib/namedRefs";
 
 export async function POST(req: Request) {
   const provider = getImageProvider();
@@ -25,6 +26,10 @@ export async function POST(req: Request) {
   const db = await getDb();
   const refs: { data: Buffer; mime: string; name: string }[] = (body.refAssetIds ?? []).map((id) => repo.getAsset(db, id)).filter((a) => a && fs.existsSync(a.path))
     .map((a) => ({ data: fs.readFileSync(a!.path), mime: a!.mime, name: a!.assetCode }));
+  // Each character's reference carries their name across the top (D109), the same name their
+  // stand-in in image 1 is labelled with, so a face and its clothes are bound to one name. Unnamed,
+  // GPT drew Nina in Jade's place with Jade's satchel.
+  await nameCharacterRefs(db, body.projectId, body.refAssetIds ?? [], refs);
   // A correction edits the picture itself (D34): it goes first, the shot to change.
   if (body.baseAssetId) {
     const a = repo.getAsset(db, body.baseAssetId);

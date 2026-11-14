@@ -66,6 +66,8 @@ export interface Figure { name: string; x: number; headY: number; feetY: number;
 
 /** The three things a picture can get wrong, judged separately (B1): one can't make up for another. */
 export type CheckArea = "blocking" | "look" | "room";
+/** How a mix-up between characters starts its problem line (D109), so the board can stop approval. */
+export const MIXED_UP = "Characters mixed up:";
 export const AREA_LABEL: Record<CheckArea, string> = { blocking: "Blocking", look: "Characters' look", room: "Room and props" };
 export interface AreaResult { pass: boolean; problems: string[]; unmeasured: string[] }
 
@@ -109,7 +111,7 @@ export function checkPrompt(e: PictureExpectation, refNames: string[]): string {
     "",
     "Ignore style, lighting and small differences in pose or expression. Do check clothes, accessories, carried items and props against their reference pictures: a missing stripe or panel, a different colour, a bag in the other hand, or a table without its cloth is a real difference. Someone seated may have their bag on their lap or on the seat beside them: that matches a bag carried in the reference; a bag nowhere to be seen does not.",
     "Reply with JSON only, no other text:",
-    `{"left_to_right": ["the main characters you see, left to right, by name; use \\"unknown\\" for anyone you cannot match"], "clothes": [{"name": "character", "matches_reference": true, "difference": "what differs, or empty"}], "props": [{"name": "key prop", "side": "left | centre | right", "depth": "among the people | behind everyone | in front of everyone", "matches_picture": true, "difference": "what differs from its reference picture, or empty"}], "props_seen": ["key props you can see"], "background_left": "which venue area is at the left of the background, or none", "background_right": "which venue area is at the right of the background, or none", "background_people": "none | few | busy", ${e.gazeByFace ? "" : '"looking_at_camera": ["main characters whose eyes look straight into the lens, making eye contact with the viewer (facing the camera while looking at someone else does not count), or empty"], '} "held": [{"name": "character", "item": "the item", "picture_side": "left | right | not visible"}], "postures": [{"name": "character", "pose": "standing | sitting | lying | kneeling | crouching"}], "notes": "one short sentence on anything clearly wrong, or empty"}`,
+    `{"left_to_right": ["the main characters you see, left to right, by name; use \\"unknown\\" for anyone you cannot match"], "clothes": [{"name": "character", "matches_reference": true, "difference": "what differs, or empty"}], "props": [{"name": "key prop", "side": "left | centre | right", "depth": "among the people | behind everyone | in front of everyone", "matches_picture": true, "difference": "what differs from its reference picture, or empty"}], "props_seen": ["key props you can see"], "background_left": "which venue area is at the left of the background, or none", "background_right": "which venue area is at the right of the background, or none", "background_people": "none | few | busy", ${e.gazeByFace ? "" : '"looking_at_camera": ["main characters whose eyes look straight into the lens, making eye contact with the viewer (facing the camera while looking at someone else does not count), or empty"], '} "held": [{"name": "character", "item": "the item", "picture_side": "left | right | not visible"}], "postures": [{"name": "character", "pose": "standing | sitting | lying | kneeling | crouching"}], "mixed_up": ["each case of one character drawn with another character's face, hair, outfit, bag or jewellery, or in another character's place, e.g. \\"Nina is holding Jade's satchel\\"; or empty"], "notes": "one short sentence on anything clearly wrong, or empty"}`,
   ].join("\n");
 }
 
@@ -260,7 +262,7 @@ export function lookLine(wardrobe: string, anchors: string[] = []): string {
 export function judgePicture(e: PictureExpectation, reply: string, plan?: string | MeasuredPlan, gaze?: GazeEvidence): PictureCheck {
   // The answer is JSON, possibly inside a code fence: take the object itself.
   const json = reply.match(/\{[\s\S]*\}/)?.[0];
-  let seen: { left_to_right?: unknown; props_seen?: unknown; background_people?: unknown; notes?: unknown; clothes?: unknown; props?: unknown; background_left?: unknown; background_right?: unknown; looking_at_camera?: unknown };
+  let seen: { left_to_right?: unknown; props_seen?: unknown; background_people?: unknown; notes?: unknown; clothes?: unknown; props?: unknown; background_left?: unknown; background_right?: unknown; looking_at_camera?: unknown; mixed_up?: unknown };
   try {
     seen = JSON.parse(json ?? "");
   } catch {
@@ -294,6 +296,8 @@ export function judgePicture(e: PictureExpectation, reply: string, plan?: string
   for (const c of objs(seen.clothes)) {
     if (c.matches_reference === false && expected.includes(first(String(c.name ?? "")))) add("look", `${String(c.name)}'s clothes differ from the reference: ${String(c.difference ?? "").trim() || "check them"}.`);
   }
+  // Characters mixed up (D109): Paul's red line. Always a fail, redrawn, and never to be approved.
+  for (const m of list(seen.mixed_up).map(String).filter((x) => x.trim() && !/^(none|empty|no)$/i.test(x.trim()))) add("look", `${MIXED_UP} ${m.trim().replace(/[.]$/, "")}.`, true);
   // Props: in their place and looking like their picture (D21).
   for (const p of objs(seen.props)) {
     const want = e.propPlaces?.find((x) => norm(x.name) === norm(String(p.name ?? "")) || norm(String(p.name ?? "")).includes(norm(x.name).slice(-6)));
