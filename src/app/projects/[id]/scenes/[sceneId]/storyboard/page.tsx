@@ -20,6 +20,8 @@ import { suggestShots } from "@/lib/domain/shotSuggest";
 import { signsWithoutPicture } from "@/lib/domain/signage";
 import { panelCameraLabel } from "@/lib/domain/geometry";
 import { continuityFor } from "@/lib/domain/continuity";
+import { drawsOnSet } from "@/lib/onSet";
+import { OnSetSwitch } from "@/components/OnSetSwitch";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +45,10 @@ export default async function StoryboardPage({ params, searchParams }: { params:
   const brief = project.brief as { aspect?: string; style?: string };
   const genre = repo.getProjectGenre(db, id);
   const canGenerate = !!getImageProvider();
+  // Drawing on the fixed set (D103): the user turns it on per scene.
+  const onSet = drawsOnSet(db, sceneId);
+  const frame = onSet ? "set" as const : frameVariant();
+  const pick = (pr: { text: string; short?: string; image?: string }) => onSet ? pr.image ?? pr.text : requestVariant() === "short" ? pr.short ?? pr.text : pr.text;
   const base = `${project.code}_EP${String(s.scene.episode).padStart(2, "0")}_S${String(s.scene.number).padStart(2, "0")}`;
   const recheck = repo.getAnimatic(db, sceneId)?.timeline.recheck ?? {};
   const pending = chars.filter((c) => c.draft);
@@ -107,7 +113,8 @@ export default async function StoryboardPage({ params, searchParams }: { params:
       </div>}
 
       {part === "board" && <div className="mt-5">
-        <StoryboardBoard canCheck={!!getTextProvider()} testMode={testMode()} frame={frameVariant()} requestVariant={requestVariant()} locks={{ positions: !!locks.positions, cameras: !!locks.cameras }}
+        {s.venue && s.plan && <OnSetSwitch sceneId={sceneId} on={onSet} setHref={`/projects/${id}/scenes/${sceneId}/set`} />}
+        <StoryboardBoard canCheck={!!getTextProvider()} testMode={testMode()} frame={frame} requestVariant={requestVariant()} locks={{ positions: !!locks.positions, cameras: !!locks.cameras }}
           heldWarnings={cast.filter((c) => (s.scene.cast as string[] | undefined)?.length ? (s.scene.cast as string[]).includes(c.id) : true).flatMap((c) => heldConflicts(c.name, profiles[c.id], c.pronoun))}
           signsNoPicture={signsWithoutPicture(s.plan?.data.furniture?.length ? s.plan.data.furniture : asStaging(s.scene.staging).props)} settingHref="?part=setting"
           propMoves={s.panels.flatMap((p) => { const m = propMoves(p.description, (s.plan?.data.furniture ?? []).map((f) => f.name)); return m.length ? [`${p.code} moves the ${m.join(" and the ")}`] : []; })}
@@ -129,7 +136,7 @@ export default async function StoryboardPage({ params, searchParams }: { params:
               backgroundHref: shot?.spec.cameraId && hasRing(s.venue?.views as { imageAssetId?: string }[] | undefined) ? `/api/background/${shot.id}` : undefined,
               // The blocking frame (D34): the shot itself, finished by GPT.
               blockingHref: shot?.spec.cameraId && hasRing(s.venue?.views as { imageAssetId?: string }[] | undefined) ? `/api/blocking/${shot.id}` : undefined,
-              frame: frameVariant(),
+              frame,
               // The approved picture from this panel's camera if there is one (D72), else the fullest.
               continuity: continuityFor(s.panels, s.shots, s.plan?.data, p.id),
             });
@@ -140,8 +147,8 @@ export default async function StoryboardPage({ params, searchParams }: { params:
               drawnFrom: p.check?.drawnFrom,
               check: p.check?.keptApproved ? { pass: p.check.pass ?? true, problems: [], keptApproved: true } : p.check?.pass === undefined ? undefined : { pass: p.check.pass, problems: p.check.problems ?? [], ...(p.check.areas ? { areas: p.check.areas } : {}), ...(p.check.redraw ? { redraw: true } : {}) },
               // The full or short request (B3), chosen by a setting, and anything contradictory left in it.
-              prompt: requestVariant() === "short" ? prompt.short ?? prompt.text : prompt.text, attach: prompt.attach,
-              conflicts: requestConflicts(requestVariant() === "short" ? prompt.short ?? prompt.text : prompt.text),
+              prompt: pick(prompt), attach: prompt.attach,
+              conflicts: requestConflicts(pick(prompt)),
             };
           })} />
       </div>}

@@ -127,7 +127,7 @@ export interface PanelPromptInput {
    * Image 1 over the venue photo ("photo", the default) or as a grey-box room from the plan
    * ("box", D60 test B): then the room's look from this camera goes as image 2.
    */
-  frame?: "photo" | "box" | "fill";
+  frame?: "photo" | "box" | "fill" | "set";
   /**
    * An approved picture of this scene (D18c), attached so later panels keep the same spot,
    * furniture, background guests, light and clothes. Not used for the panel's own picture.
@@ -142,6 +142,8 @@ export interface PanelPrompt {
    * compared on equal terms. Only when image 1 is a blocking frame; otherwise the full request.
    */
   short?: string;
+  /** The request on the fixed set (D103): image 1 holds everything seen, the words the moment. */
+  image?: string;
   /** Reference images to attach in ChatGPT, in order. A generated one has an href instead of an asset. */
   attach: { label: string; assetId: string; href?: string }[];
 }
@@ -209,13 +211,17 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     }
   }
   const peopleCount = attach.length;
-  if (i.continuity) attach.push({ label: i.continuity.label, assetId: i.continuity.assetId });
+  // On the fixed set (D103) image 1 already holds the room, the props and the light: an earlier
+  // picture or a prop picture could only disagree with it (an approved picture still showing a
+  // backdrop that was taken out), so only the people's references go with it.
+  const onSet = i.frame === "set" && !!i.blockingHref;
+  if (i.continuity && !onSet) attach.push({ label: i.continuity.label, assetId: i.continuity.assetId });
   // Key props with a reference picture (D19c): the ones this camera sees, or all of them
   // without a camera, so the prop looks the same in every shot.
   // Props come from this panel's plan (D35): one taken away on an earlier panel isn't here.
   const seenProps = cam && shotPlan ? readProps(shotPlan, cam).filter((p) => p.inView).map((p) => p.name) : undefined;
   const propPics = ((shotPlan ?? i.plan)?.furniture ?? []).filter((f) => f.imageAssetId && (!seenProps || seenProps.includes(f.name)));
-  for (const f of propPics) attach.push({ label: `${f.name} picture`, assetId: f.imageAssetId! });
+  if (!onSet) for (const f of propPics) attach.push({ label: `${f.name} picture`, assetId: f.imageAssetId! });
   const bgView = reading?.backgroundView;
   // The ring background (D20) replaces the single nearest view: it is exactly what this camera
   // sees behind the people, from where it stands, at its angle and lens.
@@ -623,7 +629,26 @@ export function panelPrompt(i: PanelPromptInput): PanelPrompt {
     ...(light ? [`Light, the same in every picture of this scene: ${light.split(/(?<=[.!?])\s+/).slice(0, 2).join(" ")}`] : []),
     noText,
   ].filter(Boolean).join("\n") : undefined;
-  return { text: lines.join("\n"), attach, ...(short ? { short } : {}) };
+  // On the fixed set (D103, Paul: "the prompt should be the story and the behaviour"): the pictures
+  // say what is where and how it looks, the words only what no picture shows. Nothing about the
+  // room, the props, the light, sizes, distances or order across the picture is said, so nothing
+  // can contradict image 1.
+  // Who is where across the picture is image 1's to say; only how many is said. Background people
+  // aren't blurred against a room that stays sharp.
+  const setPeople = blocking ? [
+    `Exactly ${visible.length + edge.length} main ${visible.length + edge.length === 1 ? "character" : "characters"}, one of each; background people apart.`,
+    ...S.people.filter((l) => !/^Sizes:|^Exactly \d+ main/.test(l)).map((l) => l.replace(/\bOut of focus, smaller\b/, "Smaller")),
+  ] : [];
+  const image = blocking && onSet ? [
+    lines[0],
+    setInstruction(coloured),
+    `The other images show only how each person looks (${attach.slice(1).map((a) => a.label).join(", ")}${leftToRight.length > 1 ? "; in image 1's left-to-right order" : ""}): copy faces, hair, clothes and anything carried exactly; never take positions or background from them.`,
+    ...(S.keep.length ? [`Keep: ${S.keep.join("; ")}.`] : []),
+    ...S.moment.filter((l) => !/^Shot effect:/.test(l)),
+    ...setPeople,
+    noText,
+  ].filter(Boolean).join("\n") : undefined;
+  return { text: lines.join("\n"), attach, ...(short ? { short } : {}), ...(image ? { image } : {}) };
 }
 
 /**
@@ -786,6 +811,19 @@ export function blockingInstruction(refLabels: string[], box = false, coloured =
     "- Remove every stand-in outline, label, arrow and tag: none of them appear in the finished picture.",
     refLabels.length ? `The other attached images are reference pictures (${refLabels.join(", ")}): use them only for how each character and prop looks, never for where anyone stands or what is behind them.` : "",
   ].filter(Boolean).join("\n");
+}
+
+/**
+ * Image 1 on the fixed set (D103): the finished room with stand-ins, where only the people are
+ * drawn. The room round them is pasted back afterwards, so this says plainly that nothing else
+ * changes, and leaves where and how big to the picture.
+ */
+export function setInstruction(coloured = false): string {
+  return [
+    "IMAGE 1 IS THIS SHOT, ALREADY FINISHED EXCEPT FOR THE PEOPLE. The room, its light and everything standing in it are the final photograph: keep them exactly, as sharp as they are.",
+    `${coloured ? "Each stand-in (shaded in the colours of that person's clothes)" : "Each pale stand-in"} becomes the person named on it, standing exactly where it stands, exactly as big, turned the way its label says and doing what it says. An orange arrow only shows which way a walker is heading, never a second place for them, so everyone appears once. A yellow tag marks something held, on that side of the picture.`,
+    "Remove every stand-in, label, arrow and tag. Draw everyone in the room's own light, with their shadows on the floor, as sharp as the room.",
+  ].join("\n");
 }
 
 /** Image 1's instruction in the short request (B3): the same meaning as `blockingInstruction`, said once. */

@@ -58,6 +58,8 @@ export interface SceneStaging {
   props: KeyProp[];
   /** Areas the action happens on or in (D80); none when the floor is flat. */
   areas?: KeyArea[];
+  /** The panels are drawn on the scene's fixed set (D103). */
+  onSet?: boolean;
 }
 
 // Actions read from a panel's own words when the panel writer gave none (D80). English, as the
@@ -195,7 +197,7 @@ export function asStaging(v: unknown): SceneStaging {
   const areas = (Array.isArray(o.areas) ? o.areas : [])
     .map((a) => ({ name: clean((a as KeyArea)?.name), kind: (AREA_KINDS as readonly string[]).includes((a as KeyArea)?.kind) ? (a as KeyArea).kind : areaKindOf(`${(a as KeyArea)?.name ?? ""} ${(a as KeyArea)?.detail ?? ""}`), detail: clean((a as KeyArea)?.detail) }))
     .filter((a): a is KeyArea => !!a.name && !!a.kind);
-  return { spot: clean(o.spot), crowd: level === "none" ? "" : crowd, crowdLevel: level, props, ...(areas.length ? { areas } : {}) };
+  return { spot: clean(o.spot), crowd: level === "none" ? "" : crowd, crowdLevel: level, props, ...(areas.length ? { areas } : {}), ...(o.onSet === true ? { onSet: true } : {}) };
 }
 
 /**

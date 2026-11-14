@@ -751,6 +751,14 @@ function coverageFor(plan: GeometryPlanData, sh: ShotInput, side: number, line: 
     const blockers = sp.actors.map((a) => a.characterId).filter((id) => o.camera.preset !== "main-ots" || id !== other);
     if (occlusions(readCamera(sp, o.camera), must, blockers).some((x) => x.level === "face")) return false;
     if (propsBlocking(sp, o.camera, must).some((x) => x.face)) return false;
+    // The one this panel is about faces the camera, unless it's their partner's shoulder we're over
+    // (D103): a group shot from behind Jade hid her face for her own angry line.
+    if (o.camera.preset !== "main-ots" && (speaker || focus)) {
+      const f = facingOf(sp, subj, line);
+      const at = here(subj)!;
+      const v = { x: o.camera.position.x - at.x, y: o.camera.position.y - at.y }, vl = Math.hypot(v.x, v.y) || 1;
+      if (f && (f.x * v.x + f.y * v.y) / vl < -0.2) return false;
+    }
     return true;
   };
   const centre = (ids: string[]) => { const ps = ids.map(pos).filter((p): p is Point => !!p); return { x: ps.reduce((t, p) => t + p.x, 0) / ps.length, y: ps.reduce((t, p) => t + p.y, 0) / ps.length }; };

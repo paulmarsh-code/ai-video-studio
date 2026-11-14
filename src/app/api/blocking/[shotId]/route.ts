@@ -7,6 +7,7 @@ import { getDb } from "@/db/client";
 import { renderBlockingForShot } from "@/lib/blockingImage";
 import { ensureHeldItems } from "@/lib/heldItemsServer";
 import * as repo from "@/lib/repo";
+import { drawsOnSet, renderBlockingOnSet } from "@/lib/onSet";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ shotId: string }> }) {
   const { shotId } = await params;
@@ -14,7 +15,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ shotId:
   const shot = repo.getShot(db, shotId);
   const scene = shot ? repo.getScene(db, shot.sceneId) : undefined;
   if (scene) await ensureHeldItems(db, scene.scene.projectId);
-  const png = await renderBlockingForShot(db, shotId);
+  // On the fixed set (D103): image 1 is the set from this camera.
+  const png = (shot && drawsOnSet(db, shot.sceneId) ? (await renderBlockingOnSet(db, shotId))?.png : null) ?? await renderBlockingForShot(db, shotId);
   if (!png) return NextResponse.json({ error: "No blocking frame for this shot: it needs a camera and the venue's 360° view." }, { status: 404 });
   return new NextResponse(new Uint8Array(png), { headers: { "Content-Type": "image/png", "Cache-Control": "no-store" } });
 }

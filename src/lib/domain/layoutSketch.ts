@@ -38,6 +38,9 @@ export function doingLabel(d: Doing): string {
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
+/** The key colour a set piece is drawn in on the fixed set (D103). */
+export const KEY = "#ff00ff";
+
 export function layoutSketchSvg(i: {
   plan: GeometryPlanData;
   camera: PlanCamera;
@@ -60,6 +63,12 @@ export function layoutSketchSvg(i: {
   held?: Record<string, { side: "left" | "right"; what: string; where: string }[]>;
   /** Flat props' own pictures (D57), by prop id, as data: addresses: drawn at their place in the blocking frame. */
   propPictures?: Record<string, string>;
+  /**
+   * On the fixed set (D103): the set's own pieces are already in the picture, so each is drawn as a
+   * flat key colour instead of an outline, in its place in depth; where the key shows, the set's
+   * real table goes back over the stand-ins behind it.
+   */
+  keyPieces?: boolean;
 }): string {
   const OV = !!i.overlay;
   const W = i.size === "portrait" ? 768 : 1152;
@@ -241,6 +250,16 @@ export function layoutSketchSvg(i: {
     const c = toScreen(fu.position, h);
     if (c.depth < near) continue;
     const floor = toScreen(fu.position, 0);
+    if (i.keyPieces) {
+      const rx = (fu.radiusM / c.depth) * focal;
+      if (kind === "table") {
+        const ry = Math.max(4, rx * Math.min(0.5, Math.abs(camH - floorZ(i.plan, fu.position) - h) / c.depth));
+        items.push({ depth: c.depth, svg: `<path d="M ${(c.x - rx).toFixed(1)} ${c.y.toFixed(1)} L ${(c.x - rx * 1.08).toFixed(1)} ${floor.y.toFixed(1)} Q ${c.x.toFixed(1)} ${(floor.y + ry).toFixed(1)} ${(c.x + rx * 1.08).toFixed(1)} ${floor.y.toFixed(1)} L ${(c.x + rx).toFixed(1)} ${c.y.toFixed(1)} Z" fill="${KEY}"/><ellipse cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" rx="${rx.toFixed(1)}" ry="${ry.toFixed(1)}" fill="${KEY}"/>` });
+      } else {
+        items.push({ depth: c.depth, svg: `<rect x="${(c.x - rx).toFixed(1)}" y="${c.y.toFixed(1)}" width="${(rx * 2).toFixed(1)}" height="${Math.max(0, floor.y - c.y).toFixed(1)}" fill="${KEY}"/>` });
+      }
+      continue;
+    }
     const label = `<text x="${c.x.toFixed(1)}" y="${(floor.y + 26).toFixed(1)}" font-size="22" text-anchor="middle" fill="#404040"${OV ? ' stroke="#fff" stroke-width="5" paint-order="stroke"' : ""} font-family="sans-serif">${esc(fu.name)}</text>`;
     if (kind === "table") {
       const rx = (fu.radiusM / c.depth) * focal;

@@ -234,3 +234,8 @@ export async function setVenueRoomAction(venueId: string, room: { widthM: number
 export async function chooseSetPictureAction(venueId: string, what: { kind: "wall"; view: string } | { kind: "floor" } | { kind: "piece"; from: string }, assetId: string | null): Promise<Result> {
   return run((db) => { studio.setVenueSetPicture(db, venueId, what, assetId); return undefined; });
 }
+
+/** Draw this scene's panels on its fixed set (D103), or go back to drawing them as before. */
+export async function setSceneOnSetAction(sceneId: string, on: boolean): Promise<Result> {
+  return run((db) => { studio.setSceneOnSet(db, sceneId, on); return undefined; });
+}

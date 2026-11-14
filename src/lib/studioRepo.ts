@@ -192,6 +192,16 @@ export function saveVenue(db: DB, venueId: string, input: { name: string; descri
   persist(db);
 }
 
+/** Draw a scene's panels on its fixed set (D103). Kept with the scene's setting; changes no panel. */
+export function setSceneOnSet(db: DB, sceneId: string, on: boolean) {
+  const s = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();
+  if (!s) throw new Error("Scene not found");
+  const staging = { ...((s.staging ?? {}) as Record<string, unknown>) };
+  if (on) staging.onSet = true; else delete staging.onSet;
+  db.update(t.scenes).set({ staging }).where(eq(t.scenes.id, sceneId)).run();
+  persist(db);
+}
+
 /**
  * Use (or, with null, stop using) one of the set's own pictures (D98). The venue stays approved:
  * its views and words are unchanged, and these pictures are only the set built from them.
@@ -589,6 +599,8 @@ export function saveSceneStaging(db: DB, sceneId: string, staging: Partial<Scene
   }
   const scene = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();
   if (!scene) throw new Error("Scene not found");
+  // Saving the setting keeps the scene drawn on its set if it was (D103).
+  if ((scene.staging as { onSet?: boolean } | null)?.onSet) st.onSet = true;
   db.update(t.scenes).set({ staging: st }).where(eq(t.scenes.id, sceneId)).run();
 
   // A floor plan the app made itself is rebuilt around the spot (D18d): the group stands

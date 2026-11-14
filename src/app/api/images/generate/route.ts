@@ -10,6 +10,7 @@ import { frameVariant, recordDraw, testMode } from "@/lib/testRecords";
 import { renderLayoutForShot } from "@/lib/layoutImage";
 import { framePadding, renderBackgroundForShot } from "@/lib/backgroundImage";
 import { softBandLine } from "@/lib/domain/plate";
+import { drawsOnSet, pasteSet, renderBlockingOnSet } from "@/lib/onSet";
 import sharp from "sharp";
 import { renderBlockingForShot, renderBlockingOnPlate } from "@/lib/blockingImage";
 import { ensurePlate, plateNumbers, withoutGuests } from "@/lib/plateImage";
@@ -33,13 +34,19 @@ export async function POST(req: Request) {
   // background and the layout, so those aren't sent separately.
   // Version C (D66, D67): image 1 on the camera's finished plate, checked against the venue's views.
   let onPlateOf: { plate: Buffer; area: Buffer; W: number; H: number } | undefined;
+  let onSetOf: { set: Buffer; area: Buffer; W: number; H: number } | undefined;
   let imageOne = false;
   let guestsRemoved = 0;
   if (body.blockingShotId) {
     const shot = repo.getShot(db, body.blockingShotId);
     if (shot) await ensureHeldItems(db, body.projectId);
     let png: Buffer | null = null;
-    if (frameVariant() === "fill") {
+    // On the fixed set (D103): image 1 is the set from this camera with the stand-ins.
+    if (shot && drawsOnSet(db, shot.sceneId)) {
+      const r = await renderBlockingOnSet(db, body.blockingShotId);
+      if (r) { png = r.png; onSetOf = { set: r.set, area: r.area, W: r.W, H: r.H }; }
+    }
+    if (!png && frameVariant() === "fill") {
       try {
         const plate = await ensurePlate(db, body.blockingShotId, provider, body.test ? { panelCode: body.test.panelCode, variant: body.test.variant } : undefined);
         const on = plate ? await renderBlockingOnPlate(db, body.blockingShotId, plate) : null;
@@ -54,7 +61,7 @@ export async function POST(req: Request) {
     imageOne = !!png;
     // Not on a finished plate (D100): image 1's soft bands above and below the venue views are
     // unfinished, and the request says so, or GPT keeps them as a blurred roof.
-    if (png && !onPlateOf && frameVariant() !== "box") {
+    if (png && !onPlateOf && !onSetOf && frameVariant() !== "box") {
       const meta = await sharp(png).metadata();
       const pad = meta.width && meta.height ? framePadding(db, body.blockingShotId, meta.width, meta.height) : null;
       const venue = shot ? repo.getScene(db, shot.sceneId)?.venue : undefined;
@@ -102,9 +109,14 @@ export async function POST(req: Request) {
   try {
     // Image 1 (or the picture being fixed) goes full size (D67): GPT keeps a sharp background.
     const img = await provider.generate(body.prompt, refs, body.size ?? "portrait", { firstFullSize: imageOne || !!body.baseAssetId });
-    const data = img.data;
+    // On the fixed set (D103): the set goes back over everything that isn't a person.
+    const pasted = onSetOf ? await pasteSet(img.data, onSetOf.set, onSetOf.area, onSetOf.W, onSetOf.H).catch(() => null) : null;
+    const data = pasted?.png ?? img.data;
+    // GPT's own picture is kept beside it, to see what the paste changed.
+    if (pasted) storeAsset(db, { projectId: body.projectId, baseCode: cleanBaseCode(`${body.baseCode}_GPT`), kind: "image-raw", ext: "png", mime: img.mime, data: img.data, note: "before the set was pasted back" });
     const saved = storeAsset(db, {
-      projectId: body.projectId, baseCode: cleanBaseCode(body.baseCode), kind: body.kind ?? "image", ext: "png", mime: img.mime, data, note: img.providerNote,
+      projectId: body.projectId, baseCode: cleanBaseCode(body.baseCode), kind: body.kind ?? "image", ext: "png", mime: pasted ? "image/png" : img.mime, data,
+      note: pasted ? `${img.providerNote ?? ""} On the fixed set: ${pasted.pasted ? "room pasted back" : "room NOT pasted back (GPT moved it too far)"}, ${pasted.keptPeople} people kept, room moved ${pasted.moved.toFixed(3)}.`.trim() : img.providerNote,
     });
     const numbers = onPlateOf ? await plateNumbers(img.data, onPlateOf.plate, onPlateOf.area, onPlateOf.W, onPlateOf.H).catch(() => undefined) : undefined;
     // Test mode (B4): keep exactly what this picture was drawn from.

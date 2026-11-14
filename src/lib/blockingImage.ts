@@ -73,7 +73,12 @@ export async function renderBlockingOnPlate(db: DB, shotId: string, plate: Buffe
   return { png: parts.png, area, W: parts.W, H: parts.H };
 }
 
-async function blockingParts(db: DB, shotId: string, opts: { extraHeld?: Record<string, { side: "left" | "right"; what: string; where: string }[]>; background?: Buffer }) {
+/** Image 1's parts drawn over a given background (D103: the fixed set's view for this camera). */
+export async function blockingOver(db: DB, shotId: string, background: Buffer) {
+  return blockingParts(db, shotId, { background, onSet: true });
+}
+
+async function blockingParts(db: DB, shotId: string, opts: { extraHeld?: Record<string, { side: "left" | "right"; what: string; where: string }[]>; background?: Buffer; onSet?: boolean }) {
   const extraHeld = opts.extraHeld;
   const shot = repo.getShot(db, shotId);
   if (!shot?.spec.cameraId) return null;
@@ -109,9 +114,19 @@ async function blockingParts(db: DB, shotId: string, opts: { extraHeld?: Record<
     people: plan.actors.filter((a) => peopleIds.includes(a.characterId))
       .map((a) => ({ id: a.characterId, name: cast.find((c) => c.id === a.characterId)?.name ?? a.characterId, colours: outfitColours(profiles[a.characterId]?.wardrobe) })),
     subjectId: mainSubjectId(shot.spec), backgroundView: readCamera(plan, cam).backgroundView,
-    moves: movesFor(full, shot.spec, plan, text), held, propPictures: await flatPropPictures(db, plan),
+    moves: movesFor(full, shot.spec, plan, text), held, propPictures: opts.onSet ? {} : await flatPropPictures(db, plan), keyPieces: !!opts.onSet,
   });
-  const over = await sharp(Buffer.from(svg)).resize({ width: W, height: H, fit: "fill" }).png().toBuffer();
+  let over = await sharp(Buffer.from(svg)).resize({ width: W, height: H, fit: "fill" }).png().toBuffer();
+  // On the fixed set (D103): where a set piece's key colour shows, the stand-in layer is cleared,
+  // so the set's own table stands in front of whoever is behind it.
+  if (opts.onSet) {
+    const raw = await sharp(over).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const d = raw.data;
+    for (let k = 0; k < d.length; k += 4) {
+      if (d[k + 3] > 0 && d[k] > 200 && d[k + 2] > 200 && d[k + 1] < 90) d[k + 3] = 0;
+    }
+    over = await sharp(d, { raw: { width: raw.info.width, height: raw.info.height, channels: 4 } }).png().toBuffer();
+  }
   const png = await sharp(bg).composite([{ input: over, left: 0, top: 0 }]).png().toBuffer();
   return { png, over, W, H, plan, cam, peopleIds };
 }

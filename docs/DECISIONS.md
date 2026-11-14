@@ -2049,3 +2049,25 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
   - **Close sizes in 9:16 group panels.** A panel with three or more people that names a medium close-up, medium shot or cowboy shot frames the subject and the one they're with (their line partner, else the nearest) whole. The rest of the group may be cut by the picture's edges.
 - **Jade's Entrance on a copy of Paul's data, with the layout updated.** Panels 1, 2 and 11 stay wide (arriving, crossing, walking off). The group shots come in from 6–11 m to 2–4.5 m, and the over-the-shoulders from up to 11 m to about 3 m, with Jade at the table from panel 3 on.
 - **Saved scenes don't change by themselves (D96).** The snapshot shows no differences until a scene's layout is updated, which is done only when Paul asks.
+
+### D103: Drawing on the fixed set: pictures say what is seen, words say the moment (2026-11-14)
+
+- **Failure.** Words and pictures disagreed, and GPT followed one or the other unpredictably.
+  - The backdrop came back in panel 3 although it was no longer a prop: the scene's spot words still said "near the illuminated GLOWVANE product display".
+  - The group came out twice the planned size: image 1 showed them small, while the words said "medium close-up".
+
+  Paul: decide which is more reliable, give GPT the images (background, props, characters, floor plan), and keep the request to "the story and the behaviour and actions of the characters and other people, i.e. extras".
+- **Image 1 is the set (`src/lib/onSet.ts`).** It is the fixed set (D98) as this panel's camera sees it, with the stand-ins from the floor plan. Set pieces are drawn in a key colour in the stand-in layer and cleared, so the set's own table stands in front of whoever is behind it (`keyPieces` in `layoutSketchSvg`). Only the people's reference pictures go with it. There is no earlier approved picture and no prop picture, either of which could disagree with image 1.
+- **The request (`setInstruction`, `PanelPrompt.image`).** It says image 1 is finished except for the people, and what the stand-ins, arrows and tags mean. Then:
+  - which reference is whom;
+  - each character's keep-traits;
+  - the moment and emotion;
+  - what each person does, how they're posed, where they look and what they hold;
+  - the background people and what they're doing;
+  - no text.
+
+  Nothing about the room, props, light, sizes, distances or left-to-right order. Only the number of main characters is said. Background people are no longer "out of focus" against a room that stays sharp.
+- **The set goes back (`pasteSet`).** GPT's picture keeps the stand-ins' area and every person the detector finds in it (background people included), each with room for a shadow. The set is pasted, feathered, over everything else. If GPT has moved the room too far (`ROOM_MOVED`, 0.12, to be checked on real pictures), nothing is pasted, and the asset's note says so. GPT's own picture is kept beside it (`…_GPT`).
+- **A switch per scene.** "Draw on the fixed set" on the storyboard is kept in the scene's setting (`staging.onSet`) and survives saving the setting. When it's off, nothing changes.
+- **Cameras: the panel's subject faces the camera (`coverageFor`).** Except over a partner's shoulder, a camera from behind the speaker or subject is refused. Panel 7's cowboy shot was from behind Jade, for her own angry line.
+- **Checked.** 707 tests pass. The snapshot shows no saved scene changes. On a copy of Paul's data, image 1 for panels 3, 5, 7 and 10 shows the real table in front of the people behind it. Panel 7 now sees Jade's face, and only panels 7 and 11's cameras change when the layout is updated.
