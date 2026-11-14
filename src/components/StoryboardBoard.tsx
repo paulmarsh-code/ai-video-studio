@@ -515,6 +515,15 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
                 <ActionButton variant="approve" label="Approve" busyLabel="Approving…" doneLabel="Approved" testId={`board-${p.code}-approve`}
                   onAction={async () => { const r = await approvePanelAction(p.id); router.refresh(); return r; }} />
               )}
+              {/* A fresh draw is always there (D107): a picture that passed the check but isn't right
+                  had no way to be drawn again without describing a change. */}
+              {p.imageAssetId && b.canGenerate && p.hasCamera && !drawing[p.id] && (
+                <button type="button" data-testid={`board-${p.code}-redraw`}
+                  className="w-full rounded-lg border border-neutral-300 bg-white px-4 py-2 text-left text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
+                  onClick={async () => { setFailed((x) => { const y = { ...x }; delete y[p.id]; return y; }); setDrawing((x) => ({ ...x, [p.id]: "Redrawing…" })); try { await drawChecked(p, p.prompt, assetIds(p.attach)); } catch (e) { setFailed((x) => ({ ...x, [p.id]: e instanceof Error ? e.message : String(e) })); } finally { setDrawing((x) => { const y = { ...x }; delete y[p.id]; return y; }); router.refresh(); } }}>
+                  Redraw <span className="font-normal text-neutral-600">· about 7p, from the layout as it is now</span>
+                </button>
+              )}
               {p.imageAssetId && (
                 p.hasCamera && p.shotId
                   ? <button type="button" onClick={() => setChanging({ p, index: i })} data-testid="change-open"

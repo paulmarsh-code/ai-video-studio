@@ -2134,3 +2134,5 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
 
   Order, who is in the picture, the props and the venue are checked as before.
 - **The switch** is now called "Use the fixed set as the background", with that job explained beside it.
+- **A plain "Redraw" on every panel** (about 7p, from the layout as it is now). Paul couldn't redraw panel 3: it had passed the check and nothing had changed, so the only way was "Need to change something?".
+- **Paul on panels 5 and 7 drawn this way: "these are fine".** The table is GPT's version of it (close, not the cut-out itself), and panel 7's order still differs from the plan.
