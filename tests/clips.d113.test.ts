@@ -96,5 +96,6 @@ describe("Storyboard pictures stage each shot (D119)", () => {
     expect(c.prompt).toContain("Shot 3 (7–10 s), full shot, as in 图片2:");
     expect(c.prompt).toMatch(/Shot 2 \(4–7 s\), full shot: /);
     expect(c.webPrompt).toContain("Shot 1 (0–4 s), full shot, as in picture 1:");
+    expect(c.webPrompt).toContain("\nPicture 1, picture 2 are the storyboard pictures");
   });
 });

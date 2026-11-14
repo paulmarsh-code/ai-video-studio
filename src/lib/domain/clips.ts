@@ -144,7 +144,8 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput): Clip {
     // Jade and had Chase come round the table.
     const plan = floorPlanLines(i.plan, inClip, (id) => first(nameOf(id)), anchor?.name);
     if (plan) L.push(plan);
-    if (pictures.length) L.push(`${pictures.length === 1 ? `${pic(1)} is the storyboard picture for shot ${pictures[0].shot}` : `${pictures.map((x, n) => pic(n + 1)).join(", ")} are the storyboard pictures for shots ${pictures.map((x) => x.shot).join(", ")} in turn`}: each shot keeps its picture's camera angle, framing, background and who stands where. Faces, clothes${pieces.length ? `, the ${pieces.map((f) => f.name).join(" and ")}` : ""} and the venue come from their Elements, not from the pictures.`);
+    const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
+    if (pictures.length) L.push(cap(`${pictures.length === 1 ? `${pic(1)} is the storyboard picture for shot ${pictures[0].shot}` : `${pictures.map((x, n) => pic(n + 1)).join(", ")} are the storyboard pictures for shots ${pictures.map((x) => x.shot).join(", ")} in turn`}: each shot keeps its picture's camera angle, framing, background and who stands where. Faces, clothes${pieces.length ? `, the ${pieces.map((f) => f.name).join(" and ")}` : ""} and the venue come from their Elements, not from the pictures.`));
     // Each line said once, in its own shot (D115): with two lines for Jade in shots 3 and 4, Kling
     // had her say the first one twice and never the second.
     const lines = panels.flatMap((p) => p.dialogue);
