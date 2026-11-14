@@ -2317,3 +2317,12 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
   - **Jade's Entrance after Choose again:** panel 3 goes back to panel 2's wide. Panel 11 goes back to panel 9's line, further back ("full shot, tracking shot", the suggestion for her walking off). Clips become [1,2,3] [4,5] [6,7] [8,9,10,11]. Panels 3 and 11 need redrawing.
   - **Jade joins the group and walks off, after Choose again:** panel 6 goes back to panel 4's wide. Clips become [1,2] [3,4,5,6]. Panel 6 needs redrawing.
 - **Reaches the generation through:** the camera choice, hence the storyboard pictures Kling stages each shot from (D119), and the clip grouping. Tested in `clipCameras.d121.test.ts`.
+
+### D122: A feeling held to the last frame (2026-11-14)
+
+- **Paul on the clip of panels 9–11 made with storyboard pictures:** "it works ok; the only thing, at the very end she smiles, so would need to trim that out."
+  - At about 7.7 s, Jade turns to walk off and smiles, where the panel has her furious.
+  - Trimmed copy made ending at 7.7 s.
+- **Fix, for any clip (`clips.ts`).** The closing rules now say: "Each person keeps the feeling their shot gives them to its very last frame, walking off included: nobody smiles or softens unless the shot says so."
+- **Note.** That clip used the earlier panel 11 picture (the third angle, from before D121). The new clip 4 (panels 8–11) uses the redrawn one.
+- **Reaches the generation through:** a prompt line.
