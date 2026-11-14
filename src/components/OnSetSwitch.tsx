@@ -26,7 +26,7 @@ export function OnSetSwitch({ sceneId, on, setHref }: { sceneId: string; on: boo
       </label>
       <span className="text-neutral-600">
         {on ? "Each picture starts from the set as this panel's camera sees it, with the floor plan's stand-ins and the characters' and props' pictures; the words are the shot and what everyone does. The storyboard is the plan and preview for the clips: accurate, not perfect."
-          : <>Off: each picture starts from the venue's views. Turn on once the set is built (<Link className="text-blue-700 underline" href={setHref}>Build the set</Link>) to keep the venue, props and positions the same in every panel.</>}
+          : <>Off: each picture starts from the venue&apos;s views. Turn on once the set is built (<Link className="text-blue-700 underline" href={setHref}>Build the set</Link>) to keep the venue, props and positions the same in every panel.</>}
       </span>
       {error && <span className="text-red-700">{error}</span>}
     </div>
