@@ -2448,3 +2448,20 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
   3. Approve.
   4. Remake the Table Element from the app's pictures ("make the elements").
   5. On Monday, the clips.
+
+### D130: Keep a finished take; new clips carry on from it (2026-11-15)
+
+- **Paul, in Premiere with his 7 November Kling clips** (`potv1`, 24 s: Jade walks through the atrium to the table, her lines over Chase's shoulder, Chase's "I've seen better"): "really good … the tables have the ice buckets on them … I want to use this and add to it."
+- **Visible failure avoided.** Re-making good footage risks a worse take and spends credits. Footage added after it must match it: the same place, light, table with the ice bucket, people and positions.
+- **Fix, for any scene.**
+  - **Kept takes** (`KeptTakes` on the clips page, `/api/kept/[sceneId]`, the scene's `staging.keptTakes`).
+    - Paul adds a finished clip and chooses the panels it covers.
+    - He plays or drags it to the moment the next clip should follow from, and keeps it. The frame is taken in the browser, so it's exactly the picture he sees.
+    - The default is the clip's end. Paul can pick an earlier moment, as for `potv1`, whose last shot (the Chase close-up) is against a different background.
+  - **Clips** (`sceneClips`, `clipPrompt`).
+    - The kept panels get no clip, and no clip runs across a kept take.
+    - The first clip after one carries its frame as 图片1, in place of shot 1's storyboard picture, with: "图片1 is the last moment of the clip before this one, already made: this clip follows straight on from it, a moment later, with the same place, light, [table], people, clothes and positions. Where 图片1 and anything else here differ, 图片1 is right."
+    - Shot 1 reads "following straight on from 图片1". The other shots keep their storyboard pictures.
+  - The frame goes to Kling with the job's pictures (D123/D126).
+- **Jade's Entrance with panels 1–5 kept:** clips [6, 7, 8] (10 s, opening from the kept frame) and [9, 10, 11, 12] (11 s), about 210 credits.
+- **Reaches the generation through:** the clip's first input picture and a prompt line. Tested in `clips.d113.test.ts`.

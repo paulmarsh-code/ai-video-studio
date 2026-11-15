@@ -26,6 +26,10 @@ export interface SceneClipsView {
   pictures: PictureChoice[];
   aspect: "9:16" | "16:9";
   sceneTitle: string;
+  /** Finished takes kept for some panels (D130). */
+  kept: studio.KeptTakeRecord[];
+  /** Every panel, for choosing what a kept take covers. */
+  allPanels: { order: number; description: string }[];
 }
 
 export function buildSceneClips(db: DB, sceneId: string): SceneClipsView | null {
@@ -62,7 +66,8 @@ export function buildSceneClips(db: DB, sceneId: string): SceneClipsView | null 
     return shot ? [{ order: p.order, durationSec: p.durationSec, description: p.description, emotion: p.emotion, dialogue: (p.dialogue ?? []) as ClipPanel["dialogue"], spec: shot.spec, imageAssetId: pictures.find((x) => x.panelId === p.id)?.chosen }] : [];
   });
   const crowd = (s.scene.staging as { crowd?: string } | null)?.crowd;
-  const clips = sceneClips({ panels, cast, plan, venue: { id: s.venue.id, name: s.venue.name }, crowd, elements });
+  const kept = studio.getKeptTakes(db, sceneId);
+  const clips = sceneClips({ panels, cast, plan, venue: { id: s.venue.id, name: s.venue.name }, crowd, elements, kept: kept.map((k) => ({ from: k.from, to: k.to, frameAssetId: k.frameAssetId })) });
   const held = [...new Set(panels.flatMap((p) => (p.spec.props ?? []).map((x) => x.name)))];
   const pieces = (plan.furniture ?? []).filter(isSetPiece).map((f) => f.name);
   const rows = [
@@ -70,5 +75,5 @@ export function buildSceneClips(db: DB, sceneId: string): SceneClipsView | null 
     { key: elementKey.venue(s.venue.id), what: s.venue.name, kind: "Venue" },
     ...[...new Set([...pieces, ...held])].map((n) => ({ key: elementKey.prop(n), what: n, kind: "Prop" })),
   ].map((r) => ({ ...r, element: elements[r.key] }));
-  return { clips, rows, listed, pictures, aspect: studio.projectAspect(db, projectId), sceneTitle: s.scene.title ?? "Scene" };
+  return { clips, rows, listed, pictures, aspect: studio.projectAspect(db, projectId), sceneTitle: s.scene.title ?? "Scene", kept, allPanels: sorted.map((p) => ({ order: p.order, description: p.description })) };
 }

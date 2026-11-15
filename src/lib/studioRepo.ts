@@ -203,6 +203,26 @@ export function setSceneOnSet(db: DB, sceneId: string, on: boolean) {
   persist(db);
 }
 
+export interface KeptTakeRecord { from: number; to: number; videoAssetId: string; frameAssetId: string; atSec: number; name: string }
+
+/** A scene's finished takes kept for some panels (D130). */
+export function getKeptTakes(db: DB, sceneId: string): KeptTakeRecord[] {
+  const s = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();
+  return (((s?.staging ?? {}) as { keptTakes?: KeptTakeRecord[] }).keptTakes ?? []).slice().sort((a, b) => a.from - b.from);
+}
+
+/** Keep a take for panels from–to (replacing any that overlaps it), or with null remove the one starting at `from`. */
+export function setKeptTake(db: DB, sceneId: string, from: number, take: KeptTakeRecord | null) {
+  const s = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();
+  if (!s) throw new Error("Scene not found");
+  const staging = { ...((s.staging ?? {}) as Record<string, unknown>) };
+  let takes = ((staging.keptTakes ?? []) as KeptTakeRecord[]).filter((k) => k.from !== from);
+  if (take) takes = [...takes.filter((k) => k.to < take.from || k.from > take.to), take];
+  staging.keptTakes = takes;
+  db.update(t.scenes).set({ staging }).where(eq(t.scenes.id, sceneId)).run();
+  persist(db);
+}
+
 /**
  * Which picture of a panel Kling gets for its shot (D123): another version (an asset id), none
  * ("none"), or, with null, the storyboard's own.

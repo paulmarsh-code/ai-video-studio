@@ -164,7 +164,7 @@ export function ClipsBoard({ projectId, projectCode, sceneId, rows, clips, list,
           {clips.map((c, k) => (
             <div key={k} className="rounded-lg border border-neutral-200 bg-white p-3">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h3 className="font-semibold">Clip {k + 1}: panels {c.panels.join(", ")} · {c.seconds} s · about {c.credits} credits</h3>
+                <h3 className="font-semibold">Clip {k + 1}: panels {c.panels.join(", ")} · {c.seconds} s · about {c.credits} credits{c.continues && <span className="ml-2 rounded bg-green-100 px-2 py-0.5 text-xs font-normal text-green-800">carries on from the kept take of panels {c.continues.from}–{c.continues.to}</span>}</h3>
                 <div className="flex flex-wrap gap-2">
                   <Copy text={api ? c.prompt : c.webPrompt} label="Copy the request" />
                   <button type="button" disabled={busy !== null} onClick={() => void create(k + 1)} className="rounded bg-blue-700 px-3 py-1 text-sm text-white hover:bg-blue-800 disabled:opacity-50">{busy === k + 1 ? "Creating…" : jobOf(c) ? "Create again" : "Create this clip"}</button>

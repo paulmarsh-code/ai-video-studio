@@ -44,7 +44,14 @@ export interface ClipInput {
   master?: ClipPanel;
   /** Credits a second at the chosen quality (Kling 4.0 at 720p with sound: 10, D112). */
   creditsPerSecond?: number;
+  /**
+   * Finished takes kept for some panels (D130): those panels get no clip, and the clip after a kept
+   * take opens on the take's chosen frame, so new footage carries straight on from the good footage.
+   */
+  kept?: KeptTake[];
 }
+
+export interface KeptTake { from: number; to: number; frameAssetId?: string }
 
 export interface Clip {
   panels: number[];
@@ -61,7 +68,9 @@ export interface Clip {
    * The storyboard pictures to add to the job, in this order (D119): picture 1 is shot 1's panel,
    * and so on. Kling stages each shot from its picture; words alone it treats as a suggestion.
    */
-  pictures: { shot: number; panel: number; assetId: string }[];
+  pictures: { shot: number; panel: number; assetId: string; continuity?: boolean }[];
+  /** The kept take this clip carries on from (D130). */
+  continues?: { from: number; to: number };
 }
 
 /** Kling Omni-Ref takes up to this many Elements in one clip. */
@@ -92,7 +101,7 @@ export function shotSeconds(p: ClipPanel): number {
 }
 
 /** The request for one clip. */
-export function clipPrompt(panels: ClipPanel[], i: ClipInput): Clip {
+export function clipPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake): Clip {
   const nameOf = (id: string) => i.cast.find((c) => c.id === id)?.name ?? id;
   const inClip = [...new Set(panels.flatMap((p) => [...p.spec.visibleIds, ...p.dialogue.map((d) => d.characterId)]))].filter((id) => i.cast.some((c) => c.id === id));
   const pieces = (i.plan.furniture ?? []).filter((f) => isSetPiece(f));
@@ -120,7 +129,13 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput): Clip {
   // A single-shot clip keeps its panel's time; Kling makes nothing shorter than 3 s.
   const times = panels.length > 1 ? panels.map(shotSeconds) : panels.map((p) => Math.max(1, p.durationSec));
   while (times.reduce((a, b) => a + b, 0) < 3) times[times.length - 1]++;
-  const pictures = panels.flatMap((p, k) => p.imageAssetId ? [{ shot: k + 1, panel: p.order, assetId: p.imageAssetId }] : []);
+  // After a kept take (D130), shot 1 opens on the take's chosen frame instead of its storyboard
+  // picture: the footage already made is what the new clip has to match.
+  const cont = after?.frameAssetId ? { shot: 1, panel: panels[0].order, assetId: after.frameAssetId, continuity: true } : undefined;
+  const pictures: Clip["pictures"] = [
+    ...(cont ? [cont] : []),
+    ...panels.flatMap((p, k) => p.imageAssetId && !(cont && k === 0) ? [{ shot: k + 1, panel: p.order, assetId: p.imageAssetId }] : []),
+  ];
   const build = (ref: (key: string, plain: string) => string, pic: (n: number) => string) => {
     const who = (id: string) => ref(elementKey.character(id), first(nameOf(id)));
     const L: string[] = [];
@@ -156,7 +171,9 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput): Clip {
     const plan = floorPlanLines(i.plan, inClip, (id) => first(nameOf(id)), anchor?.name);
     if (plan) L.push(plan);
     const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
-    if (pictures.length) L.push(cap(`${pictures.length === 1 ? `${pic(1)} is the storyboard picture for shot ${pictures[0].shot}` : `${pictures.map((x, n) => pic(n + 1)).join(", ")} are the storyboard pictures for shots ${pictures.map((x) => x.shot).join(", ")} in turn`}: each shot keeps its picture's camera angle, framing, background and who stands where. Faces, clothes${pieces.length ? `, the ${pieces.map((f) => f.name).join(" and ")}` : ""} and the venue come from their Elements, not from the pictures.`));
+    if (cont) L.push(`${cap(pic(1))} is the last moment of the clip before this one, already made: this clip follows straight on from it, a moment later, with the same place, light, ${pieces.length ? `${pieces.map((f) => f.name).join(" and ")}, ` : ""}people, clothes and positions. Where ${pic(1)} and anything else here differ, ${pic(1)} is right.`);
+    const board = pictures.map((x, n) => ({ ...x, n: n + 1 })).filter((x) => !x.continuity);
+    if (board.length) L.push(cap(`${board.length === 1 ? `${pic(board[0].n)} is the storyboard picture for shot ${board[0].shot}` : `${board.map((x) => pic(x.n)).join(", ")} are the storyboard pictures for shots ${board.map((x) => x.shot).join(", ")} in turn`}: each shot keeps its picture's camera angle, framing, background and who stands where. Faces, clothes${pieces.length ? `, the ${pieces.map((f) => f.name).join(" and ")}` : ""} and the venue come from their Elements, not from the pictures.`));
     // Each line said once, in its own shot (D115): with two lines for Jade in shots 3 and 4, Kling
     // had her say the first one twice and never the second.
     const lines = panels.flatMap((p) => p.dialogue);
@@ -175,7 +192,7 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput): Clip {
       const onTheWay = Object.entries(p.spec.at ?? {}).filter(([, m]) => /^(?:arriving|crossing|approaching)$/.test(m)).map(([id]) => id).filter((id) => inClip.includes(id));
       const way = onTheWay.map((id) => `${first(nameOf(id))} has not reached ${anchor ? `the ${anchor.name}` : "the others"} yet: ${anchor ? "it is" : "they are"} ahead of ${first(nameOf(id))}, further into the room, and ${first(nameOf(id))} walks towards ${anchor ? "it" : "them"}, never past.`).join(" ");
       const pn = pictures.findIndex((x) => x.shot === k + 1);
-      L.push(`Shot ${k + 1} (${t}–${t + d} s)${words ? `, ${words}` : ""}${pn >= 0 ? `, as in ${pic(pn + 1)}` : ""}: ${p.description.trim().replace(/\.$/, "")}${p.emotion ? ` (${p.emotion.trim().replace(/\.$/, "")})` : ""}.${way ? ` ${way}` : ""} ${speech}`);
+      L.push(`Shot ${k + 1} (${t}–${t + d} s)${words ? `, ${words}` : ""}${pn >= 0 ? (pictures[pn].continuity ? `, following straight on from ${pic(pn + 1)}` : `, as in ${pic(pn + 1)}`) : ""}: ${p.description.trim().replace(/\.$/, "")}${p.emotion ? ` (${p.emotion.trim().replace(/\.$/, "")})` : ""}.${way ? ` ${way}` : ""} ${speech}`);
       t += d;
     });
     const speakers = [...new Set(panels.flatMap((p) => p.dialogue.map((x) => x.characterId)))];
@@ -199,13 +216,26 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput): Clip {
     return L.join("\n");
   };
   const seconds = times.reduce((a, b) => a + b, 0);
-  return { panels: panels.map((p) => p.order), seconds, prompt: build(api, (n) => `图片${n}`), webPrompt: build(web, (n) => `picture ${n}`), elements: used, missing, credits: seconds * (i.creditsPerSecond ?? 10), pictures };
+  return { panels: panels.map((p) => p.order), seconds, prompt: build(api, (n) => `图片${n}`), webPrompt: build(web, (n) => `picture ${n}`), elements: used, missing, credits: seconds * (i.creditsPerSecond ?? 10), pictures, ...(after ? { continues: { from: after.from, to: after.to } } : {}) };
 }
 
 /** The scene's clips. */
 export function sceneClips(i: ClipInput): Clip[] {
   const master = i.master ?? [...i.panels].sort((a, b) => b.spec.visibleIds.length - a.spec.visibleIds.length || a.order - b.order)[0];
-  return groupClips(i.panels, i.plan).map((g) => clipPrompt(g, { ...i, master }));
+  // Panels a kept take covers get no clip (D130); the clip right after one carries on from it.
+  const kept = i.kept ?? [];
+  const covered = (o: number) => kept.some((k) => o >= k.from && o <= k.to);
+  const left = i.panels.filter((p) => !covered(p.order));
+  const sorted = [...i.panels].sort((a, b) => a.order - b.order);
+  const next = (k: KeptTake) => sorted.find((p) => p.order > k.to && !covered(p.order))?.order;
+  // A clip never runs across a kept take: the panels either side of one are apart in time.
+  const runs: ClipPanel[][] = [];
+  for (const p of [...left].sort((a, b) => a.order - b.order)) {
+    const last = runs[runs.length - 1]?.[runs[runs.length - 1].length - 1];
+    const between = last && sorted.some((q) => q.order > last.order && q.order < p.order && covered(q.order));
+    if (!last || between) runs.push([p]); else runs[runs.length - 1].push(p);
+  }
+  return runs.flatMap((r) => groupClips(r, i.plan)).map((g) => clipPrompt(g, { ...i, master }, kept.find((k) => next(k) === g[0].order)));
 }
 
 function cameraOf(p: ClipPanel, plan: GeometryPlanData): { sp: GeometryPlanData; cam?: PlanCamera } {

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getDb } from "@/db/client";
 import * as repo from "@/lib/repo";
 import { ClipsBoard } from "@/components/ClipsBoard";
+import { KeptTakes } from "@/components/KeptTakes";
 import { buildSceneClips } from "@/lib/sceneClips";
 import { readJobs } from "@/lib/klingJobs";
 import { elementSources, linkMadeElements, readElementRequests } from "@/lib/klingElementRequests";
@@ -39,6 +40,7 @@ export default async function ClipsPage({ params }: { params: Promise<{ id: stri
         Kling keeps the clips consistent with Elements: each character, the venue and each key prop, the same in every clip. Each shot is staged from its storyboard picture.
         Here the panels are grouped into clips of up to two camera angles, and each clip&apos;s request is written from the plan. Pick the Elements and pictures, then create the clips.
       </p>
+      <KeptTakes sceneId={sceneId} kept={v.kept} panels={v.allPanels} />
       <ClipsBoard projectId={s.scene.projectId} projectCode={repo.getProject(db, s.scene.projectId)?.code ?? ""} sceneId={sceneId} rows={v.rows} clips={v.clips} list={v.listed} pictures={v.pictures} jobs={jobs} making={making} />
     </div>
   );

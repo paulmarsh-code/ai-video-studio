@@ -116,3 +116,23 @@ describe("Shots timed to what they need inside a clip (D120)", () => {
     expect(c.seconds).toBe(5);
   });
 });
+
+describe("Keeping a finished take (D130)", () => {
+  it("gives the kept panels no clip, and opens the next clip on the take's chosen frame", () => {
+    const panels = [1, 2, 3, 4].map((n) => ({ ...P(n, 3, {}), imageAssetId: `a${n}` }));
+    const clips = sceneClips({ panels, cast: cast as never, plan: plan as never, venue: { id: "v1", name: "Roof bar" }, elements, kept: [{ from: 1, to: 2, frameAssetId: "frame" }] });
+    expect(clips.flatMap((c) => c.panels)).toEqual([3, 4]);
+    const [c] = clips;
+    expect(c.continues).toEqual({ from: 1, to: 2 });
+    expect(c.pictures).toEqual([{ shot: 1, panel: 3, assetId: "frame", continuity: true }, { shot: 2, panel: 4, assetId: "a4" }]);
+    expect(c.prompt).toContain("图片1 is the last moment of the clip before this one, already made: this clip follows straight on from it, a moment later");
+    expect(c.prompt).toContain("Where 图片1 and anything else here differ, 图片1 is right.");
+    expect(c.prompt).toContain("图片2 is the storyboard picture for shot 2");
+    expect(c.prompt).toMatch(/Shot 1 \([^)]*\), [^:]*following straight on from 图片1:/);
+  });
+  it("never runs a clip across a kept take", () => {
+    const panels = [1, 2, 3, 4].map((n) => P(n, 2, {}));
+    const clips = sceneClips({ panels, cast: cast as never, plan: plan as never, venue: { id: "v1", name: "Roof bar" }, elements, kept: [{ from: 2, to: 3 }] });
+    expect(clips.map((c) => c.panels)).toEqual([[1], [4]]);
+  });
+});
