@@ -2427,3 +2427,24 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
   - All the History Prism video Elements (judges, barristers, voices): they're video subjects whose voices are .mp4, and rewriting them would drop the voice. Paul can rename them in the Kling app.
   - The ones that already had a prefix.
 - **Ids unchanged:** the app's links stand. The dropdowns show the new names after the next "refresh my Kling Elements".
+
+### D129: The contract beat back in Jade's Entrance; the ice bucket on the table (2026-11-15)
+
+- **Paul:** "When Jade says it's past 30 days we should get a shot of her taking out the contract and handing it to Chase, who puts it in an ice bucket and says 'you're wrong, it's 90 days' … we seem to have lost that part of the story."
+  - The app followed the story as written. The scene's story text had no contract and no ice bucket, so the beat was lost in the story, before the storyboard.
+  - Not an app rule, so no rule change.
+- **Paul's choice:** the ice bucket stands on the table all scene, as part of the table. That keeps the table one Kling Element (clip 4 already uses 6 of 7), and the bucket never appears from nowhere.
+- **Changes to Paul's data** (app closed; backup in `data/backups/studio_before_D129.db`; snapshot check showed no existing panel's positions or camera moved):
+  - **Story:** "Jade takes the contract out of her handbag and hands it to Chase. Chase glances at it, drops it in the ice bucket on the table and lies: 'your wrong its 90 days love'".
+  - **The table prop:**
+    - New picture `PROP_COCKTAIL_TABLE_v06.png`: the same table, made with Kling image O1 from v05 (1 credit), with a silver champagne ice bucket and bottle added, cut out.
+    - Its words say so too, so picture and words agree.
+    - The plan's table carries the new picture.
+  - **New panel 8** (code P12, 3 s, silent, panel 7's group shot): "Jade pulls the contract out of her handbag and holds it out to Chase, insisting he looks at it." Props: the table and the contract ("a few stapled white A4 pages of printed text").
+  - **Panel 9** (code P8, 4 s): "Chase takes the contract, glances at it, drops it into the ice bucket on the table and delivers a smooth, dismissive retort." The line is unchanged. Props: the table and the contract.
+- **Paul to do in the app:**
+  1. Draw panels 8 and 9.
+  2. Redraw the panels that show the table, now with the bucket.
+  3. Approve.
+  4. Remake the Table Element from the app's pictures ("make the elements").
+  5. On Monday, the clips.
