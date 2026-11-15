@@ -87,7 +87,7 @@ describe("One circle round the table, one of each (D118)", () => {
     expect(c.prompt).not.toContain("left to right as seen from the room");
     expect(c.prompt).toContain("Ava, Bo, Cy and Di each appear once in the picture, never twice; no guest looks or dresses like any of them.");
     expect(c.prompt).toContain("whoever is out of frame is still standing in their place at the bar table.");
-    expect(c.prompt).toContain("Nobody else stands at the bar table or touches it; other guests stay at their own tables, a few metres away."); // D132
+    expect(c.prompt).toContain("Only Ava, Bo, Cy and Di stand at the bar table; other guests stay at their own tables, a few metres away."); // D132
   });
 });
 

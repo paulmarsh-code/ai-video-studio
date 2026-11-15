@@ -2484,7 +2484,7 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
 - **Fix, for any clip (`clips.ts`).**
   - "Each person keeps their own face and clothes throughout; anything they carry stays in the same hand until a shot says it is handed over or put down, then stays where that shot leaves it."
   - "The {table} and everything on it stay exactly the same throughout, except what a shot puts on, takes off or drops in; that stays as the shot leaves it."
-  - Added to the group line: "Nobody else stands at the {table} or touches it; other guests stay at their own tables, a few metres away."
+  - Added to the group line: "Only {the group} stand at the {table}; other guests stay at their own tables, a few metres away." It is worded as what we want, not what we don't: Jack's Realism Prompt Engine warns that naming the unwanted thing can anchor it.
 - **Not taken from the skill:** 30-second, many-shot clips and draft mode are Seedance 2.5 features. Kling held together better at 6–8 s with one or two angles (D120, D121). Feelings described by face rather than by label stay a candidate, if smiles come back after D122.
 - **Reaches the generation through:** prompt lines. Tested in `clips.d113.test.ts`.
 

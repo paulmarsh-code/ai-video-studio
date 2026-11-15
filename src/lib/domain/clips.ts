@@ -219,7 +219,7 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake):
       inClip.length > 1 ? `${and(names(inClip))} each appear once in the picture, never twice; no guest looks or dresses like any of them.` : "",
       // Only the group at its table (D132): a stranger in a dark suit stood at the group's table as
       // Jade arrived and had to be cropped out in the edit.
-      anchor && inClip.length > 1 ? `Every shot is of this same group at the ${anchor.name}: a closer shot frames part of it, and whoever is out of frame is still standing in their place at the ${anchor.name}. Nobody else stands at the ${anchor.name} or touches it; other guests stay at their own tables, a few metres away.` : "",
+      anchor && inClip.length > 1 ? `Every shot is of this same group at the ${anchor.name}: a closer shot frames part of it, and whoever is out of frame is still standing in their place at the ${anchor.name}. Only ${and(names(inClip))} stand at the ${anchor.name}; other guests stay at their own tables, a few metres away.` : "",
       pieces.length ? `${pieces.map((f) => `The ${f.name}`).join(" and ")} and everything on ${pieces.length === 1 ? "it" : "them"} stay exactly the same throughout, except what a shot puts on, takes off or drops in; that stays as the shot leaves it.` : "",
       "No text, no logos.",
     ].filter(Boolean).join(" "));
