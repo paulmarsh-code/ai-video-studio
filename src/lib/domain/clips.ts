@@ -185,7 +185,7 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake):
       const speech = p.dialogue.length
         // Said with the panel's feeling, in a natural voice (D116): line 2 came out flat and robotic
         // with the feeling only on the action before it.
-        ? p.dialogue.map((x) => `${lines.length > 1 ? `Line ${++lineNo}, ` : ""}${first(nameOf(x.characterId))} says${p.emotion ? `, ${p.emotion.trim().replace(/\.$/, "")}, naturally, never flat` : ""}: "${x.text.trim()}"`).join(" Then ")
+        ? p.dialogue.map((x) => `${lines.length > 1 ? `Line ${++lineNo}, ` : ""}${first(nameOf(x.characterId))} says${p.emotion ? `, ${p.emotion.trim().replace(/\.$/, "")}` : ""}, naturally, never flat, in a spontaneous conversational rhythm, the face expressive but restrained, accurate lip-sync: "${x.text.trim()}"`).join(" Then ")
         : "No one speaks.";
       // On the way in (D115): someone arriving or crossing hasn't reached the group yet, so the
       // group is ahead of them. Kling had Jade walk past them, then turn back to greet them.
@@ -200,7 +200,10 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake):
     if (voices.length) L.push(`Voices. ${voices.join(". ")}.`);
     L.push([
       lines.length > 1 ? `Each line is said once, in its own shot, word for word: ${lines.length} different lines in all.` : "",
-      "Only the speaker talks in each shot; the others listen with mouths closed.",
+      // Acting and the room, as in Paul's best take (D133): natural, subtle acting; only the cast
+      // speak words anyone can make out; the guests a soft-focus murmur behind them.
+      speakers.length ? `Only the speaker talks in each shot; the others listen with mouths closed. Only ${and(names(speakers))} ${speakers.length > 1 ? "have" : "has"} words anyone can make out; the guests' chatter stays a murmur. No repeated words, no extra speech.` : "",
+      "Natural, subtle acting, no exaggerated gestures. Guests behind the group stay in soft focus.",
       // Sound under the voices (D115): Jade's heels were louder than the party. No music (D131): the
       // music and the room sound run as one bed under the whole scene in the edit; each clip's own
       // music jumped at every cut.

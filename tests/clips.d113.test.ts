@@ -54,8 +54,8 @@ describe("Clip requests after the first full clip (D115)", () => {
       P(3, 3, { cameraId: "o", shot: "medium close-up, over-the-shoulder shot", speakerId: "ava" }, [{ characterId: "ava", text: "Well?" }]),
     ];
     const [c] = sceneClips({ panels, cast: cast as never, plan: plan as never, venue: { id: "v1", name: "Roof bar" }, elements });
-    expect(c.prompt).toContain('Line 1, Ava says: "Hello."');
-    expect(c.prompt).toContain('Line 2, Ava says: "Well?"');
+    expect(c.prompt).toContain('Line 1, Ava says, naturally, never flat, in a spontaneous conversational rhythm, the face expressive but restrained, accurate lip-sync: "Hello."');
+    expect(c.prompt).toContain('Line 2, Ava says, naturally, never flat, in a spontaneous conversational rhythm, the face expressive but restrained, accurate lip-sync: "Well?"');
     expect(c.prompt).toContain("Each line is said once, in its own shot, word for word: 2 different lines in all.");
     expect(c.prompt).toContain("Ava has not reached the bar table yet: it is ahead of Ava, further into the room, and Ava walks towards it, never past.");
     expect(c.prompt).toContain("footsteps and movement quiet, never louder than speech");
@@ -68,7 +68,9 @@ describe("Lines said with feeling (D116)", () => {
   it("a line carries its panel's feeling", () => {
     const p = { ...P(1, 4, {}, [{ characterId: "ava", text: "Well?" }]), emotion: "hopeful, expectant" };
     const [c] = sceneClips({ panels: [p], cast: cast as never, plan: plan as never, venue: { id: "v1", name: "Roof bar" }, elements });
-    expect(c.prompt).toContain('Ava says, hopeful, expectant, naturally, never flat: "Well?"');
+    expect(c.prompt).toContain('Ava says, hopeful, expectant, naturally, never flat, in a spontaneous conversational rhythm, the face expressive but restrained, accurate lip-sync: "Well?"'); // D133
+    expect(c.prompt).toContain("Only Ava has words anyone can make out; the guests' chatter stays a murmur. No repeated words, no extra speech."); // D133
+    expect(c.prompt).toContain("Natural, subtle acting, no exaggerated gestures. Guests behind the group stay in soft focus."); // D133
   });
 });
 

@@ -2487,3 +2487,18 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
   - Added to the group line: "Nobody else stands at the {table} or touches it; other guests stay at their own tables, a few metres away."
 - **Not taken from the skill:** 30-second, many-shot clips and draft mode are Seedance 2.5 features. Kling held together better at 6–8 s with one or two angles (D120, D121). Feelings described by face rather than by label stay a candidate, if smiles come back after D122.
 - **Reaches the generation through:** prompt lines. Tested in `clips.d113.test.ts`.
+
+### D133: Acting and the room, as in Paul's best take (2026-11-15)
+
+- **Paul:** the Kling-website take of Jade's greeting (7 Nov, "Use Jade's approved character image…") is better than what the app has made.
+- **Its prompt, compared with the app's.**
+  - One shot, one line, about 1,100 characters.
+  - It directs the acting: "spontaneous conversational rhythm and expressive but restrained facial movements. Accurate lip-sync." and "Natural subtle acting, no exaggerated gestures, no repeated words or additional speech."
+  - "Only Jade has intelligible dialogue."
+  - "Busy party guests move in soft focus behind them."
+  - It said nothing about places. That's where it went wrong: strangers stood at the table instead of Marcus and Nina, and one had to be cropped out (D132).
+- **Fix, for any clip (`clips.ts`).** The app keeps its places and pictures, and takes the acting and room lines:
+  - Each line: "… says, {feeling}, naturally, never flat, in a spontaneous conversational rhythm, the face expressive but restrained, accurate lip-sync: "…""
+  - "Only {speakers} has words anyone can make out; the guests' chatter stays a murmur. No repeated words, no extra speech."
+  - "Natural, subtle acting, no exaggerated gestures. Guests behind the group stay in soft focus."
+- **Reaches the generation through:** prompt lines. Tested in `clips.d113.test.ts`. To be judged on the next clips made; if the acting is no better, take the lines back out.
