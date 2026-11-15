@@ -60,6 +60,7 @@ describe("Clip requests after the first full clip (D115)", () => {
     expect(c.prompt).toContain("Ava has not reached the bar table yet: it is ahead of Ava, further into the room, and Ava walks towards it, never past.");
     expect(c.prompt).toContain("footsteps and movement quiet, never louder than speech");
     expect(c.prompt).toContain("nobody smiles or softens unless the shot says so"); // D122
+    expect(c.prompt).toContain("no music at all, it is added in the edit"); // D131
   });
 });
 

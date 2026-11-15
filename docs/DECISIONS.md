@@ -2465,3 +2465,12 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
   - The frame goes to Kling with the job's pictures (D123/D126).
 - **Jade's Entrance with panels 1–5 kept:** clips [6, 7, 8] (10 s, opening from the kept frame) and [9, 10, 11, 12] (11 s), about 210 credits.
 - **Reaches the generation through:** the clip's first input picture and a prompt line. Tested in `clips.d113.test.ts`.
+
+### D131: No music in the clips; one music and room bed under the whole scene in the edit (2026-11-15)
+
+- **Paul:** "the sound, both the music and background, need to continue throughout the whole scene … use the music and background we already have in Premiere Pro."
+- **Visible (audible) failure.** Each Kling clip makes its own music and room sound, so both jump at every cut between clips: kept take to new clip, or clip to clip.
+- **Fix, for any clip (`clips.ts`).** The sound line now reads: "Sound: the voices, clear, over a low, steady room murmur at the same level throughout; no music at all, it is added in the edit; footsteps and movement quiet, never louder than speech."
+  - The music and the crowd bed are laid once in the edit, under the whole scene. For Paid On Time that's Paul's Adobe Stock party walla and music, already in his Premiere sequence.
+  - Clips already made carry their own music. Separate their voices to use them over the bed.
+- **Reaches the generation through:** a prompt line. Tested in `clips.d113.test.ts`.

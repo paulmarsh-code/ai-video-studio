@@ -201,8 +201,10 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake):
     L.push([
       lines.length > 1 ? `Each line is said once, in its own shot, word for word: ${lines.length} different lines in all.` : "",
       "Only the speaker talks in each shot; the others listen with mouths closed.",
-      // Sound under the voices (D115): Jade's heels were louder than the party.
-      "Sound: the room's low murmur and soft music under the voices; footsteps and movement quiet, never louder than speech.",
+      // Sound under the voices (D115): Jade's heels were louder than the party. No music (D131): the
+      // music and the room sound run as one bed under the whole scene in the edit; each clip's own
+      // music jumped at every cut.
+      "Sound: the voices, clear, over a low, steady room murmur at the same level throughout; no music at all, it is added in the edit; footsteps and movement quiet, never louder than speech.",
       "Each person keeps their own face, clothes and anything they carry throughout.",
       // A feeling held to the last frame (D122): furious Jade smiled as she turned to walk off.
       "Each person keeps the feeling their shot gives them to its very last frame, walking off included: nobody smiles or softens unless the shot says so.",
