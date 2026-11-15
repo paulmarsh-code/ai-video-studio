@@ -85,6 +85,16 @@ describe("One circle round the table, one of each (D118)", () => {
     expect(c.prompt).not.toContain("left to right as seen from the room");
     expect(c.prompt).toContain("Ava, Bo, Cy and Di each appear once in the picture, never twice; no guest looks or dresses like any of them.");
     expect(c.prompt).toContain("whoever is out of frame is still standing in their place at the bar table.");
+    expect(c.prompt).toContain("Nobody else stands at the bar table or touches it; other guests stay at their own tables, a few metres away."); // D132
+  });
+});
+
+describe("Things handed over or put down stay where the shot leaves them (D132)", () => {
+  it("lets a shot hand something over or drop it on the table, instead of freezing both", () => {
+    const [c] = sceneClips({ panels: [P(1, 4, {}, [], "Ava hands Bo the letter; he drops it in the ice bucket.")], cast: cast as never, plan: plan as never, venue: { id: "v1", name: "Roof bar" }, elements });
+    expect(c.prompt).toContain("anything they carry stays in the same hand until a shot says it is handed over or put down, then stays where that shot leaves it.");
+    expect(c.prompt).toContain("stay exactly the same throughout, except what a shot puts on, takes off or drops in; that stays as the shot leaves it.");
+    expect(c.prompt).not.toContain("anything they carry throughout");
   });
 });
 

@@ -2474,3 +2474,16 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
   - The music and the crowd bed are laid once in the edit, under the whole scene. For Paid On Time that's Paul's Adobe Stock party walla and music, already in his Premiere sequence.
   - Clips already made carry their own music. Separate their voices to use them over the bed.
 - **Reaches the generation through:** a prompt line. Tested in `clips.d113.test.ts`.
+
+### D132: Things change hands when a shot says so; nobody else at the group's table (2026-11-15)
+
+- **Checked against Jack's Animation Prompt Engine V2** (Paul shared it). Its rule: give every held prop its state by shot, and the shot where it changes; say who does an action and who doesn't.
+- **Visible failures, one seen and one coming.**
+  - Seen: in the kept take, a stranger in a dark suit stood at the group's table as Jade arrived. It had to be cropped out in Premiere.
+  - Coming: the contract beat (panels 8–9). Two of the clip request's own lines forbade it. "Each person keeps … anything they carry throughout" says Jade never hands the contract over. "The cocktail table and everything on it stay exactly the same throughout" says Chase can't drop it in the ice bucket.
+- **Fix, for any clip (`clips.ts`).**
+  - "Each person keeps their own face and clothes throughout; anything they carry stays in the same hand until a shot says it is handed over or put down, then stays where that shot leaves it."
+  - "The {table} and everything on it stay exactly the same throughout, except what a shot puts on, takes off or drops in; that stays as the shot leaves it."
+  - Added to the group line: "Nobody else stands at the {table} or touches it; other guests stay at their own tables, a few metres away."
+- **Not taken from the skill:** 30-second, many-shot clips and draft mode are Seedance 2.5 features. Kling held together better at 6–8 s with one or two angles (D120, D121). Feelings described by face rather than by label stay a candidate, if smiles come back after D122.
+- **Reaches the generation through:** prompt lines. Tested in `clips.d113.test.ts`.

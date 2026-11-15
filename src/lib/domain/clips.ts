@@ -205,14 +205,19 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake):
       // music and the room sound run as one bed under the whole scene in the edit; each clip's own
       // music jumped at every cut.
       "Sound: the voices, clear, over a low, steady room murmur at the same level throughout; no music at all, it is added in the edit; footsteps and movement quiet, never louder than speech.",
-      "Each person keeps their own face, clothes and anything they carry throughout.",
+      // Held things change hands only when a shot says so (D132): "anything they carry throughout"
+      // and "the table stays exactly the same" forbade the contract beat, Jade handing it over and
+      // Chase dropping it in the ice bucket.
+      "Each person keeps their own face and clothes throughout; anything they carry stays in the same hand until a shot says it is handed over or put down, then stays where that shot leaves it.",
       // A feeling held to the last frame (D122): furious Jade smiled as she turned to walk off.
       "Each person keeps the feeling their shot gives them to its very last frame, walking off included: nobody smiles or softens unless the shot says so.",
       // One of each, always at the table (D118): Kling cut to closer shots with Marcus and Nina
       // somewhere else, and dressed guests like them, so they showed twice.
       inClip.length > 1 ? `${and(names(inClip))} each appear once in the picture, never twice; no guest looks or dresses like any of them.` : "",
-      anchor && inClip.length > 1 ? `Every shot is of this same group at the ${anchor.name}: a closer shot frames part of it, and whoever is out of frame is still standing in their place at the ${anchor.name}.` : "",
-      pieces.length ? `${pieces.map((f) => `The ${f.name}`).join(" and ")} and everything on ${pieces.length === 1 ? "it" : "them"} stay exactly the same throughout.` : "",
+      // Only the group at its table (D132): a stranger in a dark suit stood at the group's table as
+      // Jade arrived and had to be cropped out in the edit.
+      anchor && inClip.length > 1 ? `Every shot is of this same group at the ${anchor.name}: a closer shot frames part of it, and whoever is out of frame is still standing in their place at the ${anchor.name}. Nobody else stands at the ${anchor.name} or touches it; other guests stay at their own tables, a few metres away.` : "",
+      pieces.length ? `${pieces.map((f) => `The ${f.name}`).join(" and ")} and everything on ${pieces.length === 1 ? "it" : "them"} stay exactly the same throughout, except what a shot puts on, takes off or drops in; that stays as the shot leaves it.` : "",
       "No text, no logos.",
     ].filter(Boolean).join(" "));
     return L.join("\n");
