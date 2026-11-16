@@ -95,9 +95,20 @@ const first = (name: string) => name.split(/\s+/)[0];
  */
 export function shotSeconds(p: ClipPanel): number {
   const words = p.dialogue.map((d) => d.text).join(" ");
-  const talk = words.trim() ? Math.ceil(spokenSeconds(words) + 0.5) : 0;
-  const need = Math.max(2, talk, actionFloor(p.description));
+  const handle = handlingSeconds(p.description);
+  const talk = words.trim() ? Math.ceil(spokenSeconds(words) + 0.5 + handle) : 0;
+  const need = Math.max(2, talk, words.trim() ? 0 : Math.ceil(1 + handle), actionFloor(p.description));
   return Math.max(1, Math.min(p.durationSec, need));
+}
+
+/**
+ * Things handled in a shot (D140): taking, handing over, pulling out, dropping in, glancing at.
+ * Each takes time on top of a line: "Chase takes the contract, glances at it, drops it into the
+ * ice bucket" and his line were given the line's 3 s alone. Three quarters of a second each.
+ */
+const HANDLING = /\b(?:takes?|took|taking|pulls?\s+(?:\w+\s+){0,3}out|pulled\s+(?:\w+\s+){0,3}out|hands?\s+(?:it|him|her|them|over)|handed|holds?\s+(?:it\s+|\w+\s+)?out|drops?\s+(?:it|\w+)\s+in(?:to)?|dropped\s+(?:it|\w+)\s+in(?:to)?|puts?\s+(?:it|\w+)\s+down|picks?\s+(?:it\s+|\w+\s+)?up|picked\s+(?:it\s+|\w+\s+)?up|gives?|gave|glances?\s+at|looks?\s+at|reads?|signs?|pours?|opens?|tears?|toss(?:es)?|flicks?)\b/gi;
+export function handlingSeconds(text: string | undefined): number {
+  return Math.min(3, 0.75 * (text?.match(HANDLING)?.length ?? 0));
 }
 
 /** The request for one clip. */

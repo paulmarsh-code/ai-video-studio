@@ -2579,3 +2579,12 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
   - **Make it again as it is:** a new take of the same request.
 - Earlier takes are listed on the card, each with its change. The runbook saves a new take as `_take<N>`, so no take is overwritten, and Claude tells Paul it's a new take and its cost before sending.
 - **Tested** in `clipReview.d139.test.ts`, and in the browser on a copy of Paul's scene: approve became a kept take, and a change wrote the new request.
+
+### D140: Time for things handled in a shot (2026-11-16)
+
+- **Visible failure (coming).** Before Paul's contract clips were sent, two shots had too little time:
+  - "Chase takes the contract, glances at it, drops it into the ice bucket" and his line were given the line's 3 s alone (D120);
+  - Jade pulling the contract out of her bag and holding it out was a 2 s silent beat.
+- **Fix, for any clip (`clips.ts`, `handlingSeconds`).** Each thing handled in the panel's words adds three quarters of a second, at most 3 s: taking, handing, pulling out, holding out, dropping in, putting down, picking up, glancing or looking at, reading, signing, pouring, opening, tossing. A shot is still never longer than its panel.
+- On Paul's scene: the hand-over is now 3 s and Chase's shot 4 s.
+- **Reaches the generation through:** the shot times in the clip request. Tested in `clipReview.d139.test.ts`.

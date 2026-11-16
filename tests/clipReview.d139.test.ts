@@ -39,3 +39,15 @@ describe("Reviewing a made clip (D139)", () => {
     expect(() => reviewJob("s:7-8", "again")).toThrow(/already waiting/);
   });
 });
+
+import { handlingSeconds, shotSeconds, type ClipPanel } from "../src/lib/domain/clips";
+describe("Time for things handled in a shot (D140)", () => {
+  const P = (description: string, text: string | undefined, durationSec: number) => ({ order: 1, durationSec, description, emotion: "", dialogue: text ? [{ characterId: "a", text }] : [], spec: {} as never }) as ClipPanel;
+  it("taking, glancing and dropping add to the line; a hand-over gets its time; never past the panel", () => {
+    expect(handlingSeconds("Chase takes the contract, glances at it, drops it into the ice bucket and delivers a retort.")).toBe(2.25);
+    expect(shotSeconds(P("Chase takes the contract, glances at it, drops it into the ice bucket.", "You're wrong, it's 90 days, love.", 4))).toBe(4);
+    expect(shotSeconds(P("Jade pulls the contract out of her handbag and holds it out to Chase.", undefined, 3))).toBe(3);
+    expect(shotSeconds(P("They talk.", "Well?", 4))).toBe(2);
+    expect(shotSeconds(P("Jade waits.", undefined, 3))).toBe(2);
+  });
+});
