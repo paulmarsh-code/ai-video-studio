@@ -13,10 +13,14 @@ When he says "make the clips":
    - the reply's `data.url` is the `klingUrl`.
    - kling.ai is in Paul's Claude allowed websites (Settings → Capabilities → Allowed websites: `kling.ai`, `*.kling.ai`, `*.klingai.com`).
    - **Fallback, if the workspace can't reach kling.ai:** write the ticket into the picture's `upload` as `{ticket, url, expireAt}` and commit the file. The clips page, while open, uploads it from Paul's computer (D125). Then re-stage until `klingUrl` is set.
+3b. **Upload the voices** (free, D146). For each of the job's `audios` without a `klingUrl`:
+   - stage the file from its `path`;
+   - make it an mp3 of 5–30 s in the workspace: `ffmpeg -i in -vn -ac 1 -ar 44100 -b:a 128k out.mp3`. Pad a shorter one with silence (`-af apad=whole_dur=5.2`); cut a longer one to its first 30 s;
+   - `file_upload` with `audio/mpeg`, then `curl`, as for the pictures.
 4. **Submit each clip.** Call `omni_ref_video` with:
    - model `kling-video-v4_0`;
    - arguments: `prompt` (the job's prompt), `elements` as a JSON array of `{id, bindName: name, type: "image"}`, `duration` (seconds), `aspect_ratio`, `resolution` 720p, `enable_audio` true, `prefer_multi_shots` true;
-   - inputs: `image_N` for each picture's `klingUrl`, in order.
+   - inputs: `image_N` for each picture's `klingUrl`, in order, and `audio_N` for each voice's `klingUrl` (the request says "exactly the voice in 音频N").
    - Then set the job's `status` to `sent` with its `generationId`, and commit the jobs file, with `expectedMtimeMs` from the stage.
 5. **When it's made.** Poll `query_tasks`, then:
    - download the video (`urlWithoutWatermark`) in the workspace;

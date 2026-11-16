@@ -20,6 +20,8 @@ export const elementKey = {
   character: (slug: string) => `char:${slug}`,
   venue: (id: string) => `venue:${id}`,
   prop: (name: string) => `prop:${name.trim().toLowerCase()}`,
+  /** A character's voice sample (D146): an audio file, kept as an asset; its id is the "Element" id. */
+  voice: (slug: string) => `voice:${slug}`,
 };
 
 export interface ClipPanel {
@@ -69,6 +71,8 @@ export interface Clip {
    * and so on. Kling stages each shot from its picture; words alone it treats as a suggestion.
    */
   pictures: { shot: number; panel: number; assetId: string; continuity?: boolean }[];
+  /** Voice samples for who speaks (D146), in order: audio N is 音频N. Kling 4.0 takes up to 3. */
+  audios: { n: number; characterId: string; assetId: string }[];
   /** The kept take this clip carries on from (D130). */
   continues?: { from: number; to: number };
 }
@@ -147,7 +151,9 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake):
     ...(cont ? [cont] : []),
     ...panels.flatMap((p, k) => p.imageAssetId && !(cont && k === 0) ? [{ shot: k + 1, panel: p.order, assetId: p.imageAssetId }] : []),
   ];
-  const build = (ref: (key: string, plain: string) => string, pic: (n: number) => string) => {
+  const speakersAll = [...new Set(panels.flatMap((p) => p.dialogue.map((x) => x.characterId)))];
+  const audios: Clip["audios"] = speakersAll.flatMap((id) => { const e = i.elements[elementKey.voice(id)]; return e?.id ? [{ characterId: id, assetId: e.id }] : []; }).slice(0, 3).map((x, k) => ({ n: k + 1, ...x }));
+  const build = (ref: (key: string, plain: string) => string, pic: (n: number) => string, aud: (n: number) => string) => {
     const who = (id: string) => ref(elementKey.character(id), first(nameOf(id)));
     const L: string[] = [];
     const venue = ref(elementKey.venue(i.venue.id), i.venue.name);
@@ -209,7 +215,14 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake):
       t += d;
     });
     const speakers = [...new Set(panels.flatMap((p) => p.dialogue.map((x) => x.characterId)))];
-    const voices = speakers.map((id) => { const v = voiceShort(i.cast.find((c) => c.id === id)?.voiceLock ?? ""); return v ? `${first(nameOf(id))}: ${v}` : ""; }).filter(Boolean);
+    // Each speaker's own voice sample when they have one (D146): without it Kling 4.0 made both
+    // voices up, American, though the words said British.
+    const voices = speakers.map((id) => {
+      const v = voiceShort(i.cast.find((c) => c.id === id)?.voiceLock ?? "");
+      const a = audios.find((x) => x.characterId === id);
+      const heard = a ? `exactly the voice in ${aud(a.n)}: the same person, accent, pitch and tone, saying this clip's words` : "";
+      return heard || v ? `${first(nameOf(id))}: ${[heard, v].filter(Boolean).join(". ")}` : "";
+    }).filter(Boolean);
     if (voices.length) L.push(`Voices. ${voices.join(". ")}.`);
     L.push([
       lines.length > 1 ? `Each line is said once, in its own shot, word for word: ${lines.length} different lines in all.` : "",
@@ -239,7 +252,7 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake):
     return L.join("\n");
   };
   const seconds = times.reduce((a, b) => a + b, 0);
-  return { panels: panels.map((p) => p.order), seconds, prompt: build(api, (n) => `图片${n}`), webPrompt: build(web, (n) => `picture ${n}`), elements: used, missing, credits: seconds * (i.creditsPerSecond ?? 10), pictures, ...(after ? { continues: { from: after.from, to: after.to } } : {}) };
+  return { panels: panels.map((p) => p.order), seconds, prompt: build(api, (n) => `图片${n}`, (n) => `音频${n}`), webPrompt: build(web, (n) => `picture ${n}`, (n) => `audio ${n}`), audios, elements: used, missing, credits: seconds * (i.creditsPerSecond ?? 10), pictures, ...(after ? { continues: { from: after.from, to: after.to } } : {}) };
 }
 
 /** The scene's clips. */

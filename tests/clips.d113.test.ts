@@ -156,3 +156,15 @@ describe("Keeping a finished take (D130)", () => {
     expect(c.pictures[0]).toEqual(expect.objectContaining({ assetId: "second" }));
   });
 });
+
+describe("Each speaker's own voice (D146)", () => {
+  it("sends the speaker's voice sample as audio and ties the voice to it", () => {
+    const p = P(1, 4, {}, [{ characterId: "ava", text: "Well?" }]);
+    const [c] = sceneClips({ panels: [p], cast: cast as never, plan: plan as never, venue: { id: "v1", name: "Roof bar" }, elements: { ...elements, [elementKey.voice("ava")]: { id: "voiceasset", name: "ava.mp3" } } });
+    expect(c.audios).toEqual([{ n: 1, characterId: "ava", assetId: "voiceasset" }]);
+    expect(c.prompt).toContain("Voices. Ava: exactly the voice in 音频1: the same person, accent, pitch and tone, saying this clip's words. Warm Scottish woman");
+    expect(c.webPrompt).toContain("exactly the voice in audio 1");
+    const [d] = sceneClips({ panels: [p], cast: cast as never, plan: plan as never, venue: { id: "v1", name: "Roof bar" }, elements });
+    expect(d.audios).toEqual([]);
+  });
+});

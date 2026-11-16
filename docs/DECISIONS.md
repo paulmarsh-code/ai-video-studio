@@ -2633,3 +2633,15 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 
 - **Visible failure (caught before sending).** With panels 1–6 kept and then take 4 of panels 7–8 approved, the next clip (panels 9–12) opened on the frame from panels 1–6, the older take. It would have jumped back in time, before Jade's line and the contract.
 - **Fix (`clips.ts`).** When more than one kept take comes right before a clip, the clip follows the one that ends last. Tested in `clips.d113.test.ts`.
+
+### D146: A character's voice is theirs, in every clip (2026-11-16)
+
+- **Paul:** "both voices have changed and sound American … it is crucial the voice is consistent and tied to the character."
+- **Cause.** Paul's earlier good takes used his own Kling Elements that carry a voice: "voice jade", and "Chase" / "Chaseupdated" with chase_voice_reference. The Elements the app made from its pictures (D127) have none. Kling 4.0 doesn't take a voice through an Element anyway, only through audio references (`audio_1`–`audio_3`, 5–30 s each). With no voice given, Kling made one up for each character, American, though the words asked for British.
+- **Fix, for any project.**
+  - **Each character has a voice sample**, kept with the character for the whole project (Kling Elements on the clips page: "add a voice sample"). It's a few seconds of them speaking, as mp3, wav, m4a or a video with sound.
+  - **Every clip sends the sample of each speaker** as `audio_N`. The request says "Jade: exactly the voice in 音频1: the same person, accent, pitch and tone, saying this clip's words", plus the written voice.
+  - **A clip with a speaker who has no voice sample can't be created.** The app says whose sample to add first, because a missing voice means a new voice every clip.
+  - The runbook turns each sample into a 5–30 s mp3 and uploads it with the pictures.
+- **Paul's voices:** Jade's is from his "voice jade" Element (5 s) and Chase's from "Chaseupdated" (chase_voice_reference, 8 s), made into `POT_voice_Jade.mp3` and `POT_voice_Chase.mp3`.
+- **Reaches the generation through:** audio references and a prompt line. Tested in `clips.d113.test.ts`.

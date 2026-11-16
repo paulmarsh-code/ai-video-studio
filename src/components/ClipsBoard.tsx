@@ -12,7 +12,7 @@ import type { PictureChoice } from "@/lib/sceneClips";
 import type { KlingJob } from "@/lib/klingJobs";
 import { ofProject } from "@/lib/klingNames";
 
-type Row = { key: string; what: string; kind: string; element?: KlingElement };
+type Row = { key: string; what: string; kind: string; element?: KlingElement; voice?: KlingElement };
 /** Whether the app can make a row's Element from its own pictures, and how the request stands (D127). */
 type Making = Record<string, { pictures: number; status?: "ready" | "sent" | "done" | "failed"; error?: string }>;
 const MAKING: Record<string, string> = { ready: "waiting for Claude", sent: "being made in Kling", done: "made from the app's pictures", failed: "couldn't be made" };
@@ -53,7 +53,25 @@ function ElementRow({ projectId, projectCode, sceneId, row, list, making }: { pr
         {making?.status && <span className={`ml-2 text-xs ${making.status === "failed" ? "text-red-700" : "text-blue-800"}`}>{MAKING[making.status]}{making.error ? `: ${making.error}` : ""}</span>}
         {error && <span className="ml-2 text-xs text-red-700">{error}</span>}
       </td>
-      <td className="py-1 pl-2">
+      <td className="py-1 pl-2 text-xs">
+        {/* The character's voice (D146): a few seconds of them speaking, sent with every clip they speak in. */}
+        {row.kind === "Character" && (
+          <span className="mr-3" data-testid={`voice-${row.key}`}>
+            Voice: {row.voice ? <span className="text-green-700">{row.voice.name}</span> : <span className="text-amber-700">none</span>}{" "}
+            <label className="cursor-pointer text-blue-700 underline">{row.voice ? "change" : "add a voice sample"}
+              <input type="file" accept="audio/*,video/mp4,video/quicktime" className="hidden" disabled={busy} onChange={async (e) => {
+                const f = e.target.files?.[0]; e.target.value = "";
+                if (!f) return;
+                setBusy(true); setError("");
+                const form = new FormData(); form.append("file", f);
+                const res = await fetch(`/api/voice/${projectId}/${encodeURIComponent(row.key.slice(5))}`, { method: "POST", body: form });
+                const body = (await res.json()) as { ok?: boolean; error?: string };
+                setBusy(false);
+                if (!res.ok || !body.ok) setError(body.error ?? "The voice couldn't be saved."); else router.refresh();
+              }} />
+            </label>
+          </span>
+        )}
         {making && making.status !== "ready" && making.status !== "sent" && (
           <button type="button" disabled={busy} onClick={() => void make()} className="text-xs text-blue-700 underline disabled:opacity-50">
             {row.element ? "Make again from the app's pictures" : "Make from the app's pictures"}

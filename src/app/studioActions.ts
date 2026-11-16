@@ -267,12 +267,20 @@ export async function createClipJobsAction(sceneId: string, clips?: number[]): P
     const chosen = v.clips.map((c, k) => ({ c, n: k + 1 })).filter((x) => !clips?.length || clips.includes(x.n));
     for (const { c, n } of chosen) {
       if (!c.elements.length) throw new Error(`Clip ${n} has no Kling Elements linked yet: pick them in the list above first.`);
+      // A voice is the character's (D146): nobody speaks in a clip without their own voice sample,
+      // or Kling makes a new voice up for them.
+      const cast = coreRepo.getCast(db, s.scene.projectId);
+      const speakers = [...new Set(v.allPanels.length ? coreRepo.getScene(db, sceneId)!.panels.filter((p) => c.panels.includes(p.order)).flatMap((p) => (p.dialogue as { characterId: string }[]).map((d) => d.characterId)) : [])];
+      const without = speakers.filter((id) => !c.audios.some((a) => a.characterId === id)).map((id) => cast.find((x) => x.id === id)?.name ?? id);
+      if (without.length) throw new Error(`Clip ${n}: add ${without.join(" and ")}'s voice sample first (Kling Elements, "add a voice sample"), so ${without.length === 1 ? "their" : "each"} voice stays the same in every clip.`);
     }
     const jobs = chosen.map(({ c, n }) => ({
       id: jobId(sceneId, c.panels), projectId: s.scene.projectId, sceneId, sceneTitle: v.sceneTitle, clip: n, panels: c.panels, seconds: c.seconds,
       aspect: v.aspect, model: "kling-video-v4_0", resolution: "720p", sound: true, prompt: c.prompt,
       elements: c.elements.map((e) => ({ id: e.id, name: e.name })),
       pictures: c.pictures.map((x, i) => ({ n: i + 1, shot: x.shot, panel: x.panel, assetId: x.assetId, path: coreRepo.getAsset(db, x.assetId)?.path ?? "" })),
+      // Each speaker's voice sample (D146): audio N is 音频N in the request.
+      audios: c.audios.map((a) => ({ ...a, path: coreRepo.getAsset(db, a.assetId)?.path ?? "" })),
       missing: c.missing, credits: c.credits, status: "ready" as const, requestedAt: now,
     }));
     putJobs(jobs);

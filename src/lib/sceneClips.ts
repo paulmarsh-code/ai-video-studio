@@ -21,7 +21,7 @@ export interface PictureChoice {
 
 export interface SceneClipsView {
   clips: Clip[];
-  rows: { key: string; what: string; kind: string; element?: { id: string; name: string } }[];
+  rows: { key: string; what: string; kind: string; element?: { id: string; name: string }; voice?: { id: string; name: string } }[];
   listed: { elements: KlingListed[]; updatedAt?: string };
   pictures: PictureChoice[];
   aspect: "9:16" | "16:9";
@@ -74,6 +74,6 @@ export function buildSceneClips(db: DB, sceneId: string): SceneClipsView | null 
     ...cast.map((c) => ({ key: elementKey.character(c.id), what: c.name, kind: "Character" })),
     { key: elementKey.venue(s.venue.id), what: s.venue.name, kind: "Venue" },
     ...[...new Set([...pieces, ...held])].map((n) => ({ key: elementKey.prop(n), what: n, kind: "Prop" })),
-  ].map((r) => ({ ...r, element: elements[r.key] }));
+  ].map((r) => ({ ...r, element: elements[r.key], ...(r.kind === "Character" ? { voice: elements[elementKey.voice(r.key.slice(5))] } : {}) }));
   return { clips, rows, listed, pictures, aspect: studio.projectAspect(db, projectId), sceneTitle: s.scene.title ?? "Scene", kept, allPanels: sorted.map((p) => ({ order: p.order, description: p.description })) };
 }

@@ -25,6 +25,8 @@ export interface KlingJob {
   elements: { id: string; name: string }[];
   /** In order: picture N is 图片N. `path` is the file on this computer. */
   pictures: KlingJobPicture[];
+  /** Voice samples for who speaks (D146): audio N is 音频N; Claude sends each as an mp3 of 5–30 s. */
+  audios?: { n: number; characterId: string; assetId: string; path: string; klingUrl?: string }[];
   missing: string[];
   credits: number;
   status: KlingJobStatus;
@@ -76,7 +78,7 @@ export function readJobs(): KlingJobsFile {
 }
 
 /** What makes a clip the same clip to send again: its request and its pictures. */
-const sameRequest = (a: KlingJob, b: KlingJob) => a.prompt === b.prompt && a.seconds === b.seconds && a.pictures.map((x) => x.assetId).join() === b.pictures.map((x) => x.assetId).join();
+const sameRequest = (a: KlingJob, b: KlingJob) => a.prompt === b.prompt && a.seconds === b.seconds && a.pictures.map((x) => x.assetId).join() === b.pictures.map((x) => x.assetId).join() && (a.audios ?? []).map((x) => x.assetId).join() === (b.audios ?? []).map((x) => x.assetId).join();
 
 /** Write the file as it now is (the app's own uploads, D125). */
 export function writeJobs(f: KlingJobsFile) {
