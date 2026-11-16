@@ -2511,3 +2511,18 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
   - A two-shot named in a panel with more than two people, naming two of them, gets its own camera instead of the fixed set.
   - The pair is the first two people the words name, in that order (`namedPair`).
 - **Reaches the generation through:** the camera choice, so the blocking frame and the storyboard picture. Tested in `namedTwoShot.d134.test.ts`.
+
+### D135: One place to change a panel, in words (2026-11-16)
+
+- **Paul:** "for something that is supposed to make things easier this seems very complicated, no one is going to understand or want to understand this."
+- **Visible failure.** Turning panel 8 into a two-shot for the contract hand-over took four pages: the panel's words, the camera chooser, the floor plan tabs (first in the wrong scene) and unlocking. On the way it was easy to re-pick every panel's camera and spoil approved pictures.
+- **Fix, for any scene.**
+  - Every storyboard panel has a **Change this panel** box. Type what should change, e.g. "two-shot of Jade and Chase", "closer on Chase", "Nina stands left of Marcus" or "she looks angrier", then click **Change it**.
+  - `panelChange.ts` reads the words:
+    - people moving, turning or sitting: D39's reader, saved for this panel only;
+    - a named shot, a size, or nearer and further: the app places this panel's camera again, with the words leading, so a named two-shot is of the two named (D134).
+  - It works with the cameras locked. No other panel's camera or picture changes.
+  - The picture is then drawn again from the new layout. Words that moved nothing go to the picture as an instruction: an edit if there is a picture, a fresh draw if not.
+  - "Need to change something?" becomes a small link, "More ways to change it", for the floor plan and reference pictures. The shot box no longer says to unlock the cameras.
+- **Tested** in `panelChange.d135.test.ts`, and on a copy of Paul's scene. "Two-shot of Jade and Chase" on panel 8 gave "Two-shot on Jade and Chase Whitmore", with Chase on the left, Jade on the right and the table between them; the other panels' cameras were unchanged.
+- **Reaches the generation through:** the camera choice and the positions, so the blocking frame and the picture.

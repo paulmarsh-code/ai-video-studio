@@ -10,7 +10,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { setShotChoiceAction, approveCamerasAction, approvePanelAction, unapprovePanelAction, approvePanelsAction, approvePositionsAction, chooseCamerasAction, updateLayoutAction, setPanelImageAction, unlockSceneAction } from "@/app/studioActions";
+import { changePanelAction, setShotChoiceAction, approveCamerasAction, approvePanelAction, unapprovePanelAction, approvePanelsAction, approvePositionsAction, chooseCamerasAction, updateLayoutAction, setPanelImageAction, unlockSceneAction } from "@/app/studioActions";
 import type { GeometryPlanData } from "@/lib/domain/types";
 import { PlanThumb } from "./PlanThumb";
 import { uploadBlob } from "@/lib/clientUpload";
@@ -231,6 +231,37 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
     if (p) void redraw(p, pr.ch);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [b]);
+
+  // One place to change a panel, in words (D135): the app moves people and the camera for this
+  // panel only, then the picture is drawn again from the new layout. Words that move nothing go
+  // to the picture as they are.
+  const [words, setWords] = useState<Record<string, string>>({});
+  const [wordNotes, setWordNotes] = useState<Record<string, { ok: boolean; text: string }>>({});
+  async function changeInWords(p: BoardPanel) {
+    const text = (words[p.id] ?? "").trim();
+    if (!text) return;
+    setWordNotes((x) => { const y = { ...x }; delete y[p.id]; return y; });
+    setDrawing((x) => ({ ...x, [p.id]: "Changing…" }));
+    const r = await changePanelAction(p.id, text);
+    setDrawing((x) => { const y = { ...x }; delete y[p.id]; return y; });
+    if (!r.ok) { setWordNotes((x) => ({ ...x, [p.id]: { ok: false, text: r.error } })); return; }
+    const v = r.value!;
+    const also = v.unclear.length && v.layout ? ` Also: ${v.unclear.join("; ")}.` : "";
+    setWordNotes((x) => ({ ...x, [p.id]: { ok: true, text: v.layout ? `${v.done.join(". ")}.${b.canGenerate ? " Drawing the picture again…" : " The camera view and the ChatGPT request are updated."}` : b.canGenerate ? "Changing the picture…" : "Make the change in ChatGPT below." } }));
+    setWords((x) => ({ ...x, [p.id]: "" }));
+    if (!v.layout && v.done.length && !v.unclear.length) { setWordNotes((x) => ({ ...x, [p.id]: { ok: true, text: `${v.done.join(". ")}. Nothing to change${p.imageAssetId ? "; Redraw draws the picture again" : ""}.` } })); return; }
+    const ch: SubmittedChange = v.layout
+      ? { text, parts: { place: `changed on this panel's floor plan: ${v.done.join("; ")}`, ...(also ? { other: also.replace(/^ Also: |\.$/g, "") } : {}) }, refs: [], visual: false }
+      : { text, parts: {}, refs: [], visual: false };
+    // Without GPT, a panel with no picture yet just shows its new request below; nothing to redo.
+    if (v.layout && !b.canGenerate && !p.imageAssetId) { router.refresh(); return; }
+    if (v.layout) { pendingRedraw.current = { panelId: p.id, ch }; router.refresh(); return; }
+    if (p.imageAssetId) { await redraw(p, ch); return; }
+    if (!b.canGenerate) { setWordNotes((x) => ({ ...x, [p.id]: { ok: false, text: `Nothing on the plan changed. Add "${text}" to the panel's words, or make the picture in ChatGPT.` } })); return; }
+    setDrawing((x) => ({ ...x, [p.id]: "Drawing…" }));
+    try { await drawChecked(p, `${p.prompt}\nAlso: ${text}.`, assetIds(p.attach)); } catch (e) { setFailed((x) => ({ ...x, [p.id]: e instanceof Error ? e.message : String(e) })); }
+    finally { setDrawing((x) => { const y = { ...x }; delete y[p.id]; return y; }); router.refresh(); }
+  }
 
   const camerasDone = b.panels.every((p) => p.hasCamera);
   const missing = b.panels.filter((p) => !p.imageAssetId);
@@ -516,6 +547,19 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
             </div>}
             {failed[p.id] && <p className="mt-1 text-xs text-red-700" role="alert" data-testid={`board-${p.code}-failed`}>GPT couldn&apos;t draw this one. {plainReason(failed[p.id])}</p>}
 
+            {p.shotId && p.hasCamera && (
+              <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/40 p-2" data-testid={`board-${p.code}-words`}>
+                <label className="block text-sm font-semibold text-blue-900">Change this panel
+                  <textarea rows={2} value={words[p.id] ?? ""} onChange={(e) => setWords((x) => ({ ...x, [p.id]: e.target.value }))} data-testid={`board-${p.code}-words-input`}
+                    placeholder="e.g. two-shot of Jade and Chase · closer on Chase · Nina stands left of Marcus · she looks angrier"
+                    className="mt-1 w-full rounded border border-neutral-300 bg-white px-2 py-1 text-sm font-normal" />
+                </label>
+                <button type="button" disabled={!(words[p.id] ?? "").trim() || !!drawing[p.id]} onClick={() => void changeInWords(p)} data-testid={`board-${p.code}-words-go`}
+                  className="mt-1 rounded-md bg-blue-700 px-3 py-1 text-sm text-white hover:bg-blue-800 disabled:opacity-40">Change it{b.canGenerate ? " · about 7p" : ""}</button>
+                <span className="ml-2 text-xs text-neutral-600">Only this panel changes.</span>
+                {wordNotes[p.id] && <p className={`mt-1 text-xs ${wordNotes[p.id].ok ? "text-green-800" : "text-red-700"}`} data-testid={`board-${p.code}-words-note`}>{wordNotes[p.id].text}</p>}
+              </div>
+            )}
             <div className="mt-3 space-y-2">
               {/* Characters mixed up (D109): Paul's red line, never approved; redraw instead. */}
               {p.imageAssetId && p.status !== "approved" && mixedUp(p) && (
@@ -539,8 +583,8 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
               {p.imageAssetId && (
                 p.hasCamera && p.shotId
                   ? <button type="button" onClick={() => setChanging({ p, index: i })} data-testid="change-open"
-                      className="w-full rounded-lg border border-blue-200 bg-blue-50/40 px-4 py-2 text-left text-sm font-semibold text-blue-900 hover:bg-blue-50">
-                      Need to change something?
+                      className="text-xs text-blue-700 underline">
+                      More ways to change it: the floor plan, reference pictures
                     </button>
                   : <ChangeRequest key={p.imageAssetId} what="panel" projectId={b.projectId} baseCode={codeOf(p)} onSubmit={(ch) => redraw(p, ch)} />
               )}
@@ -605,7 +649,7 @@ function ShotPicker({ p, shotId, locked, onDone }: { p: BoardPanel; shotId: stri
       </p>
       {p.shot!.why && p.shot!.by !== "you" && <p className="text-neutral-500">Why: {p.shot!.why}.</p>}
       {p.camera && <p data-testid={`board-${p.code}-camera`}><span className="font-medium">Camera:</span> {p.camera.name}
-        {p.camera.copyOf && <span className="text-amber-800"> · this panel&apos;s own copy, moved from “{p.camera.copyOf}” to suit this panel. The floor plan shows both: select “{p.camera.name}” there to see what this panel sees.</span>}</p>}
+        {p.camera.copyOf && !/for this panel$/.test(p.camera.name) && <span className="text-neutral-500"> · this panel only</span>}</p>}
       {open && (
         <div className="mt-1 space-y-1">
           {list("shot", "Shot", "Let the camera rules decide")}
@@ -619,7 +663,7 @@ function ShotPicker({ p, shotId, locked, onDone }: { p: BoardPanel; shotId: stri
           </div>
         </div>
       )}
-      {locked && <p className="text-neutral-500">To change it, unlock the cameras first.</p>}
+      {locked && <p className="text-neutral-500">To change it, say so under Change this panel.</p>}
     </div>
   );
 }

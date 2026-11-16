@@ -985,7 +985,7 @@ export function saveCharacterHeldItems(db: DB, versionId: string, frontAssetId: 
  * worked out again for the whole scene. The cameras stay as they are, approved or not (D39):
  * fixing one picture never moves another panel's camera.
  */
-export function savePanelBlocking(db: DB, changes: { shotId: string; entries: Record<string, BlockEntry | null>; camera?: { position: Point; lookAt: Point } & Partial<Pick<PlanCamera, "preset" | "fovDeg" | "heightM" | "tiltDeg" | "rollDeg" | "size">> }[]): { sceneId: string; turned: { code: string; who: string[] }[] } {
+export function savePanelBlocking(db: DB, changes: { shotId: string; entries: Record<string, BlockEntry | null>; camera?: { position: Point; lookAt: Point } & Partial<Pick<PlanCamera, "preset" | "fovDeg" | "heightM" | "tiltDeg" | "rollDeg" | "size" | "name">> }[]): { sceneId: string; turned: { code: string; who: string[] }[] } {
   if (!changes.length) throw new Error("Nothing to save.");
   const round = (p: Point) => ({ x: +p.x.toFixed(2), y: +p.y.toFixed(2) });
   let sceneId = "";
@@ -1010,8 +1010,8 @@ export function savePanelBlocking(db: DB, changes: { shotId: string; entries: Re
   for (const ch of changes) {
     if (!ch.camera) continue;
     // Only the camera's own settings: where it stands, where it looks, its lens, height and tilt.
-    const { preset, fovDeg, heightM, tiltDeg, rollDeg, size } = ch.camera;
-    const extra = Object.fromEntries(Object.entries({ preset, fovDeg, heightM, tiltDeg, rollDeg, size }).filter(([, v]) => v !== undefined));
+    const { preset, fovDeg, heightM, tiltDeg, rollDeg, size, name } = ch.camera;
+    const extra = Object.fromEntries(Object.entries({ preset, fovDeg, heightM, tiltDeg, rollDeg, size, name }).filter(([, v]) => v !== undefined));
     panelCamera(db, sceneId, ch.shotId, (c) => ({ ...c, ...extra, position: round(ch.camera!.position), lookAt: round(ch.camera!.lookAt) }));
   }
   // Anyone who must be in the picture but has been moved out of its camera's view (D42).
@@ -1064,7 +1064,9 @@ function panelCamera(db: DB, sceneId: string, shotId: string, change: (cam: Plan
   const shared = db.select().from(t.shots).where(eq(t.shots.sceneId, sceneId)).all().some((x) => x.id !== shotId && (x.spec as ShotSpec).cameraId === cam.id);
   const own = !shared && cam.id.includes("~");
   const id = own ? cam.id : `${cam.id.split("~")[0]}~${shotId.slice(0, 6)}`;
-  const camera = { ...next, id, name: own ? cam.name : `${cam.name.replace(/, (turned|for this panel)$/, "")}, for this panel` };
+  // A camera the words named (D135) keeps that name: "Two-shot on Jade and Chase", not "Wide".
+  const renamed = next.name !== cam.name ? next.name.replace(/, (turned|for this panel)$/, "") : undefined;
+  const camera = { ...next, id, name: renamed ? `${renamed}, for this panel` : own ? cam.name : `${cam.name.replace(/, (turned|for this panel)$/, "")}, for this panel` };
   const cameras = own ? plan.data.cameras.map((c) => (c.id === id ? camera : c)) : [...plan.data.cameras.filter((c) => c.id !== id), camera];
   db.insert(t.plans).values({ id: randomUUID(), sceneId, name: plan.name, version: plan.version + 1, data: { ...plan.data, cameras } }).run();
   db.update(t.shots).set({ spec: { ...spec, cameraId: id } }).where(eq(t.shots.id, shotId)).run();

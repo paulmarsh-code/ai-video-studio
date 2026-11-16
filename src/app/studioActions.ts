@@ -296,3 +296,8 @@ export async function requestElementsAction(sceneId: string, keys?: string[]): P
     return { count: made.length };
   });
 }
+
+/** Change one panel in words (D135): people and camera for this panel only, no unlocking. */
+export async function changePanelAction(panelId: string, words: string) {
+  return runAsync(async (db) => (await import("@/lib/panelChange")).changePanel(db, panelId, words));
+}
