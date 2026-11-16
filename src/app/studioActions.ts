@@ -328,8 +328,23 @@ export async function setDeliveryAction(panelId: string, text: string) {
 /** Review a made clip like a storyboard frame (D139): approve it, change it in words, or make it again. */
 export async function reviewClipAction(jobId: string, decision: "approved" | "change" | "again", words?: string) {
   return runAsync(async () => {
-    const { reviewJob } = await import("@/lib/klingJobs");
-    const j = reviewJob(jobId, decision, words);
+    const { reviewJob, readJobs } = await import("@/lib/klingJobs");
+    // The clip's request as it is now (D147), for a new take.
+    const job = readJobs().jobs.find((x) => x.id === jobId);
+    const v = job && decision !== "approved" ? buildSceneClips(await (await import("@/db/client")).getDb(), job.sceneId) : null;
+    const c = v?.clips.find((x) => x.panels.join() === job!.panels.join());
+    const db = await (await import("@/db/client")).getDb();
+    const fresh = c ? { prompt: c.prompt, seconds: c.seconds, credits: c.credits, elements: c.elements.map((e) => ({ id: e.id, name: e.name })),
+      pictures: c.pictures.map((x, i) => ({ n: i + 1, shot: x.shot, panel: x.panel, assetId: x.assetId, path: coreRepo.getAsset(db, x.assetId)?.path ?? "" })),
+      audios: c.audios.map((a) => ({ ...a, path: coreRepo.getAsset(db, a.assetId)?.path ?? "" })) } : undefined;
+    if (c && job) {
+      const scene = coreRepo.getScene(db, job.sceneId)!;
+      const cast = coreRepo.getCast(db, scene.scene.projectId);
+      const speakers = [...new Set(scene.panels.filter((p) => c.panels.includes(p.order)).flatMap((p) => (p.dialogue as { characterId: string }[]).map((d) => d.characterId)))];
+      const without = speakers.filter((id) => !c.audios.some((a) => a.characterId === id)).map((id) => cast.find((x) => x.id === id)?.name ?? id);
+      if (without.length) throw new Error(`Add ${without.join(" and ")}'s voice sample first (Kling Elements, "add a voice sample"), so ${without.length === 1 ? "their" : "each"} voice stays the same in every clip.`);
+    }
+    const j = reviewJob(jobId, decision, words, fresh);
     return { status: j.status, credits: j.credits };
   });
 }

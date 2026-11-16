@@ -117,7 +117,7 @@ export const jobId = (sceneId: string, panels: number[]) => `${sceneId}:${panels
  * it as a kept take). A change in words or another take: the take so far goes into `takes`, and
  * the clip is ready to make again, with the change added to its request.
  */
-export function reviewJob(id: string, decision: "approved" | "change" | "again", words?: string): KlingJob {
+export function reviewJob(id: string, decision: "approved" | "change" | "again", words?: string, fresh?: Pick<KlingJob, "prompt" | "seconds" | "credits" | "pictures" | "elements" | "audios">): KlingJob {
   const f = readJobs();
   const j = f.jobs.find((x) => x.id === id);
   if (!j) throw new Error("That clip wasn't found. Create it first.");
@@ -129,6 +129,13 @@ export function reviewJob(id: string, decision: "approved" | "change" | "again",
   } else {
     if (j.status === "ready" || j.status === "sent") throw new Error("This clip is already waiting to be made.");
     if (j.localFile || j.videoUrl) j.takes = [...(j.takes ?? []), { localFile: j.localFile, videoUrl: j.videoUrl, generationId: j.generationId, madeAt: j.updatedAt, change: j.change }];
+    // A new take goes from the clip's request as it is now (D147): a voice sample or a line changed
+    // since the last take goes with it, not the old request.
+    if (fresh && fresh.prompt !== (j.basePrompt ?? j.prompt)) {
+      j.basePrompt = fresh.prompt; j.seconds = fresh.seconds; j.credits = fresh.credits; j.elements = fresh.elements;
+      j.pictures = fresh.pictures.map((p) => ({ ...p, klingUrl: j.pictures.find((q) => q.assetId === p.assetId)?.klingUrl }));
+      j.audios = fresh.audios;
+    }
     const base = j.basePrompt ?? j.prompt;
     j.basePrompt = base;
     j.change = decision === "change" ? said : undefined;

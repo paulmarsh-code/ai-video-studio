@@ -2645,3 +2645,8 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
   - The runbook turns each sample into a 5–30 s mp3 and uploads it with the pictures.
 - **Paul's voices:** Jade's is from his "voice jade" Element (5 s) and Chase's from "Chaseupdated" (chase_voice_reference, 8 s), made into `POT_voice_Jade.mp3` and `POT_voice_Chase.mp3`.
 - **Reaches the generation through:** audio references and a prompt line. Tested in `clips.d113.test.ts`.
+
+### D147: A new take goes from the clip's request as it is now (2026-11-16)
+
+- **Visible failure (caught before sending).** After Jade's and Chase's voice samples were added, **Make it again** and **Change it** would still have sent the old request, made before the voices existed. That would mean the same made-up voices again.
+- **Fix.** Asking for a new take rebuilds the clip's request from the storyboard as it is now: voices, lines, deliveries and pictures. The change words are then added to that. A new take can't go if someone speaking in it has no voice sample.
