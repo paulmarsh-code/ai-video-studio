@@ -2540,3 +2540,19 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
 - **Reaches the generation through:** the blocking frame (image 1).
 - **The missing bottle:** the bigger table in image 1 should keep it. Otherwise "the bottle stays in the ice bucket" in Change this panel (D135) tells the picture.
 - **Tested** in `setPieceFit.d136.test.ts`, and on Paul's two table pictures.
+
+### D137: The product flow, as Paul set it out (2026-11-16)
+
+This refines D124.
+
+1. **Story brief.** The user writes what the story is about, who it's for and where it will be shown (TikTok, YouTube…). A template makes sure there's enough detail.
+2. **Characters, props and venues** are built from the story. The user approves each.
+3. **The app builds** the floor plans, the camera shots and the storyboard. Every line carries its feeling, expression and action, learning from the approved take of Jade walking to the table and delivering her lines.
+4. **The user reviews the storyboard,** writes any changes in words (D135), including the speech, feeling and expression, and approves each frame.
+5. **The clips are submitted** with their Elements: characters, props, venue, and the storyboard picture for each shot (pictures 1, 2, 3; D119). Those fix positions and camera angles, and Kling does the rest.
+
+The user approves at every stage. Gaps found against the app on 16 Nov:
+- no story template (stage 1);
+- characters and venues aren't proposed from the story; only a scene's props and setting are (stage 2);
+- a line has a feeling, but no written delivery, expression or action of its own (stage 3);
+- a line's words and feeling are edited at the bottom of the storyboard page, not on the panel (stage 4).
