@@ -2502,3 +2502,12 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
   - "Only {speakers} has words anyone can make out; the guests' chatter stays a murmur. No repeated words, no extra speech."
   - "Natural, subtle acting, no exaggerated gestures. Guests behind the group stay in soft focus."
 - **Reaches the generation through:** prompt lines. Tested in `clips.d113.test.ts`. To be judged on the next clips made; if the acting is no better, take the lines back out.
+
+### D134: A two-shot named in a group panel is of the two it names (2026-11-16)
+
+- **Visible failure.** Panel 8 (P12) read "Two-shot of Jade and Chase: Jade pulls the contract out of her handbag and holds it out to Chase". Both "Let the app place the camera" and the camera choices gave the group's fixed wide. All four were small, with Marcus and Nina between Chase and Jade, so the hand-over wouldn't read.
+- **Cause.** The scene's fixed cameras (D95) come before a named shot, and a two-shot only counted as one when exactly two people were in the panel. The named two-shot's pair was the subject and whoever stands nearest them, not the two the words name.
+- **Fix, for any scene (`director.ts`).**
+  - A two-shot named in a panel with more than two people, naming two of them, gets its own camera instead of the fixed set.
+  - The pair is the first two people the words name, in that order (`namedPair`).
+- **Reaches the generation through:** the camera choice, so the blocking frame and the storyboard picture. Tested in `namedTwoShot.d134.test.ts`.

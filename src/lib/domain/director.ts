@@ -702,6 +702,9 @@ function coverageFor(plan: GeometryPlanData, sh: ShotInput, side: number, line: 
   const named = namedShot(`${sh.description ?? ""} ${sh.spec.actions ?? ""} ${sh.spec.shot ?? ""}`);
   if (named.framing && !["ots", "reverse", "two-shot", "three-shot", "master", "establishing", "reaction", "single"].includes(named.framing)) return dbg("named framing");
   if (named.size === "ecu" || named.size === "cu") return dbg("close-up by name");
+  // A two-shot named in a group panel (D134) is of the two it names, not the group's wide: "Two-shot
+  // of Jade and Chase" got the fixed wide, Marcus and Nina between them, for a hand-over.
+  if (named.framing === "two-shot" && sh.spec.visibleIds.length > 2 && namedPair(`${sh.description ?? ""} ${sh.spec.actions ?? ""}`, sh.spec.visibleIds, name)) return dbg("two-shot of two named in a group");
   const sp = planForShot(plan, sh.spec);
   // The set is built once from where everyone stands in the layout (Paul: "the layout is done and
   // fixed"), so every panel's cameras are the same few set-ups on the same side; a panel where
@@ -866,6 +869,16 @@ function withCoverage(designs: ShotDesign[], plan: GeometryPlanData, shots: Shot
   });
 }
 
+/** The two people a panel's words name for its two-shot (D134), in the order named; else undefined. */
+export function namedPair(text: string, ids: string[], name: (id: string) => string): [string, string] | undefined {
+  const at = ids.map((id) => {
+    const words = name(id).split(/\s+/).filter((w) => w.length > 1).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    const m = words.length ? new RegExp(`\\b(?:${words.join("|")})\\b`, "i").exec(text) : null;
+    return { id, i: m ? m.index : -1 };
+  }).filter((x) => x.i >= 0).sort((a, b) => a.i - b.i);
+  return at.length >= 2 ? [at[0].id, at[1].id] : undefined;
+}
+
 function namedShotDesign(d: ShotDesign, plan: GeometryPlanData, sh: ShotInput, line: [string, string] | undefined, name: (id: string) => string): ShotDesign {
   // The panel's own words plus its chosen shot (D28).
   const text = `${sh.description ?? ""} ${sh.spec.actions ?? ""} ${sh.spec.shot ?? ""}`;
@@ -911,7 +924,7 @@ function namedShotDesign(d: ShotDesign, plan: GeometryPlanData, sh: ShotInput, l
   }
   // Two-shot: side-on to the two of them, both filling the frame, on the side already chosen.
   if (n.framing === "two-shot") {
-    const pair = sh.spec.visibleIds.length === 2 ? sh.spec.visibleIds : subj ? [subj, ...sp.actors.filter((a) => a.characterId !== subj && S).sort((a, b) => Math.hypot(a.position.x - S!.x, a.position.y - S!.y) - Math.hypot(b.position.x - S!.x, b.position.y - S!.y)).map((a) => a.characterId).slice(0, 1)] : [];
+    const pair = sh.spec.visibleIds.length === 2 ? sh.spec.visibleIds : namedPair(text, sh.spec.visibleIds, name) ?? (subj ? [subj, ...sp.actors.filter((a) => a.characterId !== subj && S).sort((a, b) => Math.hypot(a.position.x - S!.x, a.position.y - S!.y) - Math.hypot(b.position.x - S!.x, b.position.y - S!.y)).map((a) => a.characterId).slice(0, 1)] : []);
     const A = sp.actors.find((a) => a.characterId === pair[0])?.position, B = sp.actors.find((a) => a.characterId === pair[1])?.position;
     if (A && B) {
       const M = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
