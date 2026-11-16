@@ -124,7 +124,7 @@ export default async function StoryboardPage({ params, searchParams }: { params:
           signsNoPicture={signsWithoutPicture(s.plan?.data.furniture?.length ? s.plan.data.furniture : asStaging(s.scene.staging).props)} settingHref="?part=setting"
           propMoves={s.panels.flatMap((p) => { const m = propMoves(p.description, (s.plan?.data.furniture ?? []).map((f) => f.name)); return m.length ? [`${p.code} moves the ${m.join(" and the ")}`] : []; })}
           outdated={!!s.plan && (!!locks.positions || s.plan.data.cameras.length > 0) && (s.plan.data.rules ?? 0) < LAYOUT_RULES} plan={s.plan?.data} planHref={`/projects/${id}/scenes/${sceneId}/plan`}
-          names={Object.fromEntries(cast.map((c) => [c.id, c.name]))} settingEmpty={!asStaging(s.scene.staging).spot && !asStaging(s.scene.staging).crowd} projectId={id} sceneId={sceneId} designHref={`/projects/${id}/scenes/${sceneId}/design`} baseCode={base} size={portrait ? "portrait" : "landscape"} canGenerate={canGenerate}
+          names={Object.fromEntries(cast.map((c) => [c.id, c.name]))} settingEmpty={!asStaging(s.scene.staging).spot && !asStaging(s.scene.staging).crowd} projectId={id} sceneId={sceneId} designHref={`/projects/${id}/scenes/${sceneId}/design`} baseCode={base} size={portrait ? "portrait" : "landscape"} canGenerate={canGenerate} canWrite={!!getTextProvider()}
           panels={s.panels.map((p) => {
             const shot = s.shots.find((x) => x.panelId === p.id);
             // Suggested shot (D28): the app's suggestion until the user chooses one.
@@ -147,7 +147,7 @@ export default async function StoryboardPage({ params, searchParams }: { params:
             });
             return {
               id: p.id, code: p.code, description: p.description, seconds: p.durationSec, status: p.status, imageAssetId: p.imageAssetId ?? undefined,
-              speaker: d ? cast.find((c) => c.id === d.characterId)?.name : undefined, line: d?.text,
+              speaker: d ? cast.find((c) => c.id === d.characterId)?.name : undefined, line: d?.text, delivery: (d as { delivery?: string } | undefined)?.delivery,
               hasCamera: !!shot?.spec.cameraId, shotId: shot?.id, shot: shotInfo, camera: panelCameraLabel(s.plan?.data, shot?.spec.cameraId),
               drawnFrom: p.check?.drawnFrom,
               check: p.check?.keptApproved ? { pass: p.check.pass ?? true, problems: [], keptApproved: true } : p.check?.pass === undefined ? undefined : { pass: p.check.pass, problems: p.check.problems ?? [], ...(p.check.areas ? { areas: p.check.areas } : {}), ...(p.check.redraw ? { redraw: true } : {}) },

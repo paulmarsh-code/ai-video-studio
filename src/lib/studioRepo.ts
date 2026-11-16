@@ -357,7 +357,8 @@ export function updatePanel(db: DB, panelId: string, input: PanelInput): PanelCh
   const changed = dialogueChanged || code !== panel.code || input.description.trim() !== panel.description || input.emotion.trim() !== panel.emotion;
   const durationSec = dialogueChanged && newD ? deriveDuration(newD.text, undefined, input.description) : (input.durationSec ?? panel.durationSec);
   db.update(t.panels).set({
-    code, description: input.description.trim(), emotion: input.emotion.trim(), dialogue: newD ? [newD] : [], durationSec,
+    // The line's delivery (D138) stays while the line is the same; a new line gets a new one.
+    code, description: input.description.trim(), emotion: input.emotion.trim(), dialogue: newD ? [{ ...newD, ...(!dialogueChanged && (oldD as { delivery?: string } | undefined)?.delivery ? { delivery: (oldD as { delivery?: string }).delivery } : {}) }] : [], durationSec,
     status: changed ? "draft" : panel.status, version: changed ? panel.version + 1 : panel.version,
   }).where(eq(t.panels.id, panelId)).run();
 

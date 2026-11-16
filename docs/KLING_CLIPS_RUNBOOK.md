@@ -4,7 +4,7 @@ The app has no Kling key. When Paul presses Create on "Make the clips", the app 
 `data/kling_jobs.json` on his computer (`C:\Users\paul.marsh\ai-video-studio\data\kling_jobs.json`).
 When he says "make the clips":
 
-1. **Read the jobs.** Stage the jobs file through the device bridge. The clips to make are the jobs with status `ready`.
+1. **Read the jobs.** Stage the jobs file through the device bridge. The clips to make are the jobs with status `ready`. A job with `change` is a new take Paul asked for in words: its `prompt` already says the change, so send the prompt as it is. Tell Paul it's a new take and its cost before sending.
 2. **Tell Paul the cost first.** Give the total credits and check the balance (`query_membership_and_credits`). The balance the connection reports can be lower than the one in Kling's app. Kling jobs are charged: make only what he asked for.
 3. **Upload the pictures** (free). For each picture without a `klingUrl`:
    - stage the file from its `path`;
@@ -20,7 +20,7 @@ When he says "make the clips":
    - Then set the job's `status` to `sent` with its `generationId`, and commit the jobs file, with `expectedMtimeMs` from the stage.
 5. **When it's made.** Poll `query_tasks`, then:
    - download the video (`urlWithoutWatermark`) in the workspace;
-   - commit it to `data/clips/<scene>_clip<N>_panels<a-b>.mp4` on Paul's computer;
+   - commit it to `data/clips/<scene>_clip<N>_panels<a-b>.mp4` on Paul's computer. For a new take of a clip (the job has `takes`, D139), add `_take<N>` with N = takes + 1, so the earlier take's file stays;
    - set `status` to `done` with `videoUrl` and `localFile` (the file name);
    - or, if it failed, set `failed` with Kling's error.
    - Commit the jobs file, then send Paul the clip and look at it against its pictures, shot by shot.

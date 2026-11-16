@@ -5,7 +5,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { createClipJobsAction, requestElementsAction, setClipPictureAction, setKlingElementAction } from "@/app/studioActions";
+import { createClipJobsAction, requestElementsAction, reviewClipAction, setClipPictureAction, setKlingElementAction } from "@/app/studioActions";
 import type { Clip, KlingElement } from "@/lib/domain/clips";
 import type { KlingListed } from "@/lib/klingList";
 import type { PictureChoice } from "@/lib/sceneClips";
@@ -98,6 +98,78 @@ function PictureSlot({ sceneId, shot, choice }: { sceneId: string; shot: number;
 
 const STATUS: Record<KlingJob["status"], string> = { ready: "Waiting for Claude to make it", sent: "Being made in Kling", done: "Made", failed: "Failed" };
 
+/** The clip's last moment as a picture (D139), for the next clip to follow on from. */
+async function lastFrame(url: string): Promise<{ video: Blob; frame: Blob; atSec: number }> {
+  const video = await (await fetch(url)).blob();
+  const src = URL.createObjectURL(video);
+  try {
+    const v = document.createElement("video");
+    v.muted = true; v.preload = "auto"; v.src = src;
+    await new Promise<void>((ok, no) => { v.onloadedmetadata = () => ok(); v.onerror = () => no(new Error("The clip couldn't be read.")); });
+    const atSec = Math.max(0, v.duration - 0.1);
+    await new Promise<void>((ok) => { v.onseeked = () => ok(); v.currentTime = atSec; });
+    const c = document.createElement("canvas");
+    c.width = v.videoWidth; c.height = v.videoHeight;
+    c.getContext("2d")!.drawImage(v, 0, 0, c.width, c.height);
+    const frame = await new Promise<Blob>((ok, no) => c.toBlob((b) => (b ? ok(b) : no(new Error("The frame couldn't be taken."))), "image/png"));
+    return { video, frame, atSec };
+  } finally { URL.revokeObjectURL(src); }
+}
+
+/**
+ * A made clip, reviewed like a storyboard frame (D139): approve it (it becomes a kept take and the
+ * next clip follows on from its last moment), say what should change, or make it again.
+ */
+function ClipReview({ sceneId, job, from, to }: { sceneId: string; job: KlingJob; from: number; to: number }) {
+  const router = useRouter();
+  const [words, setWords] = useState("");
+  const [busy, setBusy] = useState("");
+  const [err, setErr] = useState("");
+  const url = job.localFile ? `/api/kling-clip/${encodeURIComponent(job.localFile)}` : undefined;
+  const decide = async (d: "approved" | "change" | "again") => {
+    setErr(""); setBusy(d);
+    try {
+      if (d === "approved") {
+        if (!url) throw new Error("The clip isn't saved on this computer yet.");
+        const { video, frame, atSec } = await lastFrame(url);
+        const form = new FormData();
+        form.append("video", new File([video], job.localFile!, { type: "video/mp4" }));
+        form.append("frame", new File([frame], "frame.png", { type: "image/png" }));
+        form.append("from", String(from)); form.append("to", String(to)); form.append("atSec", String(atSec));
+        const res = await fetch(`/api/kept/${sceneId}`, { method: "POST", body: form });
+        const r = (await res.json()) as { ok?: boolean; error?: string };
+        if (!res.ok || !r.ok) throw new Error(r.error ?? "The take couldn't be kept.");
+      }
+      const r = await reviewClipAction(job.id, d, d === "change" ? words : undefined);
+      if (!r.ok) throw new Error(r.error);
+      setWords("");
+      router.refresh();
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } finally { setBusy(""); }
+  };
+  return (
+    <div className="mt-2 rounded-lg border border-neutral-200 bg-neutral-50 p-2" data-testid={`clip-review-${job.clip}`}>
+      {url ? <video src={url} controls className="max-h-96 rounded border border-neutral-200" /> : job.videoUrl && <a className="text-sm underline" href={job.videoUrl} target="_blank" rel="noreferrer">Watch (the link lasts 24 hours)</a>}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button type="button" disabled={!!busy || !url} onClick={() => void decide("approved")} data-testid={`clip-approve-${job.clip}`}
+          className="rounded bg-green-700 px-3 py-1 text-sm text-white hover:bg-green-800 disabled:opacity-50">{busy === "approved" ? "Keeping…" : "Approve: keep it"}</button>
+        <span className="text-xs text-neutral-600">The next clip then follows on from its last moment.</span>
+      </div>
+      <label className="mt-2 block text-sm font-medium">Change it
+        <textarea rows={2} value={words} onChange={(e) => setWords(e.target.value)} data-testid={`clip-words-${job.clip}`}
+          placeholder="e.g. she shouldn't smile at the end · Chase drops it in the ice bucket, not on the table · slower, more menace in his voice"
+          className="mt-1 w-full rounded border border-neutral-300 bg-white px-2 py-1 text-sm font-normal" />
+      </label>
+      <div className="mt-1 flex flex-wrap gap-2">
+        <button type="button" disabled={!!busy || !words.trim()} onClick={() => void decide("change")} data-testid={`clip-change-${job.clip}`}
+          className="rounded bg-blue-700 px-3 py-1 text-sm text-white hover:bg-blue-800 disabled:opacity-50">{busy === "change" ? "Asking…" : `Make it with this change · about ${job.credits} credits`}</button>
+        <button type="button" disabled={!!busy} onClick={() => void decide("again")} data-testid={`clip-again-${job.clip}`}
+          className="rounded border border-neutral-300 bg-white px-3 py-1 text-sm hover:bg-neutral-50 disabled:opacity-50">{busy === "again" ? "Asking…" : `Make it again as it is · about ${job.credits} credits`}</button>
+      </div>
+      {err && <p className="mt-1 text-sm text-red-700">{err}</p>}
+    </div>
+  );
+}
+
 export function ClipsBoard({ projectId, projectCode, sceneId, rows, clips, list, pictures, jobs, making }: { projectId: string; projectCode: string; sceneId: string; rows: Row[]; clips: Clip[]; list: { elements: KlingListed[]; updatedAt?: string }; pictures: PictureChoice[]; jobs: KlingJob[]; making: Making }) {
   const router = useRouter();
   const [api, setApi] = useState(false);
@@ -181,6 +253,18 @@ export function ClipsBoard({ projectId, projectCode, sceneId, rows, clips, list,
                     {j.localFile ? <> · <a className="underline" href={`/api/kling-clip/${encodeURIComponent(j.localFile)}`} target="_blank" rel="noreferrer">watch</a> (saved in data/clips/{j.localFile})</>
                       : j.videoUrl && <> · <a className="underline" href={j.videoUrl} target="_blank" rel="noreferrer">watch or download</a> (the link lasts 24 hours)</>}
                   </p>
+                );
+              })()}
+              {(() => {
+                const j = jobOf(c);
+                if (!j) return null;
+                const from = Math.min(...c.panels), to = Math.max(...c.panels);
+                return (
+                  <>
+                    {j.review && j.status !== "done" && <p className="mt-1 text-sm text-blue-800">{j.review.status === "change" ? `New take asked for, with: ${j.review.words}.` : "New take asked for."} Tell Claude in the chat: &ldquo;make the clips&rdquo;.</p>}
+                    {j.status === "done" && (j.localFile || j.videoUrl) && <ClipReview sceneId={sceneId} job={j} from={from} to={to} />}
+                    {!!j.takes?.length && <p className="mt-1 text-xs text-neutral-600">Earlier takes: {j.takes.map((t, i) => <span key={i}>{i > 0 && " · "}{t.localFile ? <a className="underline" href={`/api/kling-clip/${encodeURIComponent(t.localFile)}`} target="_blank" rel="noreferrer">take {i + 1}</a> : `take ${i + 1}`}{t.change ? ` (${t.change})` : ""}</span>)}</p>}
+                  </>
                 );
               })()}
               <p className="mt-1 text-sm text-neutral-600">Elements: {c.elements.length ? c.elements.map((e) => e.name).join(", ") : "none linked yet"}</p>

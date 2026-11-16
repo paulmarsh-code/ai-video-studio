@@ -301,3 +301,27 @@ export async function requestElementsAction(sceneId: string, keys?: string[]): P
 export async function changePanelAction(panelId: string, words: string) {
   return runAsync(async (db) => (await import("@/lib/panelChange")).changePanel(db, panelId, words));
 }
+
+/** The app writes how each line is delivered (D138): the ones without, or all again. */
+export async function writeDeliveriesAction(sceneId: string, all = false) {
+  return runAsync(async (db) => {
+    const { getTextProvider } = await import("@/lib/providers/images");
+    const provider = getTextProvider();
+    if (!provider) throw new Error("GPT isn't connected, so the app can't write the deliveries. Write each one on its panel.");
+    return (await import("@/lib/deliveries")).writeDeliveries(db, sceneId, provider, { all });
+  });
+}
+
+/** Your own words for how a panel's line is delivered (D138). */
+export async function setDeliveryAction(panelId: string, text: string) {
+  return runAsync(async (db) => (await import("@/lib/deliveries")).setDelivery(db, panelId, text));
+}
+
+/** Review a made clip like a storyboard frame (D139): approve it, change it in words, or make it again. */
+export async function reviewClipAction(jobId: string, decision: "approved" | "change" | "again", words?: string) {
+  return runAsync(async () => {
+    const { reviewJob } = await import("@/lib/klingJobs");
+    const j = reviewJob(jobId, decision, words);
+    return { status: j.status, credits: j.credits };
+  });
+}

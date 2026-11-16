@@ -10,7 +10,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { changePanelAction, setShotChoiceAction, approveCamerasAction, approvePanelAction, unapprovePanelAction, approvePanelsAction, approvePositionsAction, chooseCamerasAction, updateLayoutAction, setPanelImageAction, unlockSceneAction } from "@/app/studioActions";
+import { changePanelAction, setDeliveryAction, writeDeliveriesAction, setShotChoiceAction, approveCamerasAction, approvePanelAction, unapprovePanelAction, approvePanelsAction, approvePositionsAction, chooseCamerasAction, updateLayoutAction, setPanelImageAction, unlockSceneAction } from "@/app/studioActions";
 import type { GeometryPlanData } from "@/lib/domain/types";
 import { PlanThumb } from "./PlanThumb";
 import { uploadBlob } from "@/lib/clientUpload";
@@ -28,6 +28,8 @@ export interface BoardPanel {
   description: string;
   speaker?: string;
   line?: string;
+  /** How the line is delivered (D138): written by the app, changed by the user. */
+  delivery?: string;
   seconds: number;
   status: string;
   imageAssetId?: string;
@@ -56,6 +58,8 @@ export interface StoryboardBoardProps {
   baseCode: string;
   size: "portrait" | "landscape";
   canGenerate: boolean;
+  /** GPT can write text (the deliveries, D138). */
+  canWrite?: boolean;
   /** A GPT text model is set up, so pictures are checked against the layout. */
   canCheck?: boolean;
   /** Test mode (B4): no automatic correction, a record of every draw, and "Check again". */
@@ -262,6 +266,26 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
     try { await drawChecked(p, `${p.prompt}\nAlso: ${text}.`, assetIds(p.attach)); } catch (e) { setFailed((x) => ({ ...x, [p.id]: e instanceof Error ? e.message : String(e) })); }
     finally { setDrawing((x) => { const y = { ...x }; delete y[p.id]; return y; }); router.refresh(); }
   }
+
+  // How each line is delivered (D138): written by the app as the page opens for any spoken panel
+  // without one; each can be changed on its panel.
+  const [delivering, setDelivering] = useState("");
+  const [editDelivery, setEditDelivery] = useState<Record<string, string>>({});
+  const askedDeliveries = useRef(false);
+  async function writeDeliveries(all: boolean) {
+    setDelivering(all ? "Writing how every line is delivered…" : "Writing how each line is delivered…");
+    const r = await writeDeliveriesAction(b.sceneId, all);
+    setDelivering(r.ok ? "" : r.error);
+    router.refresh();
+    return r;
+  }
+  useEffect(() => {
+    if (askedDeliveries.current || !b.canWrite) return;
+    if (!b.panels.some((p) => p.line && !p.delivery)) return;
+    askedDeliveries.current = true;
+    void writeDeliveries(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [b]);
 
   const camerasDone = b.panels.every((p) => p.hasCamera);
   const missing = b.panels.filter((p) => !p.imageAssetId);
@@ -500,6 +524,13 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
           }} />
       )}
 
+      {b.panels.some((p) => p.line) && (
+        <p className="text-sm text-neutral-700" data-testid="deliveries">
+          Each line says how it&apos;s delivered: who they are in that moment, how the words come out, the face and one small action. The clips are made from it.{" "}
+          {delivering ? <span className={delivering.endsWith("…") ? "text-neutral-600" : "text-red-700"}>{delivering}</span>
+            : b.canWrite && <button type="button" className="text-blue-700 underline" data-testid="deliveries-again" onClick={() => void writeDeliveries(true)}>Write them all again</button>}
+        </p>
+      )}
       <ol className={`grid gap-4 ${b.size === "portrait" ? "sm:grid-cols-2 lg:grid-cols-3" : "md:grid-cols-2"}`}>
         {b.panels.map((p, i) => (
           <li key={p.id} className="rounded-xl border border-neutral-200 bg-white p-3" data-testid={`board-${p.code}`}>
@@ -524,6 +555,20 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
               {p.hasCamera && p.shotId && p.imageAssetId && <a className="ml-auto text-xs text-blue-700 underline" href={`/api/layout/${p.shotId}`} target="_blank" rel="noreferrer">See the layout</a>}
             </div>
             <p className="mt-1 text-sm">{p.line ? <><span className="font-medium">{p.speaker}:</span> {p.line}</> : <span className="text-neutral-500">Silent</span>}</p>
+            {p.line && (editDelivery[p.id] !== undefined ? (
+              <div className="mt-1" data-testid={`board-${p.code}-delivery-edit`}>
+                <textarea rows={3} value={editDelivery[p.id]} onChange={(e) => setEditDelivery((x) => ({ ...x, [p.id]: e.target.value }))}
+                  className="w-full rounded border border-neutral-300 px-2 py-1 text-xs" placeholder="Who they are in this moment, how the words come out, the face, one small action" />
+                <ActionButton label="Save" busyLabel="Saving…" doneLabel="Saved" testId={`board-${p.code}-delivery-save`}
+                  onAction={async () => { const r = await setDeliveryAction(p.id, editDelivery[p.id]); if (r.ok) { setEditDelivery((x) => { const y = { ...x }; delete y[p.id]; return y; }); router.refresh(); } return r; }} />
+                <button type="button" className="ml-2 text-xs text-neutral-600 underline" onClick={() => setEditDelivery((x) => { const y = { ...x }; delete y[p.id]; return y; })}>Cancel</button>
+              </div>
+            ) : (
+              <p className="mt-1 text-xs text-neutral-700" data-testid={`board-${p.code}-delivery`}>
+                <span className="font-medium">How it&apos;s said:</span> {p.delivery ?? <span className="text-neutral-500">{delivering && b.canWrite ? "being written…" : "not written yet"}</span>}{" "}
+                <button type="button" className="text-blue-700 underline" onClick={() => setEditDelivery((x) => ({ ...x, [p.id]: p.delivery ?? "" }))}>Change</button>
+              </p>
+            ))}
             <p className="mt-1 text-xs text-neutral-600">{p.description}</p>
             {p.shot && p.shotId && <ShotPicker p={p} shotId={p.shotId} locked={b.locks.cameras} onDone={(text, ok) => { setMsg({ ok, text }); router.refresh(); }} />}
             {p.imageAssetId && p.check?.keptApproved && p.status === "approved" ? <p className="mt-1 text-xs text-neutral-600" data-testid={`board-${p.code}-check`}>Approved by you on an earlier layout and kept. Redraw it only if it no longer fits.</p>

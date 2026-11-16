@@ -2558,3 +2558,24 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 - a line has a feeling, but no written delivery, expression or action of its own (stage 3);
 - a line's words and feeling are edited at the bottom of the storyboard page, not on the panel (stage 4).
 - a made clip can only be watched: it can't be approved, changed in words or made again from the clips page (stage 6).
+
+### D138: How each line is delivered (2026-11-16)
+
+- **Visible failure.** A line had only a feeling ("angry, confrontational"). Line 2 of an early clip came out flat (D116), and the app's lines were weaker than Paul's best take of Jade's greeting. That take was directed like an actor: who she is in that moment, how the words come out, her face, and natural, restrained movement.
+- **Fix, for any scene.**
+  - Each spoken panel's line carries a **delivery**: who they are in the moment and what they want, how the words come out (tone, pace, rhythm), what the face does by its features, and one small physical action. It's at most 35 words, in British English.
+  - The app writes it with GPT (`deliveries.ts`, `domain/delivery.ts`):
+    - as the storyboard opens, for every line without one;
+    - for all lines again with "Write them all again".
+  - The user changes it on the panel ("How it's said: … Change"). It stays while the line's words stay the same; a new line gets a new one.
+- **Reaches the generation through:** the clip request, which reads: "Jade: {delivery}. Jade says, {feeling}, naturally, never flat … accurate lip-sync: "…"". Tested in `delivery.d138.test.ts`.
+
+### D139: Clips reviewed like storyboard frames (2026-11-16)
+
+- **Paul:** "once clips are produced these are treated like storyboard in that the user approves or requests changes … and asks for redraw same as storyboard".
+- **Fix, on the clips page.** Each made clip plays on its card, with three choices:
+  - **Approve: keep it.** The page takes the clip's last moment as a picture and keeps the clip as a kept take for its panels (D130). The next clip follows on from it.
+  - **Change it**, in words: the take so far is kept in the clip's earlier takes. The request gets "This is a new take of this clip. Change from the last take: …", and the clip waits for "make the clips". A second change replaces the first.
+  - **Make it again as it is:** a new take of the same request.
+- Earlier takes are listed on the card, each with its change. The runbook saves a new take as `_take<N>`, so no take is overwritten, and Claude tells Paul it's a new take and its cost before sending.
+- **Tested** in `clipReview.d139.test.ts`, and in the browser on a copy of Paul's scene: approve became a kept take, and a change wrote the new request.

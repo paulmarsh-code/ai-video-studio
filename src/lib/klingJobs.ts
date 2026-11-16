@@ -35,6 +35,14 @@ export interface KlingJob {
   localFile?: string;
   error?: string;
   updatedAt?: string;
+  /** Earlier takes of this clip, newest last (D139): kept to compare and to go back to. */
+  takes?: { localFile?: string; videoUrl?: string; generationId?: string; madeAt?: string; change?: string }[];
+  /** What the user decided about the latest take (D139). */
+  review?: { status: "approved" | "change" | "again"; words?: string; at: string };
+  /** The change asked for in this take, in the user's words; already in the prompt. */
+  change?: string;
+  /** The request before any change was added, so a second change replaces the first. */
+  basePrompt?: string;
 }
 
 export interface KlingJobPicture {
@@ -83,7 +91,10 @@ export function putJobs(next: KlingJob[]): KlingJobsFile {
   const jobs = cur.jobs.filter((j) => !next.some((n) => n.id === j.id));
   for (const n of next) {
     const old = cur.jobs.find((j) => j.id === n.id);
-    jobs.push(old && sameRequest(old, n) && old.status !== "failed" ? { ...n, status: old.status, generationId: old.generationId, videoUrl: old.videoUrl, localFile: old.localFile, requestedAt: old.requestedAt, pictures: n.pictures.map((p) => ({ ...p, klingUrl: old.pictures.find((q) => q.assetId === p.assetId)?.klingUrl })) } : n);
+    // A clip asked for again keeps its earlier takes (D139); a changed take keeps its change.
+    const history = old ? { ...(old.takes ? { takes: old.takes } : {}), ...(old.review ? { review: old.review } : {}) } : {};
+    const same = old && (sameRequest(old, n) || (old.basePrompt !== undefined && old.basePrompt === n.prompt && old.seconds === n.seconds));
+    jobs.push(old && same && old.status !== "failed" ? { ...n, ...history, prompt: old.prompt, change: old.change, basePrompt: old.basePrompt, status: old.status, generationId: old.generationId, videoUrl: old.videoUrl, localFile: old.localFile, requestedAt: old.requestedAt, pictures: n.pictures.map((p) => ({ ...p, klingUrl: old.pictures.find((q) => q.assetId === p.assetId)?.klingUrl })) } : { ...n, ...history });
   }
   const out = { updatedAt: new Date().toISOString(), jobs: jobs.sort((a, b) => a.sceneId.localeCompare(b.sceneId) || a.clip - b.clip) };
   fs.mkdirSync(path.dirname(file()), { recursive: true });
@@ -92,3 +103,33 @@ export function putJobs(next: KlingJob[]): KlingJobsFile {
 }
 
 export const jobId = (sceneId: string, panels: number[]) => `${sceneId}:${panels.join("-")}`;
+
+/**
+ * Review a made clip, as a storyboard frame is reviewed (D139). Approved: noted (the page keeps
+ * it as a kept take). A change in words or another take: the take so far goes into `takes`, and
+ * the clip is ready to make again, with the change added to its request.
+ */
+export function reviewJob(id: string, decision: "approved" | "change" | "again", words?: string): KlingJob {
+  const f = readJobs();
+  const j = f.jobs.find((x) => x.id === id);
+  if (!j) throw new Error("That clip wasn't found. Create it first.");
+  const at = new Date().toISOString();
+  const said = words?.replace(/\s+/g, " ").trim();
+  if (decision === "change" && !said) throw new Error("Say what should change.");
+  if (decision === "approved") {
+    j.review = { status: "approved", at };
+  } else {
+    if (j.status === "ready" || j.status === "sent") throw new Error("This clip is already waiting to be made.");
+    if (j.localFile || j.videoUrl) j.takes = [...(j.takes ?? []), { localFile: j.localFile, videoUrl: j.videoUrl, generationId: j.generationId, madeAt: j.updatedAt, change: j.change }];
+    const base = j.basePrompt ?? j.prompt;
+    j.basePrompt = base;
+    j.change = decision === "change" ? said : undefined;
+    j.prompt = decision === "change" ? `${base}\nThis is a new take of this clip. Change from the last take: ${said}.` : base;
+    j.review = { status: decision, ...(said ? { words: said } : {}), at };
+    j.status = "ready";
+    j.requestedAt = at;
+    delete j.generationId; delete j.videoUrl; delete j.localFile; delete j.error;
+  }
+  writeJobs(f);
+  return j;
+}

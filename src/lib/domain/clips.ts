@@ -27,7 +27,7 @@ export interface ClipPanel {
   durationSec: number;
   description: string;
   emotion?: string;
-  dialogue: { characterId: string; text: string }[];
+  dialogue: { characterId: string; text: string; delivery?: string }[];
   spec: ShotSpec;
   /** The panel's storyboard picture, drawn on the fixed set from the floor plan (D119). */
   imageAssetId?: string;
@@ -185,7 +185,9 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake):
       const speech = p.dialogue.length
         // Said with the panel's feeling, in a natural voice (D116): line 2 came out flat and robotic
         // with the feeling only on the action before it.
-        ? p.dialogue.map((x) => `${lines.length > 1 ? `Line ${++lineNo}, ` : ""}${first(nameOf(x.characterId))} says${p.emotion ? `, ${p.emotion.trim().replace(/\.$/, "")}` : ""}, naturally, never flat, in a spontaneous conversational rhythm, the face expressive but restrained, accurate lip-sync: "${x.text.trim()}"`).join(" Then ")
+        // With its delivery when it has one (D138): who they are in the moment, how it comes out,
+        // the face and one small action, as Paul's best take was directed.
+        ? p.dialogue.map((x) => `${lines.length > 1 ? `Line ${++lineNo}, ` : ""}${x.delivery?.trim() ? `${first(nameOf(x.characterId))}: ${x.delivery.trim().replace(/\.$/, "")}. ` : ""}${first(nameOf(x.characterId))} says${p.emotion ? `, ${p.emotion.trim().replace(/\.$/, "")}` : ""}, naturally, never flat, in a spontaneous conversational rhythm, the face expressive but restrained, accurate lip-sync: "${x.text.trim()}"`).join(" Then ")
         : "No one speaks.";
       // On the way in (D115): someone arriving or crossing hasn't reached the group yet, so the
       // group is ahead of them. Kling had Jade walk past them, then turn back to greet them.
