@@ -2608,3 +2608,12 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 - **Also, from Paul's first remake:**
   - The delivery GPT wrote for Jade's new line had her lift the contract before the panel where she takes it out. Deliveries now stay inside their own panel: no prop, hand-over or action its words don't have.
   - A made take replaced by a changed request is kept in the clip's earlier takes (D139).
+
+### D143: One click, one request on the clips page (2026-11-16)
+
+- **Paul:** "I clicked Create again; the button should change to stop you clicking twice."
+- His click on **Create again** sent a fresh copy of clip 1's request, without the change he meant to ask for in the review box, and the panel's old delivery came back with it.
+- **Fix (`ClipsBoard.tsx`).** A clip's Create button:
+  - while the clip is waiting or being made, reads "Waiting for Claude: say "make the clips"" or "Being made in Kling…", and can't be pressed;
+  - is hidden once the clip is made, because the review (Approve, Change it, Make it again) is the way to redo it;
+  - shows again only when the request itself has changed, as "Create again: the request has changed", for example when a line is rewritten on the storyboard.

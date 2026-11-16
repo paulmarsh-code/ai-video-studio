@@ -239,7 +239,17 @@ export function ClipsBoard({ projectId, projectCode, sceneId, rows, clips, list,
                 <h3 className="font-semibold">Clip {k + 1}: panels {c.panels.join(", ")} · {c.seconds} s · about {c.credits} credits{c.continues && <span className="ml-2 rounded bg-green-100 px-2 py-0.5 text-xs font-normal text-green-800">carries on from the kept take of panels {c.continues.from}–{c.continues.to}</span>}</h3>
                 <div className="flex flex-wrap gap-2">
                   <Copy text={api ? c.prompt : c.webPrompt} label="Copy the request" />
-                  <button type="button" disabled={busy !== null} onClick={() => void create(k + 1)} className="rounded bg-blue-700 px-3 py-1 text-sm text-white hover:bg-blue-800 disabled:opacity-50">{busy === k + 1 ? "Creating…" : jobOf(c) ? "Create again" : "Create this clip"}</button>
+                  {/* One click, one request (D143): while a clip waits or is being made the button says
+                      so and can't be pressed; a made clip is redone from its review below, and Create
+                      shows again only when the request itself has changed (a line rewritten). */}
+                  {(() => {
+                    const j = jobOf(c);
+                    const waiting = j && (j.status === "ready" || j.status === "sent");
+                    const changed = j && (j.basePrompt ?? j.prompt) !== c.prompt;
+                    if (waiting) return <button type="button" disabled className="rounded bg-neutral-300 px-3 py-1 text-sm text-neutral-700">{j.status === "sent" ? "Being made in Kling…" : "Waiting for Claude: say \u201cmake the clips\u201d"}</button>;
+                    if (j && j.status === "done" && !changed) return null;
+                    return <button type="button" disabled={busy !== null} onClick={() => void create(k + 1)} className="rounded bg-blue-700 px-3 py-1 text-sm text-white hover:bg-blue-800 disabled:opacity-50">{busy === k + 1 ? "Creating…" : j ? "Create again: the request has changed" : "Create this clip"}</button>;
+                  })()}
                 </div>
               </div>
               {(() => {
