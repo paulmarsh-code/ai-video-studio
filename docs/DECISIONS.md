@@ -2628,3 +2628,8 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
   - **Review again** runs it once more. A new take clears the old review.
 - **Cost:** about 1–3p a take (the transcription and one check with pictures).
 - **Tested** in `clipAiReview.d144.test.ts`, including the route end to end against a stand-in OpenAI. It hasn't yet been run against Paul's own key.
+
+### D145: After two kept takes in a row, follow the later one (2026-11-16)
+
+- **Visible failure (caught before sending).** With panels 1–6 kept and then take 4 of panels 7–8 approved, the next clip (panels 9–12) opened on the frame from panels 1–6, the older take. It would have jumped back in time, before Jade's line and the contract.
+- **Fix (`clips.ts`).** When more than one kept take comes right before a clip, the clip follows the one that ends last. Tested in `clips.d113.test.ts`.

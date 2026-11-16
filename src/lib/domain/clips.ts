@@ -258,7 +258,9 @@ export function sceneClips(i: ClipInput): Clip[] {
     const between = last && sorted.some((q) => q.order > last.order && q.order < p.order && covered(q.order));
     if (!last || between) runs.push([p]); else runs[runs.length - 1].push(p);
   }
-  return runs.flatMap((r) => groupClips(r, i.plan)).map((g) => clipPrompt(g, { ...i, master }, kept.find((k) => next(k) === g[0].order)));
+  // Two kept takes in a row (panels 1–6, then 7–8): the clip after them follows the later one (D145).
+  const before = (o: number) => kept.filter((k) => next(k) === o).sort((a, b) => b.to - a.to)[0];
+  return runs.flatMap((r) => groupClips(r, i.plan)).map((g) => clipPrompt(g, { ...i, master }, before(g[0].order)));
 }
 
 function cameraOf(p: ClipPanel, plan: GeometryPlanData): { sp: GeometryPlanData; cam?: PlanCamera } {

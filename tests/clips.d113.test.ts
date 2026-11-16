@@ -148,4 +148,11 @@ describe("Keeping a finished take (D130)", () => {
     const clips = sceneClips({ panels, cast: cast as never, plan: plan as never, venue: { id: "v1", name: "Roof bar" }, elements, kept: [{ from: 2, to: 3 }] });
     expect(clips.map((c) => c.panels)).toEqual([[1], [4]]);
   });
+  it("after two kept takes in a row, follows the later one (D145)", () => {
+    const panels = [1, 2, 3, 4].map((n) => P(n, 2, {}));
+    const [c] = sceneClips({ panels, cast: cast as never, plan: plan as never, venue: { id: "v1", name: "Roof bar" }, elements, kept: [{ from: 1, to: 2, frameAssetId: "first" }, { from: 3, to: 3, frameAssetId: "second" }] });
+    expect(c.panels).toEqual([4]);
+    expect(c.continues).toEqual({ from: 3, to: 3 });
+    expect(c.pictures[0]).toEqual(expect.objectContaining({ assetId: "second" }));
+  });
 });
