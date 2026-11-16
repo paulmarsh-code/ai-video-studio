@@ -2526,3 +2526,17 @@ Stage 1's in-app part of the fixed-set redesign: a "Build the set" page for each
   - "Need to change something?" becomes a small link, "More ways to change it", for the floor plan and reference pictures. The shot box no longer says to unlock the cameras.
 - **Tested** in `panelChange.d135.test.ts`, and on a copy of Paul's scene. "Two-shot of Jade and Chase" on panel 8 gave "Two-shot on Jade and Chase Whitmore", with Chase on the left, Jade on the right and the table between them; the other panels' cameras were unchanged.
 - **Reaches the generation through:** the camera choice and the positions, so the blocking frame and the picture.
+
+### D136: A set piece's picture at its real size (2026-11-16)
+
+- **Paul:** "the table looks too small … also the ice bucket is too small", and in panel 9 the bottle went missing from the ice bucket.
+- **Cause.** On the fixed set (D97, D103), a piece's picture was stretched to the plan's size, 70 cm wide and 110 cm tall for the cocktail table. The picture also holds what stands on the table (the ice bucket, bottle and flowers, about a quarter of its height) and the cloth's flare to the floor. So the table's top was drawn at about 80 cm, narrower than 70 cm, and the bucket was a few centimetres tall. GPT copied that.
+- **Fix, for any set piece with something on top (`setRender.ts`, `pieceFit`).**
+  - The picture's top surface is found where its outline widens to the body.
+  - That row is the plan's height, and the widest row of the top just below it is the plan's width.
+  - The rest of the picture keeps the same scale: things on top stand above, and the flare spreads wider below.
+  - On Paul's table picture, the piece is now 1.0 m wide at the floor and 1.45 m to the top of the flowers, with the table top 70 cm across at 110 cm.
+  - Flat pieces (signs, screens) and pieces with nothing on top keep their size, as before.
+- **Reaches the generation through:** the blocking frame (image 1).
+- **The missing bottle:** the bigger table in image 1 should keep it. Otherwise "the bottle stays in the ice bucket" in Change this panel (D135) tells the picture.
+- **Tested** in `setPieceFit.d136.test.ts`, and on Paul's two table pictures.

@@ -67,15 +67,46 @@ export function isSetPiece(f: PlanFurniture): boolean {
 
 export const pieceHeight = (f: PlanFurniture) => f.heightM ?? propHeight(`${f.name} ${f.detail ?? ""}`, f.name);
 
+/**
+ * A piece's picture at its real size (D136). The size in the plan is the piece itself, a table
+ * 70 cm across and 110 cm to its top; its picture also has what stands on top (an ice bucket,
+ * flowers) and a cloth that flares out below. Stretching the whole picture into 70 × 110 cm made
+ * the table small and short and its ice bucket tiny. The picture's top surface is found where its
+ * outline widens to the body; that row is the piece's height, and its width there is the width.
+ */
+export function pieceFit(t: Texture, widthM: number, heightM: number): { widthM: number; heightM: number } {
+  const rows: number[] = [];
+  for (let y = 0; y < t.height; y++) {
+    let l = -1, r = -1;
+    for (let x = 0; x < t.width; x++) if (t.data[(y * t.width + x) * 4 + 3] > 128) { if (l < 0) l = x; r = x; }
+    rows.push(l < 0 ? 0 : r - l + 1);
+  }
+  const widest = Math.max(...rows);
+  if (widest < 8) return { widthM, heightM };
+  // The top: the first row, from the top, more than half as wide as the widest, staying
+  // that wide for the next few rows (a flower head can be wide for a row or two).
+  const steady = (y: number) => rows.slice(y, y + 6).every((w) => w >= widest * 0.55);
+  const top = rows.findIndex((_, y) => steady(y));
+  // Nothing on top, or no clear top (a sign, a screen): the picture is the piece, as before.
+  if (top < 0 || top < t.height * 0.08 || top > t.height * 0.6) return { widthM, heightM };
+  const below = t.height - top;
+  // A round top seen from a little above is an ellipse: its width is its widest row, just below.
+  const topW = Math.max(...rows.slice(top, top + Math.max(3, Math.round(t.height * 0.06))));
+  return { widthM: +((widthM * t.width) / topW).toFixed(3), heightM: +((heightM * t.height) / below).toFixed(3) };
+}
+
 /** The point everything is measured from (D95): used as the facing point for flat set pieces. */
 export function setModel(plan: GeometryPlanData, opts: { walls: SetWall[]; textures: Record<string, Texture | undefined>; wallM: number; ceilingM?: number; floor: [number, number, number]; ceiling: [number, number, number]; sky: [number, number, number]; anchor?: Point; floorTexture?: Texture; ceilingTexture?: Texture; tileM?: number }): SetModel {
   const b = plan.bounds ?? { minX: -5, maxX: 5, minY: 0, maxY: 10 };
   const mid = opts.anchor ?? { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 };
   const pieces = (plan.furniture ?? []).filter(isSetPiece).map((f) => {
     const flat = FLAT.test(f.name);
+    const tex = opts.textures[f.id];
+    const size = { widthM: Math.max(0.2, f.radiusM * 2), heightM: pieceHeight(f) };
+    const fit = tex && !flat ? pieceFit(tex, size.widthM, size.heightM) : size;
     return {
       id: f.id, name: f.name, at: f.position,
-      widthM: Math.max(0.2, f.radiusM * 2), heightM: pieceHeight(f),
+      widthM: fit.widthM, heightM: fit.heightM,
       texture: opts.textures[f.id],
       ...(flat ? { facing: mid } : {}),
     } satisfies SetPiece;
