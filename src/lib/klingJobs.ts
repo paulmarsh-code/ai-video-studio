@@ -43,6 +43,8 @@ export interface KlingJob {
   change?: string;
   /** The request before any change was added, so a second change replaces the first. */
   basePrompt?: string;
+  /** The app's own review of the latest take (D144): heard and looked at, with a change to make. */
+  aiReview?: { at: string; verdict: "approve" | "change"; summary: string; good: string[]; problems: { shot?: number; what: string }[]; change: string; speech: { shot: number; heard: string; ok: boolean; notes: string[] }[]; take?: string };
 }
 
 export interface KlingJobPicture {
@@ -132,7 +134,7 @@ export function reviewJob(id: string, decision: "approved" | "change" | "again",
     j.review = { status: decision, ...(said ? { words: said } : {}), at };
     j.status = "ready";
     j.requestedAt = at;
-    delete j.generationId; delete j.videoUrl; delete j.localFile; delete j.error;
+    delete j.generationId; delete j.videoUrl; delete j.localFile; delete j.error; delete j.aiReview;
   }
   writeJobs(f);
   return j;

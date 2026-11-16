@@ -2617,3 +2617,14 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
   - while the clip is waiting or being made, reads "Waiting for Claude: say "make the clips"" or "Being made in Kling…", and can't be pressed;
   - is hidden once the clip is made, because the review (Approve, Change it, Make it again) is the way to redo it;
   - shows again only when the request itself has changed, as "Create again: the request has changed", for example when a line is rewritten on the storyboard.
+
+### D144: The app reviews each take and suggests the change (2026-11-16)
+
+- **Paul:** "build in what you did: when the clip is created, give a summary and any suggested change … paste the prompt in what to change and create again."
+- **Fix, for any clip.** As soon as a made take shows on the clips page, the app reviews it, as Claude did by hand for clip 1:
+  - **It hears it.** OpenAI transcription, word by word with times (`transcribe`), compared with each shot's line (`speechChecks`). It reports words not heard or added, pauses of over half a second, a line running past its cut, and speech in a silent shot.
+  - **It looks at it.** About one frame a second (at most 12), taken in the browser, is sent to the check model with the clip's own pictures: the frame it follows on from, and each shot's storyboard picture. The model also gets the shots asked for and, for a new take, the change that take was asked to make (`clipReviewPrompt`).
+  - **It reports** a verdict ("Looks right" or "Worth changing"), a one-line summary, what's right, problems by shot, and the sound notes. It also gives **one suggested change** for the next take, with **Use this change**, which fills the Change it box. Then "Make it with this change" as before.
+  - **Review again** runs it once more. A new take clears the old review.
+- **Cost:** about 1–3p a take (the transcription and one check with pictures).
+- **Tested** in `clipAiReview.d144.test.ts`, including the route end to end against a stand-in OpenAI. It hasn't yet been run against Paul's own key.

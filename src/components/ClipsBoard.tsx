@@ -4,7 +4,7 @@
 // then copy each clip's request into Kling (Omni-Ref, multi-shot).
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClipJobsAction, requestElementsAction, reviewClipAction, setClipPictureAction, setKlingElementAction } from "@/app/studioActions";
 import type { Clip, KlingElement } from "@/lib/domain/clips";
 import type { KlingListed } from "@/lib/klingList";
@@ -116,6 +116,66 @@ async function lastFrame(url: string): Promise<{ video: Blob; frame: Blob; atSec
   } finally { URL.revokeObjectURL(src); }
 }
 
+/** Frames from the clip as it plays (D144): about one a second, at most 12, for the app's review. */
+async function clipFrames(url: string): Promise<{ times: number[]; frames: Blob[] }> {
+  const v = document.createElement("video");
+  v.muted = true; v.preload = "auto"; v.src = url;
+  await new Promise<void>((ok, no) => { v.onloadedmetadata = () => ok(); v.onerror = () => no(new Error("The clip couldn't be read.")); });
+  const step = Math.max(0.75, v.duration / 12);
+  const times: number[] = [], frames: Blob[] = [];
+  const c = document.createElement("canvas");
+  for (let t = 0.2; t < v.duration - 0.05; t += step) {
+    await new Promise<void>((ok) => { v.onseeked = () => ok(); v.currentTime = t; });
+    c.width = Math.round(v.videoWidth / 2); c.height = Math.round(v.videoHeight / 2);
+    c.getContext("2d")!.drawImage(v, 0, 0, c.width, c.height);
+    frames.push(await new Promise<Blob>((ok, no) => c.toBlob((b) => (b ? ok(b) : no(new Error("A frame couldn't be taken."))), "image/jpeg", 0.85)));
+    times.push(+t.toFixed(2));
+  }
+  return { times, frames };
+}
+
+/** The app's own review of a take (D144): heard and looked at, with one change ready to use. */
+function AppReview({ job, onUse }: { job: KlingJob; onUse: (change: string) => void }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const url = job.localFile ? `/api/kling-clip/${encodeURIComponent(job.localFile)}` : undefined;
+  const r = job.aiReview && job.aiReview.take === job.localFile ? job.aiReview : undefined;
+  const asked = useRef(false);
+  const run = async () => {
+    if (!url) return;
+    setBusy(true); setErr("");
+    try {
+      const { times, frames } = await clipFrames(url);
+      const form = new FormData();
+      form.append("id", job.id); form.append("times", JSON.stringify(times));
+      frames.forEach((f, k) => form.append("frame", new File([f], `frame_${k}.jpg`, { type: "image/jpeg" })));
+      const res = await fetch("/api/clip-review", { method: "POST", body: form });
+      const body = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !body.ok) throw new Error(body.error ?? "The review didn't work.");
+      router.refresh();
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
+  };
+  // Reviewed by itself as soon as the take is here, once.
+  useEffect(() => { if (!r && url && !asked.current) { asked.current = true; void run(); } }, [r, url]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (busy) return <p className="mt-2 text-sm text-blue-800">Reviewing the take: listening to the line and checking each shot against its picture…</p>;
+  if (err) return <p className="mt-2 text-sm text-red-700">{err} <button type="button" className="underline" onClick={() => void run()}>Try again</button></p>;
+  if (!r) return null;
+  return (
+    <div className="mt-2 rounded-lg border border-neutral-200 bg-white p-2 text-sm" data-testid={`clip-ai-review-${job.clip}`}>
+      <p><span className={`mr-2 rounded px-2 py-0.5 text-xs font-semibold ${r.verdict === "approve" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-900"}`}>{r.verdict === "approve" ? "Looks right" : "Worth changing"}</span>{r.summary}</p>
+      {r.good.length > 0 && <ul className="mt-1 list-disc pl-5 text-green-800">{r.good.map((g, k) => <li key={k}>{g}</li>)}</ul>}
+      {r.problems.length > 0 && <ul className="mt-1 list-disc pl-5 text-amber-900">{r.problems.map((p, k) => <li key={k}>{p.shot ? `Shot ${p.shot}: ` : ""}{p.what}</li>)}</ul>}
+      {r.speech.some((x) => x.notes.length) && <ul className="mt-1 list-disc pl-5 text-neutral-700">{r.speech.filter((x) => x.notes.length).map((x) => <li key={x.shot}>Sound, shot {x.shot}: {x.notes.join("; ")}</li>)}</ul>}
+      {r.change && (
+        <p className="mt-2"><span className="font-medium">Suggested change:</span> {r.change}{" "}
+          <button type="button" className="rounded border border-blue-700 px-2 py-0.5 text-xs text-blue-800 hover:bg-blue-50" data-testid={`clip-use-change-${job.clip}`} onClick={() => onUse(r.change)}>Use this change</button></p>
+      )}
+      <button type="button" className="mt-1 text-xs text-neutral-600 underline" onClick={() => void run()}>Review again</button>
+    </div>
+  );
+}
+
 /**
  * A made clip, reviewed like a storyboard frame (D139): approve it (it becomes a kept take and the
  * next clip follows on from its last moment), say what should change, or make it again.
@@ -149,6 +209,7 @@ function ClipReview({ sceneId, job, from, to }: { sceneId: string; job: KlingJob
   return (
     <div className="mt-2 rounded-lg border border-neutral-200 bg-neutral-50 p-2" data-testid={`clip-review-${job.clip}`}>
       {url ? <video src={url} controls className="max-h-96 rounded border border-neutral-200" /> : job.videoUrl && <a className="text-sm underline" href={job.videoUrl} target="_blank" rel="noreferrer">Watch (the link lasts 24 hours)</a>}
+      <AppReview job={job} onUse={(c) => setWords(c)} />
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <button type="button" disabled={!!busy || !url} onClick={() => void decide("approved")} data-testid={`clip-approve-${job.clip}`}
           className="rounded bg-green-700 px-3 py-1 text-sm text-white hover:bg-green-800 disabled:opacity-50">{busy === "approved" ? "Keeping…" : "Approve: keep it"}</button>

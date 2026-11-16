@@ -159,3 +159,25 @@ export function getCheckProvider(): TextProvider | null {
   const key = process.env.OPENAI_API_KEY;
   return key ? openAITextProvider(key, process.env.OPENAI_CHECK_MODEL || process.env.OPENAI_TEXT_MODEL || "gpt-5-mini") : null;
 }
+
+// ---- Hearing a clip (D144): what is said, word by word, with times ----
+
+export interface Transcript { text: string; words: { word: string; start: number; end: number }[] }
+
+/** OpenAI transcription of a clip's sound, with a time for every word. Null without a key. */
+export async function transcribe(data: Buffer, name: string, mime = "video/mp4"): Promise<Transcript | null> {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) return null;
+  const res = await fetchWithRetry(`${baseUrl()}/audio/transcriptions`, () => {
+    const form = new FormData();
+    form.append("file", new Blob([new Uint8Array(data)], { type: mime }), name);
+    form.append("model", process.env.OPENAI_TRANSCRIBE_MODEL || "whisper-1");
+    form.append("response_format", "verbose_json");
+    form.append("timestamp_granularities[]", "word");
+    form.append("language", "en");
+    return { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: form };
+  });
+  if (!res.ok) throw new Error(`OpenAI transcription failed (${res.status}): ${(await res.text()).slice(0, 300)}`);
+  const body = (await res.json()) as { text?: string; words?: { word: string; start: number; end: number }[] };
+  return { text: (body.text ?? "").trim(), words: body.words ?? [] };
+}

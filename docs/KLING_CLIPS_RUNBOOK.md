@@ -23,7 +23,7 @@ When he says "make the clips":
    - commit it to `data/clips/<scene>_clip<N>_panels<a-b>.mp4` on Paul's computer. For a new take of a clip (the job has `takes`, D139), add `_take<N>` with N = takes + 1, so the earlier take's file stays;
    - set `status` to `done` with `videoUrl` and `localFile` (the file name);
    - or, if it failed, set `failed` with Kling's error.
-   - Commit the jobs file, then send Paul the clip and look at it against its pictures, shot by shot.
+   - Commit the jobs file, then send Paul the clip. The clips page reviews the take by itself (D144): it transcribes the sound and checks each shot against its pictures, then suggests a change. Look at it too, against its pictures, shot by shot, and say what you see.
 
 **Writing the jobs file back:** each commit goes from a new, uniquely named file in the outputs folder, e.g. `kling_jobs_<time>.json`. Committing the same outputs path twice sent an older copy once, on 16 Nov. A re-stage can also show an older copy for a few seconds, so check the size with `device_list_dir` before trusting it.
 
