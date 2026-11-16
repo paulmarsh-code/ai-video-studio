@@ -10,7 +10,7 @@ import { planForShot, pictureXY } from "./geometry";
 import { sceneAnchor } from "./director";
 import { isSetPiece } from "./setRender";
 import { actionFloor, spokenSeconds } from "./duration";
-import { groupByTime } from "./clipCameras";
+import { CLIP_MAX_SEC, groupByTime } from "./clipCameras";
 
 export interface KlingElement { id: string; name: string }
 /** Elements by what they stand for: "char:<slug>", "venue:<id>", "prop:<name in lower case>". */
@@ -102,7 +102,20 @@ export function shotSeconds(p: ClipPanel): number {
   const handle = handlingSeconds(p.description);
   const talk = words.trim() ? Math.ceil(spokenSeconds(words) + 0.5 + handle) : 0;
   const need = Math.max(2, talk, words.trim() ? 0 : Math.ceil(1 + handle), actionFloor(p.description));
-  return Math.max(1, Math.min(p.durationSec, need));
+  // Walking off (D148) is seen in full: its time comes on top, even past the panel's own time,
+  // which was set by the line alone.
+  const exit = exitSeconds(p.description);
+  return Math.max(1, Math.min(p.durationSec + exit, need + exit));
+}
+
+/**
+ * Someone walking off in a shot (D148): Jade's "turns away to walk off" was given the 2 s of her
+ * one-word line, and the clip ended as she turned. Two seconds more, so the walk away is seen.
+ */
+const EXIT = /\b(?:walks?|walked|walking|storms?|stormed|storming|heads?|headed|marches|marched|strides?|strode)\s+(?:straight\s+)?(?:off|away|out)\b|\b(?:leaves|left\s+the|exits?|exited)\b/i;
+export const EXIT_SECONDS = 2;
+export function exitSeconds(text: string | undefined): number {
+  return text && EXIT.test(text) ? EXIT_SECONDS : 0;
 }
 
 /**
@@ -144,6 +157,8 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake):
   // A single-shot clip keeps its panel's time; Kling makes nothing shorter than 3 s.
   const times = panels.length > 1 ? panels.map(shotSeconds) : panels.map((p) => Math.max(1, p.durationSec));
   while (times.reduce((a, b) => a + b, 0) < 3) times[times.length - 1]++;
+  // Never past Kling's 15 s (D148): the longest shot gives way first.
+  while (times.reduce((a, b) => a + b, 0) > CLIP_MAX_SEC) { const k = times.indexOf(Math.max(...times)); if (times[k] <= 2) break; times[k]--; }
   // After a kept take (D130), shot 1 opens on the take's chosen frame instead of its storyboard
   // picture: the footage already made is what the new clip has to match.
   const cont = after?.frameAssetId ? { shot: 1, panel: panels[0].order, assetId: after.frameAssetId, continuity: true } : undefined;
@@ -190,7 +205,9 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake):
     const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
     if (cont) L.push(`${cap(pic(1))} is the last moment of the clip before this one, already made: this clip follows straight on from it, a moment later, with the same place, light, ${pieces.length ? `${pieces.map((f) => f.name).join(" and ")}, ` : ""}people, clothes and positions. Where ${pic(1)} and anything else here differ, ${pic(1)} is right.`);
     const board = pictures.map((x, n) => ({ ...x, n: n + 1 })).filter((x) => !x.continuity);
-    if (board.length) L.push(cap(`${board.length === 1 ? `${pic(board[0].n)} is the storyboard picture for shot ${board[0].shot}` : `${board.map((x) => pic(x.n)).join(", ")} are the storyboard pictures for shots ${board.map((x) => x.shot).join(", ")} in turn`}: each shot keeps its picture's camera angle, framing, background and who stands where. Faces, clothes${pieces.length ? `, the ${pieces.map((f) => f.name).join(" and ")}` : ""} and the venue come from their Elements, not from the pictures.`));
+    if (board.length) L.push(cap(`${board.length === 1 ? `${pic(board[0].n)} is the storyboard picture for shot ${board[0].shot}` : `${board.map((x) => pic(x.n)).join(", ")} are the storyboard pictures for shots ${board.map((x) => x.shot).join(", ")} in turn`}: each shot keeps its picture's camera angle, framing${cont ? "" : ", background"} and who stands where. Faces, clothes${pieces.length ? `, the ${pieces.map((f) => f.name).join(" and ")}` : ""} and the venue come from their Elements, not from the pictures.${cont ? ` The room itself, its walls, screens, lights and balcony, looks exactly as in ${pic(1)} and the venue in every shot, wide shots included, wherever the camera points; where a storyboard picture shows the room differently, ${pic(1)} is right.` : ""}`));
+    // The room from the footage (D150): after a kept take, shots 2 and 4 of clip 2 took an older
+    // look of the venue (a brick wall, no balcony) from their storyboard pictures.
     // Each line said once, in its own shot (D115): with two lines for Jade in shots 3 and 4, Kling
     // had her say the first one twice and never the second.
     const lines = panels.flatMap((p) => p.dialogue);
@@ -211,7 +228,7 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake):
       const onTheWay = Object.entries(p.spec.at ?? {}).filter(([, m]) => /^(?:arriving|crossing|approaching)$/.test(m)).map(([id]) => id).filter((id) => inClip.includes(id));
       const way = onTheWay.map((id) => `${first(nameOf(id))} has not reached ${anchor ? `the ${anchor.name}` : "the others"} yet: ${anchor ? "it is" : "they are"} ahead of ${first(nameOf(id))}, further into the room, and ${first(nameOf(id))} walks towards ${anchor ? "it" : "them"}, never past.`).join(" ");
       const pn = pictures.findIndex((x) => x.shot === k + 1);
-      L.push(`Shot ${k + 1} (${t}–${t + d} s)${words ? `, ${words}` : ""}${pn >= 0 ? (pictures[pn].continuity ? `, following straight on from ${pic(pn + 1)}` : `, as in ${pic(pn + 1)}`) : ""}: ${p.description.trim().replace(/\.$/, "")}${p.emotion ? ` (${p.emotion.trim().replace(/\.$/, "")})` : ""}.${way ? ` ${way}` : ""} ${speech}`);
+      L.push(`Shot ${k + 1} (${t}–${t + d} s)${words ? `, ${words}` : ""}${pn >= 0 ? (pictures[pn].continuity ? `, following straight on from ${pic(pn + 1)}` : `, as in ${pic(pn + 1)}`) : ""}: ${p.description.trim().replace(/\.$/, "")}${p.emotion ? ` (${p.emotion.trim().replace(/\.$/, "")})` : ""}.${way ? ` ${way}` : ""} ${speech}${exitSeconds(p.description) ? `${p.dialogue.length ? "." : ""} The walk away is seen in full: still walking away, in the picture, when the shot ends.` : ""}`);
       t += d;
     });
     const speakers = [...new Set(panels.flatMap((p) => p.dialogue.map((x) => x.characterId)))];
@@ -229,7 +246,9 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake):
       // Acting and the room, as in Paul's best take (D133): natural, subtle acting; only the cast
       // speak words anyone can make out; the guests a soft-focus murmur behind them.
       speakers.length ? `Only the speaker talks in each shot; the others listen with mouths closed. Only ${and(names(speakers))} ${speakers.length > 1 ? "have" : "has"} words anyone can make out; the guests' chatter stays a murmur. No repeated words, no extra speech.` : "",
-      "Natural, subtle acting, no exaggerated gestures. Guests behind the group stay in soft focus.",
+      // Eyes on the conversation (D149): after "it's 90 days, love" Chase looked at Marcus, then
+      // vacantly off to the right.
+      "Natural, subtle acting, no exaggerated gestures. Whoever speaks looks at the person they are speaking to and keeps looking at them after the line; the others watch the speaker. Nobody glances round at the others or stares blankly away unless the shot says so. Guests behind the group stay in soft focus.",
       // Sound under the voices (D115): Jade's heels were louder than the party. No music (D131): the
       // music and the room sound run as one bed under the whole scene in the edit; each clip's own
       // music jumped at every cut.

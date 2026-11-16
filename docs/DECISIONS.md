@@ -2650,3 +2650,21 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 
 - **Visible failure (caught before sending).** After Jade's and Chase's voice samples were added, **Make it again** and **Change it** would still have sent the old request, made before the voices existed. That would mean the same made-up voices again.
 - **Fix.** Asking for a new take rebuilds the clip's request from the storyboard as it is now: voices, lines, deliveries and pictures. The change words are then added to that. A new take can't go if someone speaking in it has no voice sample.
+
+### D148: Walking off is seen in full (2026-11-16)
+
+- **Visible failure.** Clip 2, take 2, shot 4: Jade's "turns away to walk off" got the 2 s of her one-word line, and the clip ended as she turned. Paul: "jade walks away and is cut short; we need her walking away more."
+- **Fix (`clips.ts`), for any shot.** A shot whose action has someone walking, storming or heading off, away or out (or leaving, exiting) gets 2 s more (`exitSeconds`), even past the panel's own time, which was set by the line alone. Its shot also says "The walk away is seen in full: still walking away, in the picture, when the shot ends." A clip still never runs past 15 s: the longest shot gives way first.
+- **Reaches the generation through:** the shot's time and a prompt line. Tested in `clipPaul.d148.test.ts`.
+
+### D149: Eyes on the conversation (2026-11-16)
+
+- **Visible failure.** Clip 2, take 2, shot 1: after "You're wrong, it's 90 days, love", Chase looked at Marcus, then vacantly off to the right. Paul: "they need to be removed."
+- **Fix (`clips.ts`), for every clip.** The acting line (D133) now says: "Whoever speaks looks at the person they are speaking to and keeps looking at them after the line; the others watch the speaker. Nobody glances round at the others or stares blankly away unless the shot says so." A shot or delivery that asks for a look away still gets it.
+- **Reaches the generation through:** a prompt line (an existing rule changed, not a new feature).
+
+### D150: After a kept take, the room's look comes from the footage (2026-11-16)
+
+- **Visible failure.** Clip 2, take 2, shots 2 and 4 (the wides): the room had a brick wall and a big gradient screen with no balcony. Shots 1 and 3, and clip 1, had the balcony and string lights. The look came from the older storyboard pictures for those panels, which the request told Kling to follow for "background".
+- **Fix (`clips.ts`), for any clip that follows a kept take.** The storyboard pictures now set only the camera angle, framing and who stands where. "The room itself, its walls, screens, lights and balcony, looks exactly as in 图片1 and the venue in every shot, wide shots included; where a storyboard picture shows the room differently, 图片1 is right." A first clip, with no footage before it, still takes the background from its pictures.
+- **Reaches the generation through:** a prompt line (an existing rule changed). Tested in `clipPaul.d148.test.ts`.

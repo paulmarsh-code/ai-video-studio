@@ -70,7 +70,7 @@ describe("Lines said with feeling (D116)", () => {
     const [c] = sceneClips({ panels: [p], cast: cast as never, plan: plan as never, venue: { id: "v1", name: "Roof bar" }, elements });
     expect(c.prompt).toContain('Ava says, hopeful, expectant, naturally, never flat, in a spontaneous conversational rhythm, the face expressive but restrained, accurate lip-sync: "Well?"'); // D133
     expect(c.prompt).toContain("Only Ava has words anyone can make out; the guests' chatter stays a murmur. No repeated words, no extra speech."); // D133
-    expect(c.prompt).toContain("Natural, subtle acting, no exaggerated gestures. Guests behind the group stay in soft focus."); // D133
+    expect(c.prompt).toContain("Natural, subtle acting, no exaggerated gestures."); // D133
   });
 });
 
