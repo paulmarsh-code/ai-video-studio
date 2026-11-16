@@ -2550,9 +2550,11 @@ This refines D124.
 3. **The app builds** the floor plans, the camera shots and the storyboard. Every line carries its feeling, expression and action, learning from the approved take of Jade walking to the table and delivering her lines.
 4. **The user reviews the storyboard,** writes any changes in words (D135), including the speech, feeling and expression, and approves each frame.
 5. **The clips are submitted** with their Elements: characters, props, venue, and the storyboard picture for each shot (pictures 1, 2, 3; D119). Those fix positions and camera angles, and Kling does the rest.
+6. **The clips are reviewed like the storyboard frames:** for each clip, the user approves it, writes what should change, or asks for it to be made again. An approved clip becomes a kept take that the next clip follows on from (D130).
 
 The user approves at every stage. Gaps found against the app on 16 Nov:
 - no story template (stage 1);
 - characters and venues aren't proposed from the story; only a scene's props and setting are (stage 2);
 - a line has a feeling, but no written delivery, expression or action of its own (stage 3);
 - a line's words and feeling are edited at the bottom of the storyboard page, not on the panel (stage 4).
+- a made clip can only be watched: it can't be approved, changed in words or made again from the clips page (stage 6).
