@@ -2588,3 +2588,8 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 - **Fix, for any clip (`clips.ts`, `handlingSeconds`).** Each thing handled in the panel's words adds three quarters of a second, at most 3 s: taking, handing, pulling out, holding out, dropping in, putting down, picking up, glancing or looking at, reading, signing, pouring, opening, tossing. A shot is still never longer than its panel.
 - On Paul's scene: the hand-over is now 3 s and Chase's shot 4 s.
 - **Reaches the generation through:** the shot times in the clip request. Tested in `clipReview.d139.test.ts`.
+
+### D141: A changed line gets its delivery without a reload (2026-11-16)
+
+- **Paul:** "there is no reload, and once approved for any it should refresh the page." He changed panel 7's line, and its delivery wasn't written again until the page was opened afresh.
+- **Fix (`StoryboardBoard.tsx`).** The storyboard asks for a delivery once for each line as it is, not once per page visit. When a line is saved, the page refreshes itself (as Save and Approve already do), and the new line's delivery is written straight away.

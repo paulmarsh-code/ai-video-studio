@@ -271,7 +271,9 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
   // without one; each can be changed on its panel.
   const [delivering, setDelivering] = useState("");
   const [editDelivery, setEditDelivery] = useState<Record<string, string>>({});
-  const askedDeliveries = useRef(false);
+  // Asked once for each line as it is (D141): a line changed on the page gets its delivery
+  // written straight away, with no reload.
+  const askedDeliveries = useRef(new Set<string>());
   async function writeDeliveries(all: boolean) {
     setDelivering(all ? "Writing how every line is delivered…" : "Writing how each line is delivered…");
     const r = await writeDeliveriesAction(b.sceneId, all);
@@ -280,9 +282,10 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
     return r;
   }
   useEffect(() => {
-    if (askedDeliveries.current || !b.canWrite) return;
-    if (!b.panels.some((p) => p.line && !p.delivery)) return;
-    askedDeliveries.current = true;
+    if (!b.canWrite || delivering.endsWith("…")) return;
+    const want = b.panels.filter((p) => p.line && !p.delivery).map((p) => `${p.id}|${p.line}`).filter((k) => !askedDeliveries.current.has(k));
+    if (!want.length) return;
+    for (const k of want) askedDeliveries.current.add(k);
     void writeDeliveries(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [b]);
