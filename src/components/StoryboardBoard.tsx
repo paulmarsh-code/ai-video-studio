@@ -10,7 +10,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { changePanelAction, setDeliveryAction, writeDeliveriesAction, setShotChoiceAction, approveCamerasAction, approvePanelAction, unapprovePanelAction, approvePanelsAction, approvePositionsAction, chooseCamerasAction, updateLayoutAction, setPanelImageAction, unlockSceneAction } from "@/app/studioActions";
+import { changePanelAction, writeDeliveriesAction, setShotChoiceAction, approveCamerasAction, approvePanelAction, unapprovePanelAction, approvePanelsAction, approvePositionsAction, chooseCamerasAction, updateLayoutAction, setPanelImageAction, unlockSceneAction } from "@/app/studioActions";
 import type { GeometryPlanData } from "@/lib/domain/types";
 import { PlanThumb } from "./PlanThumb";
 import { uploadBlob } from "@/lib/clientUpload";
@@ -20,6 +20,7 @@ import { ActionButton, DoneBadge } from "./ActionButton";
 import { ChangeRequest, type SubmittedChange } from "./ChangeRequest";
 import { SHOT_CHOICES, splitShot } from "@/lib/domain/shotSuggest";
 import { PlanEditorLoader } from "./PlanEditorLoader";
+import { PanelEditor, type PanelEditorProps } from "./PanelEditor";
 import type { PlanEditorData } from "@/lib/planEditorData";
 
 export interface BoardPanel {
@@ -60,6 +61,9 @@ export interface StoryboardBoardProps {
   canGenerate: boolean;
   /** GPT can write text (the deliveries, D138). */
   canWrite?: boolean;
+  /** Each panel's words, for its "Change something" form (D142). */
+  cast?: { id: string; name: string }[];
+  editors?: Record<string, { first: boolean; last: boolean; panel: NonNullable<PanelEditorProps["panel"]> }>;
   /** A GPT text model is set up, so pictures are checked against the layout. */
   canCheck?: boolean;
   /** Test mode (B4): no automatic correction, a record of every draw, and "Check again". */
@@ -241,8 +245,9 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
   // to the picture as they are.
   const [words, setWords] = useState<Record<string, string>>({});
   const [wordNotes, setWordNotes] = useState<Record<string, { ok: boolean; text: string }>>({});
-  async function changeInWords(p: BoardPanel) {
-    const text = (words[p.id] ?? "").trim();
+  const [editing, setEditing] = useState<string | null>(null);
+  async function changeInWords(p: BoardPanel, said?: string) {
+    const text = (said ?? words[p.id] ?? "").trim();
     if (!text) return;
     setWordNotes((x) => { const y = { ...x }; delete y[p.id]; return y; });
     setDrawing((x) => ({ ...x, [p.id]: "Changing…" }));
@@ -270,7 +275,6 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
   // How each line is delivered (D138): written by the app as the page opens for any spoken panel
   // without one; each can be changed on its panel.
   const [delivering, setDelivering] = useState("");
-  const [editDelivery, setEditDelivery] = useState<Record<string, string>>({});
   // Asked once for each line as it is (D141): a line changed on the page gets its delivery
   // written straight away, with no reload.
   const askedDeliveries = useRef(new Set<string>());
@@ -558,20 +562,11 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
               {p.hasCamera && p.shotId && p.imageAssetId && <a className="ml-auto text-xs text-blue-700 underline" href={`/api/layout/${p.shotId}`} target="_blank" rel="noreferrer">See the layout</a>}
             </div>
             <p className="mt-1 text-sm">{p.line ? <><span className="font-medium">{p.speaker}:</span> {p.line}</> : <span className="text-neutral-500">Silent</span>}</p>
-            {p.line && (editDelivery[p.id] !== undefined ? (
-              <div className="mt-1" data-testid={`board-${p.code}-delivery-edit`}>
-                <textarea rows={3} value={editDelivery[p.id]} onChange={(e) => setEditDelivery((x) => ({ ...x, [p.id]: e.target.value }))}
-                  className="w-full rounded border border-neutral-300 px-2 py-1 text-xs" placeholder="Who they are in this moment, how the words come out, the face, one small action" />
-                <ActionButton label="Save" busyLabel="Saving…" doneLabel="Saved" testId={`board-${p.code}-delivery-save`}
-                  onAction={async () => { const r = await setDeliveryAction(p.id, editDelivery[p.id]); if (r.ok) { setEditDelivery((x) => { const y = { ...x }; delete y[p.id]; return y; }); router.refresh(); } return r; }} />
-                <button type="button" className="ml-2 text-xs text-neutral-600 underline" onClick={() => setEditDelivery((x) => { const y = { ...x }; delete y[p.id]; return y; })}>Cancel</button>
-              </div>
-            ) : (
+            {p.line && (
               <p className="mt-1 text-xs text-neutral-700" data-testid={`board-${p.code}-delivery`}>
-                <span className="font-medium">How it&apos;s said:</span> {p.delivery ?? <span className="text-neutral-500">{delivering && b.canWrite ? "being written…" : "not written yet"}</span>}{" "}
-                <button type="button" className="text-blue-700 underline" onClick={() => setEditDelivery((x) => ({ ...x, [p.id]: p.delivery ?? "" }))}>Change</button>
+                <span className="font-medium">How it&apos;s said:</span> {p.delivery ?? <span className="text-neutral-500">{delivering && b.canWrite ? "being written…" : "not written yet"}</span>}
               </p>
-            ))}
+            )}
             <p className="mt-1 text-xs text-neutral-600">{p.description}</p>
             {p.shot && p.shotId && <ShotPicker p={p} shotId={p.shotId} locked={b.locks.cameras} onDone={(text, ok) => { setMsg({ ok, text }); router.refresh(); }} />}
             {p.imageAssetId && p.check?.keptApproved && p.status === "approved" ? <p className="mt-1 text-xs text-neutral-600" data-testid={`board-${p.code}-check`}>Approved by you on an earlier layout and kept. Redraw it only if it no longer fits.</p>
@@ -595,19 +590,30 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
             </div>}
             {failed[p.id] && <p className="mt-1 text-xs text-red-700" role="alert" data-testid={`board-${p.code}-failed`}>GPT couldn&apos;t draw this one. {plainReason(failed[p.id])}</p>}
 
-            {p.shotId && p.hasCamera && (
-              <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/40 p-2" data-testid={`board-${p.code}-words`}>
-                <label className="block text-sm font-semibold text-blue-900">Change this panel
-                  <textarea rows={2} value={words[p.id] ?? ""} onChange={(e) => setWords((x) => ({ ...x, [p.id]: e.target.value }))} data-testid={`board-${p.code}-words-input`}
-                    placeholder="e.g. two-shot of Jade and Chase · closer on Chase · Nina stands left of Marcus · she looks angrier"
-                    className="mt-1 w-full rounded border border-neutral-300 bg-white px-2 py-1 text-sm font-normal" />
-                </label>
-                <button type="button" disabled={!(words[p.id] ?? "").trim() || !!drawing[p.id]} onClick={() => void changeInWords(p)} data-testid={`board-${p.code}-words-go`}
-                  className="mt-1 rounded-md bg-blue-700 px-3 py-1 text-sm text-white hover:bg-blue-800 disabled:opacity-40">Change it{b.canGenerate ? " · about 7p" : ""}</button>
-                <span className="ml-2 text-xs text-neutral-600">Only this panel changes.</span>
-                {wordNotes[p.id] && <p className={`mt-1 text-xs ${wordNotes[p.id].ok ? "text-green-800" : "text-red-700"}`} data-testid={`board-${p.code}-words-note`}>{wordNotes[p.id].text}</p>}
+            {/* One place to change the panel (D142): its words, its line and how it's said, and
+                anything else in the picture, in one form. */}
+            {b.editors?.[p.id] && (editing === p.id ? (
+              <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/40 p-2" data-testid={`board-${p.code}-edit`}>
+                <PanelEditor key={`${p.id}-${b.editors[p.id].panel.version}`} sceneId={b.sceneId} cast={b.cast ?? []} first={b.editors[p.id].first} last={b.editors[p.id].last} panel={b.editors[p.id].panel}
+                  card={{
+                    delivery: p.delivery,
+                    onClose: () => setEditing(null),
+                    moreHref: p.imageAssetId && p.hasCamera && p.shotId ? () => { setEditing(null); setChanging({ p, index: i }); } : undefined,
+                    onPicture: async (said, descriptionChanged) => {
+                      if (said && p.shotId && p.hasCamera) { await changeInWords(p, said); return; }
+                      if (descriptionChanged && p.imageAssetId) {
+                        pendingRedraw.current = { panelId: p.id, ch: { text: "", parts: { place: "changed on this panel's floor plan: what happens changed" }, refs: [], visual: false } };
+                      }
+                    },
+                  }} />
               </div>
-            )}
+            ) : (
+              <button type="button" onClick={() => setEditing(p.id)} data-testid={`board-${p.code}-change`}
+                className="mt-3 w-full rounded-lg border border-blue-200 bg-blue-50/40 px-4 py-2 text-left text-sm font-semibold text-blue-900 hover:bg-blue-50">
+                Change something <span className="font-normal text-neutral-600">· the line, how it&apos;s said, what happens, who stands where, the camera</span>
+              </button>
+            ))}
+            {wordNotes[p.id] && <p className={`mt-1 text-xs ${wordNotes[p.id].ok ? "text-green-800" : "text-red-700"}`} data-testid={`board-${p.code}-words-note`}>{wordNotes[p.id].text}</p>}
             <div className="mt-3 space-y-2">
               {/* Characters mixed up (D109): Paul's red line, never approved; redraw instead. */}
               {p.imageAssetId && p.status !== "approved" && mixedUp(p) && (
@@ -628,14 +634,7 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
                   Redraw <span className="font-normal text-neutral-600">· about 7p, from the layout as it is now</span>
                 </button>
               )}
-              {p.imageAssetId && (
-                p.hasCamera && p.shotId
-                  ? <button type="button" onClick={() => setChanging({ p, index: i })} data-testid="change-open"
-                      className="text-xs text-blue-700 underline">
-                      More ways to change it: the floor plan, reference pictures
-                    </button>
-                  : <ChangeRequest key={p.imageAssetId} what="panel" projectId={b.projectId} baseCode={codeOf(p)} onSubmit={(ch) => redraw(p, ch)} />
-              )}
+              {p.imageAssetId && !(p.hasCamera && p.shotId) && <ChangeRequest key={p.imageAssetId} what="panel" projectId={b.projectId} baseCode={codeOf(p)} onSubmit={(ch) => redraw(p, ch)} />}
               {handChange[p.id] && (() => {
                 const req = changeRequestFor(p, handChange[p.id]);
                 return (
@@ -711,7 +710,7 @@ function ShotPicker({ p, shotId, locked, onDone }: { p: BoardPanel; shotId: stri
           </div>
         </div>
       )}
-      {locked && <p className="text-neutral-500">To change it, say so under Change this panel.</p>}
+      {locked && <p className="text-neutral-500">To change it, use Change something below.</p>}
     </div>
   );
 }

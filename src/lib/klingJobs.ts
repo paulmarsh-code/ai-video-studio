@@ -92,8 +92,12 @@ export function putJobs(next: KlingJob[]): KlingJobsFile {
   for (const n of next) {
     const old = cur.jobs.find((j) => j.id === n.id);
     // A clip asked for again keeps its earlier takes (D139); a changed take keeps its change.
-    const history = old ? { ...(old.takes ? { takes: old.takes } : {}), ...(old.review ? { review: old.review } : {}) } : {};
     const same = old && (sameRequest(old, n) || (old.basePrompt !== undefined && old.basePrompt === n.prompt && old.seconds === n.seconds));
+    // A made take replaced by a changed request (the line rewritten on the storyboard) is kept as
+    // an earlier take, not dropped (D139).
+    const made = old && !same && (old.localFile || old.videoUrl) ? [{ localFile: old.localFile, videoUrl: old.videoUrl, generationId: old.generationId, madeAt: old.updatedAt, change: old.change }] : [];
+    const takes = [...(old?.takes ?? []), ...made];
+    const history = old ? { ...(takes.length ? { takes } : {}), ...(old.review && same ? { review: old.review } : {}) } : {};
     jobs.push(old && same && old.status !== "failed" ? { ...n, ...history, prompt: old.prompt, change: old.change, basePrompt: old.basePrompt, status: old.status, generationId: old.generationId, videoUrl: old.videoUrl, localFile: old.localFile, requestedAt: old.requestedAt, pictures: n.pictures.map((p) => ({ ...p, klingUrl: old.pictures.find((q) => q.assetId === p.assetId)?.klingUrl })) } : { ...n, ...history });
   }
   const out = { updatedAt: new Date().toISOString(), jobs: jobs.sort((a, b) => a.sceneId.localeCompare(b.sceneId) || a.clip - b.clip) };

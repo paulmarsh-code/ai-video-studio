@@ -25,6 +25,8 @@ When he says "make the clips":
    - or, if it failed, set `failed` with Kling's error.
    - Commit the jobs file, then send Paul the clip and look at it against its pictures, shot by shot.
 
+**Writing the jobs file back:** each commit goes from a new, uniquely named file in the outputs folder, e.g. `kling_jobs_<time>.json`. Committing the same outputs path twice sent an older copy once, on 16 Nov. A re-stage can also show an older copy for a few seconds, so check the size with `device_list_dir` before trusting it.
+
 # Making the Elements (D127)
 
 When Paul presses "Make … from the app's pictures" on the clips page, the app writes what to make to

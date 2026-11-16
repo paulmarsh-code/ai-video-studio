@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { addPanelAction, approvePanelAction, deletePanelAction, movePanelAction, updatePanelAction } from "@/app/studioActions";
+import { addPanelAction, approvePanelAction, deletePanelAction, movePanelAction, setDeliveryAction, updatePanelAction } from "@/app/studioActions";
 import { countWords, deriveDuration } from "@/lib/domain/duration";
 import { hasQuotes } from "@/lib/domain/text";
 import { ActionButton, DoneBadge } from "./ActionButton";
@@ -15,15 +15,22 @@ export interface PanelEditorProps {
   first?: boolean;
   last?: boolean;
   suggestedCode?: string;
+  /**
+   * On the storyboard card (D142): everything about the panel in one form. How the line is said,
+   * and what else should change in the picture (people, camera, look), saved with the words.
+   */
+  card?: { delivery?: string; onPicture: (words: string, descriptionChanged: boolean) => Promise<void>; onClose: () => void; moreHref?: () => void };
 }
 
-export function PanelEditor({ panel, sceneId, cast, first, last, suggestedCode }: PanelEditorProps) {
+export function PanelEditor({ panel, sceneId, cast, first, last, suggestedCode, card }: PanelEditorProps) {
   const router = useRouter();
   const initial = {
     code: panel?.code ?? suggestedCode ?? "", description: panel?.description ?? "", emotion: panel?.emotion ?? "",
     speakerId: panel?.speakerId ?? "", line: panel?.line ?? "", durationSec: panel?.durationSec ?? 4,
   };
   const [f, setF] = useState(initial);
+  const [delivery, setDelivery] = useState(card?.delivery ?? "");
+  const [picture, setPicture] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, start] = useTransition();
   const dirty = JSON.stringify(f) !== JSON.stringify(initial);
@@ -82,17 +89,49 @@ export function PanelEditor({ panel, sceneId, cast, first, last, suggestedCode }
         </label>
       )}
       {hasQuotes(f.line) && <p className="text-xs text-red-700">Remove the quote marks from the line.</p>}
+      {card && f.speakerId && (
+        <label className="block text-sm">How it&apos;s said <span className="text-neutral-500">(who they are in the moment, how the words come out, the face, one small action{lineDirty ? "; leave it and the app writes one for the new line" : ""})</span>
+          <textarea className={field} rows={2} value={delivery} onChange={(e) => setDelivery(e.target.value)} data-testid="panel-delivery" />
+        </label>
+      )}
+      {card && (
+        <label className="block text-sm">Anything else to change in the picture <span className="text-neutral-500">(who stands where, the camera, how it looks)</span>
+          <textarea className={field} rows={2} value={picture} onChange={(e) => setPicture(e.target.value)} data-testid="panel-picture-change"
+            placeholder="e.g. two-shot of Jade and Chase · closer on Chase · Nina stands left of Marcus · she looks less angry" />
+          <span className="text-xs text-neutral-500">The picture is drawn again with this{panel?.hasImage ? ", and when what happens changes" : ""}: about 7p. Only this panel changes.</span>
+        </label>
+      )}
       {panel && lineDirty && <p className="text-xs text-amber-700">Changing the line updates the shot&apos;s locked dialogue and flags this panel in the animatic for a re-check.</p>}
 
       <div className="flex flex-wrap items-center gap-2">
         {panel ? (
           <>
+            {card ? (
+              <ActionButton label="Save changes" busyLabel="Saving…" doneLabel="Saved" testId={`panel-${panel.code}-save-all`}
+                disabled={pending || (!dirty && delivery.trim() === (card.delivery ?? "").trim() && !picture.trim())} resetKey={[f, delivery, picture]}
+                onAction={async () => {
+                  const descriptionChanged = f.description.trim() !== initial.description.trim();
+                  if (dirty) { const r = await updatePanelAction(panel.id, input); if (!r.ok) { setMsg({ ok: false, text: r.error }); return r; } }
+                  // A new line gets a new delivery written by the app, unless one is typed here.
+                  const typed = delivery.trim() !== (card.delivery ?? "").trim();
+                  if (typed && f.speakerId) { const r = await setDeliveryAction(panel.id, delivery); if (!r.ok) { setMsg({ ok: false, text: r.error }); return r; } }
+                  if (picture.trim() || (descriptionChanged && panel.hasImage)) await card.onPicture(picture.trim(), descriptionChanged);
+                  setPicture("");
+                  router.refresh();
+                  card.onClose();
+                  return { ok: true as const };
+                }} />
+            ) : (
             <ActionButton label="Save" busyLabel="Saving…" doneLabel="Saved" disabled={!dirty || pending} resetKey={f}
               onAction={() => call(() => updatePanelAction(panel.id, input), (v) => {
                 const c = v as { dialogueChanged: boolean; animaticMarked: boolean };
                 return c.dialogueChanged ? `Saved. Shot dialogue updated${c.animaticMarked ? "; animatic flagged for re-check" : ""}.` : "Saved.";
               })} />
-            {panel.status === "approved" && !dirty ? <DoneBadge text="Approved" /> : (
+            )}
+            {card ? <>
+              <button type="button" className="text-sm text-neutral-600 underline" onClick={card.onClose}>Cancel</button>
+              {card.moreHref && <button type="button" className="text-xs text-blue-700 underline" onClick={card.moreHref}>More: the floor plan, reference pictures</button>}
+            </> : panel.status === "approved" && !dirty ? <DoneBadge text="Approved" /> : (
               <ActionButton variant="approve" label="Approve" busyLabel="Approving…" doneLabel="Approved" resetKey={f}
                 disabled={dirty || pending || !panel.hasImage} title={panel.hasImage ? "" : "Upload the panel image first"}
                 onAction={() => call(() => approvePanelAction(panel.id), () => "Panel approved.")} />

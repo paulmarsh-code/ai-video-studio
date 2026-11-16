@@ -55,7 +55,6 @@ export default async function StoryboardPage({ params, searchParams }: { params:
   const promptPlan = s.plan ? { ...s.plan.data, furniture: (s.plan.data.furniture ?? []).map((f) => (f.imageAssetId && own.pieces?.[f.imageAssetId] ? { ...f, imageAssetId: own.pieces[f.imageAssetId] } : f)) } : undefined;
   const pick = (pr: { text: string; short?: string; image?: string }) => onSet ? pr.image ?? pr.text : requestVariant() === "short" ? pr.short ?? pr.text : pr.text;
   const base = `${project.code}_EP${String(s.scene.episode).padStart(2, "0")}_S${String(s.scene.number).padStart(2, "0")}`;
-  const recheck = repo.getAnimatic(db, sceneId)?.timeline.recheck ?? {};
   const pending = chars.filter((c) => c.draft);
   const missingRefs = chars.filter((c) => c.approved && !c.approved.profile.refs?.front && !c.approved.profile.refs?.face);
   const portrait = (brief.aspect ?? "9:16").startsWith("9");
@@ -125,6 +124,8 @@ export default async function StoryboardPage({ params, searchParams }: { params:
           propMoves={s.panels.flatMap((p) => { const m = propMoves(p.description, (s.plan?.data.furniture ?? []).map((f) => f.name)); return m.length ? [`${p.code} moves the ${m.join(" and the ")}`] : []; })}
           outdated={!!s.plan && (!!locks.positions || s.plan.data.cameras.length > 0) && (s.plan.data.rules ?? 0) < LAYOUT_RULES} plan={s.plan?.data} planHref={`/projects/${id}/scenes/${sceneId}/plan`}
           names={Object.fromEntries(cast.map((c) => [c.id, c.name]))} settingEmpty={!asStaging(s.scene.staging).spot && !asStaging(s.scene.staging).crowd} projectId={id} sceneId={sceneId} designHref={`/projects/${id}/scenes/${sceneId}/design`} baseCode={base} size={portrait ? "portrait" : "landscape"} canGenerate={canGenerate} canWrite={!!getTextProvider()}
+          cast={cast.map((c) => ({ id: c.id, name: c.name }))}
+          editors={Object.fromEntries(s.panels.map((p, i) => { const d = p.dialogue[0]; return [p.id, { first: i === 0, last: i === s.panels.length - 1, panel: { id: p.id, code: p.code, description: p.description, emotion: p.emotion, speakerId: d?.characterId, line: d?.text, durationSec: p.durationSec, status: p.status, version: p.version, hasImage: !!p.imageAssetId } }]; }))}
           panels={s.panels.map((p) => {
             const shot = s.shots.find((x) => x.panelId === p.id);
             // Suggested shot (D28): the app's suggestion until the user chooses one.
@@ -158,30 +159,10 @@ export default async function StoryboardPage({ params, searchParams }: { params:
           })} />
       </div>}
 
-      {part === "board" && <details className="mt-8 rounded-xl border border-neutral-200 bg-white p-4" data-testid="edit-words">
-        <summary className="cursor-pointer font-semibold">Edit the words on a panel</summary>
-        <p className="mt-1 text-sm text-neutral-600">Changing a line updates its shot and clip length, and flags the animatic for a re-check.</p>
-        <ol className="mt-4 space-y-4">
-          {s.panels.map((p, i) => {
-            const shot = s.shots.find((x) => x.panelId === p.id);
-            const d = p.dialogue[0];
-            return (
-              <li key={p.id} className="rounded-lg border border-neutral-200 p-3" data-testid={`panel-${p.code}`}>
-                <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
-                  <span className="text-sm font-semibold">{i + 1}</span>
-                  {shot && <Link className="text-blue-700 underline" href={`/projects/${id}/shots/${shot.id}`}>Shot details</Link>}
-                  {recheck[p.id] && <span className="rounded bg-red-100 px-2 py-0.5 text-red-800">Animatic re-check</span>}
-                </div>
-                <PanelEditor key={p.id} sceneId={sceneId} cast={cast.map((c) => ({ id: c.id, name: c.name }))} first={i === 0} last={i === s.panels.length - 1}
-                  panel={{ id: p.id, code: p.code, description: p.description, emotion: p.emotion, speakerId: d?.characterId, line: d?.text, durationSec: p.durationSec, status: p.status, version: p.version, hasImage: !!p.imageAssetId }} />
-              </li>
-            );
-          })}
-        </ol>
-        <div className="mt-4 rounded-lg border border-dashed border-neutral-300 p-3">
-          <h3 className="mb-2 text-sm font-semibold">Add a panel</h3>
-          <PanelEditor key="new" sceneId={sceneId} cast={cast.map((c) => ({ id: c.id, name: c.name }))} suggestedCode={`P${n}`} />
-        </div>
+      {/* One place to change a panel (D142): "Change something" on its card. Adding a panel stays here. */}
+      {part === "board" && <details className="mt-8 rounded-xl border border-neutral-200 bg-white p-4" data-testid="add-panel">
+        <summary className="cursor-pointer font-semibold">Add a panel</summary>
+        <div className="mt-3"><PanelEditor key="new" sceneId={sceneId} cast={cast.map((c) => ({ id: c.id, name: c.name }))} suggestedCode={`P${n}`} /></div>
       </details>}
     </div>
   );

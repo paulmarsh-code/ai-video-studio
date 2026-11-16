@@ -35,8 +35,9 @@ export function deliveryPrompt(o: { story: string; audience?: string; characters
     "1. who they are in this moment and what they want from the other person;",
     "2. how the words come out: tone, pace and rhythm (for example warm professional enthusiasm, spontaneous conversational rhythm; or controlled, clipped, each word deliberate);",
     "3. what the face does, by its features (eyes, brows, mouth), expressive but restrained;",
-    "4. one small physical action that fits the moment (a step closer, a glance at the contract, a shrug).",
+    "4. one small physical action that fits the moment (a step closer, a glance away, a shrug).",
     "Natural, subtle acting, no exaggerated gestures. Keep the line's own feeling. Don't repeat or change the words of the line, and don't add speech.",
+    "Stay inside the line's own panel: no prop, hand-over or action that its 'What happens' doesn't have. Something that happens in a later panel hasn't happened yet.",
     "",
     'Reply with JSON only: [{"panel": <number>, "delivery": "<text>"}, ...], one entry per line above.',
   ].filter((x, i, a) => x !== "" || a[i - 1] !== "").join("\n");

@@ -51,3 +51,13 @@ describe("Time for things handled in a shot (D140)", () => {
     expect(shotSeconds(P("Jade waits.", undefined, 3))).toBe(2);
   });
 });
+
+describe("A take replaced by a changed request is kept (D139)", () => {
+  it("moves the made take into the earlier takes", () => {
+    putJobs([job()]);
+    putJobs([job({ prompt: "THE NEW LINE", status: "ready", localFile: undefined, generationId: undefined })]);
+    const j = readJobs().jobs[0];
+    expect(j.status).toBe("ready");
+    expect(j.takes).toEqual([expect.objectContaining({ localFile: "a.mp4", generationId: "g1" })]);
+  });
+});

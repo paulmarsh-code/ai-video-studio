@@ -2593,3 +2593,18 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 
 - **Paul:** "there is no reload, and once approved for any it should refresh the page." He changed panel 7's line, and its delivery wasn't written again until the page was opened afresh.
 - **Fix (`StoryboardBoard.tsx`).** The storyboard asks for a delivery once for each line as it is, not once per page visit. When a line is saved, the page refreshes itself (as Save and Approve already do), and the new line's delivery is written straight away.
+
+### D142: One "Change something" per storyboard panel (2026-11-16)
+
+- **Paul:** "the storyboard with Change (box to write) and then at the bottom change what is being said is confusing; we should only have one … just have a button, Change something."
+- **Fix.** Each panel card has one button, **Change something**. It opens one form with:
+  - the panel's code, feeling, what happens, speaker and line;
+  - how it's said (D138);
+  - anything else to change in the picture (D135);
+  - the panel's move up, move down and delete.
+
+  One **Save changes** saves the words and the delivery. If the picture box has words, they move people or the camera for this panel only and the picture is drawn again. If what happens changed and there's a picture, it's drawn again from the layout.
+- A changed line with no delivery typed gets a new one written by the app (D141). "More: the floor plan, reference pictures" opens the full change form for the rare case. The separate words list at the bottom of the page is gone; only **Add a panel** stays there.
+- **Also, from Paul's first remake:**
+  - The delivery GPT wrote for Jade's new line had her lift the contract before the panel where she takes it out. Deliveries now stay inside their own panel: no prop, hand-over or action its words don't have.
+  - A made take replaced by a changed request is kept in the clip's earlier takes (D139).
