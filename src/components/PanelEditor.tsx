@@ -80,14 +80,12 @@ export function PanelEditor({ panel, sceneId, cast, first, last, suggestedCode, 
           <input className={field} value={f.line} disabled={!f.speakerId} onChange={(e) => setF({ ...f, line: e.target.value })} data-testid="panel-line" />
         </label>
       </div>
-      {f.speakerId && f.line.trim() ? (
-        <p className="text-xs text-neutral-600">{countWords(f.line)} words → clip length {deriveDuration(f.line)}s (one speaker per clip).</p>
-      ) : (
-        <label className="text-xs">Silent panel length
-          <input type="number" min={3} max={15} className="ml-1 w-16 rounded border border-neutral-300 px-1 py-0.5" value={f.durationSec}
-            onChange={(e) => setF({ ...f, durationSec: Number(e.target.value) })} />s
-        </label>
-      )}
+      {/* The length can be corrected on a spoken panel too (D155): a 4 s shot for a 7-word line left a pause. */}
+      <label className="text-xs">{f.speakerId && f.line.trim() ? "Length" : "Silent panel length"}
+        <input type="number" min={3} max={15} className="ml-1 w-16 rounded border border-neutral-300 px-1 py-0.5" value={f.durationSec}
+          onChange={(e) => setF({ ...f, durationSec: Number(e.target.value) })} data-testid="panel-seconds" />s
+        {f.speakerId && f.line.trim() ? <span className="ml-2 text-neutral-600">{countWords(f.line)} words: the app suggests {deriveDuration(f.line)}s. A new line sets it again.</span> : null}
+      </label>
       {hasQuotes(f.line) && <p className="text-xs text-red-700">Remove the quote marks from the line.</p>}
       {card && f.speakerId && (
         <label className="block text-sm">How it&apos;s said <span className="text-neutral-500">(who they are in the moment, how the words come out, the face, one small action{lineDirty ? "; leave it and the app writes one for the new line" : ""})</span>

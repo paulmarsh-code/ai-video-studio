@@ -2704,3 +2704,9 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 - **Paul:** Jade "needs to continue walking or better it needs to pan back to Chase and group, with Chase shrugging… as if to say good riddance".
 - **Fix (`clips.ts`), refining D148.** The 2 s extra for a walk off now goes only to a walk off that is the clip's last shot. When another shot follows, the walk-off shot says "The walk away carries on into the next shot." The next shot says "In the background, Jade carries on walking away, getting smaller, and doesn't come back." The walk is seen through the cut without padding the clip.
 - **Reaches the generation through:** shot times and prompt lines.
+
+### D155: A spoken panel's length can be corrected (2026-11-17)
+
+- **Visible failure.** Clip 2, take 3, shot 1: the 7-word line had 4 s, and Kling filled it with a pause after "You're wrong" and a look to Marcus. Paul wanted it at 3 s, but a panel with a line had no length box. Only silent panels did.
+- **Fix (`PanelEditor.tsx`).** Change something now shows the length on every panel. On a spoken panel it says "7 words: the app suggests 3s". The user's number stands until the line itself changes; a new line sets the suggestion again. This is a correction control: the app still sets the length by itself.
+- **Reaches the generation through:** the shot's time in the clip request.
