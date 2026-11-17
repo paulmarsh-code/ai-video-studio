@@ -2690,3 +2690,17 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
   - open a confirmation with each clip, its seconds and credits, the total and the Kling balance, with **Yes, make them** and **Cancel**;
   - before that, show any problem found as a choice with guided actions, not as a dead end. Each choice says what will happen and what it costs, with the recommended one first. The problems include out-of-date pictures (D151), a missing voice sample (D146), and pictures that disagree with each other or with the clip before.
 - **Not built yet:** it needs the app to hold its own Kling key. Recorded so it is designed in, not added later.
+
+### D153: What a shot leaves somewhere stays there, by name, in every shot (2026-11-17)
+
+- **Visible failure.** Clip 2, take 3: Chase drops the contract into the ice bucket in shot 1. By shot 3 the ice bucket had gone from the table, and the contract was gone by Jade's walk-off. The request only said "the cocktail table and everything on it stay the same". The storyboard pictures drawn before the drop show the bucket without the contract.
+- **Fix (`clips.ts`), for any clip.**
+  - The set-piece line lists what is on it, from the piece's own detail ("(2 tumbler candles, a small display of lilac flowers and a silver champagne ice bucket with a bottle in it)"). It also says "in every shot, wide shots included".
+  - A shot that drops, puts, flicks or leaves something in or on something else (`leftIn`; "it" is the thing named before it) adds a line: "From shot 1 to the end of the clip, the contract stays in the ice bucket, in every shot, wide shots included, even where a storyboard picture doesn't show it."
+- **Reaches the generation through:** prompt lines (the existing table rule, made specific). Tested in `clipPaul.d148.test.ts`.
+
+### D154: A walk off that another shot follows carries on in it (2026-11-17)
+
+- **Paul:** Jade "needs to continue walking or better it needs to pan back to Chase and group, with Chase shrugging… as if to say good riddance".
+- **Fix (`clips.ts`), refining D148.** The 2 s extra for a walk off now goes only to a walk off that is the clip's last shot. When another shot follows, the walk-off shot says "The walk away carries on into the next shot." The next shot says "In the background, Jade carries on walking away, getting smaller, and doesn't come back." The walk is seen through the cut without padding the clip.
+- **Reaches the generation through:** shot times and prompt lines.

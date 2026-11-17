@@ -128,6 +128,30 @@ export function handlingSeconds(text: string | undefined): number {
   return Math.min(3, 0.75 * (text?.match(HANDLING)?.length ?? 0));
 }
 
+/** What sits on a set piece, from its detail (D153): "…, with 2 candles and an ice bucket; see …". */
+export function itemsOn(detail: string | undefined): string {
+  const m = /,\s*with\s+([^;]+)/i.exec(detail ?? "");
+  return m ? m[1].replace(/\s*\bsee (?:the )?reference image\b.*$/i, "").trim().replace(/[.,]$/, "") : "";
+}
+
+/**
+ * Something a shot leaves in or on something else (D153): "drops it into the ice bucket on the
+ * table" → the contract, in, the ice bucket. "It" is the last thing the shot names before it.
+ */
+export function leftIn(text: string | undefined): { thing: string; how: "in" | "on"; into: string } | null {
+  if (!text) return null;
+  const re = /\b(?:drops?|dropped|puts?|places?|placed|flicks?|flicked|tosses|tossed|throws?|threw|stuffs?|stuffed|sets?|leaves|left)\s+(it|(?:the|a|an|her|his|their)\s+[a-z]+(?:\s+[a-z]+)?)\s+(into|in|onto|on)\s+(?:the|a|her|his)\s+([a-z]+(?:\s+(?!on\b|in\b|at\b|by\b|and\b|of\b|with\b|beside\b|next\b)[a-z]+)?)/i;
+  const m = re.exec(text);
+  if (!m) return null;
+  let thing = m[1].replace(/^(?:the|a|an|her|his|their)\s+/i, "").replace(/\s+(?:on|in|at|and|of|with)$/i, "");
+  if (/^it$/i.test(m[1])) {
+    const before = [...text.slice(0, m.index).matchAll(/\b(?:the|her|his|their)\s+([a-z]+)/gi)].pop();
+    if (!before) return null;
+    thing = before[1];
+  }
+  return { thing: thing.toLowerCase(), how: /^in/i.test(m[2]) ? "in" : "on", into: m[3].toLowerCase() };
+}
+
 /** The request for one clip. */
 export function clipPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake): Clip {
   const nameOf = (id: string) => i.cast.find((c) => c.id === id)?.name ?? id;
@@ -155,7 +179,10 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake):
   // The storyboard pictures, one for each shot that has one (D119). Words alone gave Kling the floor
   // plan as a suggestion: clip 3 put Marcus and Nina behind Jade, away from the table.
   // A single-shot clip keeps its panel's time; Kling makes nothing shorter than 3 s.
-  const times = panels.length > 1 ? panels.map(shotSeconds) : panels.map((p) => Math.max(1, p.durationSec));
+  // A walk off before another shot (D154) carries on in that shot, so it gets no extra time of its own.
+  const walkOn = (k: number) => k < panels.length - 1 && exitSeconds(panels[k].description) > 0;
+  const times = panels.length > 1 ? panels.map((p, k) => shotSeconds(p) - (walkOn(k) ? EXIT_SECONDS : 0)) : panels.map((p) => Math.max(1, p.durationSec));
+  const walker = (p: ClipPanel) => p.dialogue[0]?.characterId ?? (p.spec as { subjectId?: string }).subjectId ?? p.spec.visibleIds[0];
   while (times.reduce((a, b) => a + b, 0) < 3) times[times.length - 1]++;
   // Never past Kling's 15 s (D148): the longest shot gives way first.
   while (times.reduce((a, b) => a + b, 0) > CLIP_MAX_SEC) { const k = times.indexOf(Math.max(...times)); if (times[k] <= 2) break; times[k]--; }
@@ -226,7 +253,7 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake):
       const onTheWay = Object.entries(p.spec.at ?? {}).filter(([, m]) => /^(?:arriving|crossing|approaching)$/.test(m)).map(([id]) => id).filter((id) => inClip.includes(id));
       const way = onTheWay.map((id) => `${first(nameOf(id))} has not reached ${anchor ? `the ${anchor.name}` : "the others"} yet: ${anchor ? "it is" : "they are"} ahead of ${first(nameOf(id))}, further into the room, and ${first(nameOf(id))} walks towards ${anchor ? "it" : "them"}, never past.`).join(" ");
       const pn = pictures.findIndex((x) => x.shot === k + 1);
-      L.push(`Shot ${k + 1} (${t}–${t + d} s)${words ? `, ${words}` : ""}${pn >= 0 ? (pictures[pn].continuity ? `, following straight on from ${pic(pn + 1)}` : `, as in ${pic(pn + 1)}`) : ""}: ${p.description.trim().replace(/\.$/, "")}${p.emotion ? ` (${p.emotion.trim().replace(/\.$/, "")})` : ""}.${way ? ` ${way}` : ""} ${speech}${exitSeconds(p.description) ? `${p.dialogue.length ? "." : ""} The walk away is seen in full: still walking away, in the picture, when the shot ends.` : ""}`);
+      L.push(`Shot ${k + 1} (${t}–${t + d} s)${words ? `, ${words}` : ""}${pn >= 0 ? (pictures[pn].continuity ? `, following straight on from ${pic(pn + 1)}` : `, as in ${pic(pn + 1)}`) : ""}: ${p.description.trim().replace(/\.$/, "")}${p.emotion ? ` (${p.emotion.trim().replace(/\.$/, "")})` : ""}.${way ? ` ${way}` : ""} ${speech}${exitSeconds(p.description) ? `${p.dialogue.length ? "." : ""} ${walkOn(k) ? "The walk away carries on into the next shot." : "The walk away is seen in full: still walking away, in the picture, when the shot ends."}` : ""}${k > 0 && walkOn(k - 1) && walker(panels[k - 1]) ? ` In the background, ${nameOf(walker(panels[k - 1])!)} carries on walking away, getting smaller, and doesn't come back.` : ""}`);
       t += d;
     });
     const speakers = [...new Set(panels.flatMap((p) => p.dialogue.map((x) => x.characterId)))];
@@ -263,7 +290,10 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake):
       // Only the group at its table (D132): a stranger in a dark suit stood at the group's table as
       // Jade arrived and had to be cropped out in the edit.
       anchor && inClip.length > 1 ? `Every shot is of this same group at the ${anchor.name}: a closer shot frames part of it, and whoever is out of frame is still standing in their place at the ${anchor.name}. Only ${and(names(inClip))} stand at the ${anchor.name}; other guests stay at their own tables, a few metres away.` : "",
-      pieces.length ? `${pieces.map((f) => `The ${f.name}`).join(" and ")} and everything on ${pieces.length === 1 ? "it" : "them"} stay exactly the same throughout, except what a shot puts on, takes off or drops in; that stays as the shot leaves it.` : "",
+      // Named, and in every shot (D153): in Paul's clip 2 the ice bucket was gone from the table in
+      // shot 3, and the contract Chase dropped in it was gone by the wide.
+      pieces.length ? `${pieces.map((f) => `The ${f.name}`).join(" and ")} and everything on ${pieces.length === 1 ? "it" : "them"}${(() => { const on = pieces.map((f) => itemsOn(f.detail)).filter(Boolean); return on.length ? ` (${on.join("; ")})` : ""; })()} stay exactly the same in every shot, wide shots included, except what a shot puts on, takes off or drops in; that stays as the shot leaves it.` : "",
+      ...panels.map((p, k) => { const m = k < panels.length - 1 ? leftIn(p.description) : null; return m ? `From shot ${k + 1} to the end of the clip, the ${m.thing} stays ${m.how} the ${m.into}, in every shot, wide shots included, even where a storyboard picture doesn't show it.` : ""; }),
       "No text, no logos.",
     ].filter(Boolean).join(" "));
     return L.join("\n");

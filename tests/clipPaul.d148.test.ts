@@ -38,3 +38,31 @@ describe("Eyes on the conversation (D149)", () => {
     expect(c.prompt).toContain("Whoever speaks looks at the person they are speaking to and keeps looking at them after the line; the others watch the speaker. Nobody glances round at the others or stares blankly away unless the shot says so.");
   });
 });
+
+describe("Things left in or on something stay there, named (D153)", () => {
+  it("reads what a shot leaves where, with 'it' as the thing named before", async () => {
+    const { leftIn, itemsOn } = await import("../src/lib/domain/clips");
+    expect(leftIn("Chase takes the contract, glances at it, drops it into the ice bucket on the table and delivers a smooth retort")).toEqual({ thing: "contract", how: "in", into: "ice bucket" });
+    expect(leftIn("Ava puts her phone on the bar")).toEqual({ thing: "phone", how: "on", into: "bar" });
+    expect(leftIn("They talk.")).toBeNull();
+    expect(itemsOn("round, covered with white cloth, with 2 tumbler candles and a silver ice bucket with a bottle in it; see reference image")).toBe("2 tumbler candles and a silver ice bucket with a bottle in it");
+  });
+  it("says it in the clip, from that shot to the end, and lists what's on the table", () => {
+    const withTable = { ...plan, furniture: [{ ...plan.furniture[0], detail: "round, with 2 candles and a silver ice bucket; see reference image" }] };
+    const panels = [P(1, 3, [], "Bo takes the note and drops it into the ice bucket."), P(2, 3), P(3, 3)];
+    const [c] = sceneClips({ ...input(panels), plan: withTable as never });
+    expect(c.prompt).toContain("From shot 1 to the end of the clip, the note stays in the ice bucket, in every shot, wide shots included, even where a storyboard picture doesn't show it.");
+    expect(c.prompt).toContain("and everything on it (2 candles and a silver ice bucket) stay exactly the same in every shot, wide shots included");
+  });
+});
+
+describe("A walk off before another shot carries on in it (D154)", () => {
+  it("gives no extra time there and has the next shot keep the walker going in the background", () => {
+    const off = P(1, 3, [{ characterId: "ava", text: "Unbelievable" }], "Ava scoffs and walks away.");
+    const [c] = sceneClips(input([off, P(2, 3, [], "Bo shrugs at the others.")]));
+    expect(c.prompt).toContain("The walk away carries on into the next shot.");
+    expect(c.prompt).toMatch(/Shot 2 [^\n]*In the background, Ava Stone carries on walking away, getting smaller, and doesn't come back\./);
+    expect(c.prompt).not.toContain("still walking away, in the picture, when the shot ends");
+    expect(c.prompt).toMatch(/Shot 1 \(0–2 s\)/);
+  });
+});
