@@ -408,6 +408,8 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
       await drawChecked(p, req.prompt, req.refs);
     } catch (e) {
       setFailed((x) => ({ ...x, [p.id]: e instanceof Error ? e.message : String(e) }));
+      // The change wasn't drawn: say so, not "Changing the picture…", and keep the words for another try.
+      if (ch.text) setWordNotes((x) => ({ ...x, [p.id]: { ok: false, text: `Your change wasn't drawn: "${ch.text}". Open Change something and save it again.` } }));
     } finally {
       setDrawing((x) => { const y = { ...x }; delete y[p.id]; return y; });
       router.refresh();
