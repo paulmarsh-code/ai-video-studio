@@ -319,7 +319,9 @@ export function addPanel(db: DB, sceneId: string, input: PanelInput) {
     id: panelId, sceneId, code, order, description: input.description.trim(), emotion: input.emotion.trim(),
     dialogue: line ? [{ characterId: input.speakerId!, text: line }] : [], durationSec, status: "draft",
   }).run();
-  const all = cast.map((c) => c.id);
+  // The scene's people (D159): those on its floor plan, not the project's whole cast.
+  const planNow = latestPlan(db, sceneId);
+  const all = planNow?.data.actors.length ? cast.map((c) => c.id).filter((id) => planNow.data.actors.some((a) => a.characterId === id)) : cast.map((c) => c.id);
   // The scene's setting, crowd and props (D158), as every other panel has them: panel 13, added
   // later, was drawn in an empty venue with no guests.
   const st = scene.staging ? asStaging(scene.staging) : undefined;
@@ -375,6 +377,12 @@ export function updatePanel(db: DB, panelId: string, input: PanelInput): PanelCh
     if (st?.crowd && !spec.crowd) spec.crowd = st.crowd;
     if (st?.spot && !spec.spot) { spec.spot = st.spot; spec.excludedIds = []; }
     if (st?.props.length && !spec.props?.length) spec.props = st.props;
+    // A panel added before D159 listed the whole cast: only the scene's people stay.
+    const planNow = latestPlan(db, panel.sceneId);
+    if (planNow?.data.actors.length) {
+      const here = (id: string) => planNow.data.actors.some((a) => a.characterId === id);
+      spec.visibleIds = spec.visibleIds.filter(here); spec.presentIds = spec.presentIds.filter(here);
+    }
     if (dialogueChanged) {
       spec.dialogue = newD?.text;
       spec.speakerId = newD?.characterId;

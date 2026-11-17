@@ -155,7 +155,10 @@ export function leftIn(text: string | undefined): { thing: string; how: "in" | "
 /** The request for one clip. */
 export function clipPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake): Clip {
   const nameOf = (id: string) => i.cast.find((c) => c.id === id)?.name ?? id;
-  const inClip = [...new Set(panels.flatMap((p) => [...p.spec.visibleIds, ...p.dialogue.map((d) => d.characterId)]))].filter((id) => i.cast.some((c) => c.id === id));
+  // Only people in this scene's floor plan (D159): panel 13, added later, listed the project's
+  // whole cast, and Gary and Samantha were told to stand at the table.
+  const inScene = (id: string) => !i.plan.actors?.length || i.plan.actors.some((a) => a.characterId === id);
+  const inClip = [...new Set(panels.flatMap((p) => [...p.spec.visibleIds, ...p.dialogue.map((d) => d.characterId)]))].filter((id) => i.cast.some((c) => c.id === id) && inScene(id));
   const pieces = (i.plan.furniture ?? []).filter((f) => isSetPiece(f));
   const held = [...new Set(panels.flatMap((p) => (p.spec.props ?? []).map((x) => x.name)))].filter((n) => !pieces.some((f) => f.name === n));
 

@@ -66,3 +66,13 @@ describe("A walk off before another shot carries on in it (D154)", () => {
     expect(c.prompt).toMatch(/Shot 1 \(0–2 s\)/);
   });
 });
+
+describe("Only the scene's people in a clip (D159)", () => {
+  it("leaves out someone in the project's cast who isn't on this scene's floor plan", () => {
+    const castMore = [...cast, { id: "gus", name: "Gus Far", pronoun: "he" as const }];
+    const p = P(1, 3, [], "Bo shrugs.");
+    (p.spec as { visibleIds: string[] }).visibleIds = ["ava", "bo", "gus"];
+    const [c] = sceneClips({ ...input([p]), cast: castMore as never });
+    expect(c.prompt).not.toContain("Gus");
+  });
+});

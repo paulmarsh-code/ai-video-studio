@@ -2745,3 +2745,12 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
   - A new panel's camera that stands where another panel's camera does (within 15 cm, looking the same way, same lens) uses that camera (`placeNewPanelCamera`).
   - On a panel's change, an own camera identical to another panel's camera is switched to it (`shareSameCamera`). The same set-up then gets the same room as its approved picture.
 - **Reaches the generation through:** the picture prompt (the crowd, matching the approved picture from the same camera) and so the clip's pictures. Tested in `newPanelSetup.d158.test.ts`.
+
+### D159: Only the scene's people in a panel added later, and in any clip (2026-11-17)
+
+- **Visible failure.** The clip request for panel 13 said "Only Jade, Chase, Marcus, Nina, Gary and Samantha stand at the cocktail table". Gary and Samantha Caulderwood are in the project's cast but not in this scene. `addPanel` listed the project's whole cast as present and seen.
+- **Fix.**
+  - A new panel lists only the people on its scene's floor plan.
+  - A panel added before this is trimmed to them on its next change.
+  - A clip request only names people on the scene's floor plan, whatever a panel lists.
+- **Reaches the generation through:** the clip prompt (who is in the clip and at the table) and the picture prompt. Tested in `clipPaul.d148.test.ts`.
