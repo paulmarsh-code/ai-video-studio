@@ -127,7 +127,9 @@ export function buildSceneClips(db: DB, sceneId: string): SceneClipsView | null 
   const held = [...new Set(panels.flatMap((p) => (p.spec.props ?? []).map((x) => x.name)))];
   const pieces = (plan.furniture ?? []).filter(isSetPiece).map((f) => f.name);
   const rows = [
-    ...cast.map((c) => ({ key: elementKey.character(c.id), what: c.name, kind: "Character" })),
+    // Only this scene's people (D159): Gary and Samantha, in the project but not the scene, showed
+    // as "2 missing Elements" to make.
+    ...cast.filter((c) => !plan.actors?.length || plan.actors.some((a) => a.characterId === c.id)).map((c) => ({ key: elementKey.character(c.id), what: c.name, kind: "Character" })),
     { key: elementKey.venue(s.venue.id), what: s.venue.name, kind: "Venue" },
     ...[...new Set([...pieces, ...held])].map((n) => ({ key: elementKey.prop(n), what: n, kind: "Prop" })),
   ].map((r) => ({ ...r, element: elements[r.key], ...(r.kind === "Character" ? { voice: elements[elementKey.voice(r.key.slice(5))] } : {}) }));

@@ -2753,4 +2753,5 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
   - A new panel lists only the people on its scene's floor plan.
   - A panel added before this is trimmed to them on its next change.
   - A clip request only names people on the scene's floor plan, whatever a panel lists.
+  - The clips page's Kling Elements list shows only the scene's people, so it no longer offers to make Elements for people who aren't in it.
 - **Reaches the generation through:** the clip prompt (who is in the clip and at the table) and the picture prompt. Tested in `clipPaul.d148.test.ts`.
