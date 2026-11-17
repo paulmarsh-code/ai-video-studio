@@ -602,7 +602,8 @@ export function StoryboardBoard(b: StoryboardBoardProps) {
                     onClose: () => setEditing(null),
                     moreHref: p.imageAssetId && p.hasCamera && p.shotId ? () => { setEditing(null); setChanging({ p, index: i }); } : undefined,
                     onPicture: async (said, descriptionChanged) => {
-                      if (said && p.shotId && p.hasCamera) { await changeInWords(p, said); return; }
+                      // A panel with no camera yet gets one from the change (D156), so it isn't skipped.
+                      if (said && p.shotId) { await changeInWords(p, said); return; }
                       if (descriptionChanged && p.imageAssetId) {
                         pendingRedraw.current = { panelId: p.id, ch: { text: "", parts: { place: "changed on this panel's floor plan: what happens changed" }, refs: [], visual: false } };
                       }
