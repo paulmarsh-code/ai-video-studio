@@ -17,13 +17,13 @@ const input = (panels: ClipPanel[], kept?: never) => ({ panels, cast: cast as ne
 
 describe("Walking off is seen in full (D148)", () => {
   it("gives a walk off two seconds more, past the panel's own time, and says it is seen", () => {
-    expect(exitSeconds("Jade scoffs and turns away to walk off before she says anything worse")).toBe(2);
-    expect(exitSeconds("Bo storms out")).toBe(2);
+    expect(exitSeconds("Jade scoffs and turns away to walk off before she says anything worse")).toBe(3);
+    expect(exitSeconds("Bo storms out")).toBe(3);
     expect(exitSeconds("Ava walks towards the bar")).toBe(0);
     const off = P(2, 3, [{ characterId: "ava", text: "Unbelievable" }], "Ava scoffs and walks away.");
-    expect(shotSeconds(off)).toBe(4);
+    expect(shotSeconds(off)).toBe(5);
     const [c] = sceneClips(input([P(1, 3, [{ characterId: "bo", text: "Go on then." }]), off]));
-    expect(c.prompt).toMatch(/Shot 2 \(\d+–\d+ s\)[^\n]*"Unbelievable"\. The walk away is seen in full: still walking away, in the picture, when the shot ends\./);
+    expect(c.prompt).toMatch(/Shot 2 \(\d+–\d+ s\)[^\n]*"Unbelievable"\. The walk away is seen in full: head up, eyes ahead, never looking down, still walking away and well on the way out of the picture when the shot ends\./);
   });
   it("never makes a clip longer than 15 s", () => {
     const long = [1, 2, 3, 4].map((n) => P(n, 5, [{ characterId: "ava", text: "One two three four five six seven eight nine." }], "Ava takes it, glances at it, and walks off."));
@@ -62,7 +62,7 @@ describe("A walk off before another shot carries on in it (D154)", () => {
     const [c] = sceneClips(input([off, P(2, 3, [], "Bo shrugs at the others.")]));
     expect(c.prompt).toContain("The walk away carries on into the next shot.");
     expect(c.prompt).toMatch(/Shot 2 [^\n]*In the background, Ava Stone carries on walking away, getting smaller, and doesn't come back\./);
-    expect(c.prompt).not.toContain("still walking away, in the picture, when the shot ends");
+    expect(c.prompt).not.toContain("well on the way out of the picture");
     expect(c.prompt).toMatch(/Shot 1 \(0–2 s\)/);
   });
 });
@@ -74,5 +74,12 @@ describe("Only the scene's people in a clip (D159)", () => {
     (p.spec as { visibleIds: string[] }).visibleIds = ["ava", "bo", "gus"];
     const [c] = sceneClips({ ...input([p]), cast: castMore as never });
     expect(c.prompt).not.toContain("Gus");
+  });
+});
+
+describe("Silent gestures, nothing after the last line (D160)", () => {
+  it("says so in every clip", () => {
+    const [c] = sceneClips(input([P(1, 3, [{ characterId: "ava", text: "Unbelievable" }], "Ava scoffs and walks off.")]));
+    expect(c.prompt).toContain("Gestures make no sound: no clicks, snaps or claps unless a shot says so. A scoff, sigh or laugh a shot asks for comes with that person's line, never after it; once someone has said their last line, they make no more sounds.");
   });
 });

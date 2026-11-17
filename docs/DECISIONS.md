@@ -2755,3 +2755,11 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
   - A clip request only names people on the scene's floor plan, whatever a panel lists.
   - The clips page's Kling Elements list shows only the scene's people, so it no longer offers to make Elements for people who aren't in it.
 - **Reaches the generation through:** the clip prompt (who is in the clip and at the table) and the picture prompt. Tested in `clipPaul.d148.test.ts`.
+
+### D160: Gestures are silent, no sounds after the last line, and a longer walk off (2026-11-17)
+
+- **Visible and audible failure.** Clip 1 (panels 9–12), take 4, shot 4. Paul: Jade's raised finger came with "like a click of a finger"; "at 13 seconds Jade huffs", after her line, as she walks off; she "turns her head down oddly"; and "she needs to walk further out of the shot".
+- **Fix (`clips.ts`), for every clip.**
+  - The sound line now says: "Gestures make no sound: no clicks, snaps or claps unless a shot says so. A scoff, sigh or laugh a shot asks for comes with that person's line, never after it; once someone has said their last line, they make no more sounds."
+  - A walk off at the end of a clip gets 3 s, not 2 (D148). Its shot says: "head up, eyes ahead, never looking down, still walking away and well on the way out of the picture when the shot ends."
+- **Reaches the generation through:** prompt lines and the shot's time. Tested in `clipPaul.d148.test.ts`.

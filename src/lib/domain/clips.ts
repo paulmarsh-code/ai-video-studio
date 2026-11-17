@@ -110,10 +110,10 @@ export function shotSeconds(p: ClipPanel): number {
 
 /**
  * Someone walking off in a shot (D148): Jade's "turns away to walk off" was given the 2 s of her
- * one-word line, and the clip ended as she turned. Two seconds more, so the walk away is seen.
+ * one-word line, and the clip ended as she turned. Three seconds more (D160: two weren't enough), so the walk away is seen.
  */
 const EXIT = /\b(?:walks?|walked|walking|storms?|stormed|storming|heads?|headed|marches|marched|strides?|strode)\s+(?:straight\s+)?(?:off|away|out)\b|\b(?:leaves|left\s+the|exits?|exited)\b/i;
-export const EXIT_SECONDS = 2;
+export const EXIT_SECONDS = 3;
 export function exitSeconds(text: string | undefined): number {
   return text && EXIT.test(text) ? EXIT_SECONDS : 0;
 }
@@ -256,7 +256,7 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake):
       const onTheWay = Object.entries(p.spec.at ?? {}).filter(([, m]) => /^(?:arriving|crossing|approaching)$/.test(m)).map(([id]) => id).filter((id) => inClip.includes(id));
       const way = onTheWay.map((id) => `${first(nameOf(id))} has not reached ${anchor ? `the ${anchor.name}` : "the others"} yet: ${anchor ? "it is" : "they are"} ahead of ${first(nameOf(id))}, further into the room, and ${first(nameOf(id))} walks towards ${anchor ? "it" : "them"}, never past.`).join(" ");
       const pn = pictures.findIndex((x) => x.shot === k + 1);
-      L.push(`Shot ${k + 1} (${t}–${t + d} s)${words ? `, ${words}` : ""}${pn >= 0 ? (pictures[pn].continuity ? `, following straight on from ${pic(pn + 1)}` : `, as in ${pic(pn + 1)}`) : ""}: ${p.description.trim().replace(/\.$/, "")}${p.emotion ? ` (${p.emotion.trim().replace(/\.$/, "")})` : ""}.${way ? ` ${way}` : ""} ${speech}${exitSeconds(p.description) ? `${p.dialogue.length ? "." : ""} ${walkOn(k) ? "The walk away carries on into the next shot." : "The walk away is seen in full: still walking away, in the picture, when the shot ends."}` : ""}${k > 0 && walkOn(k - 1) && walker(panels[k - 1]) ? ` In the background, ${nameOf(walker(panels[k - 1])!)} carries on walking away, getting smaller, and doesn't come back.` : ""}`);
+      L.push(`Shot ${k + 1} (${t}–${t + d} s)${words ? `, ${words}` : ""}${pn >= 0 ? (pictures[pn].continuity ? `, following straight on from ${pic(pn + 1)}` : `, as in ${pic(pn + 1)}`) : ""}: ${p.description.trim().replace(/\.$/, "")}${p.emotion ? ` (${p.emotion.trim().replace(/\.$/, "")})` : ""}.${way ? ` ${way}` : ""} ${speech}${exitSeconds(p.description) ? `${p.dialogue.length ? "." : ""} ${walkOn(k) ? "The walk away carries on into the next shot." : "The walk away is seen in full: head up, eyes ahead, never looking down, still walking away and well on the way out of the picture when the shot ends."}` : ""}${k > 0 && walkOn(k - 1) && walker(panels[k - 1]) ? ` In the background, ${nameOf(walker(panels[k - 1])!)} carries on walking away, getting smaller, and doesn't come back.` : ""}`);
       t += d;
     });
     const speakers = [...new Set(panels.flatMap((p) => p.dialogue.map((x) => x.characterId)))];
@@ -280,7 +280,9 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake):
       // Sound under the voices (D115): Jade's heels were louder than the party. No music (D131): the
       // music and the room sound run as one bed under the whole scene in the edit; each clip's own
       // music jumped at every cut.
-      "Sound: the voices, clear, over a low, steady room murmur at the same level throughout; no music at all, it is added in the edit; footsteps and movement quiet, never louder than speech.",
+      // Silent gestures, nothing after the line (D160): Jade's raised finger came with a click,
+      // and a huff came at the very end of the clip, after her line, as she walked off.
+      "Sound: the voices, clear, over a low, steady room murmur at the same level throughout; no music at all, it is added in the edit; footsteps and movement quiet, never louder than speech. Gestures make no sound: no clicks, snaps or claps unless a shot says so. A scoff, sigh or laugh a shot asks for comes with that person's line, never after it; once someone has said their last line, they make no more sounds.",
       // Held things change hands only when a shot says so (D132): "anything they carry throughout"
       // and "the table stays exactly the same" forbade the contract beat, Jade handing it over and
       // Chase dropping it in the ice bucket.
