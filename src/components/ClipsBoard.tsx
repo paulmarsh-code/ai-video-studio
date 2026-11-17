@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { createClipJobsAction, requestElementsAction, reviewClipAction, setClipPictureAction, setKlingElementAction } from "@/app/studioActions";
 import type { Clip, KlingElement } from "@/lib/domain/clips";
 import type { KlingListed } from "@/lib/klingList";
-import type { PictureChoice } from "@/lib/sceneClips";
+import type { ClipPictureIssues, PictureChoice } from "@/lib/sceneClips";
 import type { KlingJob } from "@/lib/klingJobs";
 import { ofProject } from "@/lib/klingNames";
 
@@ -249,7 +249,7 @@ function ClipReview({ sceneId, job, from, to }: { sceneId: string; job: KlingJob
   );
 }
 
-export function ClipsBoard({ projectId, projectCode, sceneId, rows, clips, list, pictures, jobs, making }: { projectId: string; projectCode: string; sceneId: string; rows: Row[]; clips: Clip[]; list: { elements: KlingListed[]; updatedAt?: string }; pictures: PictureChoice[]; jobs: KlingJob[]; making: Making }) {
+export function ClipsBoard({ projectId, projectCode, sceneId, rows, clips, list, pictures, jobs, making, issues = [] }: { projectId: string; projectCode: string; sceneId: string; rows: Row[]; clips: Clip[]; issues?: ClipPictureIssues[]; list: { elements: KlingListed[]; updatedAt?: string }; pictures: PictureChoice[]; jobs: KlingJob[]; making: Making }) {
   const router = useRouter();
   const [api, setApi] = useState(false);
   const [busy, setBusy] = useState<number | "all" | null>(null);
@@ -327,6 +327,8 @@ export function ClipsBoard({ projectId, projectCode, sceneId, rows, clips, list,
                     const changed = j && (j.basePrompt ?? j.prompt) !== c.prompt;
                     if (waiting) return <button type="button" disabled className="rounded bg-neutral-300 px-3 py-1 text-sm text-neutral-700">{j.status === "sent" ? "Being made in Kling…" : "Waiting for Claude: say \u201cmake the clips\u201d"}</button>;
                     if (j && j.status === "done" && !changed) return null;
+                    // Out-of-date pictures stop it (D151): redraw them first.
+                    if (issues[k]?.redraw.length) return <button type="button" disabled className="rounded bg-neutral-300 px-3 py-1 text-sm text-neutral-700">Redraw the pictures below first</button>;
                     return <button type="button" disabled={busy !== null} onClick={() => void create(k + 1)} className="rounded bg-blue-700 px-3 py-1 text-sm text-white hover:bg-blue-800 disabled:opacity-50">{busy === k + 1 ? "Creating…" : j ? "Create again: the request has changed" : "Create this clip"}</button>;
                   })()}
                 </div>
@@ -356,6 +358,13 @@ export function ClipsBoard({ projectId, projectCode, sceneId, rows, clips, list,
                   </>
                 );
               })()}
+              {!!issues[k]?.redraw.length && (
+                <div className="mt-2 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-800">
+                  {issues[k].redraw.map((r) => <p key={r.panel}>{r.why}</p>)}
+                  <a className="underline" href={`/projects/${projectId}/scenes/${sceneId}/storyboard`}>Go to the storyboard</a>
+                </div>
+              )}
+              {!!issues[k]?.warn.length && <div className="mt-1 text-sm text-amber-800">{issues[k].warn.map((r) => <p key={r.panel}>{r.why}</p>)}</div>}
               <p className="mt-1 text-sm text-neutral-600">Elements: {c.elements.length ? c.elements.map((e) => e.name).join(", ") : "none linked yet"}</p>
               <div className="mt-2">
                 <p className="text-sm text-neutral-600">Pictures, one per shot, in order: Kling stages each shot from its picture (who stands where, the camera angle). Pick another version, or none, if a picture isn&apos;t right.</p>

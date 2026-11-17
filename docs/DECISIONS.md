@@ -2670,3 +2670,14 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 - **Reaches the generation through:** a prompt line (an existing rule changed). Tested in `clipPaul.d148.test.ts`.
 
 - **Withdrawn, 17 Nov.** Checked against what was sent: the wides' pictures (P9 v30, P11 v29) show the venue's own screen wall, which is the cover picture of the GLOWVANE Element. It's the same room, seen facing the other way, and Kling followed the pictures as asked. Telling Kling the room looks like the kept frame "wherever the camera points" would have put the bar and balcony where the screen wall is. The rule is taken out. The real cause is the camera direction of the wides; see the next decision.
+
+### D151: A clip's pictures must be drawn on the current floor plan (2026-11-17)
+
+- **Visible failure.** Clip 2, take 2 (panels 9–12): the wides looked like another room, there was no ice bucket, and the group stood in a row. Its storyboard pictures for panels 10, 11 and 12 were drawn on 14 Nov, on floor plan versions 32 and 33. The plan was on 35, with the ice bucket, the bigger table and the closer cameras. They stayed on the storyboard because Paul had approved them earlier (D19e), marked only "Approved by you on an earlier layout and kept". Nothing on the clips page said so. Clip 1's pictures had been redrawn on version 35, and it came out right.
+- **Paul:** each shot's picture is the floor plan, the camera and the venue put together, with the people, props and background in place. That's the point of sending it.
+- **Fix, for any project.**
+  - Before a clip is created, or a new take is asked for, the app checks each of its storyboard pictures.
+  - A picture drawn on an earlier floor plan stops the clip: "Clip 2: the pictures for panels 10, 11, 12 were drawn on an earlier floor plan. Redraw them on the storyboard first…". The clips page shows it in red, with a link to the storyboard, and the Create button says "Redraw the pictures below first".
+  - A picture that failed the app's picture check but was approved is shown in amber, without stopping the clip, because some failures are small (a satchel in the wrong hand).
+  - Not checked: the frame from a kept take (it's the footage itself), and a version the user picked for the clip by hand, or "none" (their call).
+- **Reaches the generation through:** the shot pictures Kling gets. Tested in `clipPictures.d151.test.ts`.
