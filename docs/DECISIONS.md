@@ -2681,3 +2681,12 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
   - A picture that failed the app's picture check but was approved is shown in amber, without stopping the clip, because some failures are small (a satchel in the wrong hand).
   - Not checked: the frame from a kept take (it's the footage itself), and a version the user picked for the clip by hand, or "none" (their call).
 - **Reaches the generation through:** the shot pictures Kling gets. Tested in `clipPictures.d151.test.ts`.
+
+### D152 (planned, for the standalone app): confirm the cost, and offer choices when something needs deciding (2026-11-17)
+
+- **Paul:** "when user clicks make clips it provides details of cost and Yes and Cancel buttons… If there is an issue or choice… that should show with options / guided actions."
+- **Today** Claude does this in the chat: it gives the credits and balance before sending, and asks with options when a picture or request looks wrong (for example, "Fix wides first / Send it now").
+- **In the standalone app**, Make the clips will:
+  - open a confirmation with each clip, its seconds and credits, the total and the Kling balance, with **Yes, make them** and **Cancel**;
+  - before that, show any problem found as a choice with guided actions, not as a dead end. Each choice says what will happen and what it costs, with the recommended one first. The problems include out-of-date pictures (D151), a missing voice sample (D146), and pictures that disagree with each other or with the clip before.
+- **Not built yet:** it needs the app to hold its own Kling key. Recorded so it is designed in, not added later.
