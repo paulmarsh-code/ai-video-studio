@@ -2785,3 +2785,18 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 - **Checked on Paul's scene 4.** Chase is beside the bar counter. Jade is 2 m behind him, out of his sight, until she walks up in panel 8.
 - **Still open.** The bar counter is a round piece in the room's middle, not along the venue's bar wall. Pictures will show it as a free-standing counter with the venue's bar further behind. To check on the redrawn pictures before building a wall-side counter.
 - **Reaches the generation through:** the panels' positions, so the cameras chosen and the pictures. Tested in `panelWords.d157.test.ts`.
+
+### D163: Kling chooses the shots; the app gets the people, props, venue and positions right (2026-11-17, Paul)
+
+- **Why.** For a week, each new scene hit a gap in the app's own camera and room model: slopes, walk-offs, and now a bar counter with someone behind. Each gap was patched as a "general" rule, and the next scene found the next one. Scene 4's cameras all came out wide because the model can't place a camera behind a bar. Paul: "we need something that works across multiple projects… let Kling decide on the camera shots; we just need to get the floor plan and positioning correct."
+- **The flow from here:**
+  1. **Characters:** reference sheets, Elements, voice samples.
+  2. **Props:** pictures and Elements, and who holds what.
+  3. **Venue:** its Element with three views.
+  4. **Floor plan and positions:** who stands where, which way they face, who's behind whom. Set from the panel words, corrected by the user on the plan.
+  5. **Scenes:** story → panels → exact lines → delivery.
+  6. **Storyboard:** a picture per panel, drawn from its words, the references and the positions. The picture model frames the shot from the words; the app no longer chooses or approves cameras.
+  7. **Clips:** Elements, the last kept frame, the storyboard pictures, the lines, voices and positions in words. Kling chooses the shots; the clip review checks them.
+- **Goes:** shot design, camera choice and approval, and drawing pictures from app-placed cameras.
+- **Stays:** everything else, including the picture check (who, props, background), the D151 out-of-date check (keyed to positions instead of cameras), and the clip rules D113–D162.
+- **Status.** Agreed in principle; to be built and tried on scene 4.
