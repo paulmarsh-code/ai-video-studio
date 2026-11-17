@@ -39,3 +39,21 @@ describe("Reading who does what (D157)", () => {
     expect(out.ava).toBeUndefined();
   });
 });
+
+describe("Leaning on, and behind someone among the crowd (D162)", () => {
+  const counter: GeometryPlanData = { ...bar, furniture: [{ id: "spot", name: "bar counter", position: { x: 0, y: 10 }, radiusM: 1.5 }], actors: [{ characterId: "bo", position: { x: 1, y: 10 } }, { characterId: "ava", position: { x: -1, y: 10 } }] };
+  it("leaning on the counter is beside it, not on top of it", () => {
+    const [out] = blockingFromWords(counter, [P("Bo leans on the counter, phone to his ear.", "bo")], people);
+    const at = out.bo?.at ?? { x: 1, y: 10 };
+    expect(Math.hypot(at.x, at.y - 10)).toBeGreaterThan(1.4);
+  });
+  it("'behind Bo among guests' is a few metres behind him, away from what he faces, and stays there", () => {
+    const out = blockingFromWords(counter, [
+      { ...P("Bo leans on the counter; Ava stands a few metres behind him.", "bo"), places: { bo: "at the bar counter", ava: "behind Bo among guests" } },
+      { ...P("On Ava behind him, listening.", "ava"), places: { ava: "behind Bo among guests" } },
+    ], people);
+    expect(out[0].ava.why).toBe("a few metres behind Bo, out of sight");
+    expect(out[0].ava.at.x).toBeGreaterThan(3); // the far side of Bo from the counter
+    expect(out[1].ava).toBeUndefined(); // already there
+  });
+});

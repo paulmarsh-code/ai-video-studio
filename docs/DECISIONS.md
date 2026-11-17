@@ -2771,3 +2771,17 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
   - Headings ("Where:", "Who's in it:", "Scene title:") and camera notes ("On Jade:", "Back on…") aren't speakers.
   - With the cast known, only a character's name is a speaker.
 - **Reaches the generation through:** the panels' locked lines, so the clip's words, voice and lip-sync. Tested in `scriptLines.d161.test.ts`.
+
+### D162: Leaning on something is beside it; "behind X among the guests" is a few metres behind them (2026-11-17)
+
+- **Visible failure.** Scene 4 ("Chase is caught out"), first pictures. Jade was meant to be "a few metres behind him, half-hidden among guests". She stood in plain view beside him. Chase was away from the bar in every picture, and Jade appeared in shots meant to show only him. The floor plan showed why:
+  - "Chase leans on the counter" put Chase **on** the bar counter, at its centre.
+  - "behind Chase among guests" put Jade **beside** Chase, 0.3 m from him.
+  - With the two of them on one spot, no closer camera could take one without the other.
+- **Fix (`panelWords.ts`), for any scene.**
+  - Leaning on or against something stands you beside it, not on top of it.
+  - "Behind someone", with "a few metres", "among the guests or crowd", "half-hidden" or "out of their sight", places them about 3 m behind that person, away from what that person faces. That is the thing they're at, or else the group's middle. They are turned towards the person, and stay put in later panels that say the same.
+  - Places given relative to someone else come after everyone's own.
+- **Checked on Paul's scene 4.** Chase is beside the bar counter. Jade is 2 m behind him, out of his sight, until she walks up in panel 8.
+- **Still open.** The bar counter is a round piece in the room's middle, not along the venue's bar wall. Pictures will show it as a free-standing counter with the venue's bar further behind. To check on the redrawn pictures before building a wall-side counter.
+- **Reaches the generation through:** the panels' positions, so the cameras chosen and the pictures. Tested in `panelWords.d157.test.ts`.

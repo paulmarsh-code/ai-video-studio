@@ -259,12 +259,33 @@ export function blockingFromWords(plan: GeometryPlanData, panels: WordsPanel[], 
     // Where the panel writer put each person (D80): "in the skate bowl", "on the far lip of the
     // bowl", "beside Ava". It comes before the verbs below, which then leave that person be.
     const placed = new Set<string>();
-    for (const [id, words0] of Object.entries(pn.places ?? {})) {
+    // Places relative to someone else come after everyone's own (D162), so "behind Chase" uses
+    // where Chase stands in this panel.
+    for (const [id, words0] of Object.entries(pn.places ?? {}).sort(([, a], [, b]) => Number(/\b(?:behind|beside|next\s+to)\s+[A-Z]/.test(a)) - Number(/\b(?:behind|beside|next\s+to)\s+[A-Z]/.test(b)))) {
       if (!pos.has(id) || own[id] || marked.has(id) || left.has(id)) continue;
       const from = pos.get(id)!;
       const { how, what } = readPlace(words0);
       const person = byFirst(what.split(/\s+/)[0] ?? "");
       let spot: Point | undefined, why = "";
+      // Behind someone, a few metres off or among the crowd (D162): "behind Chase among guests"
+      // put Jade beside him, in plain sight. Behind is away from what they face: the thing they
+      // stand at, else the group's middle.
+      const behindFar = person && person.id !== id && pos.has(person.id) && /^\s*(?:(?:standing|waiting|lingering|hidden|half-hidden|still)\s+)*(?:a\s+few\s+(?:metres|meters|paces|steps)\s+)?behind\b/i.test(words0)
+        && /\b(?:among|amongst|in\s+the\s+crowd|crowd|guests|hidden|half-hidden|a\s+few\s+(?:metres|meters|paces|steps)|metres|meters|out\s+of\s+(?:his|her|their)\s+sight|unseen|without\s+(?:him|her|them)\s+seeing)\b/i.test(words0);
+      if (behindFar) {
+        const tp = pos.get(person!.id)!;
+        const near = props.filter((f) => !f.heldBy).map((f) => ({ f, d: Math.hypot(f.position.x - tp.x, f.position.y - tp.y) })).sort((x, y) => x.d - y.d)[0];
+        const faces = near && near.d <= (near.f.radiusM ?? 0.5) + 1.2 ? near.f.position : centre();
+        let dir = { x: tp.x - faces.x, y: tp.y - faces.y }; const dl = Math.hypot(dir.x, dir.y);
+        dir = dl > 0.05 ? { x: dir.x / dl, y: dir.y / dl } : { x: 0, y: -1 };
+        // Already there, a couple of metres behind them: she stays put.
+        const off = { x: from.x - tp.x, y: from.y - tp.y };
+        if (Math.hypot(off.x, off.y) >= 2 && (off.x * dir.x + off.y * dir.y) / Math.hypot(off.x, off.y) > 0.7) { placed.add(id); continue; }
+        const spot0 = clamp({ x: tp.x + dir.x * 3, y: tp.y + dir.y * 3 });
+        if (Math.hypot(spot0.x - from.x, spot0.y - from.y) >= 0.3) { out[id] = { at: spot0, facingDeg: degTo(spot0, tp), by: "app", why: `a few metres behind ${person!.name.split(/\s+/)[0]}, out of sight` }; pos.set(id, spot0); }
+        placed.add(id);
+        continue;
+      }
       if (person && person.id !== id && pos.has(person.id)) {
         const tp = pos.get(person.id)!, d = { x: from.x - tp.x, y: from.y - tp.y }, l = Math.hypot(d.x, d.y) || 1;
         if (l < 1.3) { placed.add(id); continue; } // already beside them
@@ -400,7 +421,10 @@ export function blockingFromWords(plan: GeometryPlanData, panels: WordsPanel[], 
         const t = resolve(kind === "goto" ? m[1] : m[2], props, views, areas);
         if (!t) continue;
         // Into an area (D80): "drops into the bowl", "dives into the pool".
-        const on = (kind === "at" && /^(on|onto|on\s+to|in|into|over)$/i.test(m[1] ?? "") && t.kind !== "view") || (kind === "goto" && t.kind === "area" && /\b(?:into|in\s+to|onto|in)\s+/i.test(m[0]));
+        // Leaning on something is beside it, not on top of it (D162): "Chase leans on the counter"
+        // stood him in the middle of the bar counter.
+        const leaning = kind === "at" && /^lean/i.test(m[0].trim());
+        const on = (kind === "at" && !leaning && /^(on|onto|on\s+to|in|into|over)$/i.test(m[1] ?? "") && t.kind !== "view") || (kind === "goto" && t.kind === "area" && /\b(?:into|in\s+to|onto|in)\s+/i.test(m[0]));
         const spot = placeOf(t, from, on);
         if (Math.hypot(spot.x - from.x, spot.y - from.y) < 0.3) continue;
         const name = nameOf(t);
