@@ -2663,8 +2663,10 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 - **Fix (`clips.ts`), for every clip.** The acting line (D133) now says: "Whoever speaks looks at the person they are speaking to and keeps looking at them after the line; the others watch the speaker. Nobody glances round at the others or stares blankly away unless the shot says so." A shot or delivery that asks for a look away still gets it.
 - **Reaches the generation through:** a prompt line (an existing rule changed, not a new feature).
 
-### D150: After a kept take, the room's look comes from the footage (2026-11-16)
+### D150: After a kept take, the room's look comes from the footage (2026-11-16) — WITHDRAWN 17 Nov
 
 - **Visible failure.** Clip 2, take 2, shots 2 and 4 (the wides): the room had a brick wall and a big gradient screen with no balcony. Shots 1 and 3, and clip 1, had the balcony and string lights. The look came from the older storyboard pictures for those panels, which the request told Kling to follow for "background".
 - **Fix (`clips.ts`), for any clip that follows a kept take.** The storyboard pictures now set only the camera angle, framing and who stands where. "The room itself, its walls, screens, lights and balcony, looks exactly as in 图片1 and the venue in every shot, wide shots included; where a storyboard picture shows the room differently, 图片1 is right." A first clip, with no footage before it, still takes the background from its pictures.
 - **Reaches the generation through:** a prompt line (an existing rule changed). Tested in `clipPaul.d148.test.ts`.
+
+- **Withdrawn, 17 Nov.** Checked against what was sent: the wides' pictures (P9 v30, P11 v29) show the venue's own screen wall, which is the cover picture of the GLOWVANE Element. It's the same room, seen facing the other way, and Kling followed the pictures as asked. Telling Kling the room looks like the kept frame "wherever the camera points" would have put the bar and balcony where the screen wall is. The rule is taken out. The real cause is the camera direction of the wides; see the next decision.

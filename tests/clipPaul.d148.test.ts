@@ -38,15 +38,3 @@ describe("Eyes on the conversation (D149)", () => {
     expect(c.prompt).toContain("Whoever speaks looks at the person they are speaking to and keeps looking at them after the line; the others watch the speaker. Nobody glances round at the others or stares blankly away unless the shot says so.");
   });
 });
-
-describe("The room from the footage already made (D150)", () => {
-  it("after a kept take, takes the room's look from its frame, not from the storyboard pictures", () => {
-    const panels = [1, 2, 3].map((n) => P(n, 3));
-    const [c] = sceneClips(input(panels, [{ from: 1, to: 1, frameAssetId: "frame" }] as never));
-    expect(c.prompt).toContain("each shot keeps its picture's camera angle, framing and who stands where.");
-    expect(c.prompt).toContain("The room itself, its walls, screens, lights and balcony, looks exactly as in 图片1 and the venue in every shot, wide shots included");
-    const [d] = sceneClips(input(panels));
-    expect(d.prompt).toContain("camera angle, framing, background and who stands where");
-    expect(d.prompt).not.toContain("The room itself");
-  });
-});
