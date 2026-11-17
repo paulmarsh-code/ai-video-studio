@@ -2733,3 +2733,15 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 - **Read again on a change.** Changing a panel's words now reads every panel's own positions again, even with the positions approved, as adding a panel already did. Only the per-panel positions change; the approved floor plan stays.
 - **Checked on Paul's scene.** Panel 8 has nobody on the table. Panel 12 has Jade walking away from the wide camera, towards the screen wall. Panel 13 has her still walking away in the background, and Nina stays put.
 - **Reaches the generation through:** the panel's positions, which set the floor plan sketch, the picture and the clip. Tested in `panelWords.d157.test.ts`.
+
+### D158: A panel added later gets the scene's crowd and setting, and shares a camera already standing there (2026-11-17)
+
+- **Visible failure.** Panel 13's picture had no guests at all. Its room was also different from panel 12's and from the clip: an arched glass window over a door on the right, and no balcony across the screen wall. Panel 12, taken from the very same spot, matched the clip.
+- **Causes.**
+  - `addPanel` built the shot without the scene's staging: no crowd, no setting spot, no props. A spoken line also excluded everyone else, which a group scene never does.
+  - Its camera was made as a new one ("Wide, for this panel"), identical to panel 12's wide. As a different camera, it wasn't matched to panel 12's approved picture (D69). So GPT drew the venue's own screen-wall picture instead, which has no balcony.
+- **Fix, for any scene.**
+  - A panel added later gets the scene's crowd, setting and props, like every other panel. A panel added before this gets them on its next change.
+  - A new panel's camera that stands where another panel's camera does (within 15 cm, looking the same way, same lens) uses that camera (`placeNewPanelCamera`).
+  - On a panel's change, an own camera identical to another panel's camera is switched to it (`shareSameCamera`). The same set-up then gets the same room as its approved picture.
+- **Reaches the generation through:** the picture prompt (the crowd, matching the approved picture from the same camera) and so the clip's pictures. Tested in `newPanelSetup.d158.test.ts`.

@@ -114,6 +114,15 @@ export function placeNewPanelCamera(db: DB, panelId: string): string | null {
   const o = design.shots.find((d) => d.shotId === shot.id)?.options[0];
   if (!o) return null;
   const { position, lookAt, preset, fovDeg, heightM, tiltDeg, rollDeg, size } = o.camera;
+  // The same set-up as another panel's (D158): that camera, not a copy. Panel 13 stood exactly where
+  // panel 12's wide did, but as a new camera it wasn't matched to panel 12's approved picture, and
+  // the room came out different (no balcony, an arched window).
+  const same = s.plan.data.cameras.find((c) => Math.hypot(c.position.x - position.x, c.position.y - position.y) < 0.15 && Math.hypot(c.lookAt.x - lookAt.x, c.lookAt.y - lookAt.y) < 0.3 && Math.abs((c.fovDeg ?? 0) - (fovDeg ?? 0)) < 3 && s.shots.some((x) => x.spec.cameraId === c.id));
+  if (same) {
+    db.update(t.shots).set({ spec: { ...shot.spec, cameraId: same.id } }).where(eq(t.shots.id, shot.id)).run();
+    studio.savePanelBlocking(db, [{ shotId: shot.id, entries: {} }]);
+    return same.name;
+  }
   studio.savePanelBlocking(db, [{ shotId: shot.id, entries: {}, camera: { position, lookAt, preset, fovDeg, heightM, tiltDeg, rollDeg, size, name: o.kind } }]);
   return o.kind;
 }

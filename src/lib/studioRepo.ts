@@ -320,9 +320,13 @@ export function addPanel(db: DB, sceneId: string, input: PanelInput) {
     dialogue: line ? [{ characterId: input.speakerId!, text: line }] : [], durationSec, status: "draft",
   }).run();
   const all = cast.map((c) => c.id);
+  // The scene's setting, crowd and props (D158), as every other panel has them: panel 13, added
+  // later, was drawn in an empty venue with no guests.
+  const st = scene.staging ? asStaging(scene.staging) : undefined;
   const spec: ShotSpec = {
+    ...(st?.spot ? { spot: st.spot } : {}), ...(st?.crowd ? { crowd: st.crowd } : {}), ...(st?.props.length ? { props: st.props } : {}),
     code: shotCode(scene, code), venueName: venue?.name ?? "", sceneContext: input.description.trim(),
-    presentIds: all, visibleIds: line ? [input.speakerId!] : all, excludedIds: line ? all.filter((id) => id !== input.speakerId) : [],
+    presentIds: all, visibleIds: line ? [input.speakerId!] : all, excludedIds: line && !st?.spot ? all.filter((id) => id !== input.speakerId) : [],
     speakerId: line ? input.speakerId : undefined, dialogue: line || undefined, subjectId: line ? undefined : all[0],
     actions: "", emotion: input.emotion.trim() || undefined, durationSec, audioMode: line ? "native-on" : "off", intensity: "natural",
   };
@@ -366,6 +370,11 @@ export function updatePanel(db: DB, panelId: string, input: PanelInput): PanelCh
   const shot = shotForPanel(db, panelId);
   if (shot) {
     const spec: ShotSpec = { ...shot.spec, code: shotCode(scene, code), emotion: input.emotion.trim() || shot.spec.emotion };
+    // A panel added before D158 had no setting or crowd: it takes the scene's on its next change.
+    const st = scene.staging ? asStaging(scene.staging) : undefined;
+    if (st?.crowd && !spec.crowd) spec.crowd = st.crowd;
+    if (st?.spot && !spec.spot) { spec.spot = st.spot; spec.excludedIds = []; }
+    if (st?.props.length && !spec.props?.length) spec.props = st.props;
     if (dialogueChanged) {
       spec.dialogue = newD?.text;
       spec.speakerId = newD?.characterId;
@@ -392,6 +401,8 @@ export function updatePanel(db: DB, panelId: string, input: PanelInput): PanelCh
     }
   }
   persist(db);
+  // A panel's own camera that stands exactly where another panel's does becomes that camera (D158).
+  if (shot) shareSameCamera(db, panel.sceneId, shot.id);
   // New words, new positions (D36). With the positions approved, the panels' own positions are
   // still read again from the words (D157), as for a new panel; the approved floor plan stays.
   if (changed) {
@@ -399,6 +410,27 @@ export function updatePanel(db: DB, panelId: string, input: PanelInput): PanelCh
     else if (applyPanelWords(db, panel.sceneId)) persist(db);
   }
   return { dialogueChanged, animaticMarked, shotUpdated };
+}
+
+/**
+ * A panel's own camera ("…, for this panel") that stands exactly where another panel's camera
+ * does, looking the same way with the same lens, is switched to that camera (D158). The same
+ * set-up then gets the same room: a picture from it is matched to the approved one (D69).
+ */
+export function shareSameCamera(db: DB, sceneId: string, shotId: string): boolean {
+  const plan = latestPlan(db, sceneId);
+  const sh = db.select().from(t.shots).where(eq(t.shots.id, shotId)).get();
+  if (!plan || !sh) return false;
+  const spec = sh.spec as ShotSpec;
+  const mine = plan.data.cameras.find((c) => c.id === spec.cameraId);
+  if (!mine || !mine.id.includes("~")) return false;
+  const others = db.select().from(t.shots).where(eq(t.shots.sceneId, sceneId)).all().filter((x) => x.id !== shotId).map((x) => (x.spec as ShotSpec).cameraId);
+  const same = plan.data.cameras.find((c) => c.id !== mine.id && others.includes(c.id)
+    && Math.hypot(c.position.x - mine.position.x, c.position.y - mine.position.y) < 0.15 && Math.hypot(c.lookAt.x - mine.lookAt.x, c.lookAt.y - mine.lookAt.y) < 0.3
+    && Math.abs((c.fovDeg ?? 0) - (mine.fovDeg ?? 0)) < 3 && Math.abs((c.heightM ?? 1.6) - (mine.heightM ?? 1.6)) < 0.2);
+  if (!same) return false;
+  db.update(t.shots).set({ spec: { ...spec, cameraId: same.id } }).where(eq(t.shots.id, shotId)).run();
+  return true;
 }
 
 /** A new picture always needs approving again. */
