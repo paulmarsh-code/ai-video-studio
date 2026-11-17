@@ -2710,3 +2710,11 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 - **Visible failure.** Clip 2, take 3, shot 1: the 7-word line had 4 s, and Kling filled it with a pause after "You're wrong" and a look to Marcus. Paul wanted it at 3 s, but a panel with a line had no length box. Only silent panels did.
 - **Fix (`PanelEditor.tsx`).** Change something now shows the length on every panel. On a spoken panel it says, for example, "7 words: the app suggests 4s". The user's number stands until the line itself changes; a new line sets the suggestion again. This is a correction control: the app still sets the length by itself.
 - **Reaches the generation through:** the shot's time in the clip request.
+
+### D156: A panel added after the floor plan gets its camera by itself; a picture is out of date only if its own layout changed (2026-11-17)
+
+- **Visible failure.** Paul added panel 13 (Chase shrugs to Marcus and Nina). It came up "no camera yet", with no way to draw it in the app, and a message to go and run Design shots on the floor plan. While fixing this, a second problem showed. Giving any panel a camera saves a new floor plan version, and D151 counted every picture drawn on an earlier version as out of date. One new camera would have blocked clip 2, whose pictures were all fine.
+- **Fix.**
+  - **Add a panel** places the new panel's camera straight away from what happens in it (`placeNewPanelCamera`), like a change in words. "Change something" on a panel with no camera gives it one too, for panels added before this. `panelCamera` can now make a panel's own camera when it has none. Every other camera stays as it is.
+  - **The D151 check** compares each picture against its own layout, not the plan's version number. The layout is the panel's camera, where everyone stands for it, and the set pieces with their detail (`panelLayoutKey`, taken from the plan version the picture was drawn on and from the current one). On Paul's scene, panels 9–12 drawn on plan 32 differ from plan 35, so they're caught. A new camera for panel 13 changes nothing for them.
+- **Reaches the generation through:** the shot's camera and picture, and keeping up-to-date pictures in the clip. Tested in `newPanelCamera.d156.test.ts` and `clipPictures.d151.test.ts`.

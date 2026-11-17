@@ -1058,17 +1058,19 @@ function panelCamera(db: DB, sceneId: string, shotId: string, change: (cam: Plan
   const sh = db.select().from(t.shots).where(eq(t.shots.id, shotId)).get();
   if (!plan || !sh) return;
   const spec = sh.spec as ShotSpec;
-  const cam = plan.data.cameras.find((c) => c.id === spec.cameraId);
-  if (!cam) return;
+  // A panel with no camera yet (added after the floor plan, D156) gets its own, made here.
+  const cam = plan.data.cameras.find((c) => c.id === spec.cameraId)
+    ?? ({ id: `cam-new~${shotId.slice(0, 6)}`, name: "Camera", preset: "wide", position: { x: 0, y: 0 }, lookAt: { x: 0, y: 1 }, fovDeg: 50 } as PlanCamera);
   const next = change(cam);
   if (JSON.stringify(next) === JSON.stringify(cam)) return;
   const shared = db.select().from(t.shots).where(eq(t.shots.sceneId, sceneId)).all().some((x) => x.id !== shotId && (x.spec as ShotSpec).cameraId === cam.id);
-  const own = !shared && cam.id.includes("~");
+  const fresh = !plan.data.cameras.some((c) => c.id === cam.id);
+  const own = fresh || (!shared && cam.id.includes("~"));
   const id = own ? cam.id : `${cam.id.split("~")[0]}~${shotId.slice(0, 6)}`;
   // A camera the words named (D135) keeps that name: "Two-shot on Jade and Chase", not "Wide".
   const renamed = next.name !== cam.name ? next.name.replace(/, (turned|for this panel)$/, "") : undefined;
-  const camera = { ...next, id, name: renamed ? `${renamed}, for this panel` : own ? cam.name : `${cam.name.replace(/, (turned|for this panel)$/, "")}, for this panel` };
-  const cameras = own ? plan.data.cameras.map((c) => (c.id === id ? camera : c)) : [...plan.data.cameras.filter((c) => c.id !== id), camera];
+  const camera = { ...next, id, name: fresh ? `${next.name}, for this panel` : renamed ? `${renamed}, for this panel` : own ? cam.name : `${cam.name.replace(/, (turned|for this panel)$/, "")}, for this panel` };
+  const cameras = fresh ? [...plan.data.cameras, camera] : own ? plan.data.cameras.map((c) => (c.id === id ? camera : c)) : [...plan.data.cameras.filter((c) => c.id !== id), camera];
   db.insert(t.plans).values({ id: randomUUID(), sceneId, name: plan.name, version: plan.version + 1, data: { ...plan.data, cameras } }).run();
   db.update(t.shots).set({ spec: { ...spec, cameraId: id } }).where(eq(t.shots.id, shotId)).run();
 }

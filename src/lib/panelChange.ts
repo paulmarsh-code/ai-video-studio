@@ -62,7 +62,8 @@ export function changePanel(db: DB, panelId: string, words: string): PanelChange
   const n = namedShot(text);
   const aboutCamera = !!(n.framing || n.size || CAMERA_WORDS.test(text));
   let placed = false;
-  if (aboutCamera || moved) {
+  // A panel with no camera yet gets one from any change (D156).
+  if (aboutCamera || moved || !shot.spec.cameraId) {
     const base = { ...s.plan!.data, aspect: s.plan!.data.aspect ?? studio.projectAspect(db, s.scene.projectId) };
     const inputs = s.shots.map((x) => ({ id: x.id, code: x.code, spec: x.spec, description: x.id === shot.id ? `${text}. ${panel.description ?? ""}` : s.panels.find((p) => p.id === x.panelId)?.description }));
     const design = designScene(base, inputs, name, repo.getProjectGenre(db, s.scene.projectId));
@@ -89,4 +90,30 @@ export function changePanel(db: DB, panelId: string, words: string): PanelChange
   const already = done.some((d) => d.startsWith("The camera is already"));
   const unclear = moved || placed || already ? rest : rest.length ? rest : [text];
   return { layout: moved || placed, done, unclear };
+}
+
+/**
+ * A panel added after the floor plan gets its camera straight away (D156). Panel 13 ("Back on
+ * Chase and the group…") came up with "no camera yet" and no way to draw it, and the user was
+ * told to go and run Design shots on the floor plan. The app places it here, the way a change in
+ * words does, from what happens in the panel. Every other panel and camera stays as it is.
+ * Returns the camera's kind, or null when the scene has no floor plan or nothing fits.
+ */
+export function placeNewPanelCamera(db: DB, panelId: string): string | null {
+  const panel = db.select().from(t.panels).where(eq(t.panels.id, panelId)).get();
+  if (!panel) return null;
+  const s = repo.getScene(db, panel.sceneId);
+  if (!s?.plan) return null;
+  const shot = s.shots.find((x) => x.panelId === panelId);
+  if (!shot || shot.spec.cameraId) return null;
+  const cast = repo.getCast(db, s.scene.projectId);
+  const name = (id: string) => cast.find((c) => c.id === id)?.name ?? id;
+  const base = { ...s.plan.data, aspect: s.plan.data.aspect ?? studio.projectAspect(db, s.scene.projectId) };
+  const inputs = s.shots.map((x) => ({ id: x.id, code: x.code, spec: x.spec, description: s.panels.find((p) => p.id === x.panelId)?.description }));
+  const design = designScene(base, inputs, name, repo.getProjectGenre(db, s.scene.projectId));
+  const o = design.shots.find((d) => d.shotId === shot.id)?.options[0];
+  if (!o) return null;
+  const { position, lookAt, preset, fovDeg, heightM, tiltDeg, rollDeg, size } = o.camera;
+  studio.savePanelBlocking(db, [{ shotId: shot.id, entries: {}, camera: { position, lookAt, preset, fovDeg, heightM, tiltDeg, rollDeg, size, name: o.kind } }]);
+  return o.kind;
 }

@@ -94,7 +94,8 @@ export async function approveVenueAction(venueId: string) {
 
 // Storyboard
 export async function addPanelAction(sceneId: string, input: studio.PanelInput) {
-  return run((db) => studio.addPanel(db, sceneId, input));
+  // Its camera is placed straight away when the scene has a floor plan (D156).
+  return runAsync(async (db) => { const id = studio.addPanel(db, sceneId, input); const camera = (await import("@/lib/panelChange")).placeNewPanelCamera(db, id); return { id, camera }; });
 }
 export async function updatePanelAction(panelId: string, input: studio.PanelInput) {
   return run((db) => studio.updatePanel(db, panelId, input));

@@ -2,6 +2,10 @@
 // place, so what Paul sees is exactly what is sent.
 
 import type { DB } from "@/db/client";
+import { and, eq } from "drizzle-orm";
+import * as t from "@/db/schema";
+import { planForShot } from "./domain/geometry";
+import type { GeometryPlanData, ShotSpec } from "./domain/types";
 import * as repo from "./repo";
 import * as studio from "./studioRepo";
 import { elementKey, sceneClips, type Clip, type ClipPanel } from "./domain/clips";
@@ -47,16 +51,34 @@ export interface ClipPictureIssues {
   warn: { panel: number; why: string }[];
 }
 
-export function pictureIssues(clip: Pick<Clip, "pictures">, panels: { order: number; check?: unknown }[], how: (order: number) => PictureChoice["how"] | undefined, planVersion: number): ClipPictureIssues {
+export function pictureIssues(clip: Pick<Clip, "pictures">, panels: { order: number; check?: unknown }[], how: (order: number) => PictureChoice["how"] | undefined, planVersion: number, sameLayout?: (order: number, drawnOnPlan: number) => boolean): ClipPictureIssues {
   const redraw: ClipPictureIssues["redraw"] = [], warn: ClipPictureIssues["warn"] = [];
   for (const x of clip.pictures) {
     // The frame from a kept take is the footage itself, and a version the user picked is theirs.
     if (x.continuity || how(x.panel) !== "storyboard") continue;
     const ck = (panels.find((p) => p.order === x.panel)?.check ?? {}) as { drawnOnPlan?: number; pass?: boolean; problems?: string[] };
-    if (ck.drawnOnPlan === undefined || ck.drawnOnPlan < planVersion) redraw.push({ panel: x.panel, why: `Panel ${x.panel}'s picture was drawn on an earlier floor plan (${ck.drawnOnPlan === undefined ? "an unknown version" : `version ${ck.drawnOnPlan}`}; it's now on ${planVersion}), so people, props or the camera may not match. Redraw it on the storyboard first, or pick "none" for it below.` });
+    // A later floor plan that changed nothing this panel shows (another panel's camera, D156)
+    // leaves its picture current.
+    if (ck.drawnOnPlan === undefined || (ck.drawnOnPlan < planVersion && !sameLayout?.(x.panel, ck.drawnOnPlan))) redraw.push({ panel: x.panel, why: `Panel ${x.panel}'s picture was drawn on an earlier floor plan (${ck.drawnOnPlan === undefined ? "an unknown version" : `version ${ck.drawnOnPlan}`}; it's now on ${planVersion}), so people, props or the camera may not match. Redraw it on the storyboard first, or pick "none" for it below.` });
     else if (ck.pass === false) warn.push({ panel: x.panel, why: `Panel ${x.panel}'s picture didn't pass the app's picture check${ck.problems?.[0] ? `: ${ck.problems[0]}` : ""}.` });
   }
   return { redraw, warn };
+}
+
+/**
+ * What one panel's picture is drawn from in the floor plan (D156): its camera, where everyone
+ * stands for it, and the set pieces with their detail. Two plan versions with the same key look
+ * the same in that panel.
+ */
+export function panelLayoutKey(plan: GeometryPlanData, spec: ShotSpec): string {
+  const cam = plan.cameras.find((c) => c.id === spec.cameraId);
+  const shot = planForShot(plan, spec);
+  const r = (n: number | undefined) => (n === undefined ? null : Math.round(n * 100) / 100);
+  return JSON.stringify({
+    cam: cam ? [r(cam.position.x), r(cam.position.y), r(cam.lookAt.x), r(cam.lookAt.y), r(cam.fovDeg), r(cam.heightM), r(cam.tiltDeg), r(cam.rollDeg)] : null,
+    actors: shot.actors.map((a) => [a.characterId, r(a.position.x), r(a.position.y), r((a as { facingDeg?: number }).facingDeg)]),
+    furniture: (plan.furniture ?? []).map((f) => [f.id, r(f.position.x), r(f.position.y), r(f.radiusM), r(f.heightM), f.detail ?? ""]),
+  });
 }
 
 /** The error that stops a clip with out-of-date pictures (D151), or nothing. */
@@ -109,6 +131,17 @@ export function buildSceneClips(db: DB, sceneId: string): SceneClipsView | null 
     { key: elementKey.venue(s.venue.id), what: s.venue.name, kind: "Venue" },
     ...[...new Set([...pieces, ...held])].map((n) => ({ key: elementKey.prop(n), what: n, kind: "Prop" })),
   ].map((r) => ({ ...r, element: elements[r.key], ...(r.kind === "Character" ? { voice: elements[elementKey.voice(r.key.slice(5))] } : {}) }));
-  const issues = clips.map((c) => pictureIssues(c, sorted, (o) => pictures.find((x) => x.order === o)?.how, s.plan!.version));
+  const planAt = new Map<number, GeometryPlanData | null>();
+  const dataAt = (v: number) => {
+    if (!planAt.has(v)) planAt.set(v, (db.select().from(t.plans).where(and(eq(t.plans.sceneId, sceneId), eq(t.plans.version, v))).get()?.data as GeometryPlanData | undefined) ?? null);
+    return planAt.get(v)!;
+  };
+  const sameLayout = (order: number, drawn: number) => {
+    const p = sorted.find((x) => x.order === order);
+    const spec = s.shots.find((x) => x.panelId === p?.id)?.spec;
+    const then = dataAt(drawn);
+    return !!(spec && then && panelLayoutKey(then, spec) === panelLayoutKey(s.plan!.data, spec));
+  };
+  const issues = clips.map((c) => pictureIssues(c, sorted, (o) => pictures.find((x) => x.order === o)?.how, s.plan!.version, sameLayout));
   return { issues, clips, rows, listed, pictures, aspect: studio.projectAspect(db, projectId), sceneTitle: s.scene.title ?? "Scene", kept, allPanels: sorted.map((p) => ({ order: p.order, description: p.description })) };
 }

@@ -28,4 +28,9 @@ describe("Out-of-date pictures (D151)", () => {
     expect(outOfDateError(2, r)).toBeNull();
     expect(pictureIssues(clip, [{ order: 10, check: {} }], () => "storyboard", 35).redraw.map((x) => x.panel)).toEqual([10, 11, 12]);
   });
+  it("a later floor plan that didn't change this panel's layout leaves its picture current (D156)", () => {
+    const panels = [10, 11, 12].map((order) => ({ order, check: { drawnOnPlan: 35, pass: true } }));
+    const r = pictureIssues(clip, panels, () => "storyboard", 36, (o) => o !== 12);
+    expect(r.redraw.map((x) => x.panel)).toEqual([12]);
+  });
 });
