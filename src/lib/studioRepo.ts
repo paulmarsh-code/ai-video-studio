@@ -392,8 +392,12 @@ export function updatePanel(db: DB, panelId: string, input: PanelInput): PanelCh
     }
   }
   persist(db);
-  // New words, new positions (D36), while the positions aren't approved yet.
-  if (changed && !sceneLocks(db, panel.sceneId).positions) applyMovementMarks(db, panel.sceneId);
+  // New words, new positions (D36). With the positions approved, the panels' own positions are
+  // still read again from the words (D157), as for a new panel; the approved floor plan stays.
+  if (changed) {
+    if (!sceneLocks(db, panel.sceneId).positions) applyMovementMarks(db, panel.sceneId);
+    else if (applyPanelWords(db, panel.sceneId)) persist(db);
+  }
   return { dialogueChanged, animaticMarked, shotUpdated };
 }
 

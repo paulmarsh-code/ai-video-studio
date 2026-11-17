@@ -2730,5 +2730,6 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
   - The name before "carries on", "goes on", "continues" or "keeps on" is the one doing it.
   - A walk off with no destination named goes away from that panel's camera, when it has one (`cameraAt`). This matches how pictures and Kling show "walks off". Without a camera, it goes to the way out as before.
   - A clause whose subject is a thing ("The ice bucket stays…", "Its lid…") moves nobody, whatever name came earlier in the panel.
+- **Read again on a change.** Changing a panel's words now reads every panel's own positions again, even with the positions approved, as adding a panel already did. Only the per-panel positions change; the approved floor plan stays.
 - **Checked on Paul's scene.** Panel 8 has nobody on the table. Panel 12 has Jade walking away from the wide camera, towards the screen wall. Panel 13 has her still walking away in the background, and Nina stays put.
 - **Reaches the generation through:** the panel's positions, which set the floor plan sketch, the picture and the clip. Tested in `panelWords.d157.test.ts`.
