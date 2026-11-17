@@ -2763,3 +2763,11 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
   - The sound line now says: "Gestures make no sound: no clicks, snaps or claps unless a shot says so. A scoff, sigh or laugh a shot asks for comes with that person's line, never after it; once someone has said their last line, they make no more sounds."
   - A walk off at the end of a clip gets 3 s, not 2 (D148). Its shot says: "head up, eyes ahead, never looking down, still walking away and well on the way out of the picture when the shot ends."
 - **Reaches the generation through:** prompt lines and the shot's time. Tested in `clipPaul.d148.test.ts`.
+
+### D161: Script-style lines are exact spoken lines (2026-11-17)
+
+- **Would-be failure.** Paul pasted scene 4's brief with its lines written as a script ("Chase: Bro, you're gonna love this…"). The Tell the story guide said "Spoken lines found: 1, about 2 s of talking", because only words in quote marks counted. The drafting request treats anything else as reported speech and writes "a short, natural line in their voice", so six of his seven lines would have been reworded. The voice and the lip-sync are locked to the exact words.
+- **Fix (`story.ts`), for any project.** A line of its own that starts "Name:" (optionally numbered or in bold) counts as that person's exact line, the same as words in quote marks (`quoteScriptLines`). It counts in the guide's estimate, and it is sent to the drafting request as `Name says: "…"`.
+  - Headings ("Where:", "Who's in it:", "Scene title:") and camera notes ("On Jade:", "Back on…") aren't speakers.
+  - With the cast known, only a character's name is a speaker.
+- **Reaches the generation through:** the panels' locked lines, so the clip's words, voice and lip-sync. Tested in `scriptLines.d161.test.ts`.

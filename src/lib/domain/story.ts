@@ -311,7 +311,9 @@ export interface ProjectBrief {
   genre?: string;
 }
 
-export function storyPrompt(i: { story: string; characters: StoryCharacter[]; venue: string; targetSec: number; brief?: ProjectBrief; sceneTitle?: string }): string {
+export function storyPrompt(i0: { story: string; characters: StoryCharacter[]; venue: string; targetSec: number; brief?: ProjectBrief; sceneTitle?: string }): string {
+  // Script-style lines are exact lines (D161).
+  const i = { ...i0, story: quoteScriptLines(i0.story, i0.characters.map((c) => c.name)) };
   const names = i.characters.map((c) => (c.role?.trim() ? `${c.name} (${c.role.trim()})` : c.name)).join(", ");
   const b = i.brief ?? {};
   const about = [
@@ -644,8 +646,26 @@ export interface StoryEstimate {
   longLines: number;
 }
 
+/**
+ * Script-style lines, "Chase: Hey buddy, gotta go." on a line of their own, as exact spoken
+ * lines (D161), the same as words in quote marks. Paul's scene brief had seven lines like this
+ * and the app found one: the rest would have been treated as reported speech and reworded.
+ * Headings ("Where:", "Who's in it:", "Scene title:") aren't speakers; with the cast known,
+ * only a character's name is.
+ */
+const NOT_SPEAKERS = /^(?:where|who|who's in it|what|what happens|scene|scene title|title|setting|note|notes|panel|shot|end|location|time|mood|story|brief|camera|sound|music)$/i;
+export function quoteScriptLines(story: string, names?: string[]): string {
+  const known = names?.map((n) => n.split(/\s+/)[0].toLowerCase());
+  return story.replace(/^([ \t]*(?:\d+\.\s*)?)(?:\*\*)?([A-Z][\w'’-]*(?:\s[A-Z][\w'’-]*)?)(?:\*\*)?\s*:(?:\*\*)?[ \t]+(?!["“])([^\n]*[A-Za-z][^\n]*)$/gm, (all, lead: string, who: string, said: string) => {
+    if (NOT_SPEAKERS.test(who.trim()) || /^(?:On|At|In|Back|Wide|Close|Closer|Then|Later|Cut|Over|From|With|Behind|Inside|Outside|Meanwhile|Now|Later|Interior|Exterior|Int|Ext)\b/.test(who)) return all;
+    if (known && !known.includes(who.split(/\s+/)[0].toLowerCase())) return all;
+    return `${lead}${who} says: "${said.trim().replace(/["“”]/g, "")}"`;
+  });
+}
+
 /** Lines in "double", “curly” or 'single' quote marks; apostrophes inside words are ignored. */
-export function quotedLines(story: string): string[] {
+export function quotedLines(story0: string): string[] {
+  const story = quoteScriptLines(story0);
   const out: string[] = [];
   for (const m of story.matchAll(/["“”]([^"“”]+)["“”]|(?:^|[\s(—–-])['‘]([^'‘’\n]+?)['’](?=[\s.,!?;:)—–-]|$)/gm)) out.push((m[1] ?? m[2]).trim());
   return out.filter((x) => countWords(x) > 0);
