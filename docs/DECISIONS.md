@@ -2718,3 +2718,17 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
   - **Add a panel** places the new panel's camera straight away from what happens in it (`placeNewPanelCamera`), like a change in words. "Change something" on a panel with no camera gives it one too, for panels added before this. (The card had skipped a change on a panel with no camera; it no longer does.) `panelCamera` can now make a panel's own camera when it has none. Every other camera stays as it is.
   - **The D151 check** compares each picture against its own layout, not the plan's version number. The layout is the panel's camera, where everyone stands for it, and the set pieces with their detail (`panelLayoutKey`, taken from the plan version the picture was drawn on and from the current one). On Paul's scene, panels 9–12 drawn on plan 32 differ from plan 35, so they're caught. A new camera for panel 13 changes nothing for them.
 - **Reaches the generation through:** the shot's camera and picture, and keeping up-to-date pictures in the clip. Tested in `newPanelCamera.d156.test.ts` and `clipPictures.d151.test.ts`.
+
+### D157: Three misreadings of who does what, fixed in the words reader (2026-11-17)
+
+- **Visible failure.** Panel 13's picture had Jade back at the table and walking towards the camera, and Chase on the wrong side. Paul: "she is walking off in the wrong direction." The panels' own positions showed three misreadings:
+  1. "Back on Chase and the group … behind them, Jade carries on walking away" named Jade, so she counted as *back with the others*. "Carries on walking away" was also given to Nina, the last name after an "and".
+  2. Panel 12's "turns away to walk off" sent Jade towards the entrance, which lies behind the wide camera. She walked straight at the lens, while Kling's clip had her walk away into the picture.
+  3. Panel 8's "…looks at it.The silver ice bucket … stays on the cocktail table" put **Chase** "on the cocktail table", at its centre, carried through every later panel.
+- **Fix (`panelWords.ts`), for any scene.**
+  - Someone who has left and is named as still going ("carries on walking away", "keeps walking", "is still heading off", "walks away") stays gone. They are placed further off, still walking ("still walking away"), not back at their place.
+  - The name before "carries on", "goes on", "continues" or "keeps on" is the one doing it.
+  - A walk off with no destination named goes away from that panel's camera, when it has one (`cameraAt`). This matches how pictures and Kling show "walks off". Without a camera, it goes to the way out as before.
+  - A clause whose subject is a thing ("The ice bucket stays…", "Its lid…") moves nobody, whatever name came earlier in the panel.
+- **Checked on Paul's scene.** Panel 8 has nobody on the table. Panel 12 has Jade walking away from the wide camera, towards the screen wall. Panel 13 has her still walking away in the background, and Nina stays put.
+- **Reaches the generation through:** the panel's positions, which set the floor plan sketch, the picture and the clip. Tested in `panelWords.d157.test.ts`.

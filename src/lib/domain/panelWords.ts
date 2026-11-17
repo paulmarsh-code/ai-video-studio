@@ -21,6 +21,8 @@ export interface WordsPanel {
   own?: Record<string, PanelBlock>;
   /** Where each person is, in the panel writer's words (D80): "in the skate bowl". */
   places?: Record<string, string>;
+  /** Where this panel's camera stands, when it has one (D157): a walk off goes away from it. */
+  cameraAt?: Point;
 }
 
 export const EXIT_RE = /\b(entrance|exit|door|doors|doorway|way out|lobby|foyer|hall|hallway|corridor|stairs|staircase|landing)\b/i;
@@ -214,6 +216,7 @@ export function blockingFromWords(plan: GeometryPlanData, panels: WordsPanel[], 
   let onTheWay = new Set<string>();
   return panels.map((pn) => {
     const out: Record<string, AppBlock> = {};
+    const stillGoing = new Set<string>();
     const own = pn.own ?? {};
     const marked = new Set(Object.keys(pn.at ?? {}));
     for (const id of onTheWay) if (!marked.has(id) && !own[id] && !left.has(id) && base.has(id)) pos.set(id, base.get(id)!);
@@ -234,6 +237,17 @@ export function blockingFromWords(plan: GeometryPlanData, panels: WordsPanel[], 
     // Anyone who left earlier: still gone unless this panel shows them (then back at their place).
     for (const [id, where] of [...left]) {
       if (own[id] || marked.has(id)) continue;
+      // Still on their way out (D157): "behind them, Jade carries on walking away" names her, but
+      // she isn't back; she's further off, still walking. It put Jade back at the table.
+      const nm = (people.find((p) => p.id === id)?.name.split(/\s+/)[0] ?? id).replace(/[^\w]/g, "");
+      if (new RegExp(String.raw`\b${nm}\b[^.;!?]{0,40}?\b(?:carr(?:ies|y)\s+on|keeps?(?:\s+on)?|continues?(?:\s+to)?|is\s+still|still)\s+(?:walking|walk|heading|head|going|storming|marching|striding)|\b${nm}\b[^.;!?]{0,40}?\b(?:walk|head|storm|march|strid|mov)\w*\s+(?:off|away|out)\b`).test(pn.action)) {
+        const c0 = centre();
+        const further = towardWall(where, degTo(c0, where), 0.3, 3);
+        out[id] = { at: where, to: further, by: "app", why: "still walking away" };
+        left.set(id, further);
+        stillGoing.add(id);
+        continue;
+      }
       if (pn.visibleIds.includes(id) || new RegExp(`\\b${(people.find((p) => p.id === id)?.name.split(/\s+/)[0] ?? id).replace(/[^\w]/g, "")}\\b`).test(pn.action)) {
         left.delete(id);
         const home = base.get(id)!;
@@ -304,11 +318,16 @@ export function blockingFromWords(plan: GeometryPlanData, panels: WordsPanel[], 
     let prevEnd = 0;
     const done = new Set<string>();
     for (const { kind, m } of kept) {
-      const who = subjectIn(pn.action.slice(prevEnd, m.index), prevEnd === 0, byFirst);
-      if (who) actor = who;
+      const seg = pn.action.slice(prevEnd, m.index);
+      // A thing as the subject (D157): "…insisting he looks at it.The silver ice bucket … stays on
+      // the cocktail table" put Chase in the middle of the table for the rest of the scene. The
+      // clause the words are in decides, before any name earlier in the panel.
+      const who = thingSubject(seg, prevEnd === 0) ? null : subjectIn(seg, prevEnd === 0, byFirst);
+      if (who === null) actor = undefined;
+      else if (who) actor = who;
       prevEnd = m.index + m[0].length;
       const id = actor;
-      if (!id || !pos.has(id) || own[id] || marked.has(id)) continue;
+      if (!id || !pos.has(id) || own[id] || marked.has(id) || stillGoing.has(id)) continue;
       if (placed.has(id) && kind !== "turn" && kind !== "face" && kind !== "turnAway" && kind !== "pick" && kind !== "put") continue;
       const from = pos.get(id)!;
       const set = (e: Omit<AppBlock, "by">) => {
@@ -367,7 +386,11 @@ export function blockingFromWords(plan: GeometryPlanData, panels: WordsPanel[], 
         const named = resolve(dest, [], views);
         const exit = named?.kind === "view" ? named.v : views.find((v) => EXIT_RE.test(v.name));
         const c = centre();
-        const deg = exit ? exit.directionDeg : degTo(c, from);
+        // Away from this panel's camera (D157), unless the words name where: the picture and the
+        // clip both show "walks off" as walking away into the picture, and the floor plan sent
+        // Jade towards the entrance, straight at the wide camera.
+        const awayCam = !named && pn.cameraAt && Math.hypot(from.x - pn.cameraAt.x, from.y - pn.cameraAt.y) > 0.5 ? degTo(pn.cameraAt, from) : undefined;
+        const deg = awayCam ?? (exit ? exit.directionDeg : degTo(c, from));
         const to = towardWall(from, deg, 0.3, 6);
         set({ at: from, to, why: "walks off" });
         left.set(id, to);
@@ -454,8 +477,14 @@ export function blockingFromWords(plan: GeometryPlanData, panels: WordsPanel[], 
  * ("as Aron walks off"); otherwise a name starting a sentence or clause ("Jade, fuming, gives
  * Chase the finger and turns away": Jade); otherwise whoever did the last one (she, he, and).
  */
+/** Whether the clause a match is in starts with a thing, not a person ("The ice bucket stays…"). */
+export function thingSubject(seg: string, atStart: boolean): boolean {
+  const m = new RegExp(String.raw`(?:${atStart ? "^\s*|" : ""}[.!?;]\s*)((?:The|A|An|This|That|These|Those|Its|His|Her|Their)\s+[a-z][^.!?;]*)$`).exec(seg);
+  return !!m && !/\b(?:he|she|they|him|her\s+(?:eyes|face|voice))\b/.test(m[1].replace(/^(?:His|Her|Their)\s+/, ""));
+}
+
 export function subjectIn(seg: string, atStart: boolean, byFirst: (w: string) => { id: string } | undefined): string | undefined {
-  const right = /\b([A-Z][a-z]+)\b(?:['’]s\s+\w+)?(?:\s*,[^,]{0,40},)?\s*(?:(?:\w+ly|then|now|also|just|still|finally|quickly|slowly|suddenly|is|was|are|were|has|had|been|remains|stays|keeps|lies|sits)\s+)*$/.exec(seg);
+  const right = /\b([A-Z][a-z]+)\b(?:['’]s\s+\w+)?(?:\s*,[^,]{0,40},)?\s*(?:(?:\w+ly|then|now|also|just|still|finally|quickly|slowly|suddenly|is|was|are|were|has|had|been|remains|stays|keeps|lies|sits|carries\s+on|carry\s+on|goes\s+on|continues(?:\s+to)?|keeps\s+on|starts|begins)\s+)*$/.exec(seg);
   if (right && byFirst(right[1])) return byFirst(right[1])!.id;
   const starts = new RegExp(String.raw`(?:${atStart ? "^\\s*|" : ""}[.;!?]\s+|\b(?:and|but|while|as|then|so)\s+)(?:(?:Then|Meanwhile|Now|Suddenly|Finally|Later|Still),?\s+)?([A-Z][a-z]+)\b`, "g");
   for (const m of seg.matchAll(starts)) { const p = byFirst(m[1]); if (p) return p.id; }

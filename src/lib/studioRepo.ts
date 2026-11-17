@@ -1090,6 +1090,7 @@ export function applyPanelWords(db: DB, sceneId: string): boolean {
   const mine = (sp: ShotSpec) => Object.fromEntries(Object.entries(sp.blocking ?? {}).filter(([, b]) => b.by === "you"));
   const app = blockingFromWords(plan.data, shots.map(({ p, sh }) => ({
     action: p.description, subjectId: sh.spec.subjectId ?? sh.spec.speakerId ?? sh.spec.visibleIds[0], visibleIds: sh.spec.visibleIds, at: sh.spec.at, own: mine(sh.spec), places: sh.spec.where,
+    cameraAt: plan.data.cameras.find((c) => c.id === sh.spec.cameraId)?.position,
   })), people);
   let changed = false;
   shots.forEach(({ sh }, k) => {
