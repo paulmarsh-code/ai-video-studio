@@ -70,6 +70,32 @@ export interface ClipFrames { start?: string; startApproved?: boolean; end?: str
 /** How it's said asks for an impression or a put-on voice (D168). */
 export const PUT_ON = /\b(mimic\w*|imitat\w*|impression|impersonat\w*|put-on voice|in (?:a|her|his|their) voice|parrot\w*)\b/i;
 
+const CALL = /\b(phone|on the line|on a call|the call|mobile)\b/i;
+const CALL_ENDS = /\b(cuts the call|ends the call|hangs up|lowers the phone|puts (?:the|his|her|their) phone (?:down|away)|pockets (?:the|his|her|their) phone|gotta go)\b/i;
+/** Who is on a phone call during these panels, and the moment the call ends if it ends in them (D170). */
+export function callersIn(all: ClipPanel[], panels: ClipPanel[], people: { id: string; name: string }[]): { name: string; ends?: string }[] {
+  const first = (n: string) => n.split(" ")[0].toLowerCase();
+  const mentions = (p: ClipPanel, n: string) => p.description.toLowerCase().includes(first(n));
+  const ended = (p: ClipPanel, id: string) => CALL_ENDS.test(p.description) || p.dialogue.some((d) => d.characterId === id && CALL_ENDS.test(d.text));
+  const out: { name: string; ends?: string }[] = [];
+  for (const who of people) {
+    let on = false;
+    for (const p of all.filter((x) => x.order < panels[0].order).sort((a, b) => a.order - b.order)) {
+      if (!mentions(p, who.name)) continue;
+      if (ended(p, who.id)) on = false;
+      else if (CALL.test(p.description)) on = true;
+    }
+    let ends: string | undefined;
+    for (const [k, p] of panels.entries()) {
+      if (!mentions(p, who.name)) continue;
+      if (ended(p, who.id)) { if (on || CALL.test(p.description)) ends = `moment ${k + 1} (what happens, in order), when the call ends`; on = on || CALL.test(p.description); break; }
+      if (CALL.test(p.description)) on = true;
+    }
+    if (on) out.push({ name: who.name.split(" ")[0], ...(ends ? { ends } : {}) });
+  }
+  return out;
+}
+
 export const clipKey = (panels: number[]) => panels.join("-");
 
 export interface Clip {
@@ -500,6 +526,9 @@ export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake
   while (times.reduce((a, b) => a + b, 0) > CLIP_MAX_SEC) { const k = times.indexOf(Math.max(...times)); if (times[k] <= 2) break; times[k]--; }
   const speakers = [...new Set(panels.flatMap((p) => p.dialogue.map((x) => x.characterId)))];
   const audios: Clip["audios"] = speakers.flatMap((id) => { const e = i.elements[elementKey.voice(id)]; return e?.id ? [{ characterId: id, assetId: e.id }] : []; }).slice(0, 3).map((x, k) => ({ n: k + 1, ...x }));
+  // Who is on a phone call through this clip (D170): Chase put his phone on the bar to take a sip
+  // and carried on talking to no one.
+  const onCall = callersIn(i.panels, panels, inClip.map((id) => ({ id, name: nameOf(id) })));
   const and = (xs: string[]) => xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}` : xs.join("");
   const build = (ref: (key: string, plain: string) => string, pic: (n: number) => string, aud: (n: number) => string) => {
     const L: string[] = [];
@@ -548,6 +577,7 @@ export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake
       "Natural, subtle acting, no exaggerated gestures. Whoever speaks looks at the person they are speaking to, unless what happens says otherwise. Guests behind them stay in soft focus.",
       "Sound: the voices, clear, over a low, steady room murmur at the same level throughout; no music at all, it is added in the edit; footsteps and movement quiet, never louder than speech. Gestures make no sound: no clicks, snaps or claps. A scoff, sigh or laugh comes with that person's line, never after it; once someone has said their last line, they make no more sounds.",
       "Each person keeps their own face and clothes throughout; anything they carry stays in the same hand until what happens says it is handed over or put down, then stays where it is left.",
+      ...onCall.map((c) => `${c.name} is on a phone call ${c.ends ? `until ${c.ends}` : "for the whole clip"}: the phone stays at their ear in the same hand, never put down or lowered before then, and they keep talking into it; anything else they do (a drink, a gesture) is with the other hand.`),
       "Each person keeps the feeling they're given to the very last frame: nobody smiles or softens unless what happens says so.",
       inClip.length > 1 ? `${and(names(inClip))} each appear once in the picture, never twice; no guest looks or dresses like any of them.` : "",
       ...panels.map((p, k) => { const m = k < panels.length - 1 ? leftIn(p.description) : null; return m ? `Once the ${m.thing} is ${m.how} the ${m.into}, it stays there to the end of the clip.` : ""; }),

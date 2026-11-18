@@ -2891,3 +2891,10 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 - **Decision.** When a clip opens on the last frame of the take before (not on a start frame of its own), the people in the last panel of that take join the clip's people. They get their Elements and the "each appear once" rule. A clip with its own start frame is unchanged.
 - **General:** any scene, any people, from the panels.
 - **Reaches the generation through:** the clip request's Elements and people. Tested in `clipFrames.d164.test.ts`.
+
+## D170: someone on a phone call keeps the phone at their ear (18 Nov 2026)
+
+- **Visible failure.** Scene 4 panels 6–7: Chase, on a call, put his phone down on the bar to lift his drink, then carried on talking with no phone. The general rule ("anything they carry stays in the same hand until what happens says it is put down") wasn't enough once the drink needed a hand.
+- **Decision.** The app works out who is on a phone call during a clip from the panels: someone whose panel mentions the phone, the line or the call, carried on from earlier panels, until a panel says the call ends (cuts the call, hangs up, lowers the phone, "gotta go"…). For each, the clip request says they are on the call for the whole clip, or until the moment it ends: the phone stays at their ear in the same hand, never put down or lowered before then, they keep talking into it, and anything else (a drink, a gesture) is with the other hand.
+- **General:** any character, any call, from the panel words.
+- **Reaches the generation through:** a prompt line in the clip request. Tested in `clipFrames.d164.test.ts`.

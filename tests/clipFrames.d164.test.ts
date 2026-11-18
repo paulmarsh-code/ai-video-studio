@@ -83,3 +83,18 @@ describe("A clip opening on the take before has that take's last people (D169)",
     expect(d.elements.map((e) => e.what)).not.toContain("Ava Stone");
   });
 });
+
+describe("Someone on a phone call keeps the phone at their ear (D170)", () => {
+  it("says so for a caller carried over from an earlier panel, and until the moment the call ends", async () => {
+    const { callersIn } = await import("../src/lib/domain/clips");
+    const p1 = P(1, 4, [], "Bo leans on the counter, phone to his ear.");
+    const p2 = P(2, 4, [{ characterId: "bo", text: "Let 'em wait." }], "Bo takes a sip, then speaks.");
+    const p3 = P(3, 3, [{ characterId: "bo", text: "Hey buddy, gotta go." }], "Bo turns and cuts the call.");
+    const ppl = [{ id: "bo", name: "Bo Lind" }, { id: "ava", name: "Ava Stone" }];
+    expect(callersIn([p1, p2, p3], [p2], ppl)).toEqual([{ name: "Bo" }]);
+    expect(callersIn([p1, p2, p3], [p2, p3], ppl)).toEqual([{ name: "Bo", ends: "moment 2 (what happens, in order), when the call ends" }]);
+    expect(callersIn([p1, p2, p3], [P(4, 3, [], "Bo shrugs.")], ppl)).toEqual([]);
+    const [c] = sceneClips({ ...base({}), panels: [p1, p2], kept: [{ from: 1, to: 1, frameAssetId: "f" }] as never });
+    expect(c.prompt).toContain("Bo is on a phone call for the whole clip: the phone stays at their ear in the same hand, never put down");
+  });
+});
