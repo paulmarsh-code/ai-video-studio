@@ -310,9 +310,21 @@ export function PlanEditor(props: {
   }, [panel]);
 
   const b = plan.bounds ?? { minX: -5, maxX: 5, minY: 0, maxY: 10 };
+  const people = plan.actors.map((a) => a.position);
   // A big room or open ground is drawn smaller so it fits on the screen (D29).
-  const SCALE = Math.max(14, Math.min(MAX_SCALE, Math.round(660 / Math.max(b.maxX - b.minX, b.maxY - b.minY))));
+  const FIT = Math.max(14, Math.min(MAX_SCALE, Math.round(660 / Math.max(b.maxX - b.minX, b.maxY - b.minY))));
+  // Zoom (Paul: "the image is small"): the positions-only plan opens closer in, centred on the people.
+  const [zoom, setZoom] = useState(props.positionsOnly ? 2 : 1);
+  const SCALE = Math.round(FIT * zoom);
+  const box = useRef<HTMLDivElement>(null);
   const width = (b.maxX - b.minX) * SCALE + PAD * 2;
+  useEffect(() => {
+    const el = box.current;
+    if (!el || !people.length) return;
+    const cx = people.reduce((t, p) => t + p.x, 0) / people.length, cy = people.reduce((t, p) => t + p.y, 0) / people.length;
+    el.scrollTo({ left: PAD + (cx - b.minX) * SCALE - el.clientWidth / 2, top: PAD + (b.maxY - cy) * SCALE - el.clientHeight / 2 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [SCALE]);
   const height = (b.maxY - b.minY) * SCALE + PAD * 2;
   const toPx = (p: Point) => ({ x: PAD + (p.x - b.minX) * SCALE, y: PAD + (b.maxY - p.y) * SCALE });
   const toM = (x: number, y: number): Point => ({
@@ -349,8 +361,17 @@ export function PlanEditor(props: {
   };
 
   return (
-    <div className="mt-6 grid gap-6 xl:grid-cols-[auto_1fr]">
-      <div className="overflow-auto rounded-xl border border-neutral-200 bg-white p-2">
+    <div className={`mt-6 grid gap-6 ${noCams ? "" : "xl:grid-cols-[auto_1fr]"}`}>
+      <div ref={box} className="overflow-auto rounded-xl border border-neutral-200 bg-white p-2" style={noCams ? { maxHeight: "75vh" } : undefined}>
+        {noCams && (
+          <div className="sticky left-0 top-0 z-10 mb-2 flex items-center gap-2 bg-white px-1 text-sm" data-testid="plan-zoom">
+            <span className="text-neutral-600">Zoom</span>
+            {[1, 1.5, 2, 3].map((z) => (
+              <button key={z} type="button" onClick={() => setZoom(z)}
+                className={`rounded border px-2 py-0.5 ${zoom === z ? "border-blue-600 bg-blue-600 text-white" : "border-neutral-300"}`}>{z === 1 ? "Whole room" : `${z}×`}</button>
+            ))}
+          </div>
+        )}
         {props.focus && panel && <p className="mb-2 px-1 font-semibold" data-testid="plan-step-label">Panel {step}: {panel.description}</p>}
         {panels.length > 0 && !props.focus && (
           <div className="mb-2 px-1" data-testid="plan-stepper" style={{ maxWidth: Math.max(width, 420) }}>
