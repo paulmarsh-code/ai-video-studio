@@ -4,6 +4,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { PUT_ON } from "./domain/clips";
 
 export type KlingJobStatus = "ready" | "sent" | "done" | "failed";
 
@@ -139,7 +140,9 @@ export function reviewJob(id: string, decision: "approved" | "change" | "again",
     const base = j.basePrompt ?? j.prompt;
     j.basePrompt = base;
     j.change = decision === "change" ? said : undefined;
-    j.prompt = decision === "change" ? `${base}\nThis is a new take of this clip. Change from the last take: ${said}.` : base;
+    // A change asking for an impression lifts the "exactly the voice" rule for those words (D168).
+    const voiced = decision === "change" && PUT_ON.test(said ?? "") ? base.replace(/(the same person, accent, pitch and tone, saying (?:these|this clip's) words)(?!, except)/g, "$1, except the words they say in a put-on voice as the change below describes: those are clearly in that other voice, then straight back to their own") : base;
+    j.prompt = decision === "change" ? `${voiced}\nThis is a new take of this clip. Change from the last take: ${said}.` : base;
     j.review = { status: decision, ...(said ? { words: said } : {}), at };
     j.status = "ready";
     j.requestedAt = at;

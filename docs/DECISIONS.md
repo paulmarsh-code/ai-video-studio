@@ -2881,3 +2881,4 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 - **Decision.** When a line's "How it's said" asks for an impression (mimics, imitates, impression, impersonates, "in her voice", a put-on voice), the voice rule for that speaker adds: except the words said in a put-on voice as described, which are clearly in that other voice, then straight back to their own.
 - **General:** any speaker, any impression, from the words in "How it's said".
 - **Reaches the generation through:** the clip request's voice line. Tested in `clipFrames.d164.test.ts`.
+- The same applies when the impression is asked for in a new take's change words (Paul wrote it there): the voice rule in that take's request gets the same exception.
