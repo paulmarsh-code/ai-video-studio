@@ -223,6 +223,31 @@ export function setKeptTake(db: DB, sceneId: string, from: number, take: KeptTak
   persist(db);
 }
 
+/** Each clip's start and end frames (D164), by its key ("3-4"). */
+export function getClipFrames(db: DB, sceneId: string): Record<string, import("./domain/clips").ClipFrames> {
+  const s = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();
+  return ((s?.staging ?? {}) as { clipFrames?: Record<string, import("./domain/clips").ClipFrames> }).clipFrames ?? {};
+}
+
+/**
+ * A clip's start or end frame set, cleared or approved (D164). A new start frame needs approving
+ * again; "previous" approves the last frame of the take before, offered as the start.
+ */
+export function setClipFrame(db: DB, sceneId: string, key: string, change: { start?: string | null; end?: string | null; approve?: boolean }) {
+  const s = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();
+  if (!s) throw new Error("Scene not found");
+  const staging = { ...((s.staging ?? {}) as Record<string, unknown>) };
+  const all = { ...((staging.clipFrames ?? {}) as Record<string, import("./domain/clips").ClipFrames>) };
+  const f = { ...(all[key] ?? {}) };
+  if (change.start !== undefined) { if (change.start) f.start = change.start; else delete f.start; f.startApproved = false; }
+  if (change.end !== undefined) { if (change.end) f.end = change.end; else delete f.end; }
+  if (change.approve !== undefined) f.startApproved = change.approve;
+  all[key] = f;
+  staging.clipFrames = all;
+  db.update(t.scenes).set({ staging }).where(eq(t.scenes.id, sceneId)).run();
+  persist(db);
+}
+
 /**
  * Which picture of a panel Kling gets for its shot (D123): another version (an asset id), none
  * ("none"), or, with null, the storyboard's own.

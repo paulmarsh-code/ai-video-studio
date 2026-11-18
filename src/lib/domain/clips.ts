@@ -51,9 +51,21 @@ export interface ClipInput {
    * take opens on the take's chosen frame, so new footage carries straight on from the good footage.
    */
   kept?: KeptTake[];
+  /**
+   * Start and end frames by clip (D164), keyed by its panels ("3-4"). With frames, Kling chooses the
+   * shots: no storyboard pictures or shot list go with the clip, only its start frame (and end
+   * frame), the Elements, the voices, the starting positions and what happens.
+   */
+  frames?: Record<string, ClipFrames>;
 }
 
 export interface KeptTake { from: number; to: number; frameAssetId?: string }
+
+/** A clip's start frame (needed, and approved before it's made) and its optional end frame (D164). */
+export interface ClipFrames { start?: string; startApproved?: boolean; end?: string }
+
+/** A clip's key: its panels, "3-4". */
+export const clipKey = (panels: number[]) => panels.join("-");
 
 export interface Clip {
   panels: number[];
@@ -75,6 +87,13 @@ export interface Clip {
   audios: { n: number; characterId: string; assetId: string }[];
   /** The kept take this clip carries on from (D130). */
   continues?: { from: number; to: number };
+  /**
+   * The start frame (D164): the one picked for this clip, or else the last frame of the take it
+   * carries on from, offered until another is picked. Needs approving before the clip is made.
+   */
+  start?: { assetId: string; from: "chosen" | "previous clip"; approved: boolean };
+  /** The end frame, when the clip has to finish somewhere particular (D164). */
+  end?: { assetId: string };
 }
 
 /** Kling Omni-Ref takes up to this many Elements in one clip. */
@@ -154,6 +173,7 @@ export function leftIn(text: string | undefined): { thing: string; how: "in" | "
 
 /** The request for one clip. */
 export function clipPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake): Clip {
+  if (i.frames) return framesPrompt(panels, i, after);
   const nameOf = (id: string) => i.cast.find((c) => c.id === id)?.name ?? id;
   // Only people in this scene's floor plan (D159): panel 13, added later, listed the project's
   // whole cast, and Gary and Samantha were told to stand at the table.
@@ -423,4 +443,110 @@ export function floorPlanLines(plan: GeometryPlanData, ids: string[], name: (id:
     if (behind.length) out.push(`Seen from across the ${anchorName ?? "group"}: ${behind.join("; ")}.`);
   }
   return out.length ? `From the floor plan: ${out.join(" ")}` : "";
+}
+
+/**
+ * The request when the clip has a start frame (D164): Kling chooses the shots. Paul, after a week
+ * of the app's own cameras failing scene by scene: "let Kling decide on the camera shots; we just
+ * need the floor plan and positioning correct." Tried on scene 4 (17 Nov): with three pictures of
+ * the scene, the Elements and the voice, Kling cut from side-on along the bar to a close shot from
+ * behind it, with Jade in the crowd behind Chase, first time. So: the start frame is picture 1 and
+ * the clip opens on it; an end frame, when given, is the last picture and the clip ends on it; the
+ * Elements keep faces, the venue and the props; where everyone starts comes from the panel words;
+ * what happens runs in time order with the exact lines, how they're said, and the voices.
+ */
+export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake): Clip {
+  const nameOf = (id: string) => i.cast.find((c) => c.id === id)?.name ?? id;
+  const key = clipKey(panels.map((p) => p.order));
+  const f = i.frames?.[key] ?? {};
+  const inScene = (id: string) => !i.plan.actors?.length || i.plan.actors.some((a) => a.characterId === id);
+  const inClip = [...new Set(panels.flatMap((p) => [...p.spec.visibleIds, ...p.dialogue.map((d) => d.characterId)]))].filter((id) => i.cast.some((c) => c.id === id) && inScene(id));
+  const pieces = (i.plan.furniture ?? []).filter((x) => isSetPiece(x));
+  const held = [...new Set(panels.flatMap((p) => (p.spec.props ?? []).map((x) => x.name)))].filter((n) => !pieces.some((x) => x.name === n));
+  const wanted: { key: string; what: string }[] = [
+    ...inClip.map((id) => ({ key: elementKey.character(id), what: nameOf(id) })),
+    { key: elementKey.venue(i.venue.id), what: i.venue.name },
+    ...pieces.map((x) => ({ key: elementKey.prop(x.name), what: x.name })),
+    ...held.map((n) => ({ key: elementKey.prop(n), what: n })),
+  ];
+  const used: Clip["elements"] = [];
+  const missing: string[] = [];
+  for (const w of wanted) {
+    const e = i.elements[w.key];
+    if (e?.id && used.length < MAX_ELEMENTS) used.push({ key: w.key, id: e.id, name: e.name, what: w.what });
+    else missing.push(w.what);
+  }
+  // The start frame: the one picked, or the last frame of the take before, offered (chained).
+  const start: Clip["start"] = f.start ? { assetId: f.start, from: "chosen", approved: !!f.startApproved }
+    : after?.frameAssetId ? { assetId: after.frameAssetId, from: "previous clip", approved: !!f.startApproved } : undefined;
+  const end: Clip["end"] = f.end ? { assetId: f.end } : undefined;
+  const pictures: Clip["pictures"] = [
+    ...(start ? [{ shot: 1, panel: panels[0].order, assetId: start.assetId, continuity: true }] : []),
+    ...(end ? [{ shot: panels.length, panel: panels[panels.length - 1].order, assetId: end.assetId }] : []),
+  ];
+  const walkOn = (k: number) => k < panels.length - 1 && exitSeconds(panels[k].description) > 0;
+  const times = panels.length > 1 ? panels.map((p, k) => shotSeconds(p) - (walkOn(k) ? EXIT_SECONDS : 0)) : panels.map((p) => Math.max(1, p.durationSec + exitSeconds(p.description)));
+  while (times.reduce((a, b) => a + b, 0) < 3) times[times.length - 1]++;
+  while (times.reduce((a, b) => a + b, 0) > CLIP_MAX_SEC) { const k = times.indexOf(Math.max(...times)); if (times[k] <= 2) break; times[k]--; }
+  const speakers = [...new Set(panels.flatMap((p) => p.dialogue.map((x) => x.characterId)))];
+  const audios: Clip["audios"] = speakers.flatMap((id) => { const e = i.elements[elementKey.voice(id)]; return e?.id ? [{ characterId: id, assetId: e.id }] : []; }).slice(0, 3).map((x, k) => ({ n: k + 1, ...x }));
+  const and = (xs: string[]) => xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}` : xs.join("");
+  const build = (ref: (key: string, plain: string) => string, pic: (n: number) => string, aud: (n: number) => string) => {
+    const L: string[] = [];
+    const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
+    L.push(`In ${ref(elementKey.venue(i.venue.id), i.venue.name)}${i.crowd ? `: ${i.crowd.replace(/\.$/, "")}` : ""}.`);
+    const chars = inClip.filter((id) => used.some((u) => u.key === elementKey.character(id)));
+    if (chars.length) L.push(`${chars.map((id) => `${first(nameOf(id))} is ${ref(elementKey.character(id), first(nameOf(id)))}`).join("; ")}.`);
+    // Props: each with its Element when it has one; its own words only when it has none.
+    const props = [...pieces.map((x) => ({ name: x.name, detail: x.detail })), ...held.map((n) => ({ name: n, detail: undefined as string | undefined }))];
+    const propLines = props.map((x) => { const has = used.some((u) => u.key === elementKey.prop(x.name)); return has ? `the ${x.name} is ${ref(elementKey.prop(x.name), x.name)}` : `the ${x.name}${x.detail ? ` (${x.detail.replace(/;\s*see (?:the )?reference image.*$/i, "")})` : ""}`; });
+    if (propLines.length) L.push(`Props in the scene: ${propLines.join("; ")}.`);
+    if (start) L.push(`${cap(pic(1))} is the first frame of this clip${start.from === "previous clip" ? ", the last moment of the clip before it" : ""}: the clip opens exactly on it, with the same place, light, people, clothes, positions and props, and carries on from there. Where ${pic(1)} and anything else here differ, ${pic(1)} is right.`);
+    if (end) L.push(`${cap(pic(pictures.length))} is the last frame: the clip ends exactly on it, with everyone where it shows them.`);
+    // Where everyone starts, in the panel's own words (from the scene's floor plan).
+    const where = panels[0].spec.where ?? {};
+    const starts = inClip.map((id) => where[id] ? `${first(nameOf(id))} ${where[id].trim().replace(/\.$/, "")}` : "").filter(Boolean);
+    if (starts.length) L.push(`Where everyone is at the start: ${starts.join("; ")}.`);
+    L.push("Choose the camera shots yourself to tell this moment well, cutting between angles where it helps; whatever the angle, everyone stays where they are unless what happens moves them, and the place and props stay the same.");
+    L.push("What happens, in order:");
+    const lines = panels.flatMap((p) => p.dialogue);
+    let t = 0;
+    panels.forEach((p, k) => {
+      const d = times[k];
+      const speech = p.dialogue.length
+        ? p.dialogue.map((x) => `${x.delivery?.trim() ? `${first(nameOf(x.characterId))}: ${x.delivery.trim().replace(/\.$/, "")}. ` : ""}${first(nameOf(x.characterId))} says${p.emotion ? `, ${p.emotion.trim().replace(/\.$/, "")}` : ""}, naturally, never flat, in a spontaneous conversational rhythm, accurate lip-sync: "${x.text.trim()}"`).join(" Then ")
+        : "No one speaks.";
+      const exit = exitSeconds(p.description) ? ` ${walkOn(k) ? "The walk away carries on after this." : "The walk away is seen in full: head up, eyes ahead, never looking down, still walking away and well on the way out of the picture at the end."}` : "";
+      L.push(`${t}–${t + d} s: ${p.description.trim().replace(/\.$/, "")}${p.emotion ? ` (${p.emotion.trim().replace(/\.$/, "")})` : ""}. ${speech}${exit}`);
+      t += d;
+    });
+    const voices = speakers.map((id) => {
+      const v = voiceShort(i.cast.find((c) => c.id === id)?.voiceLock ?? "");
+      const a = audios.find((x) => x.characterId === id);
+      const heard = a ? `exactly the voice in ${aud(a.n)}: the same person, accent, pitch and tone, saying these words` : "";
+      return heard || v ? `${first(nameOf(id))}: ${[heard, v].filter(Boolean).join(". ")}` : "";
+    }).filter(Boolean);
+    if (voices.length) L.push(`Voices. ${voices.join(". ")}.`);
+    const names = (ids: string[]) => ids.map((id) => first(nameOf(id)));
+    L.push([
+      lines.length > 1 ? `Each line is said once, word for word, in this order: ${lines.length} different lines in all.` : lines.length ? "The line is said once, word for word." : "",
+      speakers.length ? `Only ${and(names(speakers))} ${speakers.length > 1 ? "have" : "has"} words anyone can make out, and only when it's their line; everyone else listens with their mouth closed; the guests' chatter stays a murmur. No repeated words, no extra speech.` : "No one says anything anyone can make out; the guests' chatter stays a murmur.",
+      "Natural, subtle acting, no exaggerated gestures. Whoever speaks looks at the person they are speaking to, unless what happens says otherwise. Guests behind them stay in soft focus.",
+      "Sound: the voices, clear, over a low, steady room murmur at the same level throughout; no music at all, it is added in the edit; footsteps and movement quiet, never louder than speech. Gestures make no sound: no clicks, snaps or claps. A scoff, sigh or laugh comes with that person's line, never after it; once someone has said their last line, they make no more sounds.",
+      "Each person keeps their own face and clothes throughout; anything they carry stays in the same hand until what happens says it is handed over or put down, then stays where it is left.",
+      "Each person keeps the feeling they're given to the very last frame: nobody smiles or softens unless what happens says so.",
+      inClip.length > 1 ? `${and(names(inClip))} each appear once in the picture, never twice; no guest looks or dresses like any of them.` : "",
+      ...panels.map((p, k) => { const m = k < panels.length - 1 ? leftIn(p.description) : null; return m ? `Once the ${m.thing} is ${m.how} the ${m.into}, it stays there to the end of the clip.` : ""; }),
+      "No text, no logos.",
+    ].filter(Boolean).join(" "));
+    return L.join("\n");
+  };
+  const seconds = times.reduce((a, b) => a + b, 0);
+  return {
+    panels: panels.map((p) => p.order), seconds, credits: seconds * (i.creditsPerSecond ?? 10), pictures, audios, elements: used, missing,
+    prompt: build((k, plain) => { const e = used.find((u) => u.key === k); return e ? `<<<${e.id}>>>` : plain; }, (n) => `图片${n}`, (n) => `音频${n}`),
+    webPrompt: build((k, plain) => { const e = used.find((u) => u.key === k); return e ? `@${e.name}` : plain; }, (n) => `picture ${n}`, (n) => `audio ${n}`),
+    ...(after ? { continues: { from: after.from, to: after.to } } : {}),
+    ...(start ? { start } : {}), ...(end ? { end } : {}),
+  };
 }

@@ -41,7 +41,7 @@ export default async function ClipsPage({ params }: { params: Promise<{ id: stri
         Here the panels are grouped into clips of up to two camera angles, and each clip&apos;s request is written from the plan. Pick the Elements and pictures, then create the clips.
       </p>
       <KeptTakes sceneId={sceneId} kept={v.kept} panels={v.allPanels} />
-      <ClipsBoard projectId={s.scene.projectId} projectCode={repo.getProject(db, s.scene.projectId)?.code ?? ""} sceneId={sceneId} rows={v.rows} clips={v.clips} list={v.listed} pictures={v.pictures} issues={v.issues} jobs={jobs} making={making} />
+      <ClipsBoard projectId={s.scene.projectId} projectCode={repo.getProject(db, s.scene.projectId)?.code ?? ""} sceneId={sceneId} rows={v.rows} clips={v.clips} list={v.listed} pictures={v.pictures} issues={v.issues} frameRequests={v.frameRequests} editors={v.editors} cast={repo.getCast(db, s.scene.projectId).map((c) => ({ id: c.id, name: c.name }))} aspect={v.aspect} jobs={jobs} making={making} />
     </div>
   );
 }

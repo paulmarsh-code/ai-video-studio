@@ -9,7 +9,7 @@ import type { RefView } from "@/lib/domain/imagePrompts";
 import type { Pronoun } from "@/lib/domain/types";
 import * as studio from "@/lib/studioRepo";
 import * as coreRepo from "@/lib/repo";
-import { buildSceneClips, outOfDateError } from "@/lib/sceneClips";
+import { buildSceneClips } from "@/lib/sceneClips";
 import { jobId, putJobs } from "@/lib/klingJobs";
 import { elementSources, requestElements } from "@/lib/klingElementRequests";
 import { chooseCameras, updateLayout } from "@/lib/layoutUpdate";
@@ -268,9 +268,9 @@ export async function createClipJobsAction(sceneId: string, clips?: number[]): P
     const chosen = v.clips.map((c, k) => ({ c, n: k + 1 })).filter((x) => !clips?.length || clips.includes(x.n));
     for (const { c, n } of chosen) {
       if (!c.elements.length) throw new Error(`Clip ${n} has no Kling Elements linked yet: pick them in the list above first.`);
-      // Pictures drawn on an earlier floor plan don't go to Kling (D151).
-      const stale = outOfDateError(n, v.issues[n - 1]);
-      if (stale) throw new Error(stale);
+      // Nothing is spent on a clip until its start frame is approved (D164).
+      if (!c.start) throw new Error(`Clip ${n}: make or pick its start frame first: the picture the clip opens on.`);
+      if (!c.start.approved) throw new Error(`Clip ${n}: approve its start frame first.`);
       // A voice is the character's (D146): nobody speaks in a clip without their own voice sample,
       // or Kling makes a new voice up for them.
       const cast = coreRepo.getCast(db, s.scene.projectId);
@@ -290,6 +290,11 @@ export async function createClipJobsAction(sceneId: string, clips?: number[]): P
     putJobs(jobs);
     return { count: jobs.length, credits: jobs.reduce((t, j) => t + j.credits, 0) };
   });
+}
+
+/** A clip's start or end frame: set, cleared or approved (D164). */
+export async function setClipFrameAction(sceneId: string, key: string, change: { start?: string | null; end?: string | null; approve?: boolean }): Promise<Result<void>> {
+  return run((db) => { studio.setClipFrame(db, sceneId, key, change); });
 }
 
 /**
@@ -342,8 +347,8 @@ export async function reviewClipAction(jobId: string, decision: "approved" | "ch
       pictures: c.pictures.map((x, i) => ({ n: i + 1, shot: x.shot, panel: x.panel, assetId: x.assetId, path: coreRepo.getAsset(db, x.assetId)?.path ?? "" })),
       audios: c.audios.map((a) => ({ ...a, path: coreRepo.getAsset(db, a.assetId)?.path ?? "" })) } : undefined;
     if (c && job) {
-      const stale = outOfDateError(job.clip, v!.issues[v!.clips.indexOf(c)]);
-      if (stale) throw new Error(stale);
+      // A new take needs an approved start frame too (D164).
+      if (!c.start?.approved) throw new Error("Approve this clip's start frame first.");
       const scene = coreRepo.getScene(db, job.sceneId)!;
       const cast = coreRepo.getCast(db, scene.scene.projectId);
       const speakers = [...new Set(scene.panels.filter((p) => c.panels.includes(p.order)).flatMap((p) => (p.dialogue as { characterId: string }[]).map((d) => d.characterId)))];

@@ -19,7 +19,7 @@ export interface PanelEditorProps {
    * On the storyboard card (D142): everything about the panel in one form. How the line is said,
    * and what else should change in the picture (people, camera, look), saved with the words.
    */
-  card?: { delivery?: string; onPicture: (words: string, descriptionChanged: boolean) => Promise<void>; onClose: () => void; moreHref?: () => void };
+  card?: { delivery?: string; onPicture: (words: string, descriptionChanged: boolean) => Promise<void>; onClose: () => void; moreHref?: () => void; noPicture?: boolean };
 }
 
 export function PanelEditor({ panel, sceneId, cast, first, last, suggestedCode, card }: PanelEditorProps) {
@@ -92,7 +92,8 @@ export function PanelEditor({ panel, sceneId, cast, first, last, suggestedCode, 
           <textarea className={field} rows={2} value={delivery} onChange={(e) => setDelivery(e.target.value)} data-testid="panel-delivery" />
         </label>
       )}
-      {card && (
+      {/* On a clip (D164) there's no storyboard picture: the words go straight into the clip. */}
+      {card && !card.noPicture && (
         <label className="block text-sm">Anything else to change in the picture <span className="text-neutral-500">(who stands where, the camera, how it looks)</span>
           <textarea className={field} rows={2} value={picture} onChange={(e) => setPicture(e.target.value)} data-testid="panel-picture-change"
             placeholder="e.g. two-shot of Jade and Chase · closer on Chase · Nina stands left of Marcus · she looks less angry" />
@@ -113,7 +114,7 @@ export function PanelEditor({ panel, sceneId, cast, first, last, suggestedCode, 
                   // A new line gets a new delivery written by the app, unless one is typed here.
                   const typed = delivery.trim() !== (card.delivery ?? "").trim();
                   if (typed && f.speakerId) { const r = await setDeliveryAction(panel.id, delivery); if (!r.ok) { setMsg({ ok: false, text: r.error }); return r; } }
-                  if (picture.trim() || (descriptionChanged && panel.hasImage)) await card.onPicture(picture.trim(), descriptionChanged);
+                  if (!card.noPicture && (picture.trim() || (descriptionChanged && panel.hasImage))) await card.onPicture(picture.trim(), descriptionChanged);
                   setPicture("");
                   router.refresh();
                   card.onClose();

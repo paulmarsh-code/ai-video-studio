@@ -2800,3 +2800,32 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 - **Goes:** shot design, camera choice and approval, and drawing pictures from app-placed cameras.
 - **Stays:** everything else, including the picture check (who, props, background), the D151 out-of-date check (keyed to positions instead of cameras), and the clip rules D113–D162.
 - **Status.** Agreed in principle; to be built and tried on scene 4.
+
+### D164: Clips open on an approved start frame; Kling chooses the shots; what happens is changed on the clip (2026-11-18, Paul)
+
+- **Why.** D163, and the scene 4 test of 17 Nov. With three scene pictures, the Elements and the voice, Kling chose good shots first time: side-on along the bar, then a close shot from behind it with Jade in the crowd behind Chase. The storyboard pictures kept drifting from the floor plan: round cocktail tables in panels 2, 4, 6 and 8 when the plan has a bar counter, and every clip blocked as "drawn on version 7".
+- **Paul's flow:**
+  1. Story, characters and props (approved).
+  2. One floor plan per scene: who's where at the start (approved).
+  3. The 360° set.
+  4. No storyboard.
+  5. Clips, each with a start frame (and an end frame if needed), and the change feature on the clip.
+- **Built (stage 1).**
+  - **Clip request (`framesPrompt`):**
+    - Picture 1 is the start frame and the clip opens exactly on it. An end frame, if given, is the last picture and the clip ends on it.
+    - The Elements: characters, venue, props.
+    - "Where everyone is at the start", from the panels' own place words.
+    - "Choose the camera shots yourself…".
+    - What happens in time order ("0–4 s: …"), with each exact line, how it's said, and the voices.
+    - The rules from D113–D162 that aren't about shots.
+    - No storyboard pictures and no shot list.
+  - **Start frame.** It is the last frame of the take before (offered, so clips chain), or one made for the clip (`framePrompt`) from:
+    - the people's approved pictures, the props' pictures and the venue's views;
+    - everyone where the panel words put them;
+    - guests around and between people, so nobody stands alone on open floor (Paul).
+    It can be made again with words saying what to change. **Nothing is spent until it's approved:** Create and new takes both need it.
+  - **End frame:** optional, made the same way.
+  - **What happens**, each line, how it's said and the length are changed on the clip card, with the panel editor and no picture step.
+  - The D151 out-of-date check no longer applies: clips carry no storyboard pictures.
+- **Still to come:** the floor plan set by the app and corrected in words (Paul: "explain what's wrong" rather than drag); the storyboard and camera steps removed from the scene's steps; props as Elements; the runbook.
+- **Reaches the generation through:** the clip's pictures and request. Tested in `clipFrames.d164.test.ts`.

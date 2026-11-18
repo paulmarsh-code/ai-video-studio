@@ -8,7 +8,8 @@ import { useEffect, useRef, useState } from "react";
 import { createClipJobsAction, requestElementsAction, reviewClipAction, setClipPictureAction, setKlingElementAction } from "@/app/studioActions";
 import type { Clip, KlingElement } from "@/lib/domain/clips";
 import type { KlingListed } from "@/lib/klingList";
-import type { ClipPictureIssues, PictureChoice } from "@/lib/sceneClips";
+import type { ClipPictureIssues, PictureChoice, SceneClipsView } from "@/lib/sceneClips";
+import { ClipFrames, ClipMoments } from "./ClipFrames";
 import type { KlingJob } from "@/lib/klingJobs";
 import { ofProject } from "@/lib/klingNames";
 
@@ -249,7 +250,7 @@ function ClipReview({ sceneId, job, from, to }: { sceneId: string; job: KlingJob
   );
 }
 
-export function ClipsBoard({ projectId, projectCode, sceneId, rows, clips, list, pictures, jobs, making, issues = [] }: { projectId: string; projectCode: string; sceneId: string; rows: Row[]; clips: Clip[]; issues?: ClipPictureIssues[]; list: { elements: KlingListed[]; updatedAt?: string }; pictures: PictureChoice[]; jobs: KlingJob[]; making: Making }) {
+export function ClipsBoard({ projectId, projectCode, sceneId, rows, clips, list, pictures, jobs, making, issues = [], frameRequests = [], editors = {}, cast = [], aspect = "9:16" }: { projectId: string; projectCode: string; sceneId: string; rows: Row[]; clips: Clip[]; issues?: ClipPictureIssues[]; frameRequests?: SceneClipsView["frameRequests"]; editors?: SceneClipsView["editors"]; cast?: { id: string; name: string }[]; aspect?: "9:16" | "16:9"; list: { elements: KlingListed[]; updatedAt?: string }; pictures: PictureChoice[]; jobs: KlingJob[]; making: Making }) {
   const router = useRouter();
   const [api, setApi] = useState(false);
   const [busy, setBusy] = useState<number | "all" | null>(null);
@@ -309,7 +310,7 @@ export function ClipsBoard({ projectId, projectCode, sceneId, rows, clips, list,
         </div>
         {note && <p className="mt-2 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">{note}</p>}
         <p className="text-sm text-neutral-600">
-          &ldquo;Create&rdquo; hands a clip to Claude with its Elements, its pictures in order and its request; then tell Claude &ldquo;make the clips&rdquo; and it makes them in Kling (Omni-Ref, model 4.0, 720p, sound on) and shows each result here. About {total} credits for the whole scene (10 a second). A clip holds at most two camera angles, so a panel that would bring a third starts the next clip. You can still copy a request into the Kling app yourself.
+          &ldquo;Create&rdquo; hands a clip to Claude with its Elements, its pictures in order and its request; then tell Claude &ldquo;make the clips&rdquo; and it makes them in Kling (Omni-Ref, model 4.0, 720p, sound on) and shows each result here. About {total} credits for the whole scene (10 a second). Each clip opens on its approved start frame and Kling chooses the camera shots. You can still copy a request into the Kling app yourself.
         </p>
         <div className="mt-3 space-y-4">
           {clips.map((c, k) => (
@@ -327,8 +328,8 @@ export function ClipsBoard({ projectId, projectCode, sceneId, rows, clips, list,
                     const changed = j && (j.basePrompt ?? j.prompt) !== c.prompt;
                     if (waiting) return <button type="button" disabled className="rounded bg-neutral-300 px-3 py-1 text-sm text-neutral-700">{j.status === "sent" ? "Being made in Kling…" : "Waiting for Claude: say \u201cmake the clips\u201d"}</button>;
                     if (j && j.status === "done" && !changed) return null;
-                    // Out-of-date pictures stop it (D151): redraw them first.
-                    if (issues[k]?.redraw.length) return <button type="button" disabled className="rounded bg-neutral-300 px-3 py-1 text-sm text-neutral-700">Redraw the pictures below first</button>;
+                    // Nothing is spent until the start frame is approved (D164).
+                    if (!c.start?.approved) return <button type="button" disabled className="rounded bg-neutral-300 px-3 py-1 text-sm text-neutral-700">{c.start ? "Approve the start frame below first" : "Make the start frame below first"}</button>;
                     return <button type="button" disabled={busy !== null} onClick={() => void create(k + 1)} className="rounded bg-blue-700 px-3 py-1 text-sm text-white hover:bg-blue-800 disabled:opacity-50">{busy === k + 1 ? "Creating…" : j ? "Create again: the request has changed" : "Create this clip"}</button>;
                   })()}
                 </div>
@@ -358,20 +359,9 @@ export function ClipsBoard({ projectId, projectCode, sceneId, rows, clips, list,
                   </>
                 );
               })()}
-              {!!issues[k]?.redraw.length && (
-                <div className="mt-2 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-800">
-                  {issues[k].redraw.map((r) => <p key={r.panel}>{r.why}</p>)}
-                  <a className="underline" href={`/projects/${projectId}/scenes/${sceneId}/storyboard`}>Go to the storyboard</a>
-                </div>
-              )}
-              {!!issues[k]?.warn.length && <div className="mt-1 text-sm text-amber-800">{issues[k].warn.map((r) => <p key={r.panel}>{r.why}</p>)}</div>}
-              <p className="mt-1 text-sm text-neutral-600">Elements: {c.elements.length ? c.elements.map((e) => e.name).join(", ") : "none linked yet"}</p>
-              <div className="mt-2">
-                <p className="text-sm text-neutral-600">Pictures, one per shot, in order: Kling stages each shot from its picture (who stands where, the camera angle). Pick another version, or none, if a picture isn&apos;t right.</p>
-                <div className="mt-1 flex flex-wrap gap-3">
-                  {c.panels.map((order, n) => { const ch = pictures.find((x) => x.order === order); return ch ? <PictureSlot key={ch.panelId} sceneId={sceneId} shot={n + 1} choice={ch} /> : null; })}
-                </div>
-              </div>
+              <p className="mt-1 text-sm text-neutral-600">Elements: {c.elements.length ? c.elements.map((e) => e.name).join(", ") : "none linked yet"}. Kling chooses the camera shots from the start frame and what happens.</p>
+              {frameRequests[k] && <ClipFrames projectId={projectId} sceneId={sceneId} clip={c} clipKey={c.panels.join("-")} requests={frameRequests[k]} aspect={aspect} />}
+              <ClipMoments sceneId={sceneId} panels={c.panels} editors={editors} cast={cast} />
               {c.missing.length > 0 && <p className="mt-1 text-sm text-amber-800">No Element for {c.missing.join(", ")}: drawn from the words alone, so {c.missing.length === 1 ? "it" : "they"} may not match from clip to clip.</p>}
               <pre className="mt-2 whitespace-pre-wrap rounded bg-neutral-50 p-2 text-xs text-neutral-800">{api ? c.prompt : c.webPrompt}</pre>
             </div>
