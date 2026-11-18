@@ -75,21 +75,26 @@ const CALL_ENDS = /\b(cuts the call|ends the call|hangs up|lowers the phone|puts
 /** Who is on a phone call during these panels, and the moment the call ends if it ends in them (D170). */
 export function callersIn(all: ClipPanel[], panels: ClipPanel[], people: { id: string; name: string }[]): { name: string; ends?: string }[] {
   const first = (n: string) => n.split(" ")[0].toLowerCase();
+  // A clause's caller is the first person it names: "Chase leans on the counter, phone to his ear;
+  // Jade stands behind him" puts Chase on the call, not Jade.
+  const clauses = (p: ClipPanel) => p.description.split(/[.;]/).map((c) => c.toLowerCase());
+  const lead = (c: string) => people.map((x) => ({ x, at: c.indexOf(first(x.name)) })).filter((y) => y.at >= 0).sort((a, b) => a.at - b.at)[0]?.x;
+  const about = (p: ClipPanel, who: { id: string }, re: RegExp) => clauses(p).some((c) => re.test(c) && lead(c)?.id === who.id);
   const mentions = (p: ClipPanel, n: string) => p.description.toLowerCase().includes(first(n));
-  const ended = (p: ClipPanel, id: string) => CALL_ENDS.test(p.description) || p.dialogue.some((d) => d.characterId === id && CALL_ENDS.test(d.text));
+  const ended = (p: ClipPanel, id: string) => about(p, { id }, CALL_ENDS) || p.dialogue.some((d) => d.characterId === id && CALL_ENDS.test(d.text));
   const out: { name: string; ends?: string }[] = [];
   for (const who of people) {
     let on = false;
     for (const p of all.filter((x) => x.order < panels[0].order).sort((a, b) => a.order - b.order)) {
       if (!mentions(p, who.name)) continue;
       if (ended(p, who.id)) on = false;
-      else if (CALL.test(p.description)) on = true;
+      else if (about(p, who, CALL)) on = true;
     }
     let ends: string | undefined;
     for (const [k, p] of panels.entries()) {
       if (!mentions(p, who.name)) continue;
-      if (ended(p, who.id)) { if (on || CALL.test(p.description)) ends = `moment ${k + 1} (what happens, in order), when the call ends`; on = on || CALL.test(p.description); break; }
-      if (CALL.test(p.description)) on = true;
+      if (ended(p, who.id)) { if (on || about(p, who, CALL)) ends = `moment ${k + 1} (what happens, in order), when the call ends`; on = on || about(p, who, CALL); break; }
+      if (about(p, who, CALL)) on = true;
     }
     if (on) out.push({ name: who.name.split(" ")[0], ...(ends ? { ends } : {}) });
   }

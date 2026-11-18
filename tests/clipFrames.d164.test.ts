@@ -87,7 +87,7 @@ describe("A clip opening on the take before has that take's last people (D169)",
 describe("Someone on a phone call keeps the phone at their ear (D170)", () => {
   it("says so for a caller carried over from an earlier panel, and until the moment the call ends", async () => {
     const { callersIn } = await import("../src/lib/domain/clips");
-    const p1 = P(1, 4, [], "Bo leans on the counter, phone to his ear.");
+    const p1 = P(1, 4, [], "Bo leans on the counter, phone to his ear; Ava stands behind him, watching.");
     const p2 = P(2, 4, [{ characterId: "bo", text: "Let 'em wait." }], "Bo takes a sip, then speaks.");
     const p3 = P(3, 3, [{ characterId: "bo", text: "Hey buddy, gotta go." }], "Bo turns and cuts the call.");
     const ppl = [{ id: "bo", name: "Bo Lind" }, { id: "ava", name: "Ava Stone" }];
