@@ -61,3 +61,14 @@ describe("Positions in the user's words (D165)", () => {
     expect(p).toContain("Everyone faces where the words say, not the camera");
   });
 });
+
+describe("A put-on voice (D168)", () => {
+  it("lets the speaker do an impression where how it's said asks for one", () => {
+    const b = base({ "1-2": { start: "s", startApproved: true } });
+    b.panels[1].dialogue = [{ characterId: "bo", text: "Thirty days… thirty days.", delivery: "mimics an agitated woman's high, whiny voice on the words, mocking and condescending" } as never];
+    const [c] = sceneClips(b);
+    expect(c.prompt).toContain("except the words they say in a put-on voice as how it's said describes");
+    const [d] = sceneClips(base({ "1-2": { start: "s", startApproved: true } }));
+    expect(d.prompt).not.toContain("put-on voice");
+  });
+});

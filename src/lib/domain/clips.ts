@@ -67,6 +67,9 @@ export interface KeptTake { from: number; to: number; frameAssetId?: string }
 export interface ClipFrames { start?: string; startApproved?: boolean; end?: string }
 
 /** A clip's key: its panels, "3-4". */
+/** How it's said asks for an impression or a put-on voice (D168). */
+export const PUT_ON = /\b(mimic\w*|imitat\w*|impression|impersonat\w*|put-on voice|in (?:a|her|his|their) voice|parrot\w*)\b/i;
+
 export const clipKey = (panels: number[]) => panels.join("-");
 
 export interface Clip {
@@ -527,7 +530,9 @@ export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake
     const voices = speakers.map((id) => {
       const v = voiceShort(i.cast.find((c) => c.id === id)?.voiceLock ?? "");
       const a = audios.find((x) => x.characterId === id);
-      const heard = a ? `exactly the voice in ${aud(a.n)}: the same person, accent, pitch and tone, saying these words` : "";
+      // A put-on voice (D168): an impression is said in the delivery, so the voice rule allows it.
+      const putOn = lines.some((x) => x.characterId === id && PUT_ON.test(x.delivery ?? ""));
+      const heard = a ? `exactly the voice in ${aud(a.n)}: the same person, accent, pitch and tone, saying these words${putOn ? ", except the words they say in a put-on voice as how it's said describes: those are clearly in that other voice, then straight back to their own" : ""}` : "";
       return heard || v ? `${first(nameOf(id))}: ${[heard, v].filter(Boolean).join(". ")}` : "";
     }).filter(Boolean);
     if (voices.length) L.push(`Voices. ${voices.join(". ")}.`);

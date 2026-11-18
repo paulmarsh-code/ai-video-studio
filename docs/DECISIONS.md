@@ -2874,3 +2874,10 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
   - Every frame request now says: everyone faces where the words say, not the camera. Someone facing a counter or wall is seen side-on or from behind; a back to someone is really a back to them; the camera's side is chosen so this is clear; anyone hidden from someone has guests' heads and shoulders between them, partly covering them.
 - **General:** wording about facing and hiding, for any scene.
 - **Reaches the generation through:** the start frame's words, and so the frame Kling opens on. Tested in `clipFrames.d164.test.ts`.
+
+## D168: a put-on voice is allowed where how it's said asks for one (18 Nov 2026)
+
+- **Visible failure.** Scene 4 clip 1: Chase's "thirty days… thirty days" came out in his own voice. Paul wants him mimicking an agitated woman, mocking and condescending. The clip request told Kling to keep the voice "exactly" like the voice reference, "the same pitch and tone", which rules an impression out.
+- **Decision.** When a line's "How it's said" asks for an impression (mimics, imitates, impression, impersonates, "in her voice", a put-on voice), the voice rule for that speaker adds: except the words said in a put-on voice as described, which are clearly in that other voice, then straight back to their own.
+- **General:** any speaker, any impression, from the words in "How it's said".
+- **Reaches the generation through:** the clip request's voice line. Tested in `clipFrames.d164.test.ts`.
