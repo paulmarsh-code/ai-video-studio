@@ -48,13 +48,16 @@ describe("Start frames and Kling's own shots (D164)", () => {
 
 describe("Positions in the user's words (D165)", () => {
   const note = "Jade stands close enough to hear Chase's call but hidden from him, with a couple of guests between them; Chase leans facing the bar, his back to her.";
-  it("goes into the clip request ahead of the floor plan", () => {
+  it("goes into the clip request instead of the panels' place words (D167)", () => {
     const [c] = sceneClips({ ...base({ "1-2": { start: "s", startApproved: true } }), positionsNote: note });
-    expect(c.prompt).toContain(`Where everyone is: ${note.replace(/\.$/, "")}. From the floor plan: Ava behind Bo among guests; Bo at the bar counter.`);
+    expect(c.prompt).toContain(`Where everyone is: ${note.replace(/\.$/, "")}.`);
+    expect(c.prompt).not.toContain("behind Bo among guests");
     expect(c.prompt).not.toContain("Where everyone is at the start:");
   });
-  it("goes into the start frame's words", () => {
+  it("goes into the start frame's words, with facing and hiding as said, not posed for the camera (D167)", () => {
     const p = framePrompt({ which: "start", positions: note, venue: "Roof bar", crowd: "about 20 guests", aspect: "9:16", people: [{ name: "Bo", where: "at the bar counter" }], props: [], moment: "Bo talks on the phone" });
     expect(p).toContain(`Where everyone is: ${note.replace(/\.$/, "")}.`);
+    expect(p).not.toContain("Bo, at the bar counter");
+    expect(p).toContain("Everyone faces where the words say, not the camera");
   });
 });

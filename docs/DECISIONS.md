@@ -2865,3 +2865,12 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 - **Reaches the generation through:** the plan the start frame and clip read ("From the floor plan: …"), alongside the words themselves. Tested in `placeFromWords.d166.test.ts`.
 
 - **Fix, same day: the positions words vanished.** After "Save and place everyone" the words box was empty and clip requests fell back to the panel words. Rewriting the scene setting (syncing props from the plan, saving the setting, syncing areas) rebuilt the scene's stored setting from its known fields only, dropping the positions words. It could equally drop kept takes and clip start frames. Those rewrites now keep the extras: the set switch, kept takes, positions words, clip frames and clip pictures (`withStagingExtras`).
+
+## D167: start frames follow the positions words for facing and hiding (18 Nov 2026)
+
+- **Visible failure.** Scene 4's new start frame: Chase stood facing the camera at the bar with Jade at his shoulder in plain view, nobody between them. The words said Chase faces the bar with his back to Jade, and Jade is hidden with guests between them. The picture request also carried the panels' place words ("Jade beside the bar counter, just behind Chase"), which were drawn literally, and asked for nothing about facing.
+- **Decision.**
+  - When the scene has positions words, they replace the panels' place words in both the start/end frame request and the clip request. The two no longer contradict each other.
+  - Every frame request now says: everyone faces where the words say, not the camera. Someone facing a counter or wall is seen side-on or from behind; a back to someone is really a back to them; the camera's side is chosen so this is clear; anyone hidden from someone has guests' heads and shoulders between them, partly covering them.
+- **General:** wording about facing and hiding, for any scene.
+- **Reaches the generation through:** the start frame's words, and so the frame Kling opens on. Tested in `clipFrames.d164.test.ts`.

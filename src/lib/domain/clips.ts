@@ -508,7 +508,8 @@ export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake
     // Where everyone starts, in the panel's own words (from the scene's floor plan).
     const where = panels[0].spec.where ?? {};
     const starts = inClip.map((id) => where[id] ? `${first(nameOf(id))} ${where[id].trim().replace(/\.$/, "")}` : "").filter(Boolean);
-    if (i.positionsNote?.trim()) L.push(`Where everyone is: ${i.positionsNote.trim().replace(/\.$/, "")}.${starts.length ? ` From the floor plan: ${starts.join("; ")}.` : ""}`);
+    // The user's own words win (D167); the panels' place words are only used without them.
+    if (i.positionsNote?.trim()) L.push(`Where everyone is: ${i.positionsNote.trim().replace(/\.$/, "")}.`);
     else if (starts.length) L.push(`Where everyone is at the start: ${starts.join("; ")}.`);
     L.push("Choose the camera shots yourself to tell this moment well, cutting between angles where it helps; whatever the angle, everyone stays where they are unless what happens moves them, and the place and props stay the same.");
     L.push("What happens, in order:");

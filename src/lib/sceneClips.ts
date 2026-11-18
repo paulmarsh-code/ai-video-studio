@@ -59,11 +59,16 @@ export function framePrompt(o: { which: "start" | "end"; positions?: string; ven
   return [
     `A photorealistic still from a live-action film, ${o.aspect === "9:16" ? "9:16 portrait" : "16:9 landscape"}, natural cinematic lighting, at eye level: the ${o.which === "start" ? "first" : "last"} frame of a short clip.`,
     `The place: ${o.venue}${o.venueDescription ? `, ${o.venueDescription.replace(/\.$/, "")}` : ""}${o.crowd ? `; ${o.crowd.replace(/\.$/, "")}` : ""}. The attached venue pictures show this room: keep its look exactly.`,
-    o.people.length ? `The people, each exactly as in their attached picture (the same face, hair and clothes): ${o.people.map((p) => `${p.name}${p.where ? `, ${p.where.replace(/\.$/, "")}` : ""}`).join("; ")}.` : "",
+    // The user's own positions words win (D167): the panels' place words ("just behind Chase")
+    // were drawn literally beside them and put Jade at Chase's shoulder in plain view.
+    o.people.length ? `The people, each exactly as in their attached picture (the same face, hair and clothes): ${o.people.map((p) => `${p.name}${p.where && !o.positions?.trim() ? `, ${p.where.replace(/\.$/, "")}` : ""}`).join("; ")}.` : "",
     o.props.length ? `Props, each as in its attached picture where there is one: ${o.props.map((p) => `${p.name}${p.detail ? ` (${p.detail.replace(/;\s*see (?:the )?reference image.*$/i, "")})` : ""}`).join("; ")}.` : "",
     o.positions?.trim() ? `Where everyone is: ${o.positions.trim().replace(/\.$/, "")}.` : "",
     `${o.which === "start" ? "The moment the clip starts" : "The moment the clip ends"}: ${o.moment.trim().replace(/\.$/, "")}.`,
     "Frame it as a film would open on this moment, so everyone who matters is in the picture and where they stand relative to each other is clear.",
+    // Facing and hiding as the words say, not posed for the camera (D167): Chase faced the
+    // camera with Jade at his shoulder when he was meant to face the bar with his back to her.
+    "Everyone faces where the words say, not the camera: someone facing a counter or a wall is seen side-on or from behind, and someone with their back to another person really has their back to them. Choose the camera's side so this is clear. Anyone hidden from someone stands where that person can't see them, with guests' heads and shoulders between them, partly covering them.",
     // Never alone on open floor (Paul, D164): Jade stood by herself in the open, in plain view,
     // where she was meant to be hidden among guests.
     o.crowd ? "Other guests stand around and between the people, as at a busy party: nobody stands alone on open floor, and anyone meant to be hidden or half-hidden has guests between them and whoever mustn't see them." : "",
