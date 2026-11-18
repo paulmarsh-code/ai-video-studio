@@ -2882,3 +2882,4 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 - **General:** any speaker, any impression, from the words in "How it's said".
 - **Reaches the generation through:** the clip request's voice line. Tested in `clipFrames.d164.test.ts`.
 - The same applies when the impression is asked for in a new take's change words (Paul wrote it there): the voice rule in that take's request gets the same exception.
+- **Result (take 3).** Even with the exception in the request, Kling kept Chase's own voice: the voice sample binds the speaker's voice too strongly for an impression. The working route is the edit: the put-on words are raised in pitch over the kept take (about 8 semitones, ffmpeg rubberband), so no credits are spent. Until the app can do that itself, an impression is done in the edit, not by retaking.
