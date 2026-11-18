@@ -304,8 +304,9 @@ export async function setPositionsAction(sceneId: string, words: string): Promis
     const first = s?.panels.slice().sort((a, b) => a.order - b.order)[0];
     if (!first || !words.trim() || !s?.plan) return { moved: [], unclear: [] };
     if (studio.sceneLocks(db, sceneId).positions) studio.unlockScene(db, sceneId, "positions");
-    const { movePeopleFromWords } = await import("@/lib/panelChange");
-    return movePeopleFromWords(db, first.id, words);
+    const { placeSceneFromWords } = await import("@/lib/panelChange");
+    const { getTextProvider } = await import("@/lib/providers/images");
+    return placeSceneFromWords(db, sceneId, words, getTextProvider());
   });
 }
 

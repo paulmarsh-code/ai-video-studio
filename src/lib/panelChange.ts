@@ -145,3 +145,26 @@ export function movePeopleFromWords(db: DB, panelId: string, words: string): { m
   if (Object.keys(read.entries).length) studio.savePanelBlocking(db, [{ shotId: shot.id, entries: read.entries }]);
   return { moved: read.understood, unclear: read.unclear };
 }
+
+/**
+ * The scene's starting positions from the user's words (D166): the text model places everyone
+ * on the scene plan from the words, the room, its walls and props; the first panel takes those
+ * places as set by you, so the app's own reading of the panel words doesn't move them again.
+ * Without a text model, the words reader moves what it understands (D165).
+ */
+export async function placeSceneFromWords(db: DB, sceneId: string, words: string, text: { describe(prompt: string): Promise<string> } | null): Promise<{ moved: string[]; unclear: string[] }> {
+  const s = repo.getScene(db, sceneId);
+  const first = s?.panels.slice().sort((a, b) => a.order - b.order)[0];
+  if (!s?.plan || !first) return { moved: [], unclear: [] };
+  if (!text) return movePeopleFromWords(db, first.id, words);
+  const { placePrompt, parsePlacement, applyPlacement } = await import("./domain/placeFromWords");
+  const cast = repo.getCast(db, s.scene.projectId);
+  const people = s.plan.data.actors.map((a) => ({ id: a.characterId, name: cast.find((c) => c.id === a.characterId)?.name ?? a.characterId }));
+  const input = { plan: s.plan.data, people, words, story: s.scene.story };
+  const placed = parsePlacement(await text.describe(placePrompt(input)), input);
+  if (!Object.keys(placed.people).length) return { moved: [], unclear: ["The app couldn't place anyone from those words; try saying who stands where, next to what."] };
+  repo.savePlan(db, sceneId, applyPlacement(s.plan.data, placed), "Floor plan placed from your words");
+  const shot = s.shots.find((x) => x.panelId === first.id);
+  if (shot) studio.savePanelBlocking(db, [{ shotId: shot.id, entries: Object.fromEntries(Object.entries(placed.people).map(([id, p]) => [id, { at: p.at, ...(p.facingDeg !== undefined ? { facingDeg: p.facingDeg } : {}) }])) }]);
+  return { moved: [placed.summary || `Placed ${people.map((p) => p.name.split(" ")[0]).join(", ")}`], unclear: [] };
+}

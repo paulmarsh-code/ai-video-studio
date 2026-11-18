@@ -121,21 +121,21 @@ export function PositionsBox({ sceneId, positions, noThumb, planHref }: { sceneI
     const r = await setPositionsAction(sceneId, words);
     setBusy(null);
     if (!r.ok) setMsg({ ok: false, text: r.error });
-    else setMsg({ ok: true, text: `Saved: every start frame and clip in this scene uses it.${r.value!.moved.length ? ` On the plan: ${r.value!.moved.join("; ")}.` : ""} Check the plan, then approve.` });
+    else setMsg({ ok: !r.value!.unclear.length, text: `Saved: every start frame and clip in this scene uses it.${r.value!.moved.length ? ` On the plan: ${r.value!.moved.join("; ")}` : ""}${r.value!.unclear.length ? ` ${r.value!.unclear.join(" ")}` : ""} Check the plan, then approve.` });
     router.refresh();
   };
   const approve = async () => { setBusy("approve"); const r = await approvePositionsAction(sceneId); setBusy(null); if (!r.ok) setMsg({ ok: false, text: r.error }); router.refresh(); };
   return (
     <section className="rounded-lg border border-neutral-200 bg-white p-3">
       <h2 className="text-lg font-semibold">Positions {positions.approved && <span className="ml-1 text-sm font-normal text-green-700">✓ Approved</span>}</h2>
-      <p className="text-sm text-neutral-600">Where everyone is as the scene starts. If something&apos;s wrong, say what in words: the app redraws from them, and every start frame and clip follows them.</p>
+      <p className="text-sm text-neutral-600">Where everyone is as the scene starts. If something&apos;s wrong, say what in words: the app places everyone on the plan from them, and every start frame and clip follows them.</p>
       <div className={`mt-2 grid gap-3 ${noThumb ? "" : "md:grid-cols-2"}`}>
         {!noThumb && <div className="max-w-md"><PlanThumb plan={positions.plan} names={positions.names} />{planHref && <a className="text-xs text-blue-700 underline" href={planHref}>Open the floor plan</a>}</div>}
         <div>
           <textarea className="w-full rounded border border-neutral-300 px-2 py-1 text-sm" rows={4} value={words} onChange={(e) => setWords(e.target.value)} data-testid="positions-words"
             placeholder="e.g. Jade is close enough to hear Chase's call but hidden from him, with two or three guests between them; Chase leans on the bar facing it, his back to Jade" />
           <div className="mt-1 flex flex-wrap gap-2">
-            <button type="button" disabled={!!busy || words.trim() === positions.note} onClick={() => void save()} className="rounded bg-blue-700 px-3 py-1 text-sm text-white hover:bg-blue-800 disabled:opacity-50">{busy === "save" ? "Saving…" : "Save"}</button>
+            <button type="button" disabled={!!busy || !words.trim()} onClick={() => void save()} className="rounded bg-blue-700 px-3 py-1 text-sm text-white hover:bg-blue-800 disabled:opacity-50">{busy === "save" ? "Placing everyone… (up to a minute)" : "Save and place everyone"}</button>
             {!positions.approved && <button type="button" disabled={!!busy} onClick={() => void approve()} className="rounded bg-green-700 px-3 py-1 text-sm text-white hover:bg-green-800 disabled:opacity-50">{busy === "approve" ? "Approving…" : "Approve positions"}</button>}
           </div>
           {msg && <p className={`mt-1 text-sm ${msg.ok ? "text-green-700" : "text-red-700"}`}>{msg.text}</p>}

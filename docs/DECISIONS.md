@@ -2846,3 +2846,20 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 - **Follow-up, same day (Paul: "on scene creation I could not access the story").** With the storyboard step gone there was no way back to the story. "1. The story" is now the first of the scene's steps (1. The story, 2. Scene and props, 3. Floor plan, 4. Build the set, 5. Make the clips). It opens the story writer while no panel is approved; once one is, it shows the story and points to the clips for changes, since the story can't replace approved panels.
 - **Follow-up: the floor plan page is positions only (Paul's screenshot, "it still has this").** The page still showed the cameras, the panel stepper (1–12), the viewfinder, the line of action and the camera checks. It now opens in positions-only mode: the scene plan with people and props, the room and heights, and the Positions words box at the top. There are no cameras, no panel steps, no line of action and no impact or continuity checks. The cameras stay in the saved plan data for older scenes but aren't shown or used by the clips.
 - **Still to come:** props as Kling Elements; the runbook for the frames flow.
+
+## D166: the app places everyone from the positions words (18 Nov 2026)
+
+- **Visible failure.** Paul's positions words for scene 4 were saved and reached the clip requests, but the plan didn't move: Chase stayed in the middle of the room, away from the bar, with Jade in plain view beside him and an "arriving" mark. The words reader (D157) only understands set phrases ("left of", "behind"), not a description like "close enough to hear but hidden from his view, his back to her, guests between".
+- **Decision.** "Save and place everyone" sends the text model the room's size, which wall is which (bar, screen wall…), the raised areas, the props with their places and sizes, the people, the scene's story and the user's words. It returns where each person stands and what they face, and any prop it had to move. The rules it gets:
+  - a fitting named after a wall goes along that wall;
+  - leaning on or at something is within about 0.6 m of it;
+  - hearing without being seen is 2–4 m away, out of sight, with room for guests between;
+  - people keep apart and stay in the room;
+  - move only what the words need.
+- The reply is checked: unknown ids are dropped and everything is kept inside the room. Then:
+  - the scene plan is saved as a new version ("placed from your words");
+  - arrival marks are cleared;
+  - the first panel takes the places as set by you, so the app's own reading of the panel words doesn't move them back.
+- Without a text model, the words reader moves what it understands, as before.
+- **General:** works from any room, walls, props and words; nothing is fitted to one story.
+- **Reaches the generation through:** the plan the start frame and clip read ("From the floor plan: …"), alongside the words themselves. Tested in `placeFromWords.d166.test.ts`.
