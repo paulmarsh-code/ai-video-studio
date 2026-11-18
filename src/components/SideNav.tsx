@@ -99,10 +99,9 @@ export function SideNav({ projects }: { projects: NavProject[] }) {
                                 {sOpen && (
                                   <ul className="ml-2 border-l border-neutral-700 pl-2">
                                     <li>{item(`${sb}/storyboard?part=setting`, "1. Scene and props", `nav-setting-${s.id}`)}</li>
-                                    <li>{item(`${sb}/plan`, "2. Floor plan & cameras", `nav-plan-${s.id}`)}</li>
+                                    <li>{item(`${sb}/plan`, "2. Floor plan (who is where)", `nav-plan-${s.id}`)}</li>
                                     <li>{item(`${sb}/set`, "3. Build the set")}</li>
-                                    <li>{item(`${sb}/storyboard?part=board`, "4. Storyboard", `nav-storyboard-${s.id}`)}</li>
-                                    <li>{item(`${sb}/clips`, "5. Make the clips")}</li>
+                                    <li>{item(`${sb}/clips`, "4. Make the clips")}</li>
                                     <li className="mt-1 border-t border-neutral-800 pt-1">{item(sb, "Scene set-up", undefined, true)}</li>
                                     <li>{item(`${sb}/design`, "Shot design")}</li>
                                     <li>{item(`${sb}/animatic`, "Animatic")}</li>

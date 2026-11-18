@@ -62,7 +62,9 @@ export default async function StoryboardPage({ params, searchParams }: { params:
   const locks = studio.sceneLocks(db, sceneId);
   const shotOrder = s.shots.map((sh) => ({ id: sh.id, code: sh.code, spec: sh.spec, description: s.panels.find((p) => p.id === sh.panelId)?.description }));
   const suggestions = suggestShots(shotOrder, (cid) => cast.find((c) => c.id === cid)?.name ?? cid);
-  const part: "setting" | "board" = sp.part === "setting" || sp.part === "board" ? sp.part : locks.positions ? "board" : "setting";
+  // No storyboard step any more (D164): the scene opens on its setting; the old picture board stays
+  // reachable at ?part=board for scenes made before, but isn't a step.
+  const part: "setting" | "board" = sp.part === "board" ? "board" : "setting";
   const anyApproved = s.panels.some((p) => p.status === "approved");
   const telling = !anyApproved && (s.panels.length === 0 || sp.story === "1");
   const total = s.panels.reduce((sum, p) => sum + p.durationSec, 0);
@@ -104,15 +106,8 @@ export default async function StoryboardPage({ params, searchParams }: { params:
 
       {/* Two parts (D24): 1, the scene setting; 2, the storyboard. A scene starts on part 1
           until its positions are approved. */}
-      <div className="mt-4 flex gap-1 border-b border-neutral-200 text-sm" role="tablist" data-testid="storyboard-parts">
-        {([["setting", "1. Scene setting"], ["board", "2. Storyboard"]] as const).map(([k, label]) => (
-          <Link key={k} href={`?part=${k}`} role="tab" aria-selected={part === k} data-testid={`part-${k}`}
-            className={`-mb-px rounded-t-md border px-4 py-2 ${part === k ? "border-neutral-200 border-b-white bg-white font-semibold" : "border-transparent text-neutral-600 hover:text-neutral-900"}`}>{label}</Link>
-        ))}
-      </div>
-
       {part === "setting" && <div className="mt-5">
-        <SceneSettingCard nextHref="?part=board" propsLocked={!!locks.positions} sceneId={sceneId} projectId={id} staging={locks.positions && s.plan?.data.furniture?.length ? { ...asStaging(s.scene.staging), props: propsFromFurniture(s.plan.data.furniture) } : asStaging(s.scene.staging)} hasPictures={s.panels.some((p) => p.imageAssetId)} canAuto={!!getTextProvider()}
+        <SceneSettingCard nextHref={`/projects/${id}/scenes/${sceneId}/plan`} propsLocked={!!locks.positions} sceneId={sceneId} projectId={id} staging={locks.positions && s.plan?.data.furniture?.length ? { ...asStaging(s.scene.staging), props: propsFromFurniture(s.plan.data.furniture) } : asStaging(s.scene.staging)} hasPictures={s.panels.some((p) => p.imageAssetId)} canAuto={!!getTextProvider()}
           suggestPrompt={s.scene.story.trim() ? stagingPrompt({ story: s.scene.story, venue: s.venue?.name ?? "the venue", characters: chars.filter((c) => castIds.includes(c.slug)).map((c) => ({ id: c.slug, name: c.name, role: c.role })) }) : undefined} />
       </div>}
 
@@ -160,7 +155,7 @@ export default async function StoryboardPage({ params, searchParams }: { params:
       </div>}
 
       {/* One place to change a panel (D142): "Change something" on its card. Adding a panel stays here. */}
-      {part === "board" && <details className="mt-8 rounded-xl border border-neutral-200 bg-white p-4" data-testid="add-panel">
+      {<details className="mt-8 rounded-xl border border-neutral-200 bg-white p-4" data-testid="add-panel">
         <summary className="cursor-pointer font-semibold">Add a panel</summary>
         <div className="mt-3"><PanelEditor key="new" sceneId={sceneId} cast={cast.map((c) => ({ id: c.id, name: c.name }))} suggestedCode={`P${n}`} /></div>
       </details>}

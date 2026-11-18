@@ -57,6 +57,8 @@ export interface ClipInput {
    * frame), the Elements, the voices, the starting positions and what happens.
    */
   frames?: Record<string, ClipFrames>;
+  /** Where everyone is, in the user's words (D165): ahead of what the app worked out. */
+  positionsNote?: string;
 }
 
 export interface KeptTake { from: number; to: number; frameAssetId?: string }
@@ -506,7 +508,8 @@ export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake
     // Where everyone starts, in the panel's own words (from the scene's floor plan).
     const where = panels[0].spec.where ?? {};
     const starts = inClip.map((id) => where[id] ? `${first(nameOf(id))} ${where[id].trim().replace(/\.$/, "")}` : "").filter(Boolean);
-    if (starts.length) L.push(`Where everyone is at the start: ${starts.join("; ")}.`);
+    if (i.positionsNote?.trim()) L.push(`Where everyone is: ${i.positionsNote.trim().replace(/\.$/, "")}.${starts.length ? ` From the floor plan: ${starts.join("; ")}.` : ""}`);
+    else if (starts.length) L.push(`Where everyone is at the start: ${starts.join("; ")}.`);
     L.push("Choose the camera shots yourself to tell this moment well, cutting between angles where it helps; whatever the angle, everyone stays where they are unless what happens moves them, and the place and props stay the same.");
     L.push("What happens, in order:");
     const lines = panels.flatMap((p) => p.dialogue);

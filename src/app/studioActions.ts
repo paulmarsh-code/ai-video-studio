@@ -292,6 +292,23 @@ export async function createClipJobsAction(sceneId: string, clips?: number[]): P
   });
 }
 
+/**
+ * Where everyone is, said in words (D165): kept for every start frame and clip, and the floor
+ * plan's people moved to match where the words can be read. Approved positions are unlocked by it,
+ * to be approved again.
+ */
+export async function setPositionsAction(sceneId: string, words: string): Promise<Result<{ moved: string[]; unclear: string[] }>> {
+  return runAsync(async (db) => {
+    studio.setPositionsNote(db, sceneId, words);
+    const s = coreRepo.getScene(db, sceneId);
+    const first = s?.panels.slice().sort((a, b) => a.order - b.order)[0];
+    if (!first || !words.trim() || !s?.plan) return { moved: [], unclear: [] };
+    if (studio.sceneLocks(db, sceneId).positions) studio.unlockScene(db, sceneId, "positions");
+    const { movePeopleFromWords } = await import("@/lib/panelChange");
+    return movePeopleFromWords(db, first.id, words);
+  });
+}
+
 /** A clip's start or end frame: set, cleared or approved (D164). */
 export async function setClipFrameAction(sceneId: string, key: string, change: { start?: string | null; end?: string | null; approve?: boolean }): Promise<Result<void>> {
   return run((db) => { studio.setClipFrame(db, sceneId, key, change); });

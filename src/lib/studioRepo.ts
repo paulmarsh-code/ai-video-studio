@@ -223,6 +223,24 @@ export function setKeptTake(db: DB, sceneId: string, from: number, take: KeptTak
   persist(db);
 }
 
+/**
+ * Where everyone is, in the user's words (D165): "Jade close enough to hear Chase but hidden from
+ * him, a few guests between them; Chase leaning on the bar, facing it, his back to Jade". Goes
+ * into every start frame and clip request of the scene, ahead of what the app worked out.
+ */
+export function getPositionsNote(db: DB, sceneId: string): string {
+  const s = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();
+  return (((s?.staging ?? {}) as { positionsNote?: string }).positionsNote ?? "").trim();
+}
+export function setPositionsNote(db: DB, sceneId: string, text: string) {
+  const s = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();
+  if (!s) throw new Error("Scene not found");
+  const staging = { ...((s.staging ?? {}) as Record<string, unknown>) };
+  if (text.trim()) staging.positionsNote = text.trim(); else delete staging.positionsNote;
+  db.update(t.scenes).set({ staging }).where(eq(t.scenes.id, sceneId)).run();
+  persist(db);
+}
+
 /** Each clip's start and end frames (D164), by its key ("3-4"). */
 export function getClipFrames(db: DB, sceneId: string): Record<string, import("./domain/clips").ClipFrames> {
   const s = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();

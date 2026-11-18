@@ -104,7 +104,7 @@ export function StagingFields({ value, onChange, propsLocked, projectId }: {
 
 export function SceneSettingCard({ sceneId, projectId, staging, hasPictures, suggestPrompt, canAuto, propsLocked, nextHref }: {
   sceneId: string; projectId?: string; staging: SceneStaging; hasPictures: boolean;
-  /** Where "Save scene" goes next (D24): the storyboard. */
+  /** Where "Save scene" goes next (D164): the floor plan. */
   nextHref?: string;
   /** Positions are approved: the key props come from the floor plan and can't be edited here. */
   propsLocked?: boolean;
@@ -195,7 +195,7 @@ export function SceneSettingCard({ sceneId, projectId, staging, hasPictures, sug
           <ActionButton label="Save changes" busyLabel="Saving…" doneLabel="Saved" disabled={!dirty || filling} resetKey={v} testId="staging-save"
             onAction={() => save(v, "Saved.")} />
         )}
-        {nextHref && <span className="text-xs text-neutral-500">Next: the storyboard. Check the positions and cameras, then draw the pictures.</span>}
+        {nextHref && <span className="text-xs text-neutral-500">Next: the floor plan. Check who is where and approve it, then make the clips.</span>}
         {msg && <span className="text-sm text-neutral-700" role="status">{msg}</span>}
       </div>
     </section>

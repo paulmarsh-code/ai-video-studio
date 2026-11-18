@@ -2829,3 +2829,18 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
   - The D151 out-of-date check no longer applies: clips carry no storyboard pictures.
 - **Still to come:** the floor plan set by the app and corrected in words (Paul: "explain what's wrong" rather than drag); the storyboard and camera steps removed from the scene's steps; props as Elements; the runbook.
 - **Reaches the generation through:** the clip's pictures and request. Tested in `clipFrames.d164.test.ts`.
+
+## D165: positions in the user's words; the storyboard and camera steps go (18 Nov 2026)
+
+- **Visible failure.** Scene 4's pictures had Jade in plain sight of Chase, standing alone on open floor, and people away from the bar when the whole scene is at the bar. Dragging people on a plan didn't fix it. Paul: "App creates floor plan positions to approve or adjust… explain what's wrong, i.e. Jade needs to be close to Chase to hear his conversation but hidden from his view… make sure there are a few other people near her and Chase."
+- **Decision.**
+  - The app sets the starting positions; the user approves them or says in words what's wrong. One plan per scene (a new location means a new plan), locked once approved.
+  - The **Positions box** on the clips page shows the starting plan and takes the words. Saving them:
+    - keeps the words as the scene's positions note;
+    - unlocks the positions if they were locked;
+    - moves the people on the first panel where the words are clear (`movePeopleFromWords`, the D157 words reader, people only, no camera).
+  - The note goes into every clip request ("Where everyone is: <words>. From the floor plan: …") and into every start and end frame's words. The user's words come first; the plan adds what they don't say.
+  - The scene's steps are now: 1. Scene and props, 2. Floor plan (who is where), 3. Build the set, 4. Make the clips. The storyboard step and its picture tab are gone; "Save scene" leads to the floor plan. Story writing, the panel list and "Add a panel" stay on the scene page. The old picture board is still reachable at `?part=board` for earlier scenes, but isn't a step.
+- **General, not fitted to one story:** any scene's positions can be described the same way; nothing names a character or a venue.
+- **Reaches the generation through:** the clip request's positions line and the start frame's words (and so the start frame Kling opens on). Tested in `clipFrames.d164.test.ts` (D165 block).
+- **Still to come:** props as Kling Elements; the runbook for the frames flow.

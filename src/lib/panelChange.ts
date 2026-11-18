@@ -126,3 +126,22 @@ export function placeNewPanelCamera(db: DB, panelId: string): string | null {
   studio.savePanelBlocking(db, [{ shotId: shot.id, entries: {}, camera: { position, lookAt, preset, fovDeg, heightM, tiltDeg, rollDeg, size, name: o.kind } }]);
   return o.kind;
 }
+
+/**
+ * The people on a panel moved from words, nothing else (D165): no camera is placed, since Kling
+ * chooses the shots (D164). Returns what was understood and what moved nobody.
+ */
+export function movePeopleFromWords(db: DB, panelId: string, words: string): { moved: string[]; unclear: string[] } {
+  const panel = db.select().from(t.panels).where(eq(t.panels.id, panelId)).get();
+  if (!panel) return { moved: [], unclear: [] };
+  const s = repo.getScene(db, panel.sceneId);
+  const shot = s?.shots.find((x) => x.panelId === panelId);
+  if (!s?.plan || !shot) return { moved: [], unclear: [] };
+  const cast = repo.getCast(db, s.scene.projectId);
+  const carried = carryBlocking(s.shots);
+  const k = s.shots.findIndex((x) => x.id === shot.id);
+  const sp = planForShot(s.plan.data, carried[k]);
+  const read = changeFromWords(words, sp, undefined, cast.map((c) => ({ id: c.id, name: c.name })));
+  if (Object.keys(read.entries).length) studio.savePanelBlocking(db, [{ shotId: shot.id, entries: read.entries }]);
+  return { moved: read.understood, unclear: read.unclear };
+}

@@ -8,10 +8,11 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { setClipFrameAction } from "@/app/studioActions";
+import { approvePositionsAction, setClipFrameAction, setPositionsAction } from "@/app/studioActions";
 import type { Clip } from "@/lib/domain/clips";
 import type { FrameRequest, SceneClipsView } from "@/lib/sceneClips";
 import { PanelEditor } from "./PanelEditor";
+import { PlanThumb } from "./PlanThumb";
 
 async function draw(projectId: string, r: FrameRequest, size: "portrait" | "landscape", change?: string): Promise<string> {
   const res = await fetch("/api/images/generate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ projectId, baseCode: r.baseCode, kind: "start-frame", prompt: change?.trim() ? `${r.prompt}\nChange from the last version: ${change.trim()}` : r.prompt, refAssetIds: r.refAssetIds, size }) });
@@ -102,5 +103,44 @@ export function ClipMoments({ sceneId, panels, editors, cast }: { sceneId: strin
         })}
       </ol>
     </div>
+  );
+}
+
+/**
+ * Where everyone is as the scene starts (D165): the app's floor plan to check, and a box to say in
+ * words what's wrong. The words go into every start frame and clip; the plan moves to match where
+ * it can.
+ */
+export function PositionsBox({ sceneId, positions }: { sceneId: string; positions: SceneClipsView["positions"] }) {
+  const router = useRouter();
+  const [words, setWords] = useState(positions.note);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const save = async () => {
+    setBusy("save"); setMsg(null);
+    const r = await setPositionsAction(sceneId, words);
+    setBusy(null);
+    if (!r.ok) setMsg({ ok: false, text: r.error });
+    else setMsg({ ok: true, text: `Saved: every start frame and clip in this scene uses it.${r.value!.moved.length ? ` On the plan: ${r.value!.moved.join("; ")}.` : ""} Check the plan, then approve.` });
+    router.refresh();
+  };
+  const approve = async () => { setBusy("approve"); const r = await approvePositionsAction(sceneId); setBusy(null); if (!r.ok) setMsg({ ok: false, text: r.error }); router.refresh(); };
+  return (
+    <section className="rounded-lg border border-neutral-200 bg-white p-3">
+      <h2 className="text-lg font-semibold">Positions {positions.approved && <span className="ml-1 text-sm font-normal text-green-700">✓ Approved</span>}</h2>
+      <p className="text-sm text-neutral-600">Where everyone is as the scene starts. If something&apos;s wrong, say what in words: the app redraws from them, and every start frame and clip follows them.</p>
+      <div className="mt-2 grid gap-3 md:grid-cols-2">
+        <div className="max-w-md"><PlanThumb plan={positions.plan} names={positions.names} /></div>
+        <div>
+          <textarea className="w-full rounded border border-neutral-300 px-2 py-1 text-sm" rows={4} value={words} onChange={(e) => setWords(e.target.value)} data-testid="positions-words"
+            placeholder="e.g. Jade is close enough to hear Chase's call but hidden from him, with two or three guests between them; Chase leans on the bar facing it, his back to Jade" />
+          <div className="mt-1 flex flex-wrap gap-2">
+            <button type="button" disabled={!!busy || words.trim() === positions.note} onClick={() => void save()} className="rounded bg-blue-700 px-3 py-1 text-sm text-white hover:bg-blue-800 disabled:opacity-50">{busy === "save" ? "Saving…" : "Save"}</button>
+            {!positions.approved && <button type="button" disabled={!!busy} onClick={() => void approve()} className="rounded bg-green-700 px-3 py-1 text-sm text-white hover:bg-green-800 disabled:opacity-50">{busy === "approve" ? "Approving…" : "Approve positions"}</button>}
+          </div>
+          {msg && <p className={`mt-1 text-sm ${msg.ok ? "text-green-700" : "text-red-700"}`}>{msg.text}</p>}
+        </div>
+      </div>
+    </section>
   );
 }

@@ -5,6 +5,7 @@ import type { DB } from "@/db/client";
 import { and, eq } from "drizzle-orm";
 import * as t from "@/db/schema";
 import { planForShot } from "./domain/geometry";
+import { carryBlocking } from "./domain/blocking";
 import type { GeometryPlanData, ShotSpec } from "./domain/types";
 export type { ClipFrames };
 import * as repo from "./repo";
@@ -39,6 +40,8 @@ export interface SceneClipsView {
   issues: ClipPictureIssues[];
   /** For each clip, in order: the request for a start frame and for an end frame (D164). */
   frameRequests: { start: FrameRequest; end: FrameRequest }[];
+  /** The scene's positions (D165): the plan, who's who, the user's words, and whether approved. */
+  positions: { plan: GeometryPlanData; names: Record<string, string>; note: string; approved: boolean };
   /** Each panel's words, for changing them on its clip (D164), by order. */
   editors: Record<number, { panel: { id: string; code: string; description: string; emotion: string; speakerId?: string; line?: string; durationSec: number; status: string; version: number; hasImage: boolean }; delivery?: string; first: boolean; last: boolean }>;
 }
@@ -52,12 +55,13 @@ export interface FrameRequest { baseCode: string; prompt: string; refAssetIds: s
  * them. The same kind of picture as scene 4's three scene pictures (17 Nov), which matched the
  * room, the clothes and the hands first time.
  */
-export function framePrompt(o: { which: "start" | "end"; venue: string; venueDescription?: string; crowd?: string; aspect: "9:16" | "16:9"; people: { name: string; where?: string }[]; props: { name: string; detail?: string }[]; moment: string; change?: string }): string {
+export function framePrompt(o: { which: "start" | "end"; positions?: string; venue: string; venueDescription?: string; crowd?: string; aspect: "9:16" | "16:9"; people: { name: string; where?: string }[]; props: { name: string; detail?: string }[]; moment: string; change?: string }): string {
   return [
     `A photorealistic still from a live-action film, ${o.aspect === "9:16" ? "9:16 portrait" : "16:9 landscape"}, natural cinematic lighting, at eye level: the ${o.which === "start" ? "first" : "last"} frame of a short clip.`,
     `The place: ${o.venue}${o.venueDescription ? `, ${o.venueDescription.replace(/\.$/, "")}` : ""}${o.crowd ? `; ${o.crowd.replace(/\.$/, "")}` : ""}. The attached venue pictures show this room: keep its look exactly.`,
     o.people.length ? `The people, each exactly as in their attached picture (the same face, hair and clothes): ${o.people.map((p) => `${p.name}${p.where ? `, ${p.where.replace(/\.$/, "")}` : ""}`).join("; ")}.` : "",
     o.props.length ? `Props, each as in its attached picture where there is one: ${o.props.map((p) => `${p.name}${p.detail ? ` (${p.detail.replace(/;\s*see (?:the )?reference image.*$/i, "")})` : ""}`).join("; ")}.` : "",
+    o.positions?.trim() ? `Where everyone is: ${o.positions.trim().replace(/\.$/, "")}.` : "",
     `${o.which === "start" ? "The moment the clip starts" : "The moment the clip ends"}: ${o.moment.trim().replace(/\.$/, "")}.`,
     "Frame it as a film would open on this moment, so everyone who matters is in the picture and where they stand relative to each other is clear.",
     // Never alone on open floor (Paul, D164): Jade stood by herself in the open, in plain view,
@@ -155,7 +159,8 @@ export function buildSceneClips(db: DB, sceneId: string): SceneClipsView | null 
   const kept = studio.getKeptTakes(db, sceneId);
   // Start and end frames (D164): Kling chooses the shots from them.
   const frames = studio.getClipFrames(db, sceneId);
-  const clips = sceneClips({ panels, cast, plan, venue: { id: s.venue.id, name: s.venue.name }, crowd, elements, kept: kept.map((k) => ({ from: k.from, to: k.to, frameAssetId: k.frameAssetId })), frames });
+  const positionsNote = studio.getPositionsNote(db, sceneId);
+  const clips = sceneClips({ panels, cast, plan, venue: { id: s.venue.id, name: s.venue.name }, crowd, elements, kept: kept.map((k) => ({ from: k.from, to: k.to, frameAssetId: k.frameAssetId })), frames, positionsNote });
   const held = [...new Set(panels.flatMap((p) => (p.spec.props ?? []).map((x) => x.name)))];
   const pieces = (plan.furniture ?? []).filter(isSetPiece).map((f) => f.name);
   const rows = [
@@ -192,10 +197,14 @@ export function buildSceneClips(db: DB, sceneId: string): SceneClipsView | null 
     const make = (which: "start" | "end", p: ClipPanel) => ({
       baseCode: `${project.code}_${(s.scene.title ?? "SCENE").replace(/[^A-Za-z0-9]+/g, "").slice(0, 12).toUpperCase()}_CLIP${clipKey(c.panels)}_${which.toUpperCase()}`,
       refAssetIds,
-      prompt: framePrompt({ which, venue: s.venue!.name, venueDescription: s.venue!.description ?? undefined, crowd, aspect: studio.projectAspect(db, projectId), people: who.map((id) => ({ name: nameOf(id), where: (p.spec.where ?? {})[id] })), props, moment: `${p.description}${p.dialogue[0] ? ` (${nameOf(p.dialogue[0].characterId).split(/\s+/)[0]} is about to say: "${p.dialogue[0].text}")` : ""}` }),
+      prompt: framePrompt({ which, positions: positionsNote, venue: s.venue!.name, venueDescription: s.venue!.description ?? undefined, crowd, aspect: studio.projectAspect(db, projectId), people: who.map((id) => ({ name: nameOf(id), where: (p.spec.where ?? {})[id] })), props, moment: `${p.description}${p.dialogue[0] ? ` (${nameOf(p.dialogue[0].characterId).split(/\s+/)[0]} is about to say: "${p.dialogue[0].text}")` : ""}` }),
     });
     return { start: make("start", ps[0]), end: make("end", ps[ps.length - 1]) };
   });
   const editors: SceneClipsView["editors"] = Object.fromEntries(sorted.map((p, k) => { const d = (p.dialogue ?? [])[0] as { characterId: string; text: string; delivery?: string } | undefined; return [p.order, { first: k === 0, last: k === sorted.length - 1, delivery: d?.delivery, panel: { id: p.id, code: p.code, description: p.description, emotion: p.emotion ?? "", speakerId: d?.characterId, line: d?.text, durationSec: p.durationSec, status: p.status, version: p.version, hasImage: !!p.imageAssetId } }]; }));
-  return { frameRequests, editors, issues, clips, rows, listed, pictures, aspect: studio.projectAspect(db, projectId), sceneTitle: s.scene.title ?? "Scene", kept, allPanels: sorted.map((p) => ({ order: p.order, description: p.description })) };
+  // The plan as the scene starts: everyone where the first panel puts them.
+  const firstShot = sorted[0] ? s.shots.findIndex((x) => x.panelId === sorted[0].id) : -1;
+  const startPlan = firstShot >= 0 ? planForShot(plan, carryBlocking(s.shots)[firstShot]) : plan;
+  const positions = { plan: startPlan, names: Object.fromEntries(cast.map((c) => [c.id, c.name])), note: positionsNote, approved: !!studio.sceneLocks(db, sceneId).positions };
+  return { positions, frameRequests, editors, issues, clips, rows, listed, pictures, aspect: studio.projectAspect(db, projectId), sceneTitle: s.scene.title ?? "Scene", kept, allPanels: sorted.map((p) => ({ order: p.order, description: p.description })) };
 }
