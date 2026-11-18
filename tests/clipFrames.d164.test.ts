@@ -72,3 +72,14 @@ describe("A put-on voice (D168)", () => {
     expect(d.prompt).not.toContain("put-on voice");
   });
 });
+
+describe("A clip opening on the take before has that take's last people (D169)", () => {
+  it("adds Ava's Element when the kept take ended on her, though only Bo is in the clip's panels", () => {
+    const solo = (o: number) => { const p = P(o, 4, [{ characterId: "bo", text: "Yeah." }], "Bo shrugs."); (p.spec as { visibleIds: string[] }).visibleIds = ["bo"]; return p; };
+    const last = P(2, 4, [], "Ava listens, jaw set."); (last.spec as { visibleIds: string[] }).visibleIds = ["ava"];
+    const [c] = sceneClips({ ...base({}), panels: [P(1, 4), last, solo(3)], kept: [{ from: 1, to: 2, frameAssetId: "lastframe" }] as never });
+    expect(c.elements.map((e) => e.what)).toContain("Ava Stone");
+    const [d] = sceneClips({ ...base({ "3": { start: "own", startApproved: true } }), panels: [P(1, 4), last, solo(3)], kept: [{ from: 1, to: 2, frameAssetId: "lastframe" }] as never });
+    expect(d.elements.map((e) => e.what)).not.toContain("Ava Stone");
+  });
+});

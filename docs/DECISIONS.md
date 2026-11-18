@@ -2884,3 +2884,10 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 - The same applies when the impression is asked for in a new take's change words (Paul wrote it there): the voice rule in that take's request gets the same exception.
 - **Result (take 3).** Even with the exception in the request, Kling kept Chase's own voice: the voice sample binds the speaker's voice too strongly for an impression. The working route is the edit: the put-on words are raised in pitch over the kept take (about 8 semitones, ffmpeg rubberband), so no credits are spent. Until the app can do that itself, an impression is done in the edit, not by retaking.
 - **Follow-up: old camera pages taken out of the way (Paul landed on the old shot page with its cameras, Kling 3.0 prompt and line-of-action warning).** The scene overview page now lists the five steps and what happens in each panel, with no shots table, cameras or checks. The "Shot design", "Cameras" and "Shots and prompts" links are gone from the side menu and the project page. Moments are changed, added or deleted on Make the clips. The old pages still exist for older scenes but nothing links to them.
+
+## D169: a clip opening on the take before keeps that take's last people (18 Nov 2026)
+
+- **Visible failure (caught before sending).** Scene 4 panels 6–7 are Chase alone, but the clip opens on the last frame of the panels 3–5 take, which is Jade's close-up. The request had no Jade Element and didn't name her, so Kling would have had an unnamed face in the first frame, free to drift or reappear as a stranger.
+- **Decision.** When a clip opens on the last frame of the take before (not on a start frame of its own), the people in the last panel of that take join the clip's people. They get their Elements and the "each appear once" rule. A clip with its own start frame is unchanged.
+- **General:** any scene, any people, from the panels.
+- **Reaches the generation through:** the clip request's Elements and people. Tested in `clipFrames.d164.test.ts`.

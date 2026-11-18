@@ -465,7 +465,12 @@ export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake
   const key = clipKey(panels.map((p) => p.order));
   const f = i.frames?.[key] ?? {};
   const inScene = (id: string) => !i.plan.actors?.length || i.plan.actors.some((a) => a.characterId === id);
-  const inClip = [...new Set(panels.flatMap((p) => [...p.spec.visibleIds, ...p.dialogue.map((d) => d.characterId)]))].filter((id) => i.cast.some((c) => c.id === id) && inScene(id));
+  // A clip that opens on the last frame of the take before also has that take's last people in
+  // it (D169): a clip of Chase alone opened on Jade's close-up with no Element to keep her herself.
+  const opensOnBefore = !(i.frames?.[key]?.start) && !!after?.frameAssetId;
+  const before = opensOnBefore ? i.panels.filter((p) => p.order < panels[0].order).sort((a, b) => b.order - a.order)[0] : undefined;
+  const fromBefore = before ? [...before.spec.visibleIds, ...before.dialogue.map((d) => d.characterId)] : [];
+  const inClip = [...new Set([...panels.flatMap((p) => [...p.spec.visibleIds, ...p.dialogue.map((d) => d.characterId)]), ...fromBefore])].filter((id) => i.cast.some((c) => c.id === id) && inScene(id));
   const pieces = (i.plan.furniture ?? []).filter((x) => isSetPiece(x));
   const held = [...new Set(panels.flatMap((p) => (p.spec.props ?? []).map((x) => x.name)))].filter((n) => !pieces.some((x) => x.name === n));
   const wanted: { key: string; what: string }[] = [
