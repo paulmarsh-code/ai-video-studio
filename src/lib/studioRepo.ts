@@ -676,6 +676,17 @@ export function saveStoryboard(db: DB, sceneId: string, s: { story: string; targ
  * prompts of the whole scene change together. Pictures already made keep the old setting
  * until they are redrawn.
  */
+/**
+ * What the scene keeps beside its setting (D166 fix): kept takes, clip frames and pictures, the
+ * positions words and the set switch. Rewriting the setting must never drop them; it did, so a
+ * saved positions note vanished after the plan was placed.
+ */
+const STAGING_EXTRAS = ["onSet", "keptTakes", "positionsNote", "clipFrames", "clipPictures"] as const;
+export function withStagingExtras(raw: unknown, st: object): Record<string, unknown> {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  return { ...st, ...Object.fromEntries(STAGING_EXTRAS.filter((k) => o[k] !== undefined).map((k) => [k, o[k]])) };
+}
+
 export function saveSceneStaging(db: DB, sceneId: string, staging: Partial<SceneStaging>) {
   const st = asStaging(staging);
   // With positions approved, the floor plan fixes which props there are, what each one is and
@@ -724,8 +735,7 @@ export function saveSceneStaging(db: DB, sceneId: string, staging: Partial<Scene
   const scene = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();
   if (!scene) throw new Error("Scene not found");
   // Saving the setting keeps the scene drawn on its set if it was (D103).
-  if ((scene.staging as { onSet?: boolean } | null)?.onSet) st.onSet = true;
-  db.update(t.scenes).set({ staging: st }).where(eq(t.scenes.id, sceneId)).run();
+  db.update(t.scenes).set({ staging: withStagingExtras(scene.staging, st) }).where(eq(t.scenes.id, sceneId)).run();
 
   // A floor plan the app made itself is rebuilt around the spot (D18d): the group stands
   // around the table, and the cameras are chosen again. A plan the user has edited is kept.
@@ -804,7 +814,7 @@ export function syncAreas(db: DB, sceneId: string): boolean {
   // A prop that is really an area (D82) becomes one, in the setting and on every shot.
   const st = propsAsAreas(st0);
   if (st !== st0) {
-    db.update(t.scenes).set({ staging: st }).where(eq(t.scenes.id, sceneId)).run();
+    db.update(t.scenes).set({ staging: withStagingExtras(scene.staging, st) }).where(eq(t.scenes.id, sceneId)).run();
     for (const sh of db.select().from(t.shots).where(eq(t.shots.sceneId, sceneId)).all()) {
       db.update(t.shots).set({ spec: { ...(sh.spec as ShotSpec), props: st.props.length ? st.props : undefined } }).where(eq(t.shots.id, sh.id)).run();
     }
@@ -929,7 +939,7 @@ function syncPropsFromPlan(db: DB, sceneId: string) {
   const scene = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();
   if (!plan || !scene) return;
   const props = propsFromFurniture(plan.data.furniture);
-  db.update(t.scenes).set({ staging: { ...asStaging(scene.staging), props } }).where(eq(t.scenes.id, sceneId)).run();
+  db.update(t.scenes).set({ staging: withStagingExtras(scene.staging, { ...asStaging(scene.staging), props }) }).where(eq(t.scenes.id, sceneId)).run();
   for (const sh of db.select().from(t.shots).where(eq(t.shots.sceneId, sceneId)).all()) {
     db.update(t.shots).set({ spec: { ...(sh.spec as ShotSpec), props: props.length ? props : undefined } }).where(eq(t.shots.id, sh.id)).run();
   }

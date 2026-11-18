@@ -2863,3 +2863,5 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 - Without a text model, the words reader moves what it understands, as before.
 - **General:** works from any room, walls, props and words; nothing is fitted to one story.
 - **Reaches the generation through:** the plan the start frame and clip read ("From the floor plan: …"), alongside the words themselves. Tested in `placeFromWords.d166.test.ts`.
+
+- **Fix, same day: the positions words vanished.** After "Save and place everyone" the words box was empty and clip requests fell back to the panel words. Rewriting the scene setting (syncing props from the plan, saving the setting, syncing areas) rebuilt the scene's stored setting from its known fields only, dropping the positions words. It could equally drop kept takes and clip start frames. Those rewrites now keep the extras: the set switch, kept takes, positions words, clip frames and clip pictures (`withStagingExtras`).
