@@ -66,24 +66,36 @@ export default async function StoryboardPage({ params, searchParams }: { params:
   // reachable at ?part=board for scenes made before, but isn't a step.
   const part: "setting" | "board" = sp.part === "board" ? "board" : "setting";
   const anyApproved = s.panels.some((p) => p.status === "approved");
-  const telling = !anyApproved && (s.panels.length === 0 || sp.story === "1");
+  // The story is always one click away (step 1 in the scene's steps); it can only be rewritten
+  // into new panels while none is approved.
+  const telling = s.panels.length === 0 || sp.story === "1";
   const total = s.panels.reduce((sum, p) => sum + p.durationSec, 0);
   const crumbs = (
     <nav className="text-sm text-neutral-500" aria-label="Breadcrumb">
       <Link href="/">Projects</Link> / <Link href={`/projects/${id}`}>{project.name}</Link> / <span className="text-neutral-800">Scene {s.scene.number}: {s.scene.title}</span>
     </nav>
   );
+  if (telling && anyApproved) {
+    return (
+      <div className="max-w-6xl">
+        {crumbs}
+        <h1 className="mb-4 text-2xl font-semibold">The story: {s.scene.title}</h1>
+        <p className="whitespace-pre-wrap rounded-xl border border-neutral-200 bg-white p-4 text-sm" data-testid="story-text">{s.scene.story || "No story written for this scene."}</p>
+        <p className="mt-3 text-sm text-neutral-600">Some panels are approved, so the story can&apos;t make new panels. Change what happens, the lines and how they&apos;re said on each clip in <Link className="text-blue-700 underline" href={`/projects/${id}/scenes/${sceneId}/clips`}>Make the clips</Link>.</p>
+      </div>
+    );
+  }
   if (telling) {
     const b = studio.briefOf(project);
     return (
       <div className="max-w-6xl">
         {crumbs}
-        <h1 className="mb-4 text-2xl font-semibold">Storyboard: {s.scene.title}</h1>
+        <h1 className="mb-4 text-2xl font-semibold">The story: {s.scene.title}</h1>
         <StoryWizard sceneId={sceneId} sceneTitle={s.scene.title} venueName={s.venue?.name ?? "the venue"} canAuto={!!getTextProvider()} replacing={s.panels.length > 0}
           cast={chars.filter((c) => castIds.includes(c.slug)).map((c) => ({ id: c.slug, name: c.name, role: c.role }))}
           brief={{ format: b.format, parts: b.parts, partSec: b.partSec, audience: b.audience, outline: b.outline, genre: GENRE_PROFILES[b.genre].label }}
           initialStory={s.scene.story} initialTarget={s.scene.targetSec} example={exampleFor(b.genre, b.format)} />
-        {s.panels.length > 0 && <p className="mt-4 text-sm"><Link className="text-blue-700 underline" href="?">Keep the current storyboard</Link></p>}
+        {s.panels.length > 0 && <p className="mt-4 text-sm"><Link className="text-blue-700 underline" href="?">Keep the current panels</Link></p>}
       </div>
     );
   }
@@ -95,7 +107,7 @@ export default async function StoryboardPage({ params, searchParams }: { params:
     <div className="max-w-6xl">
       {crumbs}
       {updatedNote && <p className="my-3 rounded-lg border border-green-300 bg-green-50 p-3 text-sm" data-testid="layout-updated">{updatedNote}</p>}
-      <h1 className="text-2xl font-semibold">Storyboard: {s.scene.title}</h1>
+      <h1 className="text-2xl font-semibold">Scene and props: {s.scene.title}</h1>
       <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-900" data-testid="storyboard-summary">
         <span><strong>{s.panels.length} panels</strong> · about {total} s · target {s.scene.targetSec} s</span>
         {s.venue && <span>· {s.venue.name}{s.venue.status !== "approved" && <span className="text-amber-700"> (venue not approved yet)</span>}</span>}

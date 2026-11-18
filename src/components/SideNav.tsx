@@ -38,7 +38,8 @@ export function SideNav({ projects }: { projects: NavProject[] }) {
 
   const item = (href: string, label: string, testId?: string, exact = false) => {
     const [hp, hq] = href.split("?");
-    const partOk = !hq || (query?.get("part") ?? "") === new URLSearchParams(hq).get("part");
+    const want = new URLSearchParams(hq ?? "");
+    const partOk = !hq || ["part", "story"].every((k) => (query?.get(k) ?? "") === (want.get(k) ?? ""));
     const active = partOk && (exact || hq ? path === hp : path === hp || path.startsWith(hp + "/"));
     return (
       <Link href={href} data-testid={testId}
@@ -98,10 +99,11 @@ export function SideNav({ projects }: { projects: NavProject[] }) {
                                 {twisty(`sc:${s.id}`, sOpen, s.label, `nav-scene-${s.id}`)}
                                 {sOpen && (
                                   <ul className="ml-2 border-l border-neutral-700 pl-2">
-                                    <li>{item(`${sb}/storyboard?part=setting`, "1. Scene and props", `nav-setting-${s.id}`)}</li>
-                                    <li>{item(`${sb}/plan`, "2. Floor plan (who is where)", `nav-plan-${s.id}`)}</li>
-                                    <li>{item(`${sb}/set`, "3. Build the set")}</li>
-                                    <li>{item(`${sb}/clips`, "4. Make the clips")}</li>
+                                    <li>{item(`${sb}/storyboard?story=1`, "1. The story", `nav-story-${s.id}`)}</li>
+                                    <li>{item(`${sb}/storyboard?part=setting`, "2. Scene and props", `nav-setting-${s.id}`)}</li>
+                                    <li>{item(`${sb}/plan`, "3. Floor plan (who is where)", `nav-plan-${s.id}`)}</li>
+                                    <li>{item(`${sb}/set`, "4. Build the set")}</li>
+                                    <li>{item(`${sb}/clips`, "5. Make the clips")}</li>
                                     <li className="mt-1 border-t border-neutral-800 pt-1">{item(sb, "Scene set-up", undefined, true)}</li>
                                     <li>{item(`${sb}/design`, "Shot design")}</li>
                                     <li>{item(`${sb}/animatic`, "Animatic")}</li>
