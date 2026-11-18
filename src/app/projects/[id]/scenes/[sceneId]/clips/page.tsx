@@ -40,7 +40,7 @@ export default async function ClipsPage({ params }: { params: Promise<{ id: stri
       <p className="mt-1 max-w-3xl text-neutral-600">
         Kling keeps the clips consistent with Elements: each character, the venue and each key prop, the same in every clip. Check where everyone is, then for each clip approve its start frame: the clip opens on it and Kling chooses the camera shots. Change what happens, the lines or how they&apos;re said on the clip itself.
       </p>
-      <div className="mt-3"><PositionsBox sceneId={sceneId} positions={v.positions} /></div>
+      <div className="mt-3"><PositionsBox sceneId={sceneId} positions={v.positions} planHref={`/projects/${id}/scenes/${sceneId}/plan`} /></div>
       <KeptTakes sceneId={sceneId} kept={v.kept} panels={v.allPanels} />
       <ClipsBoard projectId={s.scene.projectId} projectCode={repo.getProject(db, s.scene.projectId)?.code ?? ""} sceneId={sceneId} rows={v.rows} clips={v.clips} list={v.listed} pictures={v.pictures} issues={v.issues} frameRequests={v.frameRequests} editors={v.editors} cast={repo.getCast(db, s.scene.projectId).map((c) => ({ id: c.id, name: c.name }))} aspect={v.aspect} jobs={jobs} making={making} />
     </div>

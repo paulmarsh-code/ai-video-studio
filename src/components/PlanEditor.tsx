@@ -54,10 +54,16 @@ export function PlanEditor(props: {
     bind?: (planner: { changed: boolean; summary: string; save: () => Promise<{ ok: boolean; error?: string; note?: string }> }) => void;
   };
   /** The project's genre, for the app's camera choice on a panel (D44). */ genre?: Genre;
+  /**
+   * The scene's one floor plan (D165): where everyone starts, people and props only. No cameras,
+   * no panel stepper, no line of action: Kling chooses the shots.
+   */
+  positionsOnly?: boolean;
 }) {
   const { cast } = props;
   const router = useRouter();
-  const panels = useMemo(() => props.panels ?? [], [props.panels]);
+  const panels = useMemo(() => (props.positionsOnly ? [] : props.panels ?? []), [props.panels, props.positionsOnly]);
+  const noCams = !!props.positionsOnly;
   const [plan, setPlan] = useState<GeometryPlanData>(props.initial);
   const [saved, setSaved] = useState<GeometryPlanData>(props.initial);
   const [savedVersion, setSavedVersion] = useState(props.version);
@@ -396,7 +402,7 @@ export function PlanEditor(props: {
 
             <Group clipX={PAD} clipY={PAD} clipWidth={width - PAD * 2} clipHeight={height - PAD * 2} listening={false}>
             {/* Camera cones */}
-            {(panelMode ? (panelCam ? [panelCam] : []) : plan.cameras).map((c) => {
+            {(noCams ? [] : panelMode ? (panelCam ? [panelCam] : []) : plan.cameras).map((c) => {
               const r = readCamera(shown, c);
               const p = toPx(c.position);
               const fov = c.fovDeg ?? PRESET_FOV[c.preset];
@@ -408,7 +414,7 @@ export function PlanEditor(props: {
             })}
 
             {/* Line of action */}
-            {!panelMode && loa && loa[0] && loa[1] && (() => {
+            {!panelMode && !noCams && loa && loa[0] && loa[1] && (() => {
               const a = toPx(loa[0]!), c = toPx(loa[1]!);
               const dx = c.x - a.x, dy = c.y - a.y, k = 4;
               return <Line points={[a.x - dx * k, a.y - dy * k, c.x + dx * k, c.y + dy * k]} stroke="#f59e0b" strokeWidth={1.5} dash={[8, 6]} listening={false} />;
@@ -458,7 +464,7 @@ export function PlanEditor(props: {
             })}
 
             {/* Cameras: body + aim handle. On a panel, only that panel's camera, moved for it alone (D43). */}
-            {(panelMode ? (panelCam ? [panelCam] : []) : plan.cameras).map((c) => {
+            {(noCams ? [] : panelMode ? (panelCam ? [panelCam] : []) : plan.cameras).map((c) => {
               const p = toPx(c.position);
               const t = toPx(c.lookAt);
               const sel = panelMode || c.id === selectedCam;
@@ -561,6 +567,7 @@ export function PlanEditor(props: {
         <p className="px-2 pb-1 text-xs text-neutral-500" style={{ maxWidth: Math.max(width, 420) }}>
           {panelMode
             ? <>Panel {step}: drag anyone to where they are in this panel; click someone to turn them with the blue handle. Teal ring: placed by the app from this panel&apos;s words. Black ring: set by you. Dashed ring: carried on from an earlier panel. Amber ring: arriving, from the words. Faded: in the room but not in this picture. Drag a prop to move it for this panel. Scale: {SCALE}px = 1 m.</>
+            : noCams ? <>Where everyone is as the scene starts. Drag people and props to move them; click someone to turn them. Or say what&apos;s wrong in words in the box above. Scale: {SCALE}px = 1 m.</>
             : <>Drag people, furniture and cameras. Select a camera, then drag its white handle to aim it. Dashed amber line: the 180° line of action. Scale: {SCALE}px = 1 m.</>}
         </p>
       </div>
@@ -764,7 +771,7 @@ export function PlanEditor(props: {
             ))}
           </div>
         </div>
-        <div className="rounded-xl border border-neutral-200 bg-white p-5">
+        {!noCams && <><div className="rounded-xl border border-neutral-200 bg-white p-5">
           <h2 className="text-lg font-semibold">Cameras</h2>
           <div className="mt-2 flex flex-wrap gap-2">
             {plan.cameras.map((c) => (
@@ -866,7 +873,7 @@ export function PlanEditor(props: {
         <div className="rounded-xl border border-neutral-200 bg-white p-5">
           <h2 className="text-lg font-semibold">Continuity checks</h2>
           <FindingList findings={lineFindings} emptyText="No continuity problems: every camera is on the same side of the line." />
-        </div>
+        </div></>}
 
         <div className="flex flex-wrap items-center gap-3">
           <ActionButton label="Save plan (new version)" busyLabel="Saving…" doneLabel={`Saved as v${savedVersion}`} disabled={!dirty} resetKey={plan}
@@ -874,6 +881,7 @@ export function PlanEditor(props: {
           <ActionButton variant="secondary" label="Save to library" busyLabel="Saving…" doneLabel="In your library" disabled={dirty} resetKey={plan}
             title={dirty ? "Save the plan first" : ""}
             onAction={async () => { await addPlanToLibraryAction(props.sceneId, "Venue and blocking plan"); setStatus("Plan saved to your library."); }} />
+          {noCams && <button type="button" disabled={!history.length} onClick={undo} className="rounded-md border border-neutral-300 px-3 py-1 text-sm disabled:opacity-40">Undo last move</button>}
           <span className="text-sm text-neutral-600">Current: v{savedVersion}{dirty ? " (unsaved changes)" : ""}</span>
           {status && <span className="text-sm text-green-700">{status}</span>}
         </div>

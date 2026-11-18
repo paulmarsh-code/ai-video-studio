@@ -111,7 +111,7 @@ export function ClipMoments({ sceneId, panels, editors, cast }: { sceneId: strin
  * words what's wrong. The words go into every start frame and clip; the plan moves to match where
  * it can.
  */
-export function PositionsBox({ sceneId, positions }: { sceneId: string; positions: SceneClipsView["positions"] }) {
+export function PositionsBox({ sceneId, positions, noThumb, planHref }: { sceneId: string; positions: SceneClipsView["positions"]; noThumb?: boolean; planHref?: string }) {
   const router = useRouter();
   const [words, setWords] = useState(positions.note);
   const [busy, setBusy] = useState<string | null>(null);
@@ -129,8 +129,8 @@ export function PositionsBox({ sceneId, positions }: { sceneId: string; position
     <section className="rounded-lg border border-neutral-200 bg-white p-3">
       <h2 className="text-lg font-semibold">Positions {positions.approved && <span className="ml-1 text-sm font-normal text-green-700">✓ Approved</span>}</h2>
       <p className="text-sm text-neutral-600">Where everyone is as the scene starts. If something&apos;s wrong, say what in words: the app redraws from them, and every start frame and clip follows them.</p>
-      <div className="mt-2 grid gap-3 md:grid-cols-2">
-        <div className="max-w-md"><PlanThumb plan={positions.plan} names={positions.names} /></div>
+      <div className={`mt-2 grid gap-3 ${noThumb ? "" : "md:grid-cols-2"}`}>
+        {!noThumb && <div className="max-w-md"><PlanThumb plan={positions.plan} names={positions.names} />{planHref && <a className="text-xs text-blue-700 underline" href={planHref}>Open the floor plan</a>}</div>}
         <div>
           <textarea className="w-full rounded border border-neutral-300 px-2 py-1 text-sm" rows={4} value={words} onChange={(e) => setWords(e.target.value)} data-testid="positions-words"
             placeholder="e.g. Jade is close enough to hear Chase's call but hidden from him, with two or three guests between them; Chase leans on the bar facing it, his back to Jade" />
