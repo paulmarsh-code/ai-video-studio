@@ -104,8 +104,7 @@ export function SideNav({ projects }: { projects: NavProject[] }) {
                                     <li>{item(`${sb}/plan`, "3. Floor plan (who is where)", `nav-plan-${s.id}`)}</li>
                                     <li>{item(`${sb}/set`, "4. Build the set")}</li>
                                     <li>{item(`${sb}/clips`, "5. Make the clips")}</li>
-                                    <li className="mt-1 border-t border-neutral-800 pt-1">{item(sb, "Scene set-up", undefined, true)}</li>
-                                    <li>{item(`${sb}/design`, "Shot design")}</li>
+                                    <li className="mt-1 border-t border-neutral-800 pt-1">{item(sb, "Scene overview", undefined, true)}</li>
                                     <li>{item(`${sb}/animatic`, "Animatic")}</li>
                                   </ul>
                                 )}

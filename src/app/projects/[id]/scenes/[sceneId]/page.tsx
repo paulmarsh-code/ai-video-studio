@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "@/db/client";
-import { validateShot } from "@/lib/domain/validator";
 import * as repo from "@/lib/repo";
 
 export const dynamic = "force-dynamic";
@@ -23,53 +22,29 @@ export default async function ScenePage({ params }: { params: Promise<{ id: stri
         EP{String(s.scene.episode).padStart(2, "0")} S{String(s.scene.number).padStart(2, "0")}: {s.scene.title}
       </h1>
       <p className="text-sm text-neutral-600">{s.venue?.name}</p>
-      <div className="mt-3 flex gap-4 text-sm">
-        <Link className="text-blue-700 underline" href={`/projects/${id}/scenes/${sceneId}/storyboard`}>Storyboard</Link>
-        <Link className="font-semibold text-blue-700 underline" href={`/projects/${id}/scenes/${sceneId}/design`}>Design shots</Link>
-        <Link className="text-blue-700 underline" href={`/projects/${id}/scenes/${sceneId}/plan`}>Floor plan</Link>
-        <Link className="text-blue-700 underline" href={`/projects/${id}/scenes/${sceneId}/set`}>Build the set</Link>
-        <Link className="text-blue-700 underline" href={`/projects/${id}/scenes/${sceneId}/clips`}>Make the clips</Link>
-        <Link className="text-blue-700 underline" href={`/projects/${id}/scenes/${sceneId}/animatic`}>Animatic</Link>
-      </div>
+      {/* The scene's steps (D164–D165): no cameras or shot settings; Kling chooses the shots. */}
+      <ol className="mt-3 flex flex-wrap gap-4 text-sm">
+        <li><Link className="text-blue-700 underline" href={`/projects/${id}/scenes/${sceneId}/storyboard?story=1`}>1. The story</Link></li>
+        <li><Link className="text-blue-700 underline" href={`/projects/${id}/scenes/${sceneId}/storyboard?part=setting`}>2. Scene and props</Link></li>
+        <li><Link className="text-blue-700 underline" href={`/projects/${id}/scenes/${sceneId}/plan`}>3. Floor plan (who is where)</Link></li>
+        <li><Link className="text-blue-700 underline" href={`/projects/${id}/scenes/${sceneId}/set`}>4. Build the set</Link></li>
+        <li><Link className="font-semibold text-blue-700 underline" href={`/projects/${id}/scenes/${sceneId}/clips`}>5. Make the clips</Link></li>
+      </ol>
 
-      <h2 className="mt-6 text-lg font-semibold">Shots</h2>
-      <div className="mt-2 overflow-x-auto">
-        <table className="w-full min-w-[640px] border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-neutral-300 text-left text-neutral-600">
-              <th className="py-2 pr-3">Shot</th>
-              <th className="pr-3">Speaker</th>
-              <th className="pr-3">Line</th>
-              <th className="pr-3">Camera</th>
-              <th className="pr-3">Duration</th>
-              <th className="pr-3">Checks</th>
-            </tr>
-          </thead>
-          <tbody>
-            {s.shots.map((shot) => {
-              const f = validateShot(shot.spec, cast, s.plan?.data);
-              const errors = f.filter((x) => x.severity === "error").length;
-              const warnings = f.filter((x) => x.severity === "warning").length;
-              return (
-                <tr key={shot.id} className="border-b border-neutral-200 bg-white">
-                  <td className="py-2 pr-3">
-                    <Link className="font-mono text-blue-700 underline" href={`/projects/${id}/shots/${shot.id}`}>{shot.code}</Link>
-                  </td>
-                  <td className="pr-3">{shot.spec.speakerId ? name(shot.spec.speakerId) : <span className="text-neutral-500">silent</span>}</td>
-                  <td className="pr-3">{shot.spec.dialogue ?? ""}</td>
-                  <td className="pr-3">{s.plan?.data.cameras.find((c) => c.id === shot.spec.cameraId)?.name ?? "—"}</td>
-                  <td className="pr-3">{shot.spec.durationSec}s</td>
-                  <td className="pr-3">
-                    {errors > 0 && <span className="mr-2 rounded bg-red-100 px-2 py-0.5 text-red-800">{errors} error</span>}
-                    {warnings > 0 && <span className="mr-2 rounded bg-amber-100 px-2 py-0.5 text-amber-800">{warnings} warning</span>}
-                    {errors + warnings === 0 && <span className="rounded bg-green-100 px-2 py-0.5 text-green-800">ready</span>}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <h2 className="mt-6 text-lg font-semibold">What happens</h2>
+      <p className="text-sm text-neutral-600">Change, add or delete a moment on <Link className="text-blue-700 underline" href={`/projects/${id}/scenes/${sceneId}/clips`}>Make the clips</Link>: click &quot;Change&quot; on it.</p>
+      <ol className="mt-2 space-y-1 text-sm">
+        {s.panels.slice().sort((a, b) => a.order - b.order).map((p) => {
+          const shot = s.shots.find((x) => x.panelId === p.id);
+          return (
+            <li key={p.id} className="rounded border border-neutral-200 bg-white px-3 py-2">
+              <span className="font-mono text-neutral-500">{p.order}.</span> {p.description}
+              {shot?.spec.speakerId && shot.spec.dialogue ? <span className="text-neutral-700"> {name(shot.spec.speakerId)}: &ldquo;{shot.spec.dialogue}&rdquo;</span> : null}
+              <span className="ml-1 text-neutral-500">· {shot?.spec.durationSec ?? p.durationSec}s</span>
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }

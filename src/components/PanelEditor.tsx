@@ -144,7 +144,7 @@ export function PanelEditor({ panel, sceneId, cast, first, last, suggestedCode, 
           </>
         ) : (
           <ActionButton label="Add panel" busyLabel="Adding…" doneLabel="Panel added" doneForMs={2500} disabled={pending || !f.code.trim() || !f.description.trim()}
-            onAction={() => call(() => addPanelAction(sceneId, input), (v) => { const cam = (v as { camera?: string | null } | undefined)?.camera; return cam ? `Panel added above, with its camera: ${cam}. Draw its picture next.` : "Panel added above. Run Design shots on the floor plan to choose its camera."; })} />
+            onAction={() => call(() => addPanelAction(sceneId, input), (v) => { const cam = (v as { camera?: string | null } | undefined)?.camera; void cam; return "Panel added. It's on Make the clips, in the clip it belongs to."; })} />
         )}
         {dirty && panel && <span className="text-xs text-amber-700">Unsaved changes</span>}
       </div>

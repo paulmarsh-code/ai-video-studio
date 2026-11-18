@@ -107,9 +107,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                     </ol>
                   ) : <p className="text-sm text-neutral-600">Tell this scene&apos;s story to create its panels.</p>}
                   <p className="mt-2 flex flex-wrap gap-4 text-sm">
-                    <Link className="text-blue-700 underline" href={`/projects/${id}/scenes/${s.id}/design`}>Cameras</Link>
                     <Link className="text-blue-700 underline" href={`/projects/${id}/scenes/${s.id}/plan`}>Floor plan</Link>
-                    <Link className="text-blue-700 underline" href={`/projects/${id}/scenes/${s.id}`}>Shots and prompts</Link>
+                    <Link className="text-blue-700 underline" href={`/projects/${id}/scenes/${s.id}/clips`}>Make the clips</Link>
                     <Link className="text-blue-700 underline" href={`/projects/${id}/scenes/${s.id}/animatic`}>Animatic</Link>
                   </p>
                 </div>
