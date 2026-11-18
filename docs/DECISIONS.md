@@ -2899,3 +2899,10 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 - **General:** any character, any call, from the panel words.
 - **Fix, same day:** a panel naming two people ("Chase, phone to his ear; Jade stands behind him") put both on the call. The caller is now the first person named in the clause that mentions the phone or the call.
 - **Reaches the generation through:** a prompt line in the clip request. Tested in `clipFrames.d164.test.ts`.
+
+## D171: never a line through a glass (18 Nov 2026)
+
+- **Visible failure.** Scene 4 panels 6–7, retake: Chase said "You're right. What a nerve…" with the tumbler at his lips, so his mouth didn't move with the words. The panel and its delivery both asked for a sip around the line.
+- **Decision.** When a clip's moments mention drinking or eating (sip, drink, swallow, eat, bite…), the request adds: nobody drinks or eats while saying a line; a sip comes before or after their words, never during them; while they speak the glass is away from their mouth and their lips move with every word.
+- **General:** any character, any drink or food.
+- **Reaches the generation through:** a prompt line in the clip request. Tested in `clipFrames.d164.test.ts`.

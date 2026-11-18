@@ -70,6 +70,7 @@ export interface ClipFrames { start?: string; startApproved?: boolean; end?: str
 /** How it's said asks for an impression or a put-on voice (D168). */
 export const PUT_ON = /\b(mimic\w*|imitat\w*|impression|impersonat\w*|put-on voice|in (?:a|her|his|their) voice|parrot\w*)\b/i;
 
+const SIP = /\b(sip|sips|drink|drinks|drinking|swallow\w*|gulp\w*|eats?|eating|bites?)\b/i;
 const CALL = /\b(phone|on the line|on a call|the call|mobile)\b/i;
 const CALL_ENDS = /\b(cuts the call|ends the call|hangs up|lowers the phone|puts (?:the|his|her|their) phone (?:down|away)|pockets (?:the|his|her|their) phone|gotta go)\b/i;
 /** Who is on a phone call during these panels, and the moment the call ends if it ends in them (D170). */
@@ -582,6 +583,8 @@ export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake
       "Natural, subtle acting, no exaggerated gestures. Whoever speaks looks at the person they are speaking to, unless what happens says otherwise. Guests behind them stay in soft focus.",
       "Sound: the voices, clear, over a low, steady room murmur at the same level throughout; no music at all, it is added in the edit; footsteps and movement quiet, never louder than speech. Gestures make no sound: no clicks, snaps or claps. A scoff, sigh or laugh comes with that person's line, never after it; once someone has said their last line, they make no more sounds.",
       "Each person keeps their own face and clothes throughout; anything they carry stays in the same hand until what happens says it is handed over or put down, then stays where it is left.",
+      // Never a line through a glass (D171): Chase spoke while drinking, so his mouth didn't move.
+      panels.some((p) => SIP.test(p.description) || p.dialogue.some((d) => SIP.test(d.delivery ?? ""))) ? "Nobody drinks or eats while saying a line: a sip comes before or after their words, never during them; while they speak the glass is away from their mouth and their lips move with every word." : "",
       ...onCall.map((c) => `${c.name} is on a phone call ${c.ends ? `until ${c.ends}` : "for the whole clip"}: the phone stays at their ear in the same hand, never put down or lowered before then, and they keep talking into it; anything else they do (a drink, a gesture) is with the other hand.`),
       "Each person keeps the feeling they're given to the very last frame: nobody smiles or softens unless what happens says so.",
       inClip.length > 1 ? `${and(names(inClip))} each appear once in the picture, never twice; no guest looks or dresses like any of them.` : "",

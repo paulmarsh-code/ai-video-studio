@@ -98,3 +98,14 @@ describe("Someone on a phone call keeps the phone at their ear (D170)", () => {
     expect(c.prompt).toContain("Bo is on a phone call for the whole clip: the phone stays at their ear in the same hand, never put down");
   });
 });
+
+describe("Never a line through a glass (D171)", () => {
+  it("says a sip comes before or after the words when a moment has drinking in it", () => {
+    const [c] = sceneClips(base({ "1-2": { start: "s", startApproved: true } }));
+    expect(c.prompt).not.toContain("Nobody drinks or eats while saying a line");
+    const b = base({ "1-2": { start: "s", startApproved: true } });
+    b.panels[1].description = "Bo takes a sip, then speaks.";
+    const [d] = sceneClips(b);
+    expect(d.prompt).toContain("Nobody drinks or eats while saying a line: a sip comes before or after their words, never during them");
+  });
+});
