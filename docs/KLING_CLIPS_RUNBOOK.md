@@ -21,6 +21,7 @@ When he says "make the clips":
    - model `kling-video-v4_0`;
    - arguments: `prompt` (the job's prompt), `elements` as a JSON array of `{id, bindName: name, type: "image"}`, `duration` (seconds), `aspect_ratio`, `resolution` 720p, `enable_audio` true, `prefer_multi_shots` true;
    - inputs: `image_N` for each picture's `klingUrl`, in order, and `audio_N` for each voice's `klingUrl` (the request says "exactly the voice in 音频N").
+   - Pictures with a `wall` (D178) are the venue's own pictures of each wall: upload and send them like the others, in order.
    - Then set the job's `status` to `sent` with its `generationId`, and commit the jobs file, with `expectedMtimeMs` from the stage.
 5. **When it's made.** Poll `query_tasks`, then:
    - download the video (`urlWithoutWatermark`) in the workspace;
@@ -42,6 +43,7 @@ When Paul presses "Make … from the app's pictures" on the clips page, the app 
    - `name` and `description` from the request;
    - `tags` from the request;
    - `resource`: `cover` is picture 1's `klingUrl`; `secondary` is the rest, as `{name: role, inputType: "URL", url}`.
+   - `resource.voice` (D177): when the request has a `voice`, stage it from its `path`, make it an mp3 of 5–30 s as in step 3b of the clips, upload it, and pass its URL. The voice then comes with the face; clips send no separate voice file for that person.
 4. **Write back.** Set `status` to `done` with the returned `id`, or `failed` with Kling's error.
 5. **Refresh the list.** Call `element_list` and write `data/kling_elements.json` as `{updatedAt, elements: [{id, name}]}`, so the dropdowns show the new Elements.
 6. **Commit both files.** The clips page links each made Element to its character, venue or prop the next time it opens (once; a later pick in the dropdown stands).

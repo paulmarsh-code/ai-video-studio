@@ -2947,3 +2947,29 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 - **Decision.** Every clip request now says that coats, jackets, hats, scarves and bags stay as they are in the start frame (worn, or over a chair, on a hook or on the floor), in every shot and from every angle. They come off or go on only when what happens says so, for example "takes her coat off and puts it over the chair", or "stands, takes it off the chair and puts it on". Without a start frame, they stay on or off as the clip starts. Paul: "only move if prompt says do".
 - **General:** any person and any outer clothing, in any scene.
 - **Reaches the generation through:** a prompt line in the clip request (frames flow and shot flow). Tested in `coats.d176.test.ts`.
+
+## D177: the voice is part of the character (19 Nov 2026)
+
+- **Visible failure.** Scene 5, panels 6–7: Jade said her line in Samantha's voice. The clip had two separate voice files and the words "Jade is the voice in 音频1, Samantha in 音频2", and Kling swapped them. Paul: "voices need to be part of the character".
+- **Decision.** A character's voice sample goes into their Kling Element. An image Element takes a voice as an mp3.
+  - The Element request carries the voice. Claude uploads it as an mp3 and makes the Element with it, and the app records which voice the Element holds.
+  - A clip sends no voice file for a person whose Element holds their current voice. It says "their own voice, the one that comes with <<<their Element>>>…, and never anyone else's voice".
+  - An Element made before the voice, or with an older voice, falls back to the voice file. The clips page says "not in the Element yet: Make again puts it in".
+- **General:** any speaking character, in any scene or look.
+- **Reaches the generation through:** the character's Element, plus the clip request's voice line. Tested in `voiceWallsCoats.d177.test.ts`.
+
+## D178: the venue all the way round in every clip (19 Nov 2026)
+
+- **Visible failure.** Same clip: when Kling cut to an angle the start frame didn't show, the café's black-framed paned window behind Jade became a plain sheet of glass. Paul: "venue shots are supposed to be from 360".
+- **Decision.** Every clip with a start frame also sends the venue's own picture of each wall, the same ones its Element is made from, after the start frame and before any end frame (10 pictures at most). The request labels each one, says they show the room only, and says that whatever is behind the people, from every angle, is the matching wall with the same windows, walls, fittings and light.
+- **General:** any venue that has wall pictures.
+- **Reaches the generation through:** reference pictures and a prompt line in the clip request. The clip review labels them as the room. Tested in `voiceWallsCoats.d177.test.ts`.
+
+## D179: coat on, coat off (19 Nov 2026)
+
+- **Visible failure.** Scene 5, clips 2 and 3: Samantha wore her camel coat and bag in close-ups, while the same coat hung over her chair and the bag sat on the floor. Her look's Element showed her wearing both. D176's prompt line fixed Jade, whose start frame showed her coat on the chair, but not Samantha. Paul: "we need to have more than one character ref… with coats and without".
+- **Decision.** "Dress them for this scene" finds the outer layers in the clothes words (coats, jackets, hats, scarves, bags). When there are any, it also draws the person indoors without them (about 5p more) and asks for a second Element: "<name> (this scene, coat off)".
+  - Each clip and start frame uses the coat-off look, unless what happens has them wearing or putting on their coat: arriving, leaving, outside, "puts it on".
+  - Hanging it on a chair doesn't count.
+- **General:** any character, any outer clothing, any scene.
+- **Reaches the generation through:** the character Element and the start frame's reference picture. Tested in `voiceWallsCoats.d177.test.ts`.

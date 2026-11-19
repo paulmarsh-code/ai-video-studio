@@ -10,9 +10,17 @@ import type { GeometryPlanData, ShotSpec } from "./domain/types";
 export type { ClipFrames };
 import * as repo from "./repo";
 import * as studio from "./studioRepo";
-import { clipKey, elementKey, whenLine, sceneClips, type Clip, type ClipFrames, type ClipPanel } from "./domain/clips";
+import { WEARS_OUTER, clipKey, elementKey, whenLine, sceneClips, type Clip, type ClipFrames, type ClipPanel } from "./domain/clips";
 import { isSetPiece } from "./domain/setRender";
 import { withPiecePictures } from "./setImage";
+import { setPicturesOf } from "./domain/setPictures";
+
+/** The venue's picture towards each wall (D178): the set's own wall picture, else the view's. */
+export function venueWalls(venue: { views?: unknown; setPictures?: unknown } | null | undefined): { name: string; assetId: string }[] {
+  if (!venue) return [];
+  const walls = setPicturesOf(venue.setPictures as never).walls ?? {};
+  return ((venue.views ?? []) as { name: string; imageAssetId?: string }[]).flatMap((v) => { const id = walls[v.name] ?? v.imageAssetId; return id ? [{ name: v.name, assetId: id }] : []; });
+}
 import { klingElementList, type KlingListed } from "./klingList";
 
 export interface PictureChoice {
@@ -141,7 +149,7 @@ export function buildSceneClips(db: DB, sceneId: string): SceneClipsView | null 
   const listed = klingElementList();
   const elements = Object.fromEntries(Object.entries(studio.getKlingElements(db, projectId)).map(([k, e]) => {
     const hit = listed.elements.find((x) => x.id === e.id) ?? listed.elements.find((x) => x.name.trim().toLowerCase() === e.name.trim().toLowerCase());
-    return [k, hit ? { id: hit.id, name: hit.name } : e];
+    return [k, hit ? { id: hit.id, name: hit.name, ...(e.voiceAssetId ? { voiceAssetId: e.voiceAssetId } : {}) } : e];
   }));
   // A character dressed differently in this scene (D174) uses that look's Element in its clips.
   const looks = studio.getSceneLooks(db, sceneId);
@@ -149,6 +157,10 @@ export function buildSceneClips(db: DB, sceneId: string): SceneClipsView | null 
     const own = elements[elementKey.look(slug, sceneId)];
     if (own) elements[elementKey.character(slug)] = own; else delete elements[elementKey.character(slug)];
   }
+  // The same looks with coats and bags off (D179), used unless what happens has them wearing them.
+  const coatOff = Object.fromEntries(Object.keys(looks).flatMap((slug) => { const e = elements[elementKey.lookOff(slug, sceneId)]; return e?.id ? [[slug, e]] : []; }));
+  // The venue all the way round (D178): the same wall pictures its Element is made from.
+  const walls = venueWalls(s.venue);
   // Each panel's picture for Kling (D123): the storyboard's unless another version or none is picked.
   const picked = ((s.scene.staging ?? {}) as { clipPictures?: Record<string, string> }).clipPictures ?? {};
   const panelAssets = repo.listAssets(db, projectId, "panel");
@@ -175,13 +187,13 @@ export function buildSceneClips(db: DB, sceneId: string): SceneClipsView | null 
   const frames = studio.getClipFrames(db, sceneId);
   const positionsNote = studio.getPositionsNote(db, sceneId);
   const when = studio.getSceneWhen(db, sceneId);
-  const clips = sceneClips({ panels, cast, plan, venue: { id: s.venue.id, name: s.venue.name }, crowd, elements, kept: kept.map((k) => ({ from: k.from, to: k.to, frameAssetId: k.frameAssetId })), frames, positionsNote, when });
+  const clips = sceneClips({ panels, cast, plan, venue: { id: s.venue.id, name: s.venue.name }, crowd, elements, kept: kept.map((k) => ({ from: k.from, to: k.to, frameAssetId: k.frameAssetId })), frames, positionsNote, when, coatOff, walls });
   const held = [...new Set(panels.flatMap((p) => (p.spec.props ?? []).map((x) => x.name)))];
   const pieces = (plan.furniture ?? []).filter(isSetPiece).map((f) => f.name);
   const rows = [
     // Only this scene's people (D159): Gary and Samantha, in the project but not the scene, showed
     // as "2 missing Elements" to make.
-    ...cast.filter((c) => !plan.actors?.length || plan.actors.some((a) => a.characterId === c.id)).map((c) => (looks[c.id] ? { key: elementKey.look(c.id, sceneId), what: `${c.name} (this scene's clothes)`, kind: "Character" } : { key: elementKey.character(c.id), what: c.name, kind: "Character" })),
+    ...cast.filter((c) => !plan.actors?.length || plan.actors.some((a) => a.characterId === c.id)).flatMap((c) => (looks[c.id] ? [{ key: elementKey.look(c.id, sceneId), what: `${c.name} (this scene's clothes)`, kind: "Character" }, ...(looks[c.id].off?.front ? [{ key: elementKey.lookOff(c.id, sceneId), what: `${c.name} (this scene, coat off)`, kind: "Character" }] : [])] : [{ key: elementKey.character(c.id), what: c.name, kind: "Character" }])),
     { key: elementKey.venue(s.venue.id), what: s.venue.name, kind: "Venue" },
     ...[...new Set([...pieces, ...held])].map((n) => ({ key: elementKey.prop(n), what: n, kind: "Prop" })),
   ].map((r) => ({ ...r, element: elements[r.key] ?? studio.getKlingElements(db, projectId)[r.key], ...(r.kind === "Character" ? { voice: elements[elementKey.voice(r.key.slice(5).split("@")[0])] } : {}) }));
@@ -206,7 +218,9 @@ export function buildSceneClips(db: DB, sceneId: string): SceneClipsView | null 
   const frameRequests = clips.map((c) => {
     const ps = c.panels.map((o) => panels.find((p) => p.order === o)!).filter(Boolean);
     const who = [...new Set(ps.flatMap((p) => [...p.spec.visibleIds, ...p.dialogue.map((d) => d.characterId)]))].filter((id) => !plan.actors?.length || plan.actors.some((a) => a.characterId === id));
-    const refsOf = (id: string) => { const r = looks[id]?.refs?.front ? looks[id].refs! : profiles[id]?.refs ?? {}; return [r.front ?? r.face ?? r.back].filter(Boolean) as string[]; };
+    // Coat off unless what happens has them wearing it (D179), as in the clip.
+    const wearing = WEARS_OUTER.test(ps.map((p) => p.description).join(" "));
+    const refsOf = (id: string) => { if (!wearing && looks[id]?.off?.front) return [looks[id].off!.front!]; const r = looks[id]?.refs?.front ? looks[id].refs! : profiles[id]?.refs ?? {}; return [r.front ?? r.face ?? r.back].filter(Boolean) as string[]; };
     const props = [...propPics.map((x) => ({ name: x.name, detail: x.detail })), ...staged.filter((x) => !propPics.some((y) => y.name === x.name)).map((x) => ({ name: x.name, detail: x.detail }))];
     const refAssetIds = [...who.flatMap(refsOf), ...propPics.map((x) => x.assetId), ...staged.flatMap((x) => (x.imageAssetId ? [x.imageAssetId] : [])), ...venueViews].slice(0, 14);
     const make = (which: "start" | "end", p: ClipPanel) => ({

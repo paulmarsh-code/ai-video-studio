@@ -12,7 +12,8 @@ import { isSetPiece } from "./setRender";
 import { actionFloor, spokenSeconds } from "./duration";
 import { CLIP_MAX_SEC, groupByTime } from "./clipCameras";
 
-export interface KlingElement { id: string; name: string }
+/** voiceAssetId (D177): the voice sample made into the Element, so the voice comes with the face. */
+export interface KlingElement { id: string; name: string; voiceAssetId?: string }
 /** Elements by what they stand for: "char:<slug>", "venue:<id>", "prop:<name in lower case>". */
 export type KlingElements = Record<string, KlingElement>;
 
@@ -24,10 +25,26 @@ export const elementKey = {
   voice: (slug: string) => `voice:${slug}`,
   /** A character's clothes in one scene (D174): its own Element, made from that look's pictures. */
   look: (slug: string, sceneId: string) => `char:${slug}@${sceneId}`,
+  /** The same look with the coat, jacket, hat or bag off (D179): its own Element. */
+  lookOff: (slug: string, sceneId: string) => `char:${slug}@${sceneId}~off`,
 };
 
 /** A character's look in one scene (D174): what they wear there, and the pictures made of it. */
-export interface SceneLook { wardrobe: string; refs?: { front?: string; back?: string; face?: string } }
+export interface SceneLook { wardrobe: string; refs?: { front?: string; back?: string; face?: string }; off?: { front?: string } }
+
+// D179: what someone takes off indoors. Samantha's Element wore her camel coat and bag, so Kling
+// put them on her though both were over her chair in the start frame.
+const OUTER = /\b(coats?|overcoats?|jackets?|parkas?|anoraks?|macs?|trench\w*|blazers?|gilets?|scarf|scarves|hats?|beanies?|caps?|gloves|(?:hand|shoulder|cross-body |tote |)bags?|backpacks?|totes?|satchels?|umbrellas?)\b/i;
+/** The parts of a look someone takes off indoors: coats, jackets, hats, scarves, bags. */
+export function outerOf(wardrobe: string): string[] {
+  return wardrobe.split(/[,;]|\band\b(?![^()]*\))/).map((x) => x.trim().replace(/\.$/, "")).filter((x) => x && OUTER.test(x));
+}
+/** The look without its outer layers, in words. */
+export function withoutOuter(wardrobe: string): string {
+  return wardrobe.split(/[,;]/).map((x) => x.trim().replace(/\.$/, "")).filter((x) => x && !OUTER.test(x)).join(", ");
+}
+/** What happens has someone wearing or putting on their coat: arriving, leaving, outside (D179). */
+export const WEARS_OUTER = /\b(?:puts?|putting|pulls?|pulling|shrugs?|shrugging|slips?|slipping)\s+(?:on|into)\b[^.]*\b(?:coat|jacket|hat|scarf)|\b(?:coat|jacket|hat|scarf)\b[^.]*\b(?:puts?|putting|pulls?|pulling|shrugs?|slips?)\s+(?:it|them)\s+on\b(?!\s+(?:the|a|an|her|his|their)\b)|\b(?:coat|jacket)s?\s+(?:on|still on|buttoned|zipped)\b|\b(?:arriv\w*|walks? in|comes? in|steps? in|enters?|entering|leav\w*|heads? out|walks? out|goes? out|gets? up to go|outside|on the street|in the street)\b/i;
 
 export interface ClipPanel {
   order: number;
@@ -66,6 +83,10 @@ export interface ClipInput {
   positionsNote?: string;
   /** When the scene happens (D175): time of day, season, weather. */
   when?: string;
+  /** Each person's coat-off Element in this scene (D179), used unless what happens has them wearing it. */
+  coatOff?: Record<string, KlingElement>;
+  /** The venue's own pictures of each wall (D178), sent with every clip so any angle shows the right room. */
+  walls?: { name: string; assetId: string }[];
 }
 
 export interface KeptTake { from: number; to: number; frameAssetId?: string }
@@ -131,7 +152,7 @@ export interface Clip {
    * The storyboard pictures to add to the job, in this order (D119): picture 1 is shot 1's panel,
    * and so on. Kling stages each shot from its picture; words alone it treats as a suggestion.
    */
-  pictures: { shot: number; panel: number; assetId: string; continuity?: boolean }[];
+  pictures: { shot: number; panel: number; assetId: string; continuity?: boolean; wall?: string }[];
   /** Voice samples for who speaks (D146), in order: audio N is 音频N. Kling 4.0 takes up to 3. */
   audios: { n: number; characterId: string; assetId: string }[];
   /** The kept take this clip carries on from (D130). */
@@ -517,6 +538,12 @@ export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake
   const before = opensOnBefore ? i.panels.filter((p) => p.order < panels[0].order).sort((a, b) => b.order - a.order)[0] : undefined;
   const fromBefore = before ? [...before.spec.visibleIds, ...before.dialogue.map((d) => d.characterId)] : [];
   const inClip = [...new Set([...panels.flatMap((p) => [...p.spec.visibleIds, ...p.dialogue.map((d) => d.characterId)]), ...fromBefore])].filter((id) => i.cast.some((c) => c.id === id) && inScene(id));
+  // Coat on or off (D179): the coat-off look unless what happens has them wearing their coat.
+  const wearing = WEARS_OUTER.test(panels.map((p) => p.description).join(" "));
+  const els: KlingElements = { ...i.elements };
+  for (const id of inClip) if (!wearing && i.coatOff?.[id]?.id) els[elementKey.character(id)] = i.coatOff[id];
+  // The voice comes with the face (D177): a character whose Element carries their voice sample.
+  const voicedIn = (id: string) => { const c = els[elementKey.character(id)]; const v = i.elements[elementKey.voice(id)]; return !!(c?.voiceAssetId && v?.id && c.voiceAssetId === v.id); };
   const pieces = (i.plan.furniture ?? []).filter((x) => isSetPiece(x));
   const held = [...new Set(panels.flatMap((p) => (p.spec.props ?? []).map((x) => x.name)))].filter((n) => !pieces.some((x) => x.name === n));
   const wanted: { key: string; what: string }[] = [
@@ -528,7 +555,7 @@ export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake
   const used: Clip["elements"] = [];
   const missing: string[] = [];
   for (const w of wanted) {
-    const e = i.elements[w.key];
+    const e = els[w.key];
     if (e?.id && used.length < MAX_ELEMENTS) used.push({ key: w.key, id: e.id, name: e.name, what: w.what });
     else missing.push(w.what);
   }
@@ -536,8 +563,12 @@ export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake
   const start: Clip["start"] = f.start ? { assetId: f.start, from: "chosen", approved: !!f.startApproved }
     : after?.frameAssetId ? { assetId: after.frameAssetId, from: "previous clip", approved: !!f.startApproved } : undefined;
   const end: Clip["end"] = f.end ? { assetId: f.end } : undefined;
+  // The room all the way round (D178): Kling made up the café's window behind Jade when it cut to
+  // an angle the start frame didn't show. Up to 10 pictures in all.
+  const walls = (i.walls ?? []).filter((w) => w.assetId !== start?.assetId).slice(0, 10 - (start ? 1 : 0) - (end ? 1 : 0));
   const pictures: Clip["pictures"] = [
     ...(start ? [{ shot: 1, panel: panels[0].order, assetId: start.assetId, continuity: true }] : []),
+    ...walls.map((w) => ({ shot: 0, panel: 0, assetId: w.assetId, wall: w.name })),
     ...(end ? [{ shot: panels.length, panel: panels[panels.length - 1].order, assetId: end.assetId }] : []),
   ];
   const walkOn = (k: number) => k < panels.length - 1 && exitSeconds(panels[k].description) > 0;
@@ -545,7 +576,7 @@ export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake
   while (times.reduce((a, b) => a + b, 0) < 3) times[times.length - 1]++;
   while (times.reduce((a, b) => a + b, 0) > CLIP_MAX_SEC) { const k = times.indexOf(Math.max(...times)); if (times[k] <= 2) break; times[k]--; }
   const speakers = [...new Set(panels.flatMap((p) => p.dialogue.map((x) => x.characterId)))];
-  const audios: Clip["audios"] = speakers.flatMap((id) => { const e = i.elements[elementKey.voice(id)]; return e?.id ? [{ characterId: id, assetId: e.id }] : []; }).slice(0, 3).map((x, k) => ({ n: k + 1, ...x }));
+  const audios: Clip["audios"] = speakers.filter((id) => !voicedIn(id)).flatMap((id) => { const e = i.elements[elementKey.voice(id)]; return e?.id ? [{ characterId: id, assetId: e.id }] : []; }).slice(0, 3).map((x, k) => ({ n: k + 1, ...x }));
   // Who is on a phone call through this clip (D170): Chase put his phone on the bar to take a sip
   // and carried on talking to no one.
   const onCall = callersIn(i.panels, panels, inClip.map((id) => ({ id, name: nameOf(id) })));
@@ -564,6 +595,10 @@ export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake
     if (propLines.length) L.push(`Props in the scene: ${propLines.join("; ")}.`);
     if (start) L.push(`${cap(pic(1))} is the first frame of this clip${start.from === "previous clip" ? ", the last moment of the clip before it" : ""}: the clip opens exactly on it, with the same place, light, people, clothes, positions and props, and carries on from there. Where ${pic(1)} and anything else here differ, ${pic(1)} is right.`);
     if (end) L.push(`${cap(pic(pictures.length))} is the last frame: the clip ends exactly on it, with everyone where it shows them.`);
+    if (walls.length) {
+      const n0 = start ? 2 : 1;
+      L.push(`${walls.length > 1 ? `${cap(pic(n0))} to ${pic(n0 + walls.length - 1)} show` : `${cap(pic(n0))} shows`} ${ref(elementKey.venue(i.venue.id), i.venue.name)} towards ${walls.length > 1 ? "each of its walls" : "one of its walls"}: ${walls.map((w, k) => `${pic(n0 + k)} ${w.name}`).join("; ")}. They show the room only, not who is in it or where. In every shot, from every angle, whatever is behind the people is the matching wall in these pictures, with the same windows, walls, fittings and light.`);
+    }
     // Where everyone starts, in the panel's own words (from the scene's floor plan).
     const where = panels[0].spec.where ?? {};
     const starts = inClip.map((id) => where[id] ? `${first(nameOf(id))} ${where[id].trim().replace(/\.$/, "")}` : "").filter(Boolean);
@@ -588,7 +623,10 @@ export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake
       const a = audios.find((x) => x.characterId === id);
       // A put-on voice (D168): an impression is said in the delivery, so the voice rule allows it.
       const putOn = lines.some((x) => x.characterId === id && PUT_ON.test(x.delivery ?? ""));
-      const heard = a ? `exactly the voice in ${aud(a.n)}: the same person, accent, pitch and tone, saying these words${putOn ? ", except the words they say in a put-on voice as how it's said describes: those are clearly in that other voice, then straight back to their own" : ""}` : "";
+      const putOnTail = putOn ? ", except the words they say in a put-on voice as how it's said describes: those are clearly in that other voice, then straight back to their own" : "";
+      // Their voice comes with their Element (D177): Jade spoke in Samantha's voice when two loose voice files went with one clip.
+      const heard = voicedIn(id) ? `their own voice, the one that comes with ${ref(elementKey.character(id), first(nameOf(id)))}: the same person, accent, pitch and tone, saying these words, and never anyone else's voice${putOnTail}`
+        : a ? `exactly the voice in ${aud(a.n)}: the same person, accent, pitch and tone, saying these words${putOnTail}` : "";
       return heard || v ? `${first(nameOf(id))}: ${[heard, v].filter(Boolean).join(". ")}` : "";
     }).filter(Boolean);
     if (voices.length) L.push(`Voices. ${voices.join(". ")}.`);

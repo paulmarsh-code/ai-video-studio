@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     // The clip's pictures first, as Kling had them, then the frames.
     const follows = /图片1 is the last moment of the clip before this one/.test(job.prompt);
     const pics = job.pictures.filter((p) => p.path && fs.existsSync(p.path));
-    const pictures = pics.map((p, k) => ({ n: k + 1, what: follows && p.n === 1 ? "the last moment of the clip before this one: shot 1 follows straight on from it, with its camera and background" : `the storyboard picture for shot ${p.shot}` }));
+    const pictures = pics.map((p, k) => ({ n: k + 1, what: p.wall ? `the venue towards ${p.wall}: the room only, for what is behind the people from that side` : follows && p.n === 1 ? "the last moment of the clip before this one: shot 1 follows straight on from it, with its camera and background" : `the storyboard picture for shot ${p.shot}` }));
     const images = [
       ...pics.map((p) => ({ data: fs.readFileSync(p.path), mime: /\.jpe?g$/i.test(p.path) ? "image/jpeg" : "image/png" })),
       ...(await Promise.all(frames.map(async (f) => ({ data: Buffer.from(await f.arrayBuffer()), mime: f.type || "image/jpeg" })))),

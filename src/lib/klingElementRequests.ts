@@ -10,7 +10,7 @@ import type { DB } from "@/db/client";
 import * as repo from "./repo";
 import * as studio from "./studioRepo";
 import { asStaging } from "./domain/story";
-import { elementKey } from "./domain/clips";
+import { elementKey, withoutOuter } from "./domain/clips";
 import { isSetPiece } from "./domain/setRender";
 import { setPicturesOf } from "./domain/setPictures";
 import { withPiecePictures } from "./setImage";
@@ -27,6 +27,8 @@ export interface ElementRequest {
   tags: string[];
   /** Picture 1 is the cover; then 1–3 more. `path` is the file on this computer. */
   pictures: { role: string; assetId: string; path: string; klingUrl?: string }[];
+  /** The character's voice sample (D177), made into the Element as an mp3 so the voice comes with the face. */
+  voice?: { assetId: string; path: string; klingUrl?: string };
   status: "ready" | "sent" | "done" | "failed";
   requestedAt: string;
   id?: string;
@@ -72,21 +74,28 @@ export function elementSources(db: DB, sceneId: string): Omit<ElementRequest, "s
 
   // Characters in this scene: the approved front as the cover, then the face, back and side (D127).
   const inScene = new Set(s.shots.flatMap((sh) => [...(sh.spec.presentIds ?? []), ...sh.spec.visibleIds]));
+  const linked = studio.getKlingElements(db, projectId);
   for (const c of studio.listCharacters(db, projectId)) {
     const v = c.approved;
     if (!v || !inScene.has(c.slug)) continue;
     const p = v.profile as { appearance?: string; wardrobe?: string; refs?: Record<string, string> };
     const refs = p.refs ?? {};
+    // Their voice goes into their Element (D177): Jade spoke in Samantha's voice from loose voice files.
+    const va = asset(linked[elementKey.voice(c.slug)]?.id);
+    const voice = va && fs.existsSync(va.path) ? { voice: { assetId: va.id, path: va.path } } : {};
     const pictures = [...pic("front", refs.front ?? refs.face), ...pic("face", refs.front ? refs.face : undefined), ...pic("back", refs.back), ...pic("side", refs.side)].slice(0, 4);
     // Dressed differently in this scene (D174): that look's pictures make its own Element.
     const look = studio.getSceneLooks(db, sceneId)[c.slug];
     if (look) {
       const lp = [...pic("front", look.refs?.front), ...pic("face", look.refs?.face ?? refs.face), ...pic("back", look.refs?.back)].slice(0, 4);
-      if (lp.length >= 2) out.push({ key: elementKey.look(c.slug, sceneId), projectId, kind: "Character", what: `${c.name} (this scene's clothes)`, name: nameOf(`${c.name} ${s.scene.title ?? "scene"}`, code), description: short(clean(`${p.appearance ?? ""} Wearing: ${look.wardrobe}`), 400), tags: ["Characters"], pictures: lp });
+      if (lp.length >= 2) out.push({ key: elementKey.look(c.slug, sceneId), projectId, kind: "Character", what: `${c.name} (this scene's clothes)`, name: nameOf(`${c.name} ${s.scene.title ?? "scene"}`, code), description: short(clean(`${p.appearance ?? ""} Wearing: ${look.wardrobe}`), 400), tags: ["Characters"], pictures: lp, ...voice });
+      // Coat, jacket, hat and bag off (D179): its own Element from the indoor picture and the face.
+      const op = [...pic("front", look.off?.front), ...pic("face", look.refs?.face ?? refs.face)].slice(0, 4);
+      if (op.length >= 2) out.push({ key: elementKey.lookOff(c.slug, sceneId), projectId, kind: "Character", what: `${c.name} (this scene, coat off)`, name: nameOf(`${c.name} ${s.scene.title ?? "scene"} in`, code), description: short(clean(`${p.appearance ?? ""} Wearing: ${withoutOuter(look.wardrobe)}`), 400), tags: ["Characters"], pictures: op, ...voice });
       continue;
     }
     if (pictures.length < 2) continue;
-    out.push({ key: elementKey.character(c.slug), projectId, kind: "Character", what: c.name, name: nameOf(c.name, code), description: short(clean(`${p.appearance ?? ""} ${p.wardrobe ?? ""}`), 400), tags: ["Characters"], pictures });
+    out.push({ key: elementKey.character(c.slug), projectId, kind: "Character", what: c.name, name: nameOf(c.name, code), description: short(clean(`${p.appearance ?? ""} ${p.wardrobe ?? ""}`), 400), tags: ["Characters"], pictures, ...voice });
   }
 
   // The venue: the set's own wall pictures (what the storyboard is drawn on), else its views.
@@ -137,7 +146,7 @@ export function linkMadeElements(db: DB, projectId: string): number {
   let n = 0;
   for (const r of all) {
     if (r.projectId !== projectId || r.status !== "done" || !r.id || r.linkedAt) continue;
-    studio.setKlingElement(db, projectId, r.key, { id: r.id, name: r.name });
+    studio.setKlingElement(db, projectId, r.key, { id: r.id, name: r.name, ...(r.voice ? { voiceAssetId: r.voice.assetId } : {}) });
     r.linkedAt = new Date().toISOString();
     n++;
   }

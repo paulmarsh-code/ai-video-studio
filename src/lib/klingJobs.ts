@@ -52,6 +52,8 @@ export interface KlingJob {
 
 export interface KlingJobPicture {
   n: number; shot: number; panel: number; assetId: string;
+  /** A picture of the venue towards one wall (D178), not a moment of the clip. */
+  wall?: string;
   /** The file on this computer. */
   path: string;
   /** Where Kling keeps it once uploaded. */
