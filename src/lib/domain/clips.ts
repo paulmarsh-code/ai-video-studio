@@ -77,6 +77,8 @@ export interface ClipFrames { start?: string; startApproved?: boolean; end?: str
 /** How it's said asks for an impression or a put-on voice (D168). */
 export const PUT_ON = /\b(mimic\w*|imitat\w*|impression|impersonat\w*|put-on voice|in (?:a|her|his|their) voice|parrot\w*)\b/i;
 
+// D176: coats, jackets, hats and bags stay on or off as the clip starts.
+export const COATS = "Coats, jackets, hats, scarves and bags stay";
 const SIP = /\b(sip|sips|drink|drinks|drinking|swallow\w*|gulp\w*|eats?|eating|bites?)\b/i;
 const CALL = /\b(phone|on the line|on a call|the call|mobile)\b/i;
 const CALL_ENDS = /\b(cuts the call|ends the call|hangs up|lowers the phone|puts (?:the|his|her|their) phone (?:down|away)|pockets (?:the|his|her|their) phone|gotta go)\b/i;
@@ -354,6 +356,8 @@ export function clipPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake):
       // and "the table stays exactly the same" forbade the contract beat, Jade handing it over and
       // Chase dropping it in the ice bucket.
       "Each person keeps their own face and clothes throughout; anything they carry stays in the same hand until a shot says it is handed over or put down, then stays where that shot leaves it.",
+      // Coats stay on or off (D176).
+      `${COATS} on or off as the clip starts, in every shot and from every angle; they only come off or go on when a shot says so.`,
       // A feeling held to the last frame (D122): furious Jade smiled as she turned to walk off.
       "Each person keeps the feeling their shot gives them to its very last frame, walking off included: nobody smiles or softens unless the shot says so.",
       // One of each, always at the table (D118): Kling cut to closer shots with Marcus and Nina
@@ -595,6 +599,9 @@ export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake
       "Natural acting with every feeling clearly readable on the faces, without exaggerated gestures. Whoever speaks looks at the person they are speaking to, unless what happens says otherwise. Guests behind them stay in soft focus.",
       "Sound: the voices, clear, over a low, steady room murmur at the same level throughout; no music at all, it is added in the edit; footsteps and movement quiet, never louder than speech. Gestures make no sound: no clicks, snaps or claps. A scoff, sigh or laugh comes with that person's line, never after it; once someone has said their last line, they make no more sounds.",
       "Each person keeps their own face and clothes throughout; anything they carry stays in the same hand until what happens says it is handed over or put down, then stays where it is left.",
+      // Coats stay on or off as in the start frame (D176): Jade's coat hung on her chair in the wide
+      // shot, but she wore it in her close-up, because her Element shows her in it.
+      start ? `${COATS} as they are in ${pic(1)}, worn or off (over a chair, on a hook, on the floor), in every shot and from every angle; they only come off or go on when what happens says so (someone takes their coat off and puts it over the chair, or stands, takes it off the chair and puts it on).` : `${COATS} on or off as the clip starts, in every shot and from every angle; they only come off or go on when what happens says so.`,
       // Never a line through a glass (D171): Chase spoke while drinking, so his mouth didn't move.
       panels.some((p) => SIP.test(p.description) || p.dialogue.some((d) => SIP.test(d.delivery ?? ""))) ? "Nobody drinks or eats while saying a line: a sip comes before or after their words, never during them; while they speak the glass is away from their mouth and their lips move with every word." : "",
       ...onCall.map((c) => `${c.name} is on a phone call ${c.ends ? `until ${c.ends}` : "for the whole clip"}: the phone stays at their ear in the same hand, never put down or lowered before then, and they keep talking into it; anything else they do (a drink, a gesture) is with the other hand.`),

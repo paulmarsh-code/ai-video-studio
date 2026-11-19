@@ -2940,3 +2940,10 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
   - the drawing of a scene look: "The clothes suit <when>: right for the season and the weather".
 - **General:** any scene, any time of year.
 - **Reaches the generation through:** prompt lines in the frame, look and clip requests. Tested in `sceneLooks.d174.test.ts`.
+
+## D176: coats stay on or off as the clip starts (19 Nov 2026)
+
+- **Visible failure.** Scene 5 clip 1, take 2: in the wide shot Jade's green coat hangs over her chair, as in the start frame, but in her close-up she is wearing it. Kling followed her Element, which shows her in the coat.
+- **Decision.** Every clip request now says that coats, jackets, hats, scarves and bags stay as they are in the start frame (worn, or over a chair, on a hook or on the floor), in every shot and from every angle. They come off or go on only when what happens says so, for example "takes her coat off and puts it over the chair", or "stands, takes it off the chair and puts it on". Without a start frame, they stay on or off as the clip starts. Paul: "only move if prompt says do".
+- **General:** any person and any outer clothing, in any scene.
+- **Reaches the generation through:** a prompt line in the clip request (frames flow and shot flow). Tested in `coats.d176.test.ts`.
