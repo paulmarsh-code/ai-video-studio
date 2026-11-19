@@ -67,3 +67,10 @@ describe("Wearing words (D179)", () => {
     expect(WEARS_OUTER.test("Ava hangs her coat over the chair.")).toBe(false);
   });
 });
+
+describe("Linked Elements keep their voice (D177)", () => {
+  it("setKlingElement keeps voiceAssetId", async () => {
+    const src = (await import("node:fs")).readFileSync("src/lib/studioRepo.ts", "utf8");
+    expect(src).toMatch(/voiceAssetId: el\.voiceAssetId/);
+  });
+});

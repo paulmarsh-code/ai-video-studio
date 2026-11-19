@@ -1273,7 +1273,8 @@ export function getKlingElements(db: DB, projectId: string): KlingElements {
 /** Link (or, with null, unlink) a Kling Element to a character, venue or prop. */
 export function setKlingElement(db: DB, projectId: string, key: string, el: KlingElement | null) {
   const all = getKlingElements(db, projectId);
-  if (el && el.id.trim()) all[key] = { id: el.id.trim(), name: el.name.trim() || el.id.trim() }; else delete all[key];
+  // The voice made into the Element (D177) is kept with it, so clips know not to send it again.
+  if (el && el.id.trim()) all[key] = { id: el.id.trim(), name: el.name.trim() || el.id.trim(), ...(el.voiceAssetId ? { voiceAssetId: el.voiceAssetId } : {}) }; else delete all[key];
   db.update(t.projects).set({ klingElements: all }).where(eq(t.projects.id, projectId)).run();
   persist(db);
 }

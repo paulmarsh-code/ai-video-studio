@@ -54,6 +54,9 @@ function writeElementRequests(requests: ElementRequest[]) {
   fs.writeFileSync(file(), JSON.stringify({ updatedAt: new Date().toISOString(), requests }, null, 1));
 }
 
+// A scene's initials for Element names (D179): "Girl talk" → "GT", so "POT Samantha GT coat" and
+// "POT Samantha GT indoor" fit Kling's 20 characters and can't be told apart only by a cut-off.
+const initials = (title?: string | null) => (title ?? "scene").split(/\s+/).filter(Boolean).map((w) => w[0].toUpperCase()).join("").slice(0, 4);
 const short = (s: string, n: number) => (s.length <= n ? s : `${s.slice(0, n - 1).trimEnd()}…`);
 const clean = (s: string) => s.replace(/\s+/g, " ").trim();
 export { nameOf, ofProject } from "./klingNames";
@@ -88,10 +91,10 @@ export function elementSources(db: DB, sceneId: string): Omit<ElementRequest, "s
     const look = studio.getSceneLooks(db, sceneId)[c.slug];
     if (look) {
       const lp = [...pic("front", look.refs?.front), ...pic("face", look.refs?.face ?? refs.face), ...pic("back", look.refs?.back)].slice(0, 4);
-      if (lp.length >= 2) out.push({ key: elementKey.look(c.slug, sceneId), projectId, kind: "Character", what: `${c.name} (this scene's clothes)`, name: nameOf(`${c.name} ${s.scene.title ?? "scene"}`, code), description: short(clean(`${p.appearance ?? ""} Wearing: ${look.wardrobe}`), 400), tags: ["Characters"], pictures: lp, ...voice });
+      if (lp.length >= 2) out.push({ key: elementKey.look(c.slug, sceneId), projectId, kind: "Character", what: `${c.name} (this scene's clothes)`, name: nameOf(`${c.name.split(/\s+/)[0]} ${initials(s.scene.title)}${look.off?.front ? " coat" : ""}`, code), description: short(clean(`${p.appearance ?? ""} Wearing: ${look.wardrobe}`), 400), tags: ["Characters"], pictures: lp, ...voice });
       // Coat, jacket, hat and bag off (D179): its own Element from the indoor picture and the face.
       const op = [...pic("front", look.off?.front), ...pic("face", look.refs?.face ?? refs.face)].slice(0, 4);
-      if (op.length >= 2) out.push({ key: elementKey.lookOff(c.slug, sceneId), projectId, kind: "Character", what: `${c.name} (this scene, coat off)`, name: nameOf(`${c.name} ${s.scene.title ?? "scene"} in`, code), description: short(clean(`${p.appearance ?? ""} Wearing: ${withoutOuter(look.wardrobe)}`), 400), tags: ["Characters"], pictures: op, ...voice });
+      if (op.length >= 2) out.push({ key: elementKey.lookOff(c.slug, sceneId), projectId, kind: "Character", what: `${c.name} (this scene, coat off)`, name: nameOf(`${c.name.split(/\s+/)[0]} ${initials(s.scene.title)} indoor`, code), description: short(clean(`${p.appearance ?? ""} Wearing: ${withoutOuter(look.wardrobe)}`), 400), tags: ["Characters"], pictures: op, ...voice });
       continue;
     }
     if (pictures.length < 2) continue;
