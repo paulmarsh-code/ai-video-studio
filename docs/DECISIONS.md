@@ -2971,5 +2971,6 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 - **Decision.** "Dress them for this scene" finds the outer layers in the clothes words (coats, jackets, hats, scarves, bags). When there are any, it also draws the person indoors without them (about 5p more) and asks for a second Element: "<name> (this scene, coat off)".
   - Each clip and start frame uses the coat-off look, unless what happens has them wearing or putting on their coat: arriving, leaving, outside, "puts it on".
   - Hanging it on a chair doesn't count.
+  - Someone in their usual clothes with a coat or bag gets "Usual clothes, coat on and coat off": it draws the same two looks from their usual clothes. Paul found no "Draw again" for Samantha, who wore her usual clothes.
 - **General:** any character, any outer clothing, any scene.
 - **Reaches the generation through:** the character Element and the start frame's reference picture. Tested in `voiceWallsCoats.d177.test.ts`.

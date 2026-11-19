@@ -56,14 +56,14 @@ function LookRow({ projectId, projectCode, sceneId, person, when }: { projectId:
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const base = [person.base.front, person.base.face].filter(Boolean) as string[];
-  const make = async () => {
+  const make = async (wear = words) => {
     setBusy(true); setMsg(null);
     try {
       const code = `${projectCode}_${person.slug.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_LOOK_${sceneId.slice(0, 6).toUpperCase()}`;
       // With an outer layer, also drawn with it off (D179): two Elements, coat on and coat off.
-      const outer = outerOf(words).length > 0;
-      const [front, back, indoors] = await Promise.all([draw(projectId, `${code}_FRONT`, lookPrompt("front", words, when), base), draw(projectId, `${code}_BACK`, lookPrompt("back", words, when), base), outer ? draw(projectId, `${code}_INDOORS`, lookPrompt("indoors", words, when), base) : Promise.resolve(undefined)]);
-      const r = await setSceneLookAction(sceneId, person.slug, { wardrobe: words.trim(), refs: { front, back, face: person.base.face }, ...(indoors ? { off: { front: indoors } } : {}) });
+      const outer = outerOf(wear).length > 0;
+      const [front, back, indoors] = await Promise.all([draw(projectId, `${code}_FRONT`, lookPrompt("front", wear, when), base), draw(projectId, `${code}_BACK`, lookPrompt("back", wear, when), base), outer ? draw(projectId, `${code}_INDOORS`, lookPrompt("indoors", wear, when), base) : Promise.resolve(undefined)]);
+      const r = await setSceneLookAction(sceneId, person.slug, { wardrobe: wear.trim(), refs: { front, back, face: person.base.face }, ...(indoors ? { off: { front: indoors } } : {}) });
       if (!r.ok) throw new Error(r.error);
       await requestElementsAction(sceneId, [elementKey.look(person.slug, sceneId), ...(indoors ? [elementKey.lookOff(person.slug, sceneId)] : [])]);
       setMsg("Drawn. Check the pictures; Claude makes the Kling Element when you say \"make the elements\".");
@@ -79,10 +79,14 @@ function LookRow({ projectId, projectCode, sceneId, person, when }: { projectId:
         <textarea className="mt-1 w-full rounded border border-neutral-300 px-2 py-1 text-sm" rows={2} value={words} onChange={(e) => setWords(e.target.value)}
           placeholder="Leave empty for their usual clothes, or describe what they wear in this scene, e.g. casual: a fitted cream roll-neck, high-waisted wide-leg jeans, loafers" />
         <div className="mt-1 flex flex-wrap items-center gap-2">
-          <button type="button" disabled={busy || !words.trim() || base.length === 0} onClick={make} className="rounded-md bg-neutral-900 px-3 py-1 text-sm text-white disabled:opacity-40">
+          <button type="button" disabled={busy || !words.trim() || base.length === 0} onClick={() => make()} className="rounded-md bg-neutral-900 px-3 py-1 text-sm text-white disabled:opacity-40">
             {busy ? "Drawing… (up to a minute)" : `${person.look?.refs?.front ? "Draw again" : "Dress them for this scene"} · about ${outerOf(words).length ? 15 : 10}p`}
           </button>
           {person.look && <button type="button" disabled={busy} onClick={clear} className="text-xs text-neutral-600 underline">Back to their usual clothes</button>}
+          {/* D179: their usual clothes have a coat or bag, so draw them coat on and coat off for this scene too. */}
+          {!person.look && !words.trim() && outerOf(person.usual).length > 0 && base.length > 0 && (
+            <button type="button" disabled={busy} onClick={() => { setWords(person.usual); void make(person.usual); }} className="rounded-md border border-neutral-300 px-3 py-1 text-sm disabled:opacity-40">Usual clothes, coat on and coat off · about 15p</button>
+          )}
           {msg && <span className="text-xs text-neutral-700">{msg}</span>}
         </div>
       </div>
