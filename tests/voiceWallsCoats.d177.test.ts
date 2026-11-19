@@ -11,21 +11,21 @@ const cast = [{ id: "ava", name: "Ava Stone", pronoun: "she" as const, voiceLock
 const P = (order: number, description: string, dialogue: ClipPanel["dialogue"] = []): ClipPanel =>
   ({ order, durationSec: 3, description, dialogue, imageAssetId: `pic${order}`, spec: { code: `P${order}`, visibleIds: ["ava", "bo"], excludedIds: [], presentIds: ["ava", "bo"], cameraId: "cam", shot: "wide", audioMode: "on", durationSec: 3, venueName: "v" } as never });
 const base = { [elementKey.venue("v1")]: { id: "3", name: "Café" }, [elementKey.voice("ava")]: { id: "va", name: "Ava voice" }, [elementKey.voice("bo")]: { id: "vb", name: "Bo voice" } };
-const input = (elements: object, extra: object = {}, panels = [P(1, "They sit at the table.", [{ characterId: "ava", text: "Hello." }]), P(2, "Bo answers.", [{ characterId: "bo", text: "Hi." }])]) =>
+const input = (elements: object, extra: object = {}, panels = [P(1, "They sit at the table.", [{ characterId: "ava", text: "Hello." }]), P(2, "Bo nods.")]) =>
   ({ panels, cast: cast as never, plan: plan as never, venue: { id: "v1", name: "Café" }, elements: { ...base, ...elements } as never, frames: { "1-2": { start: "s", startApproved: true } } as never, ...extra });
 
 describe("The voice comes with the character's Element (D177)", () => {
   it("sends no voice file for someone whose Element carries their voice", () => {
     const [c] = sceneClips(input({ [elementKey.character("ava")]: { id: "1", name: "Ava", voiceAssetId: "va" }, [elementKey.character("bo")]: { id: "2", name: "Bo", voiceAssetId: "vb" } }));
     expect(c.audios).toEqual([]);
-    expect(c.voiced).toEqual(["ava", "bo"]);
+    expect(c.voiced).toEqual(["ava"]);
     expect(c.prompt).toContain("Ava: their own voice, the one that comes with <<<1>>>");
     expect(c.prompt).toContain("never anyone else's voice");
     expect(c.prompt).not.toContain("音频");
   });
   it("falls back to the voice file when the Element was made before the voice (or with another one)", () => {
     const [c] = sceneClips(input({ [elementKey.character("ava")]: { id: "1", name: "Ava", voiceAssetId: "old" }, [elementKey.character("bo")]: { id: "2", name: "Bo" } }));
-    expect(c.audios.map((a) => a.characterId)).toEqual(["ava", "bo"]);
+    expect(c.audios.map((a) => a.characterId)).toEqual(["ava"]);
     expect(c.prompt).toContain("Ava: exactly the voice in 音频1");
   });
 });
@@ -73,5 +73,13 @@ describe("Linked Elements keep their voice (D177)", () => {
   it("setKlingElement keeps voiceAssetId", async () => {
     const src = (await import("node:fs")).readFileSync("src/lib/studioRepo.ts", "utf8");
     expect(src).toMatch(/voiceAssetId: el\.voiceAssetId/);
+  });
+});
+
+describe("One speaker per clip (D180)", () => {
+  it("starts a new clip when someone else speaks; silent panels stay with the speaker", () => {
+    const panels = [P(1, "They sit.", [{ characterId: "ava", text: "Hello." }]), P(2, "Bo frowns."), P(3, "Bo answers.", [{ characterId: "bo", text: "Hi." }]), P(4, "Ava again.", [{ characterId: "ava", text: "Well." }])];
+    const clips = sceneClips({ panels, cast: cast as never, plan: plan as never, venue: { id: "v1", name: "Café" }, elements: base as never });
+    expect(clips.map((c) => c.panels)).toEqual([[1, 2], [3], [4]]);
   });
 });

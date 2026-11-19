@@ -22,7 +22,8 @@ describe("Walking off is seen in full (D148)", () => {
     expect(exitSeconds("Ava walks towards the bar")).toBe(0);
     const off = P(2, 3, [{ characterId: "ava", text: "Unbelievable" }], "Ava scoffs and walks away.");
     expect(shotSeconds(off)).toBe(5);
-    const [c] = sceneClips(input([P(1, 3, [{ characterId: "bo", text: "Go on then." }]), off]));
+    // One speaker per clip (D180): Bo's line is silent here so Ava's walk off shares the clip.
+    const [c] = sceneClips(input([P(1, 3, [], "Bo shrugs."), off]));
     expect(c.prompt).toMatch(/Shot 2 \(\d+–\d+ s\)[^\n]*"Unbelievable"\. The walk away is seen in full: head up, eyes ahead, never looking down, still walking away and well on the way out of the picture when the shot ends\./);
   });
   it("never makes a clip longer than 15 s", () => {

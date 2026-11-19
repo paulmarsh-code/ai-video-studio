@@ -45,15 +45,20 @@ export function sameAngle(a: Cam, b: Cam): boolean {
  * Consecutive items in clips of up to 15 s and 4 shots, and at most two camera angles: an item
  * that would bring a third starts the next clip. `angle` gives an item's camera bearing, if known.
  */
-export function groupByTime<T>(items: T[], sec: (x: T) => number, angle?: (x: T) => Cam | undefined, maxSec = CLIP_MAX_SEC, maxShots = CLIP_MAX_SHOTS): T[][] {
+export function groupByTime<T>(items: T[], sec: (x: T) => number, angle?: (x: T) => Cam | undefined, maxSec = CLIP_MAX_SEC, maxShots = CLIP_MAX_SHOTS, speakers?: (x: T) => string[]): T[][] {
   const out: T[][] = [];
-  let cur: T[] = [], total = 0, angles: Cam[] = [];
+  let cur: T[] = [], total = 0, angles: Cam[] = [], voices = new Set<string>();
   for (const x of items) {
     const d = Math.max(1, sec(x));
     const a = angle?.(x);
     const third = a !== undefined && !angles.some((b) => sameAngle(a, b)) && angles.length >= CLIP_MAX_ANGLES;
-    if (cur.length && (total + d > maxSec || cur.length >= maxShots || third)) { out.push(cur); cur = []; total = 0; angles = []; }
+    // One speaker per clip (D180): with two, Kling 4.0 gave Jade Samantha's voice, from voice files
+    // and from voices in the Elements alike. A silent panel joins whoever is speaking.
+    const says = speakers?.(x) ?? [];
+    const second = says.some((v) => !voices.has(v)) && new Set([...voices, ...says]).size > 1;
+    if (cur.length && (total + d > maxSec || cur.length >= maxShots || third || second)) { out.push(cur); cur = []; total = 0; angles = []; voices = new Set(); }
     cur.push(x); total += d;
+    for (const v of says) voices.add(v);
     if (a !== undefined && !angles.some((b) => sameAngle(a, b))) angles.push(a);
   }
   if (cur.length) out.push(cur);

@@ -2975,3 +2975,10 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
   - Someone in their usual clothes with a coat or bag gets "Usual clothes, coat on and coat off": it draws the same two looks from their usual clothes. Paul found no "Draw again" for Samantha, who wore her usual clothes.
 - **General:** any character, any outer clothing, any scene.
 - **Reaches the generation through:** the character Element and the start frame's reference picture. Tested in `voiceWallsCoats.d177.test.ts`.
+
+## D180: one speaker per clip (19 Nov 2026)
+
+- **Visible failure.** Scene 5, panels 6–7 (Jade, then Samantha): Jade spoke in Samantha's voice twice. The first take sent the voices as two separate files. The second had each voice inside its character's Element (D177). Kling lists voice consistency for its 3.0 Omni model, not for 4.0. Every clip with one speaker kept the right voice.
+- **Decision.** When the app splits a scene into clips, a panel where someone new speaks starts the next clip. Silent panels stay in the speaker's clip. Each clip sends one voice. Kling charges per second, so it costs about the same: just more, shorter clips. Voices stay in the Elements (D177).
+- **General:** any scene with more than one speaker.
+- **Reaches the generation through:** how the scene is split into clips, so there is one voice in each request. Tested in `voiceWallsCoats.d177.test.ts`.

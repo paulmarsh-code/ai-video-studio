@@ -175,10 +175,11 @@ export { CLIP_MAX_SEC, CLIP_MAX_SHOTS } from "./clipCameras";
 /**
  * Consecutive panels in clips of up to 15 s and 4 shots, and at most two camera angles (D121): a
  * panel that would bring a third starts the next clip. A panel longer than that is a clip alone.
+ * A panel with a second speaker starts the next clip too (D180): one voice per clip.
  */
 export function groupClips(panels: ClipPanel[], plan?: GeometryPlanData): ClipPanel[][] {
   const angle = (p: ClipPanel) => plan?.cameras.find((x) => x.id === p.spec.cameraId);
-  return groupByTime([...panels].sort((a, b) => a.order - b.order), (p) => p.durationSec, plan ? angle : undefined);
+  return groupByTime([...panels].sort((a, b) => a.order - b.order), (p) => p.durationSec, plan ? angle : undefined, undefined, undefined, (p) => [...new Set(p.dialogue.map((d) => d.characterId))]);
 }
 
 const first = (name: string) => name.split(/\s+/)[0];

@@ -120,7 +120,7 @@ describe("Shots timed to what they need inside a clip (D120)", () => {
     expect(shotSeconds(P(10, 4, {}, [{ characterId: "bo", text: "I'm bored now — just go now, run along." }]))).toBe(4);
     expect(shotSeconds(P(11, 3, {}, [{ characterId: "ava", text: "Unbelievable" }]))).toBe(2);
     expect(shotSeconds(P(12, 2, {}, [{ characterId: "ava", text: "one two three four five six seven eight nine ten eleven" }]))).toBe(2);
-    const [c] = sceneClips({ panels: [P(9, 3, {}), P(10, 4, {}, [{ characterId: "bo", text: "I'm bored now — just go now, run along." }]), P(11, 3, {}, [{ characterId: "ava", text: "Unbelievable" }])], cast: cast as never, plan: plan as never, venue: { id: "v1", name: "Roof bar" }, elements });
+    const [c] = sceneClips({ panels: [P(9, 3, {}), P(10, 4, {}, [{ characterId: "bo", text: "I'm bored now — just go now, run along." }]), P(11, 3, {}, [{ characterId: "bo", text: "Unbelievable" }])], cast: cast as never, plan: plan as never, venue: { id: "v1", name: "Roof bar" }, elements });
     expect(c.seconds).toBe(8);
     expect(c.prompt).toContain("Shot 3 (6–8 s)");
   });
