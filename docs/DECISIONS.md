@@ -2913,3 +2913,10 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 - **Decision.** Clip requests now say "Natural acting with every feeling clearly readable on the faces, without exaggerated gestures." Take 3, with this wording and the feelings spelled out on the face (brows, jaw, lips, stare), gave Paul the surprised-then-worried Chase and a visibly cross Jade; he accepted it.
 - **General:** every clip request with start frames (the frames flow).
 - **Reaches the generation through:** the clip request's acting line.
+
+## D173: someone in a new place is only there (19 Nov 2026)
+
+- **Visible failure.** Scene 4 panels 9–10: the clip opened on the last frame of panels 6–7, with Jade in the background behind Chase. When he turned, Jade was in front of him, but a second Jade stayed in the background of his close shot, seen in two places at once. In the scene assembly it was fixed by cropping that shot (POT_EP01_S04_clip4_panels9-10_take3_fixed.mp4).
+- **Decision.** Clip requests in the frames flow now add, after "each appear once": when someone is somewhere new in a later shot (behind someone, then in front of them), they are only in the new place; the spot where they were in the start frame or an earlier shot is empty or taken by a guest who looks nothing like them.
+- **General:** any person who moves between the start frame and a later shot.
+- **Reaches the generation through:** a prompt line in the clip request. Tested in `clipFrames.d164.test.ts`.

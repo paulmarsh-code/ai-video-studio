@@ -587,7 +587,7 @@ export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake
       panels.some((p) => SIP.test(p.description) || p.dialogue.some((d) => SIP.test(d.delivery ?? ""))) ? "Nobody drinks or eats while saying a line: a sip comes before or after their words, never during them; while they speak the glass is away from their mouth and their lips move with every word." : "",
       ...onCall.map((c) => `${c.name} is on a phone call ${c.ends ? `until ${c.ends}` : "for the whole clip"}: the phone stays at their ear in the same hand, never put down or lowered before then, and they keep talking into it; anything else they do (a drink, a gesture) is with the other hand.`),
       "Each person keeps the feeling they're given to the very last frame: nobody smiles or softens unless what happens says so.",
-      inClip.length > 1 ? `${and(names(inClip))} each appear once in the picture, never twice; no guest looks or dresses like any of them.` : "",
+      inClip.length > 1 ? `${and(names(inClip))} each appear once in the picture, never twice; no guest looks or dresses like any of them. When someone is somewhere new in a later shot (behind someone, then in front of them), they are only in the new place: the spot where they were in 图片1 or an earlier shot is empty or taken by a guest who looks nothing like them.` : "",
       ...panels.map((p, k) => { const m = k < panels.length - 1 ? leftIn(p.description) : null; return m ? `Once the ${m.thing} is ${m.how} the ${m.into}, it stays there to the end of the clip.` : ""; }),
       "No text, no logos.",
     ].filter(Boolean).join(" "));

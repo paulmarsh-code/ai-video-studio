@@ -109,3 +109,10 @@ describe("Never a line through a glass (D171)", () => {
     expect(d.prompt).toContain("Nobody drinks or eats while saying a line: a sip comes before or after their words, never during them");
   });
 });
+
+describe("Someone in a new place is only there (D173)", () => {
+  it("says their old spot is empty in the frames flow", () => {
+    const [c] = sceneClips(base({ "1-2": { start: "s", startApproved: true } }));
+    expect(c.prompt).toContain("they are only in the new place");
+  });
+});
