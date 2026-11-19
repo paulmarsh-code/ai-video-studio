@@ -2906,3 +2906,10 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 - **Decision.** When a clip's moments mention drinking or eating (sip, drink, swallow, eat, bite…), the request adds: nobody drinks or eats while saying a line; a sip comes before or after their words, never during them; while they speak the glass is away from their mouth and their lips move with every word.
 - **General:** any character, any drink or food.
 - **Reaches the generation through:** a prompt line in the clip request. Tested in `clipFrames.d164.test.ts`.
+
+## D172: feelings readable on the faces (19 Nov 2026)
+
+- **Visible failure.** Scene 4 panels 9–10: in two takes Jade looked mild, even pleasant, when she had just overheard Chase and should be cross, and Chase's surprise didn't land. Every clip request said "Natural, subtle acting", which pulled the faces towards neutral.
+- **Decision.** Clip requests now say "Natural acting with every feeling clearly readable on the faces, without exaggerated gestures." Take 3, with this wording and the feelings spelled out on the face (brows, jaw, lips, stare), gave Paul the surprised-then-worried Chase and a visibly cross Jade; he accepted it.
+- **General:** every clip request with start frames (the frames flow).
+- **Reaches the generation through:** the clip request's acting line.

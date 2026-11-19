@@ -580,7 +580,7 @@ export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake
     L.push([
       lines.length > 1 ? `Each line is said once, word for word, in this order: ${lines.length} different lines in all.` : lines.length ? "The line is said once, word for word." : "",
       speakers.length ? `Only ${and(names(speakers))} ${speakers.length > 1 ? "have" : "has"} words anyone can make out, and only when it's their line; everyone else listens with their mouth closed; the guests' chatter stays a murmur. No repeated words, no extra speech.` : "No one says anything anyone can make out; the guests' chatter stays a murmur.",
-      "Natural, subtle acting, no exaggerated gestures. Whoever speaks looks at the person they are speaking to, unless what happens says otherwise. Guests behind them stay in soft focus.",
+      "Natural acting with every feeling clearly readable on the faces, without exaggerated gestures. Whoever speaks looks at the person they are speaking to, unless what happens says otherwise. Guests behind them stay in soft focus.",
       "Sound: the voices, clear, over a low, steady room murmur at the same level throughout; no music at all, it is added in the edit; footsteps and movement quiet, never louder than speech. Gestures make no sound: no clicks, snaps or claps. A scoff, sigh or laugh comes with that person's line, never after it; once someone has said their last line, they make no more sounds.",
       "Each person keeps their own face and clothes throughout; anything they carry stays in the same hand until what happens says it is handed over or put down, then stays where it is left.",
       // Never a line through a glass (D171): Chase spoke while drinking, so his mouth didn't move.
