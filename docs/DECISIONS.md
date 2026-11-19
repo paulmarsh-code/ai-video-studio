@@ -2931,3 +2931,12 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
   - New words need drawing again; "Back to their usual clothes" clears it.
 - **General:** any character, any scene, any clothes.
 - **Reaches the generation through:** the start frame's reference pictures and the clip's character Element. Tested in `sceneLooks.d174.test.ts`.
+
+## D175: when the scene is (19 Nov 2026)
+
+- **Visible failure.** Paul: clothes "need to fit with the café in terms of time of day and time of year; summer would be different to winter". Nothing in a scene said when it happened, so pictures and clips guessed the season, and outfits could be wrong for it.
+- **Decision.** Each scene has "When is this scene?" (time of day, season, weather), on the clips page above the clothes. It reaches:
+  - the start and end frame requests and every clip request: "It is <when>: the light, the weather through any window, and what everyone wears suit it";
+  - the drawing of a scene look: "The clothes suit <when>: right for the season and the weather".
+- **General:** any scene, any time of year.
+- **Reaches the generation through:** prompt lines in the frame, look and clip requests. Tested in `sceneLooks.d174.test.ts`.

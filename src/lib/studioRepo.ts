@@ -241,6 +241,20 @@ export function setPositionsNote(db: DB, sceneId: string, text: string) {
   persist(db);
 }
 
+/** When the scene happens: time of day, season, weather (D175). */
+export function getSceneWhen(db: DB, sceneId: string): string {
+  const s = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();
+  return ((s?.staging ?? {}) as { when?: string }).when ?? "";
+}
+export function setSceneWhen(db: DB, sceneId: string, when: string) {
+  const s = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();
+  if (!s) throw new Error("Scene not found");
+  const staging = { ...((s.staging ?? {}) as Record<string, unknown>) };
+  if (when.trim()) staging.when = when.trim(); else delete staging.when;
+  db.update(t.scenes).set({ staging }).where(eq(t.scenes.id, sceneId)).run();
+  persist(db);
+}
+
 /** What each character wears in this scene, when it isn't their usual clothes (D174). */
 export function getSceneLooks(db: DB, sceneId: string): Record<string, import("./domain/clips").SceneLook> {
   const s = db.select().from(t.scenes).where(eq(t.scenes.id, sceneId)).get();
@@ -699,7 +713,7 @@ export function saveStoryboard(db: DB, sceneId: string, s: { story: string; targ
  * positions words and the set switch. Rewriting the setting must never drop them; it did, so a
  * saved positions note vanished after the plan was placed.
  */
-const STAGING_EXTRAS = ["onSet", "keptTakes", "positionsNote", "clipFrames", "clipPictures", "looks"] as const;
+const STAGING_EXTRAS = ["onSet", "keptTakes", "positionsNote", "clipFrames", "clipPictures", "looks", "when"] as const;
 export function withStagingExtras(raw: unknown, st: object): Record<string, unknown> {
   const o = (raw ?? {}) as Record<string, unknown>;
   return { ...st, ...Object.fromEntries(STAGING_EXTRAS.filter((k) => o[k] !== undefined).map((k) => [k, o[k]])) };

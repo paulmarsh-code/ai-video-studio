@@ -64,6 +64,8 @@ export interface ClipInput {
   frames?: Record<string, ClipFrames>;
   /** Where everyone is, in the user's words (D165): ahead of what the app worked out. */
   positionsNote?: string;
+  /** When the scene happens (D175): time of day, season, weather. */
+  when?: string;
 }
 
 export interface KeptTake { from: number; to: number; frameAssetId?: string }
@@ -106,6 +108,9 @@ export function callersIn(all: ClipPanel[], panels: ClipPanel[], people: { id: s
   }
   return out;
 }
+
+/** The time of day and season, and what it means for light and clothes (D175). */
+export const whenLine = (when: string) => `It is ${when.trim().replace(/\.$/, "")}: the light, the weather through any window, and what everyone wears suit it.`;
 
 export const clipKey = (panels: number[]) => panels.join("-");
 
@@ -545,6 +550,8 @@ export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake
     const L: string[] = [];
     const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
     L.push(`In ${ref(elementKey.venue(i.venue.id), i.venue.name)}${i.crowd ? `: ${i.crowd.replace(/\.$/, "")}` : ""}.`);
+    // When it is (D175): clothes and light that fit the time of day and the season.
+    if (i.when?.trim()) L.push(whenLine(i.when));
     const chars = inClip.filter((id) => used.some((u) => u.key === elementKey.character(id)));
     if (chars.length) L.push(`${chars.map((id) => `${first(nameOf(id))} is ${ref(elementKey.character(id), first(nameOf(id)))}`).join("; ")}.`);
     // Props: each with its Element when it has one; its own words only when it has none.

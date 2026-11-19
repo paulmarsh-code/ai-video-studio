@@ -10,7 +10,7 @@ import type { GeometryPlanData, ShotSpec } from "./domain/types";
 export type { ClipFrames };
 import * as repo from "./repo";
 import * as studio from "./studioRepo";
-import { clipKey, elementKey, sceneClips, type Clip, type ClipFrames, type ClipPanel } from "./domain/clips";
+import { clipKey, elementKey, whenLine, sceneClips, type Clip, type ClipFrames, type ClipPanel } from "./domain/clips";
 import { isSetPiece } from "./domain/setRender";
 import { withPiecePictures } from "./setImage";
 import { klingElementList, type KlingListed } from "./klingList";
@@ -41,6 +41,7 @@ export interface SceneClipsView {
   /** For each clip, in order: the request for a start frame and for an end frame (D164). */
   frameRequests: { start: FrameRequest; end: FrameRequest }[];
   /** The scene's positions (D165): the plan, who's who, the user's words, and whether approved. */
+  when: string;
   people: { slug: string; name: string; usual: string; base: { front?: string; face?: string }; look?: import("./domain/clips").SceneLook }[];
   positions: { plan: GeometryPlanData; names: Record<string, string>; note: string; approved: boolean };
   /** Each panel's words, for changing them on its clip (D164), by order. */
@@ -56,10 +57,11 @@ export interface FrameRequest { baseCode: string; prompt: string; refAssetIds: s
  * them. The same kind of picture as scene 4's three scene pictures (17 Nov), which matched the
  * room, the clothes and the hands first time.
  */
-export function framePrompt(o: { which: "start" | "end"; positions?: string; venue: string; venueDescription?: string; crowd?: string; aspect: "9:16" | "16:9"; people: { name: string; where?: string }[]; props: { name: string; detail?: string }[]; moment: string; change?: string }): string {
+export function framePrompt(o: { which: "start" | "end"; positions?: string; venue: string; venueDescription?: string; crowd?: string; aspect: "9:16" | "16:9"; people: { name: string; where?: string }[]; props: { name: string; detail?: string }[]; moment: string; change?: string; when?: string }): string {
   return [
     `A photorealistic still from a live-action film, ${o.aspect === "9:16" ? "9:16 portrait" : "16:9 landscape"}, natural cinematic lighting, at eye level: the ${o.which === "start" ? "first" : "last"} frame of a short clip.`,
     `The place: ${o.venue}${o.venueDescription ? `, ${o.venueDescription.replace(/\.$/, "")}` : ""}${o.crowd ? `; ${o.crowd.replace(/\.$/, "")}` : ""}. The attached venue pictures show this room: keep its look exactly.`,
+    o.when?.trim() ? whenLine(o.when) : "",
     // The user's own positions words win (D167): the panels' place words ("just behind Chase")
     // were drawn literally beside them and put Jade at Chase's shoulder in plain view.
     o.people.length ? `The people, each exactly as in their attached picture (the same face, hair and clothes): ${o.people.map((p) => `${p.name}${p.where && !o.positions?.trim() ? `, ${p.where.replace(/\.$/, "")}` : ""}`).join("; ")}.` : "",
@@ -172,7 +174,8 @@ export function buildSceneClips(db: DB, sceneId: string): SceneClipsView | null 
   // Start and end frames (D164): Kling chooses the shots from them.
   const frames = studio.getClipFrames(db, sceneId);
   const positionsNote = studio.getPositionsNote(db, sceneId);
-  const clips = sceneClips({ panels, cast, plan, venue: { id: s.venue.id, name: s.venue.name }, crowd, elements, kept: kept.map((k) => ({ from: k.from, to: k.to, frameAssetId: k.frameAssetId })), frames, positionsNote });
+  const when = studio.getSceneWhen(db, sceneId);
+  const clips = sceneClips({ panels, cast, plan, venue: { id: s.venue.id, name: s.venue.name }, crowd, elements, kept: kept.map((k) => ({ from: k.from, to: k.to, frameAssetId: k.frameAssetId })), frames, positionsNote, when });
   const held = [...new Set(panels.flatMap((p) => (p.spec.props ?? []).map((x) => x.name)))];
   const pieces = (plan.furniture ?? []).filter(isSetPiece).map((f) => f.name);
   const rows = [
@@ -209,7 +212,7 @@ export function buildSceneClips(db: DB, sceneId: string): SceneClipsView | null 
     const make = (which: "start" | "end", p: ClipPanel) => ({
       baseCode: `${project.code}_${(s.scene.title ?? "SCENE").replace(/[^A-Za-z0-9]+/g, "").slice(0, 12).toUpperCase()}_CLIP${clipKey(c.panels)}_${which.toUpperCase()}`,
       refAssetIds,
-      prompt: framePrompt({ which, positions: positionsNote, venue: s.venue!.name, venueDescription: s.venue!.description ?? undefined, crowd, aspect: studio.projectAspect(db, projectId), people: who.map((id) => ({ name: nameOf(id), where: (p.spec.where ?? {})[id] })), props, moment: `${p.description}${p.dialogue[0] ? ` (${nameOf(p.dialogue[0].characterId).split(/\s+/)[0]} is about to say: "${p.dialogue[0].text}")` : ""}` }),
+      prompt: framePrompt({ which, when, positions: positionsNote, venue: s.venue!.name, venueDescription: s.venue!.description ?? undefined, crowd, aspect: studio.projectAspect(db, projectId), people: who.map((id) => ({ name: nameOf(id), where: (p.spec.where ?? {})[id] })), props, moment: `${p.description}${p.dialogue[0] ? ` (${nameOf(p.dialogue[0].characterId).split(/\s+/)[0]} is about to say: "${p.dialogue[0].text}")` : ""}` }),
     });
     return { start: make("start", ps[0]), end: make("end", ps[ps.length - 1]) };
   });
@@ -223,5 +226,5 @@ export function buildSceneClips(db: DB, sceneId: string): SceneClipsView | null 
     const p = profiles[c.id] as { wardrobe?: string; refs?: Record<string, string> } | undefined;
     return { slug: c.id, name: c.name, usual: p?.wardrobe ?? "", base: { front: p?.refs?.front, face: p?.refs?.face }, look: looks[c.id] };
   });
-  return { people, positions, frameRequests, editors, issues, clips, rows, listed, pictures, aspect: studio.projectAspect(db, projectId), sceneTitle: s.scene.title ?? "Scene", kept, allPanels: sorted.map((p) => ({ order: p.order, description: p.description })) };
+  return { when, people, positions, frameRequests, editors, issues, clips, rows, listed, pictures, aspect: studio.projectAspect(db, projectId), sceneTitle: s.scene.title ?? "Scene", kept, allPanels: sorted.map((p) => ({ order: p.order, description: p.description })) };
 }

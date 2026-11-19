@@ -7,17 +7,18 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { requestElementsAction, setSceneLookAction } from "@/app/studioActions";
+import { requestElementsAction, setSceneLookAction, setSceneWhenAction } from "@/app/studioActions";
 import { elementKey } from "@/lib/domain/clips";
 import type { SceneClipsView } from "@/lib/sceneClips";
 
-export function lookPrompt(which: "front" | "back", wardrobe: string): string {
+export function lookPrompt(which: "front" | "back", wardrobe: string, when?: string): string {
   return [
     "A full-length photograph of the same person as in the reference pictures: exactly the same face, hair, skin tone, age and build.",
     `They are now wearing: ${wardrobe.trim().replace(/\.$/, "")}.`,
+    when?.trim() ? `The clothes suit ${when.trim().replace(/\.$/, "")}: right for the season and the weather.` : "",
     which === "front" ? "Standing straight, facing the camera, arms relaxed at their sides." : "Standing straight, seen from directly behind, arms relaxed at their sides.",
     "The whole body from head to shoes in frame, plain light-grey studio background, soft even light. One person only. No text.",
-  ].join(" ");
+  ].filter(Boolean).join(" ");
 }
 
 async function draw(projectId: string, baseCode: string, prompt: string, refs: string[]): Promise<string> {
@@ -27,17 +28,27 @@ async function draw(projectId: string, baseCode: string, prompt: string, refs: s
   return j.id;
 }
 
-export function SceneLooks({ projectId, projectCode, sceneId, people }: { projectId: string; projectCode: string; sceneId: string; people: SceneClipsView["people"] }) {
+export function SceneLooks({ projectId, projectCode, sceneId, people, when }: { projectId: string; projectCode: string; sceneId: string; people: SceneClipsView["people"]; when: string }) {
+  const router = useRouter();
+  const [w, setW] = useState(when);
+  const [saved, setSaved] = useState(false);
   return (
     <section className="mb-6 rounded-xl border border-neutral-200 bg-white p-4" data-testid="scene-looks">
       <h2 className="text-lg font-semibold">Clothes in this scene</h2>
       <p className="text-sm text-neutral-600">Everyone wears their usual clothes unless you say otherwise here. The app draws the same person in the new clothes and makes a Kling Element of them for this scene only.</p>
-      <div className="mt-3 space-y-4">{people.map((p) => <LookRow key={p.slug} projectId={projectId} projectCode={projectCode} sceneId={sceneId} person={p} />)}</div>
+      <label className="mt-3 block text-sm font-medium">When is this scene?
+        <span className="ml-1 font-normal text-neutral-500">(time of day, season, weather: the light and everyone's clothes follow it)</span>
+        <div className="mt-1 flex gap-2">
+          <input className="w-full rounded border border-neutral-300 px-2 py-1 text-sm" value={w} onChange={(e) => { setW(e.target.value); setSaved(false); }} placeholder="e.g. a cold, grey late-November afternoon in London" data-testid="scene-when" />
+          <button type="button" className="rounded-md border border-neutral-300 px-3 py-1 text-sm" disabled={w.trim() === when.trim()} onClick={async () => { await setSceneWhenAction(sceneId, w); setSaved(true); router.refresh(); }}>{saved ? "Saved" : "Save"}</button>
+        </div>
+      </label>
+      <div className="mt-3 space-y-4">{people.map((p) => <LookRow key={p.slug} projectId={projectId} projectCode={projectCode} sceneId={sceneId} person={p} when={when} />)}</div>
     </section>
   );
 }
 
-function LookRow({ projectId, projectCode, sceneId, person }: { projectId: string; projectCode: string; sceneId: string; person: SceneClipsView["people"][number] }) {
+function LookRow({ projectId, projectCode, sceneId, person, when }: { projectId: string; projectCode: string; sceneId: string; person: SceneClipsView["people"][number]; when: string }) {
   const router = useRouter();
   const [words, setWords] = useState(person.look?.wardrobe ?? "");
   const [busy, setBusy] = useState(false);
@@ -47,7 +58,7 @@ function LookRow({ projectId, projectCode, sceneId, person }: { projectId: strin
     setBusy(true); setMsg(null);
     try {
       const code = `${projectCode}_${person.slug.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_LOOK_${sceneId.slice(0, 6).toUpperCase()}`;
-      const [front, back] = await Promise.all([draw(projectId, `${code}_FRONT`, lookPrompt("front", words), base), draw(projectId, `${code}_BACK`, lookPrompt("back", words), base)]);
+      const [front, back] = await Promise.all([draw(projectId, `${code}_FRONT`, lookPrompt("front", words, when), base), draw(projectId, `${code}_BACK`, lookPrompt("back", words, when), base)]);
       const r = await setSceneLookAction(sceneId, person.slug, { wardrobe: words.trim(), refs: { front, back, face: person.base.face } });
       if (!r.ok) throw new Error(r.error);
       await requestElementsAction(sceneId, [elementKey.look(person.slug, sceneId)]);

@@ -311,6 +311,11 @@ export async function setPositionsAction(sceneId: string, words: string): Promis
 }
 
 /** A clip's start or end frame: set, cleared or approved (D164). */
+/** When the scene happens (D175). */
+export async function setSceneWhenAction(sceneId: string, when: string): Promise<Result<void>> {
+  return run((db) => { studio.setSceneWhen(db, sceneId, when); });
+}
+
 /** A character's clothes in this scene (D174): words, then the pictures made from them; null clears it. */
 export async function setSceneLookAction(sceneId: string, slug: string, look: import("@/lib/domain/clips").SceneLook | null): Promise<Result<void>> {
   return run((db) => { studio.setSceneLook(db, sceneId, slug, look); });
