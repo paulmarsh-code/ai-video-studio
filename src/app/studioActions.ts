@@ -275,7 +275,7 @@ export async function createClipJobsAction(sceneId: string, clips?: number[]): P
       // or Kling makes a new voice up for them.
       const cast = coreRepo.getCast(db, s.scene.projectId);
       const speakers = [...new Set(v.allPanels.length ? coreRepo.getScene(db, sceneId)!.panels.filter((p) => c.panels.includes(p.order)).flatMap((p) => (p.dialogue as { characterId: string }[]).map((d) => d.characterId)) : [])];
-      const without = speakers.filter((id) => !c.audios.some((a) => a.characterId === id)).map((id) => cast.find((x) => x.id === id)?.name ?? id);
+      const without = speakers.filter((id) => !c.audios.some((a) => a.characterId === id) && !(c.voiced ?? []).includes(id)).map((id) => cast.find((x) => x.id === id)?.name ?? id);
       if (without.length) throw new Error(`Clip ${n}: add ${without.join(" and ")}'s voice sample first (Kling Elements, "add a voice sample"), so ${without.length === 1 ? "their" : "each"} voice stays the same in every clip.`);
     }
     const jobs = chosen.map(({ c, n }) => ({
@@ -380,7 +380,7 @@ export async function reviewClipAction(jobId: string, decision: "approved" | "ch
       const scene = coreRepo.getScene(db, job.sceneId)!;
       const cast = coreRepo.getCast(db, scene.scene.projectId);
       const speakers = [...new Set(scene.panels.filter((p) => c.panels.includes(p.order)).flatMap((p) => (p.dialogue as { characterId: string }[]).map((d) => d.characterId)))];
-      const without = speakers.filter((id) => !c.audios.some((a) => a.characterId === id)).map((id) => cast.find((x) => x.id === id)?.name ?? id);
+      const without = speakers.filter((id) => !c.audios.some((a) => a.characterId === id) && !(c.voiced ?? []).includes(id)).map((id) => cast.find((x) => x.id === id)?.name ?? id);
       if (without.length) throw new Error(`Add ${without.join(" and ")}'s voice sample first (Kling Elements, "add a voice sample"), so ${without.length === 1 ? "their" : "each"} voice stays the same in every clip.`);
     }
     const j = reviewJob(jobId, decision, words, fresh);

@@ -155,6 +155,8 @@ export interface Clip {
   pictures: { shot: number; panel: number; assetId: string; continuity?: boolean; wall?: string }[];
   /** Voice samples for who speaks (D146), in order: audio N is 音频N. Kling 4.0 takes up to 3. */
   audios: { n: number; characterId: string; assetId: string }[];
+  /** Who speaks with the voice in their Element (D177), so needs no voice file. */
+  voiced?: string[];
   /** The kept take this clip carries on from (D130). */
   continues?: { from: number; to: number };
   /**
@@ -652,7 +654,7 @@ export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake
   };
   const seconds = times.reduce((a, b) => a + b, 0);
   return {
-    panels: panels.map((p) => p.order), seconds, credits: seconds * (i.creditsPerSecond ?? 10), pictures, audios, elements: used, missing,
+    panels: panels.map((p) => p.order), seconds, credits: seconds * (i.creditsPerSecond ?? 10), pictures, audios, voiced: speakers.filter(voicedIn), elements: used, missing,
     prompt: build((k, plain) => { const e = used.find((u) => u.key === k); return e ? `<<<${e.id}>>>` : plain; }, (n) => `图片${n}`, (n) => `音频${n}`),
     webPrompt: build((k, plain) => { const e = used.find((u) => u.key === k); return e ? `@${e.name}` : plain; }, (n) => `picture ${n}`, (n) => `audio ${n}`),
     ...(after ? { continues: { from: after.from, to: after.to } } : {}),

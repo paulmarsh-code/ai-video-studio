@@ -18,6 +18,7 @@ describe("The voice comes with the character's Element (D177)", () => {
   it("sends no voice file for someone whose Element carries their voice", () => {
     const [c] = sceneClips(input({ [elementKey.character("ava")]: { id: "1", name: "Ava", voiceAssetId: "va" }, [elementKey.character("bo")]: { id: "2", name: "Bo", voiceAssetId: "vb" } }));
     expect(c.audios).toEqual([]);
+    expect(c.voiced).toEqual(["ava", "bo"]);
     expect(c.prompt).toContain("Ava: their own voice, the one that comes with <<<1>>>");
     expect(c.prompt).toContain("never anyone else's voice");
     expect(c.prompt).not.toContain("音频");

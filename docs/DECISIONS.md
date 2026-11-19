@@ -2954,6 +2954,7 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 - **Decision.** A character's voice sample goes into their Kling Element. An image Element takes a voice as an mp3.
   - The Element request carries the voice. Claude uploads it as an mp3 and makes the Element with it, and the app records which voice the Element holds.
   - A clip sends no voice file for a person whose Element holds their current voice. It says "their own voice, the one that comes with <<<their Element>>>…, and never anyone else's voice".
+  - "Create" accepts a speaker whose Element holds their voice, without a separate voice file. At first it asked for a voice sample, and Paul's Create did nothing.
   - An Element made before the voice, or with an older voice, falls back to the voice file. The clips page says "not in the Element yet: Make again puts it in".
 - **General:** any speaking character, in any scene or look.
 - **Reaches the generation through:** the character's Element, plus the clip request's voice line. Tested in `voiceWallsCoats.d177.test.ts`.
