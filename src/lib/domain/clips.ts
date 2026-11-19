@@ -579,7 +579,9 @@ export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake
   while (times.reduce((a, b) => a + b, 0) < 3) times[times.length - 1]++;
   while (times.reduce((a, b) => a + b, 0) > CLIP_MAX_SEC) { const k = times.indexOf(Math.max(...times)); if (times[k] <= 2) break; times[k]--; }
   const speakers = [...new Set(panels.flatMap((p) => p.dialogue.map((x) => x.characterId)))];
-  const audios: Clip["audios"] = speakers.filter((id) => !voicedIn(id)).flatMap((id) => { const e = i.elements[elementKey.voice(id)]; return e?.id ? [{ characterId: id, assetId: e.id }] : []; }).slice(0, 3).map((x, k) => ({ n: k + 1, ...x }));
+  // The voice file goes too, even with the voice in the Element (D180): Kling 4.0 doesn't list voice
+  // consistency for Elements, and one clear voice file per clip is what has kept voices right.
+  const audios: Clip["audios"] = speakers.flatMap((id) => { const e = i.elements[elementKey.voice(id)]; return e?.id ? [{ characterId: id, assetId: e.id }] : []; }).slice(0, 3).map((x, k) => ({ n: k + 1, ...x }));
   // Who is on a phone call through this clip (D170): Chase put his phone on the bar to take a sip
   // and carried on talking to no one.
   const onCall = callersIn(i.panels, panels, inClip.map((id) => ({ id, name: nameOf(id) })));
@@ -628,8 +630,8 @@ export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake
       const putOn = lines.some((x) => x.characterId === id && PUT_ON.test(x.delivery ?? ""));
       const putOnTail = putOn ? ", except the words they say in a put-on voice as how it's said describes: those are clearly in that other voice, then straight back to their own" : "";
       // Their voice comes with their Element (D177): Jade spoke in Samantha's voice when two loose voice files went with one clip.
-      const heard = voicedIn(id) ? `their own voice, the one that comes with ${ref(elementKey.character(id), first(nameOf(id)))}: the same person, accent, pitch and tone, saying these words, and never anyone else's voice${putOnTail}`
-        : a ? `exactly the voice in ${aud(a.n)}: the same person, accent, pitch and tone, saying these words${putOnTail}` : "";
+      const heard = a ? `exactly the voice in ${aud(a.n)}${voicedIn(id) ? `, the same voice that comes with ${ref(elementKey.character(id), first(nameOf(id)))}` : ""}: the same person, accent, pitch and tone, saying these words, and never anyone else's voice${putOnTail}`
+        : voicedIn(id) ? `their own voice, the one that comes with ${ref(elementKey.character(id), first(nameOf(id)))}: the same person, accent, pitch and tone, saying these words, and never anyone else's voice${putOnTail}` : "";
       return heard || v ? `${first(nameOf(id))}: ${[heard, v].filter(Boolean).join(". ")}` : "";
     }).filter(Boolean);
     if (voices.length) L.push(`Voices. ${voices.join(". ")}.`);

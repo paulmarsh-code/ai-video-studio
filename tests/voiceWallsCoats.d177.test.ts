@@ -15,13 +15,12 @@ const input = (elements: object, extra: object = {}, panels = [P(1, "They sit at
   ({ panels, cast: cast as never, plan: plan as never, venue: { id: "v1", name: "Café" }, elements: { ...base, ...elements } as never, frames: { "1-2": { start: "s", startApproved: true } } as never, ...extra });
 
 describe("The voice comes with the character's Element (D177)", () => {
-  it("sends no voice file for someone whose Element carries their voice", () => {
+  it("names the voice file and the Element's voice together (D180: the file still goes)", () => {
     const [c] = sceneClips(input({ [elementKey.character("ava")]: { id: "1", name: "Ava", voiceAssetId: "va" }, [elementKey.character("bo")]: { id: "2", name: "Bo", voiceAssetId: "vb" } }));
-    expect(c.audios).toEqual([]);
+    expect(c.audios.map((a) => a.characterId)).toEqual(["ava"]);
     expect(c.voiced).toEqual(["ava"]);
-    expect(c.prompt).toContain("Ava: their own voice, the one that comes with <<<1>>>");
+    expect(c.prompt).toContain("Ava: exactly the voice in 音频1, the same voice that comes with <<<1>>>");
     expect(c.prompt).toContain("never anyone else's voice");
-    expect(c.prompt).not.toContain("音频");
   });
   it("falls back to the voice file when the Element was made before the voice (or with another one)", () => {
     const [c] = sceneClips(input({ [elementKey.character("ava")]: { id: "1", name: "Ava", voiceAssetId: "old" }, [elementKey.character("bo")]: { id: "2", name: "Bo" } }));
