@@ -78,6 +78,13 @@ export function elementSources(db: DB, sceneId: string): Omit<ElementRequest, "s
     const p = v.profile as { appearance?: string; wardrobe?: string; refs?: Record<string, string> };
     const refs = p.refs ?? {};
     const pictures = [...pic("front", refs.front ?? refs.face), ...pic("face", refs.front ? refs.face : undefined), ...pic("back", refs.back), ...pic("side", refs.side)].slice(0, 4);
+    // Dressed differently in this scene (D174): that look's pictures make its own Element.
+    const look = studio.getSceneLooks(db, sceneId)[c.slug];
+    if (look) {
+      const lp = [...pic("front", look.refs?.front), ...pic("face", look.refs?.face ?? refs.face), ...pic("back", look.refs?.back)].slice(0, 4);
+      if (lp.length >= 2) out.push({ key: elementKey.look(c.slug, sceneId), projectId, kind: "Character", what: `${c.name} (this scene's clothes)`, name: nameOf(`${c.name} ${s.scene.title ?? "scene"}`, code), description: short(clean(`${p.appearance ?? ""} Wearing: ${look.wardrobe}`), 400), tags: ["Characters"], pictures: lp });
+      continue;
+    }
     if (pictures.length < 2) continue;
     out.push({ key: elementKey.character(c.slug), projectId, kind: "Character", what: c.name, name: nameOf(c.name, code), description: short(clean(`${p.appearance ?? ""} ${p.wardrobe ?? ""}`), 400), tags: ["Characters"], pictures });
   }

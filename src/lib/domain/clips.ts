@@ -22,7 +22,12 @@ export const elementKey = {
   prop: (name: string) => `prop:${name.trim().toLowerCase()}`,
   /** A character's voice sample (D146): an audio file, kept as an asset; its id is the "Element" id. */
   voice: (slug: string) => `voice:${slug}`,
+  /** A character's clothes in one scene (D174): its own Element, made from that look's pictures. */
+  look: (slug: string, sceneId: string) => `char:${slug}@${sceneId}`,
 };
+
+/** A character's look in one scene (D174): what they wear there, and the pictures made of it. */
+export interface SceneLook { wardrobe: string; refs?: { front?: string; back?: string; face?: string } }
 
 export interface ClipPanel {
   order: number;

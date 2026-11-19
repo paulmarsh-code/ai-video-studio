@@ -2920,3 +2920,14 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 - **Decision.** Clip requests in the frames flow now add, after "each appear once": when someone is somewhere new in a later shot (behind someone, then in front of them), they are only in the new place; the spot where they were in the start frame or an earlier shot is empty or taken by a guest who looks nothing like them.
 - **General:** any person who moves between the start frame and a later shot.
 - **Reaches the generation through:** a prompt line in the clip request. Tested in `clipFrames.d164.test.ts`.
+
+## D174: clothes in this scene (19 Nov 2026)
+
+- **Visible failure.** The café scene's start frame had Jade in her launch-party outfit (cream jacket, orange dress, heels). A week later, having coffee with a friend, she'd be casual: Paul wants her "dressed casually but still with a 60s-styled edge". A character had one set of clothes for every scene, and her Kling Element was made from them, so every clip would keep the launch outfit.
+- **Decision.** A scene can dress a character differently.
+  - "Clothes in this scene" on the clips page has a box per person; empty means their usual clothes.
+  - "Dress them for this scene" draws the same person in the new clothes, front and back, whole body, from their own approved pictures (about 10p). It saves the words and pictures as the scene's look and asks Claude to make a Kling Element of it.
+  - That Element is keyed to the character and the scene (`char:<slug>@<scene>`). In that scene's clips it takes the place of the usual one, and the start and end frames use the look's front picture.
+  - New words need drawing again; "Back to their usual clothes" clears it.
+- **General:** any character, any scene, any clothes.
+- **Reaches the generation through:** the start frame's reference pictures and the clip's character Element. Tested in `sceneLooks.d174.test.ts`.
