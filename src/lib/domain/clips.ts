@@ -574,7 +574,9 @@ export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake
   const els: KlingElements = { ...i.elements };
   for (const id of inClip) if (!wearing && i.coatOff?.[id]?.id) els[elementKey.character(id)] = i.coatOff[id];
   // The voice comes with the face (D177): a character whose Element carries their voice sample.
-  const voicedIn = (id: string) => { const c = els[elementKey.character(id)]; const v = i.elements[elementKey.voice(id)]; return !!(c?.voiceAssetId && v?.id && c.voiceAssetId === v.id); };
+  // D183: the voice goes as the speaker's voice file only. A voice inside the Element (D177) came out
+  // right once and wrong twice for Jade; her voice file alone has been right every time.
+  const voicedIn = (id: string): boolean => id.length < 0; // always false (D183), kept for the voice line
   const pieces = (i.plan.furniture ?? []).filter((x) => isSetPiece(x));
   // Drinks in the scene (D182): props or set pieces that are something to drink.
   const drinks = [...new Set([...(i.plan.furniture ?? []).flatMap((f) => [f.name, ...(f.detail ?? "").split(/;\s*/)]), ...panels.flatMap((p) => (p.spec.props ?? []).map((x) => x.name))])].filter((n) => DRINK.test(n)).map((n) => n.split(/\s+-\s+|:/)[0].trim()).filter((n, k, a) => n && a.indexOf(n) === k);

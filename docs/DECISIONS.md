@@ -3001,3 +3001,10 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
   - **Drinks:** when the scene has drinks (props or set-piece details, such as a coffee, a pint or a glass of wine), the clip asks for sips. In clips of 5 s or more it's "at least one sip in this clip", by whoever is listening and between lines. Each sip leaves visibly less, and the level never goes back up. The rule that nobody drinks while speaking (D171) is always added with it.
 - **General:** any scene, any outer clothing, any drinks.
 - **Reaches the generation through:** prompt lines in the clip request. Tested in `voiceWallsCoats.d177.test.ts`.
+
+## D183: the voice goes as a file, not inside the Element (20 Nov 2026)
+
+- **Visible failure.** Scene 5, panel 6, Jade alone: with her voice only inside her Element (D181), it was right in one test, then wrong in the next two takes. Her voice file alone, with Elements that have no voice, has been right every time: clip 1, and test B. The only failures with the file came when it was sent alongside a voice inside the Element (panel 6, first take), or with a second voice (panels 6–7 together).
+- **Decision.** The voice stays part of the character in the app: one voice sample per person, set on their row. Kling gets it only as that person's voice file in each clip ("exactly the voice in 音频N"). Elements are made without a voice. Paul's Jade and Samantha café Elements have had their voices removed in Kling. One speaker per clip (D180) stays. This replaces D177's Element voice and D181's "Element voice alone".
+- **General:** every speaking character.
+- **Reaches the generation through:** the clip's audio input and voice line, and Elements without a voice. Tested in `voiceWallsCoats.d177.test.ts`.

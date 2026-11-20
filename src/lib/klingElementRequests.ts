@@ -85,7 +85,9 @@ export function elementSources(db: DB, sceneId: string): Omit<ElementRequest, "s
     const refs = p.refs ?? {};
     // Their voice goes into their Element (D177): Jade spoke in Samantha's voice from loose voice files.
     const va = asset(linked[elementKey.voice(c.slug)]?.id);
-    const voice = va && fs.existsSync(va.path) ? { voice: { assetId: va.id, path: va.path } } : {};
+    // D183: Elements are made without a voice; the clip sends the voice file instead.
+    const voice: { voice?: ElementRequest["voice"] } = {};
+    void va;
     const pictures = [...pic("front", refs.front ?? refs.face), ...pic("face", refs.front ? refs.face : undefined), ...pic("back", refs.back), ...pic("side", refs.side)].slice(0, 4);
     // Dressed differently in this scene (D174): that look's pictures make its own Element.
     const look = studio.getSceneLooks(db, sceneId)[c.slug];

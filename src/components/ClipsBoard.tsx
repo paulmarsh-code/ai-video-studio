@@ -60,7 +60,7 @@ function ElementRow({ projectId, projectCode, sceneId, row, list, making }: { pr
           <span className="mr-3" data-testid={`voice-${row.key}`}>
             Voice: {row.voice ? <span className="text-green-700">{row.voice.name}</span> : <span className="text-amber-700">none</span>}{" "}
             {/* D177: the voice belongs in the Element; until it's remade, the clip sends it as a separate file. */}
-            {row.voice && row.element && (row.element as { voiceAssetId?: string }).voiceAssetId !== row.voice.id && <span className="text-amber-700">(not in the Element yet: "Make again" puts it in) </span>}
+            {/* D183: voices go as files with each clip, not inside Elements. */}
             <label className="cursor-pointer text-blue-700 underline">{row.voice ? "change" : "add a voice sample"}
               <input type="file" accept="audio/*,video/mp4,video/quicktime" className="hidden" disabled={busy} onChange={async (e) => {
                 const f = e.target.files?.[0]; e.target.value = "";
