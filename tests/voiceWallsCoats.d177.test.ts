@@ -15,11 +15,12 @@ const input = (elements: object, extra: object = {}, panels = [P(1, "They sit at
   ({ panels, cast: cast as never, plan: plan as never, venue: { id: "v1", name: "Café" }, elements: { ...base, ...elements } as never, frames: { "1-2": { start: "s", startApproved: true } } as never, ...extra });
 
 describe("The voice comes with the character's Element (D177)", () => {
-  it("names the voice file and the Element's voice together (D180: the file still goes)", () => {
+  it("uses the Element's voice alone, no voice file as well (D181)", () => {
     const [c] = sceneClips(input({ [elementKey.character("ava")]: { id: "1", name: "Ava", voiceAssetId: "va" }, [elementKey.character("bo")]: { id: "2", name: "Bo", voiceAssetId: "vb" } }));
-    expect(c.audios.map((a) => a.characterId)).toEqual(["ava"]);
+    expect(c.audios).toEqual([]);
     expect(c.voiced).toEqual(["ava"]);
-    expect(c.prompt).toContain("Ava: exactly the voice in 音频1, the same voice that comes with <<<1>>>");
+    expect(c.prompt).toContain("Ava: their own voice, the one that comes with <<<1>>>");
+    expect(c.prompt).not.toContain("音频");
     expect(c.prompt).toContain("never anyone else's voice");
   });
   it("falls back to the voice file when the Element was made before the voice (or with another one)", () => {
@@ -80,5 +81,16 @@ describe("One speaker per clip (D180)", () => {
     const panels = [P(1, "They sit.", [{ characterId: "ava", text: "Hello." }]), P(2, "Bo frowns."), P(3, "Bo answers.", [{ characterId: "bo", text: "Hi." }]), P(4, "Ava again.", [{ characterId: "ava", text: "Well." }])];
     const clips = sceneClips({ panels, cast: cast as never, plan: plan as never, venue: { id: "v1", name: "Café" }, elements: base as never });
     expect(clips.map((c) => c.panels)).toEqual([[1, 2], [3], [4]]);
+  });
+});
+
+describe("Only the walls behind the people (D181)", () => {
+  it("picks the wall beyond each person as seen from the other", async () => {
+    const { wallsBehind } = await import("../src/lib/domain/clips");
+    const p2 = { ...plan, views: [{ name: "windows", directionDeg: 0 }, { name: "bookshelf", directionDeg: 90 }, { name: "brick", directionDeg: 180 }, { name: "counter", directionDeg: 270 }] };
+    // Ava at x=1 (towards the windows), Bo at x=-1 (towards the brick wall).
+    expect(wallsBehind(p2 as never, ["ava", "bo"]).sort()).toEqual(["brick", "windows"]);
+    const [c] = sceneClips(input({ [elementKey.character("ava")]: { id: "1", name: "Ava" }, [elementKey.character("bo")]: { id: "2", name: "Bo" } }, { plan: p2, walls: [{ name: "windows", assetId: "w1" }, { name: "bookshelf", assetId: "w2" }, { name: "brick", assetId: "w3" }, { name: "counter", assetId: "w4" }] }));
+    expect(c.pictures.map((p) => p.assetId)).toEqual(["s", "w1", "w3"]);
   });
 });

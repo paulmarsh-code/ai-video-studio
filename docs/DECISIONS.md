@@ -2982,3 +2982,12 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 - **Decision.** When the app splits a scene into clips, a panel where someone new speaks starts the next clip. Silent panels stay in the speaker's clip. Each clip sends one voice. Kling charges per second, so it costs about the same: just more, shorter clips. Voices stay in the Elements (D177), but the speaker's voice file goes with the clip again too, named as the same voice. That one-file way is what has kept voices right with 4.0.
 - **General:** any scene with more than one speaker.
 - **Reaches the generation through:** how the scene is split into clips, so there is one voice in each request. Tested in `voiceWallsCoats.d177.test.ts`.
+
+## D181: one way to the voice, and only the walls behind the people (20 Nov 2026)
+
+- **Visible failures.** Scene 5, panel 6, Jade alone: she had neither her own voice nor Samantha's. That clip sent her voice inside her Element and as a voice file too. Two 3 s tests on the same line: the voice inside the Element only, and the voice file only. Paul heard Jade's own voice in both. But in both tests the pictures went wrong. Kling turned the camera towards the front windows behind Jade, put in a plain full-glass window, and in one sat Samantha beside her. All four café walls had been sent.
+- **Decisions.**
+  - **Voice:** a speaker whose Element holds their voice gets no voice file as well. The request names only "their own voice, the one that comes with <<<Element>>>". A speaker without a voice in their Element still gets the voice file. One speaker per clip (D180) stays. This replaces D180's "voice file too" note.
+  - **Walls:** a clip now sends only the walls seen behind the people. For each person, that's the wall straight on beyond them as seen from where each of the others sits, worked out from the floor plan and the walls' look directions. For two people across a table, that's two walls, not four. When the plan can't say, all walls go, as before. Paul: "the right shot added".
+- **General:** any speaker; any venue with wall pictures and a floor plan.
+- **Reaches the generation through:** the voice line and the audio inputs, and which reference pictures the clip request sends. Tested in `voiceWallsCoats.d177.test.ts`.

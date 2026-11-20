@@ -43,6 +43,26 @@ export function outerOf(wardrobe: string): string[] {
 export function withoutOuter(wardrobe: string): string {
   return wardrobe.split(/[,;]/).map((x) => x.trim().replace(/\.$/, "")).filter((x) => x && !OUTER.test(x)).join(", ");
 }
+/**
+ * The walls seen behind the people when each is shot from where the others sit (D181): for each
+ * pair, the wall straight on beyond the person, by the views' look directions. Empty when unknown.
+ */
+export function wallsBehind(plan: GeometryPlanData, ids: string[]): string[] {
+  const views = plan.views ?? [];
+  const at = (id: string) => plan.actors.find((a) => a.characterId === id)?.position;
+  const people = ids.filter((id) => at(id));
+  if (views.length < 2 || people.length < 2) return [];
+  const diff = (a: number, b: number) => { const d = Math.abs((((a - b) % 360) + 360) % 360); return Math.min(d, 360 - d); };
+  const out = new Set<string>();
+  for (const p of people) for (const q of people) {
+    if (p === q) continue;
+    const a = at(p)!, b = at(q)!;
+    const look = (Math.atan2(a.y - b.y, a.x - b.x) * 180) / Math.PI;
+    out.add([...views].sort((x, y) => diff(x.directionDeg, look) - diff(y.directionDeg, look))[0].name);
+  }
+  return [...out];
+}
+
 /** What happens has someone wearing or putting on their coat: arriving, leaving, outside (D179). */
 export const WEARS_OUTER = /\b(?:puts?|putting|pulls?|pulling|shrugs?|shrugging|slips?|slipping)\s+(?:on|into)\b[^.]*\b(?:coat|jacket|hat|scarf)|\b(?:coat|jacket|hat|scarf)\b[^.]*\b(?:puts?|putting|pulls?|pulling|shrugs?|slips?)\s+(?:it|them)\s+on\b(?!\s+(?:the|a|an|her|his|their)\b)|\b(?:coat|jacket)s?\s+(?:on|still on|buttoned|zipped)\b|\b(?:arriv\w*|walks? in|comes? in|steps? in|enters?|entering|leav\w*|heads? out|walks? out|goes? out|gets? up to go|outside|on the street|in the street)\b/i;
 
@@ -568,7 +588,11 @@ export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake
   const end: Clip["end"] = f.end ? { assetId: f.end } : undefined;
   // The room all the way round (D178): Kling made up the café's window behind Jade when it cut to
   // an angle the start frame didn't show. Up to 10 pictures in all.
-  const walls = (i.walls ?? []).filter((w) => w.assetId !== start?.assetId).slice(0, 10 - (start ? 1 : 0) - (end ? 1 : 0));
+  // Only the walls seen behind the people (D181): with all four walls, Kling turned the camera to the
+  // front windows behind Jade and seated Samantha beside her. Paul: "the right shot added".
+  const behind = wallsBehind(i.plan, inClip);
+  const chosen = (i.walls ?? []).filter((w) => !behind.length || behind.includes(w.name));
+  const walls = (chosen.length ? chosen : i.walls ?? []).filter((w) => w.assetId !== start?.assetId).slice(0, 10 - (start ? 1 : 0) - (end ? 1 : 0));
   const pictures: Clip["pictures"] = [
     ...(start ? [{ shot: 1, panel: panels[0].order, assetId: start.assetId, continuity: true }] : []),
     ...walls.map((w) => ({ shot: 0, panel: 0, assetId: w.assetId, wall: w.name })),
@@ -579,9 +603,9 @@ export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake
   while (times.reduce((a, b) => a + b, 0) < 3) times[times.length - 1]++;
   while (times.reduce((a, b) => a + b, 0) > CLIP_MAX_SEC) { const k = times.indexOf(Math.max(...times)); if (times[k] <= 2) break; times[k]--; }
   const speakers = [...new Set(panels.flatMap((p) => p.dialogue.map((x) => x.characterId)))];
-  // The voice file goes too, even with the voice in the Element (D180): Kling 4.0 doesn't list voice
-  // consistency for Elements, and one clear voice file per clip is what has kept voices right.
-  const audios: Clip["audios"] = speakers.flatMap((id) => { const e = i.elements[elementKey.voice(id)]; return e?.id ? [{ characterId: id, assetId: e.id }] : []; }).slice(0, 3).map((x, k) => ({ n: k + 1, ...x }));
+  // One way to the voice, never both (D181): with the voice in Jade's Element and her voice file as
+  // well, Kling gave her a third voice; either one alone gave her own. The Element's voice wins.
+  const audios: Clip["audios"] = speakers.filter((id) => !voicedIn(id)).flatMap((id) => { const e = i.elements[elementKey.voice(id)]; return e?.id ? [{ characterId: id, assetId: e.id }] : []; }).slice(0, 3).map((x, k) => ({ n: k + 1, ...x }));
   // Who is on a phone call through this clip (D170): Chase put his phone on the bar to take a sip
   // and carried on talking to no one.
   const onCall = callersIn(i.panels, panels, inClip.map((id) => ({ id, name: nameOf(id) })));
@@ -630,8 +654,8 @@ export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake
       const putOn = lines.some((x) => x.characterId === id && PUT_ON.test(x.delivery ?? ""));
       const putOnTail = putOn ? ", except the words they say in a put-on voice as how it's said describes: those are clearly in that other voice, then straight back to their own" : "";
       // Their voice comes with their Element (D177): Jade spoke in Samantha's voice when two loose voice files went with one clip.
-      const heard = a ? `exactly the voice in ${aud(a.n)}${voicedIn(id) ? `, the same voice that comes with ${ref(elementKey.character(id), first(nameOf(id)))}` : ""}: the same person, accent, pitch and tone, saying these words, and never anyone else's voice${putOnTail}`
-        : voicedIn(id) ? `their own voice, the one that comes with ${ref(elementKey.character(id), first(nameOf(id)))}: the same person, accent, pitch and tone, saying these words, and never anyone else's voice${putOnTail}` : "";
+      const heard = voicedIn(id) ? `their own voice, the one that comes with ${ref(elementKey.character(id), first(nameOf(id)))}: the same person, accent, pitch and tone, saying these words, and never anyone else's voice${putOnTail}`
+        : a ? `exactly the voice in ${aud(a.n)}: the same person, accent, pitch and tone, saying these words, and never anyone else's voice${putOnTail}` : "";
       return heard || v ? `${first(nameOf(id))}: ${[heard, v].filter(Boolean).join(". ")}` : "";
     }).filter(Boolean);
     if (voices.length) L.push(`Voices. ${voices.join(". ")}.`);
