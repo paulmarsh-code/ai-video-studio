@@ -43,8 +43,17 @@ When Paul presses "Make … from the app's pictures" on the clips page, the app 
    - `name` and `description` from the request;
    - `tags` from the request;
    - `resource`: `cover` is picture 1's `klingUrl`; `secondary` is the rest, as `{name: role, inputType: "URL", url}`.
-   - `resource.voice` (D177): when the request has a `voice`, stage it from its `path`, make it an mp3 of 5–30 s as in step 3b of the clips, upload it, and pass its URL. The voice then comes with the face; clips send no separate voice file for that person.
+   - `resource.voice` (D177, D186: only the voiced copies, keys ending `#voice`): when the request has a `voice`, stage it from its `path`, make it an mp3 of 5–30 s as in step 3b of the clips, upload it, and pass its URL. The voice then comes with the face; clips send no separate voice file for that person.
 4. **Write back.** Set `status` to `done` with the returned `id`, or `failed` with Kling's error.
 5. **Refresh the list.** Call `element_list` and write `data/kling_elements.json` as `{updatedAt, elements: [{id, name}]}`, so the dropdowns show the new Elements.
 6. **Commit both files.** The clips page links each made Element to its character, venue or prop the next time it opens (once; a later pick in the dropdown stands).
 7. **Check the cost.** Creating Elements costs nothing, as far as we know: check the balance before and after the first run and tell Paul.
+
+
+## Kling 3.0 Omni clips (D186)
+
+A job whose `model` is `kling-video-v3_0_omni` (two people talking) goes through `image_to_video`, not `omni_ref_video`:
+- `model`: `kling-video-v3_0_omni`.
+- `arguments`: `prompt`, `elements` (JSON `[{id, bindName}]`, no `type`), `duration`, `aspect_ratio`, `resolution` `720p`, `prefer_multi_shots` `true`, `enable_audio` `true`.
+- `inputs`: `image_N` for each picture's `klingUrl`, in order (7 at most). No audio: the voices are inside the voiced Elements (`…#voice`), which were made with each character's voice sample as an mp3.
+- It costs about 9 credits a second (a 5 s clip was 45).

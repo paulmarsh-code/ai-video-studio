@@ -27,7 +27,13 @@ export const elementKey = {
   look: (slug: string, sceneId: string) => `char:${slug}@${sceneId}`,
   /** The same look with the coat, jacket, hat or bag off (D179): its own Element. */
   lookOff: (slug: string, sceneId: string) => `char:${slug}@${sceneId}~off`,
+  /** A character Element's copy with their voice built in (D186), for clips where two people talk. */
+  voiced: (key: string) => `${key}#voice`,
 };
+
+/** Kling's models (D186): 4.0 with voice files; 3.0 Omni with voices built into Elements. */
+export const MODEL_40 = "kling-video-v4_0";
+export const MODEL_30_OMNI = "kling-video-v3_0_omni";
 
 /** A character's look in one scene (D174): what they wear there, and the pictures made of it. */
 export interface SceneLook { wardrobe: string; refs?: { front?: string; back?: string; face?: string }; off?: { front?: string } }
@@ -107,6 +113,8 @@ export interface ClipInput {
   coatOff?: Record<string, KlingElement>;
   /** The venue's own pictures of each wall (D178), sent with every clip so any angle shows the right room. */
   walls?: { name: string; assetId: string }[];
+  /** Each character Element's voiced copy, by the plain Element's id (D186). */
+  voicedOf?: Record<string, KlingElement>;
 }
 
 export interface KeptTake { from: number; to: number; frameAssetId?: string }
@@ -185,6 +193,8 @@ export interface Clip {
   audios: { n: number; characterId: string; assetId: string }[];
   /** Who speaks with the voice in their Element (D177), so needs no voice file. */
   voiced?: string[];
+  /** Which Kling model makes it (D186): 3.0 Omni when two people talk and each has a voiced Element. */
+  model?: string;
   /** The kept take this clip carries on from (D130). */
   continues?: { from: number; to: number };
   /**
@@ -207,9 +217,9 @@ export { CLIP_MAX_SEC, CLIP_MAX_SHOTS } from "./clipCameras";
  */
 export function groupClips(panels: ClipPanel[], plan?: GeometryPlanData): ClipPanel[][] {
   const angle = (p: ClipPanel) => plan?.cameras.find((x) => x.id === p.spec.cameraId);
-  // One speaker per clip (D185, D180 back): two women speaking in one clip swapped voices three times,
-  // even with clean samples; Chase and Jade in scene 4 sound nothing alike. Each alone was right.
-  return groupByTime([...panels].sort((a, b) => a.order - b.order), (p) => p.durationSec, plan ? angle : undefined, undefined, undefined, (p) => [...new Set(p.dialogue.map((d) => d.characterId))]);
+  // Two people may talk in one clip again (D186): such a clip goes to Kling 3.0 Omni with voices built
+  // into the Elements, which kept two women's voices apart where 4.0 swapped them (D185 replaced).
+  return groupByTime([...panels].sort((a, b) => a.order - b.order), (p) => p.durationSec, plan ? angle : undefined);
 }
 
 const first = (name: string) => name.split(/\s+/)[0];
@@ -578,7 +588,15 @@ export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake
   // The voice comes with the face (D177): a character whose Element carries their voice sample.
   // D183: the voice goes as the speaker's voice file only. A voice inside the Element (D177) came out
   // right once and wrong twice for Jade; her voice file alone has been right every time.
-  const voicedIn = (id: string): boolean => id.length < 0; // always false (D183), kept for the voice line
+  // Two people talking (D186): Kling 4.0 swapped two women's voices in one clip, from voice files or
+  // Elements alike; Kling 3.0 Omni, with each voice built into her Element, kept both right. So a clip
+  // where two or more speak goes to 3.0 Omni with voiced Elements, when every speaker has one.
+  const talkers = [...new Set(panels.flatMap((p) => p.dialogue.map((x) => x.characterId)))];
+  const voicedCopy = (id: string) => i.voicedOf?.[els[elementKey.character(id)]?.id ?? ""];
+  const omni3 = talkers.length > 1 && talkers.every((id) => voicedCopy(id)?.id);
+  if (omni3) for (const id of talkers) els[elementKey.character(id)] = voicedCopy(id)!;
+  // One speaker: the voice file only, with Elements made without a voice (D183).
+  const voicedIn = (id: string): boolean => omni3 && talkers.includes(id);
   const pieces = (i.plan.furniture ?? []).filter((x) => isSetPiece(x));
   // Drinks in the scene (D182): props or set pieces that are something to drink.
   const drinks = [...new Set([...(i.plan.furniture ?? []).flatMap((f) => [f.name, ...(f.detail ?? "").split(/;\s*/)]), ...panels.flatMap((p) => (p.spec.props ?? []).map((x) => x.name))])].filter((n) => DRINK.test(n)).map((n) => n.split(/\s+-\s+|:/)[0].trim()).filter((n, k, a) => n && a.indexOf(n) === k);
@@ -700,7 +718,8 @@ export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake
   };
   const seconds = times.reduce((a, b) => a + b, 0);
   return {
-    panels: panels.map((p) => p.order), seconds, credits: seconds * (i.creditsPerSecond ?? 10), pictures, audios, voiced: speakers.filter(voicedIn), elements: used, missing,
+    panels: panels.map((p) => p.order), seconds, credits: seconds * (i.creditsPerSecond ?? 10), pictures, audios, voiced: speakers.filter(voicedIn), elements: used, model: omni3 ? MODEL_30_OMNI : MODEL_40,
+    missing: [...missing, ...(talkers.length > 1 && !omni3 ? ["voices built into Elements, for two people talking in one clip (Make again on their rows)"] : [])],
     prompt: build((k, plain) => { const e = used.find((u) => u.key === k); return e ? `<<<${e.id}>>>` : plain; }, (n) => `图片${n}`, (n) => `音频${n}`),
     webPrompt: build((k, plain) => { const e = used.find((u) => u.key === k); return e ? `@${e.name}` : plain; }, (n) => `picture ${n}`, (n) => `audio ${n}`),
     ...(after ? { continues: { from: after.from, to: after.to } } : {}),

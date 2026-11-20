@@ -76,11 +76,11 @@ describe("Linked Elements keep their voice (D177)", () => {
   });
 });
 
-describe("One speaker per clip (D185)", () => {
-  it("starts a new clip when someone else speaks; silent panels stay with the speaker", () => {
+describe("Two people may share a clip (D186)", () => {
+  it("keeps panels together by time, whoever speaks", () => {
     const panels = [P(1, "They sit.", [{ characterId: "ava", text: "Hello." }]), P(2, "Bo frowns."), P(3, "Bo answers.", [{ characterId: "bo", text: "Hi." }]), P(4, "Ava again.", [{ characterId: "ava", text: "Well." }])];
     const clips = sceneClips({ panels, cast: cast as never, plan: plan as never, venue: { id: "v1", name: "Café" }, elements: base as never });
-    expect(clips.map((c) => c.panels)).toEqual([[1, 2], [3], [4]]);
+    expect(clips.map((c) => c.panels)).toEqual([[1, 2, 3, 4]]);
   });
 });
 
@@ -115,5 +115,31 @@ describe("No wall pictures from the scene (D184)", () => {
   it("buildSceneClips no longer passes walls", async () => {
     const src = (await import("node:fs")).readFileSync("src/lib/sceneClips.ts", "utf8");
     expect(src).not.toMatch(/coatOff, walls \}/);
+  });
+});
+
+describe("Two people talking go to Kling 3.0 Omni with voiced Elements (D186)", () => {
+  const els = { [elementKey.character("ava")]: { id: "1", name: "Ava" }, [elementKey.character("bo")]: { id: "2", name: "Bo" } };
+  const panels = [P(1, "They sit.", [{ characterId: "ava", text: "Hello." }]), P(2, "Bo answers.", [{ characterId: "bo", text: "Hi." }])];
+  it("uses 3.0 Omni, the voiced copies and no voice files when both speakers have one", () => {
+    const [c] = sceneClips(input(els, { voicedOf: { "1": { id: "11", name: "V Ava" }, "2": { id: "22", name: "V Bo" } } }, panels));
+    expect(c.panels).toEqual([1, 2]);
+    expect(c.model).toBe("kling-video-v3_0_omni");
+    expect(c.audios).toEqual([]);
+    expect(c.prompt).toContain("Ava is <<<11>>>");
+    expect(c.prompt).toContain("Ava: their own voice, the one that comes with <<<11>>>");
+    expect(c.prompt).toContain("Bo: their own voice, the one that comes with <<<22>>>");
+  });
+  it("stays on 4.0 with voice files, and says what's missing, when a speaker has no voiced copy", () => {
+    const [c] = sceneClips(input(els, { voicedOf: { "1": { id: "11", name: "V Ava" } } }, panels));
+    expect(c.model).toBe("kling-video-v4_0");
+    expect(c.audios.map((a) => a.characterId)).toEqual(["ava", "bo"]);
+    expect(c.missing.join(" ")).toContain("voices built into Elements");
+  });
+  it("one speaker stays on 4.0 with the voice file", () => {
+    const [c] = sceneClips(input(els, { voicedOf: { "1": { id: "11", name: "V Ava" } } }));
+    expect(c.model).toBe("kling-video-v4_0");
+    expect(c.prompt).toContain("Ava is <<<1>>>");
+    expect(c.audios.map((a) => a.characterId)).toEqual(["ava"]);
   });
 });

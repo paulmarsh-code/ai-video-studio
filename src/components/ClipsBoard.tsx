@@ -318,7 +318,7 @@ export function ClipsBoard({ projectId, projectCode, sceneId, rows, clips, list,
           {clips.map((c, k) => (
             <div key={k} className="rounded-lg border border-neutral-200 bg-white p-3">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h3 className="font-semibold">Clip {k + 1}: panels {c.panels.join(", ")} · {c.seconds} s · about {c.credits} credits{c.continues && <span className="ml-2 rounded bg-green-100 px-2 py-0.5 text-xs font-normal text-green-800">carries on from the kept take of panels {c.continues.from}–{c.continues.to}</span>}</h3>
+                <h3 className="font-semibold">Clip {k + 1}: panels {c.panels.join(", ")} · {c.seconds} s · about {c.credits} credits{c.continues && <span className="ml-2 rounded bg-green-100 px-2 py-0.5 text-xs font-normal text-green-800">carries on from the kept take of panels {c.continues.from}–{c.continues.to}</span>}{c.model === "kling-video-v3_0_omni" && <span className="ml-2 rounded bg-indigo-100 px-2 py-0.5 text-xs font-normal text-indigo-800">Kling 3.0 Omni: two people talking</span>}</h3>
                 <div className="flex flex-wrap gap-2">
                   <Copy text={api ? c.prompt : c.webPrompt} label="Copy the request" />
                   {/* One click, one request (D143): while a clip waits or is being made the button says

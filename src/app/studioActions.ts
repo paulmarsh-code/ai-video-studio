@@ -280,7 +280,7 @@ export async function createClipJobsAction(sceneId: string, clips?: number[]): P
     }
     const jobs = chosen.map(({ c, n }) => ({
       id: jobId(sceneId, c.panels), projectId: s.scene.projectId, sceneId, sceneTitle: v.sceneTitle, clip: n, panels: c.panels, seconds: c.seconds,
-      aspect: v.aspect, model: "kling-video-v4_0", resolution: "720p", sound: true, prompt: c.prompt,
+      aspect: v.aspect, model: c.model ?? "kling-video-v4_0", resolution: "720p", sound: true, prompt: c.prompt,
       elements: c.elements.map((e) => ({ id: e.id, name: e.name })),
       pictures: c.pictures.map((x, i) => ({ n: i + 1, shot: x.shot, panel: x.panel, assetId: x.assetId, path: coreRepo.getAsset(db, x.assetId)?.path ?? "", ...(x.wall ? { wall: x.wall } : {}) })),
       // Each speaker's voice sample (D146): audio N is 音频N in the request.

@@ -86,21 +86,23 @@ export function elementSources(db: DB, sceneId: string): Omit<ElementRequest, "s
     // Their voice goes into their Element (D177): Jade spoke in Samantha's voice from loose voice files.
     const va = asset(linked[elementKey.voice(c.slug)]?.id);
     // D183: Elements are made without a voice; the clip sends the voice file instead.
+    // D183: plain Elements carry no voice. D186: each also gets a voiced copy for two-person clips.
     const voice: { voice?: ElementRequest["voice"] } = {};
-    void va;
+    const sample = va && fs.existsSync(va.path) ? { assetId: va.id, path: va.path } : undefined;
+    const withVoiced = (r: Omit<ElementRequest, "status" | "requestedAt">) => { out.push(r); if (sample) out.push({ ...r, key: elementKey.voiced(r.key), what: `${r.what}, with voice`, name: nameOf(`V ${r.name.replace(/^\S+\s+/, "")}`, code), voice: sample }); };
     const pictures = [...pic("front", refs.front ?? refs.face), ...pic("face", refs.front ? refs.face : undefined), ...pic("back", refs.back), ...pic("side", refs.side)].slice(0, 4);
     // Dressed differently in this scene (D174): that look's pictures make its own Element.
     const look = studio.getSceneLooks(db, sceneId)[c.slug];
     if (look) {
       const lp = [...pic("front", look.refs?.front), ...pic("face", look.refs?.face ?? refs.face), ...pic("back", look.refs?.back)].slice(0, 4);
-      if (lp.length >= 2) out.push({ key: elementKey.look(c.slug, sceneId), projectId, kind: "Character", what: `${c.name} (this scene's clothes)`, name: nameOf(`${c.name.split(/\s+/)[0]} ${initials(s.scene.title)}${look.off?.front ? " coat" : ""}`, code), description: short(clean(`${p.appearance ?? ""} Wearing: ${look.wardrobe}`), 400), tags: ["Characters"], pictures: lp, ...voice });
+      if (lp.length >= 2) withVoiced({ key: elementKey.look(c.slug, sceneId), projectId, kind: "Character", what: `${c.name} (this scene's clothes)`, name: nameOf(`${c.name.split(/\s+/)[0]} ${initials(s.scene.title)}${look.off?.front ? " coat" : ""}`, code), description: short(clean(`${p.appearance ?? ""} Wearing: ${look.wardrobe}`), 400), tags: ["Characters"], pictures: lp, ...voice });
       // Coat, jacket, hat and bag off (D179): its own Element from the indoor picture and the face.
       const op = [...pic("front", look.off?.front), ...pic("face", look.refs?.face ?? refs.face)].slice(0, 4);
-      if (op.length >= 2) out.push({ key: elementKey.lookOff(c.slug, sceneId), projectId, kind: "Character", what: `${c.name} (this scene, coat off)`, name: nameOf(`${c.name.split(/\s+/)[0]} ${initials(s.scene.title)} indoor`, code), description: short(clean(`${p.appearance ?? ""} Wearing: ${withoutOuter(look.wardrobe)}`), 400), tags: ["Characters"], pictures: op, ...voice });
+      if (op.length >= 2) withVoiced({ key: elementKey.lookOff(c.slug, sceneId), projectId, kind: "Character", what: `${c.name} (this scene, coat off)`, name: nameOf(`${c.name.split(/\s+/)[0]} ${initials(s.scene.title)} indoor`, code), description: short(clean(`${p.appearance ?? ""} Wearing: ${withoutOuter(look.wardrobe)}`), 400), tags: ["Characters"], pictures: op, ...voice });
       continue;
     }
     if (pictures.length < 2) continue;
-    out.push({ key: elementKey.character(c.slug), projectId, kind: "Character", what: c.name, name: nameOf(c.name, code), description: short(clean(`${p.appearance ?? ""} ${p.wardrobe ?? ""}`), 400), tags: ["Characters"], pictures, ...voice });
+    withVoiced({ key: elementKey.character(c.slug), projectId, kind: "Character", what: c.name, name: nameOf(c.name, code), description: short(clean(`${p.appearance ?? ""} ${p.wardrobe ?? ""}`), 400), tags: ["Characters"], pictures, ...voice });
   }
 
   // The venue: the set's own wall pictures (what the storyboard is drawn on), else its views.

@@ -3029,3 +3029,16 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 - **Decision.** D180's split comes back: a panel with someone new speaking starts the next clip, and silent panels stay with the speaker. Everything else stays on the D184 recipe: the start frame is the only picture, the venue Element holds the room, clean voice files, coat-off looks.
 - **General:** any scene with more than one speaker.
 - **Reaches the generation through:** how the scene is split into clips. Tested in `voiceWallsCoats.d177.test.ts`.
+
+## D186: two people talking go to Kling 3.0 Omni, with voiced Elements (20 Nov 2026)
+
+- **Visible failure, and a test.** Kling 4.0 swapped Jade's and Samantha's voices whenever both spoke in one clip, with voice files or with voices inside Elements. With one speaker per clip, it lip-synced whichever face the start frame showed, so in panel 7 Jade mouthed Samantha's line. Kling's guide lists voice consistency only for 3.0 Omni. A 5 s test of panels 6–7 on 3.0 Omni, with each voice built into her Element, gave each line the right voice on the right face. Paul: "it works". It's kept as panels 6–7. Its weaker point: a plainer room behind Samantha.
+- **Decisions.**
+  - Two people may talk in one clip again (D185 replaced).
+  - Such a clip goes to Kling 3.0 Omni when every speaker has a voiced copy of their Element. The request says each speaks in "their own voice, the one that comes with <<<their voiced Element>>>", and sends no voice files.
+  - For each character Element (base, scene look and coat off), the app now also asks for a voiced copy: same pictures, plus the voice sample, key `…#voice`, name starting "V".
+  - If a speaker has no voiced copy, the clip stays on 4.0 with voice files and says what's missing.
+  - One speaker, or none, stays on Kling 4.0 with the voice file (D183), for its better rooms.
+  - The clips page marks 3.0 clips. The runbook says how to send them, through `image_to_video`, model `kling-video-v3_0_omni`.
+- **General:** any scene where two or more people talk.
+- **Reaches the generation through:** the model, the Elements (voiced copies) and the voice lines in the request. Tested in `voiceWallsCoats.d177.test.ts`.
