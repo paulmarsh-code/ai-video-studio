@@ -94,3 +94,19 @@ describe("Only the walls behind the people (D181)", () => {
     expect(c.pictures.map((p) => p.assetId)).toEqual(["s", "w1", "w3"]);
   });
 });
+
+describe("Coats off said outright, and drinks get drunk (D182)", () => {
+  it("names who has their coat off and keeps the season for the guests", () => {
+    const [c] = sceneClips(input({ [elementKey.character("ava")]: { id: "1", name: "Ava" }, [elementKey.character("bo")]: { id: "2", name: "Bo" } }, { coatOff: { ava: { id: "9", name: "Ava in" }, bo: { id: "8", name: "Bo in" } }, when: "a wet autumn afternoon" }));
+    expect(c.prompt).toContain("Ava and Bo have taken off their coats: in every shot, including any shot they first appear in, they wear exactly what their Elements show");
+    expect(c.prompt).toContain("what the guests and passers-by wear suit it");
+  });
+  it("asks for sips and a falling level when there are drinks", () => {
+    const p3 = { ...plan, furniture: [{ id: "t", name: "small table", position: { x: 0, y: 5 }, radiusM: 0.3, detail: "Ava's coffee - ceramic cup; Bo's tea - mug" }] };
+    const panels = [P(1, "They sit.", [{ characterId: "ava", text: "Hello there, how have you been keeping?" }]), P(2, "Bo listens.")];
+    const [c] = sceneClips(input({ [elementKey.character("ava")]: { id: "1", name: "Ava" }, [elementKey.character("bo")]: { id: "2", name: "Bo" } }, { plan: p3 }, panels));
+    expect(c.prompt).toContain("The drinks (Ava's coffee, Bo's tea) get drunk: at least one sip in this clip");
+    expect(c.prompt).toContain("the level never goes back up");
+    expect(c.prompt).toContain("Nobody drinks or eats while saying a line");
+  });
+});

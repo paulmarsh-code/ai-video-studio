@@ -120,6 +120,12 @@ export const PUT_ON = /\b(mimic\w*|imitat\w*|impression|impersonat\w*|put-on voi
 
 // D176: coats, jackets, hats and bags stay on or off as the clip starts.
 export const COATS = "Coats, jackets, hats, scarves and bags stay";
+/** Something to drink (D182). */
+export const DRINK = /\b(coffees?|teas?|lattes?|cappuccinos?|espressos?|flat whites?|hot chocolates?|cups?|mugs?|pints?|beers?|wines?|glass(?:es)? of|cocktails?|drinks?|juices?|smoothies?|sodas?|lemonades?|prosecco|champagne|gin|whisky|whiskey)\b/i;
+/** The drinking line: listeners take sips between lines and the level only goes down (D182). */
+export function drinkLine(drinks: string[], seconds: number): string {
+  return `The drinks (${drinks.join(", ")}) ${seconds >= 5 ? "get drunk: at least one sip in this clip" : "can be sipped"}, by whoever is listening, between lines; each sip leaves visibly less in the cup or glass, and the level never goes back up from one shot to the next.`;
+}
 const SIP = /\b(sip|sips|drink|drinks|drinking|swallow\w*|gulp\w*|eats?|eating|bites?)\b/i;
 const CALL = /\b(phone|on the line|on a call|the call|mobile)\b/i;
 const CALL_ENDS = /\b(cuts the call|ends the call|hangs up|lowers the phone|puts (?:the|his|her|their) phone (?:down|away)|pockets (?:the|his|her|their) phone|gotta go)\b/i;
@@ -153,7 +159,9 @@ export function callersIn(all: ClipPanel[], panels: ClipPanel[], people: { id: s
 }
 
 /** The time of day and season, and what it means for light and clothes (D175). */
-export const whenLine = (when: string) => `It is ${when.trim().replace(/\.$/, "")}: the light, the weather through any window, and what everyone wears suit it.`;
+// "What everyone wears" (D175) put Samantha back in a coat indoors (D182): the season now dresses the
+// guests and the street; the named people wear what their Elements show.
+export const whenLine = (when: string) => `It is ${when.trim().replace(/\.$/, "")}: the light, the weather through any window, and what the guests and passers-by wear suit it.`;
 
 export const clipKey = (panels: number[]) => panels.join("-");
 
@@ -568,6 +576,8 @@ export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake
   // The voice comes with the face (D177): a character whose Element carries their voice sample.
   const voicedIn = (id: string) => { const c = els[elementKey.character(id)]; const v = i.elements[elementKey.voice(id)]; return !!(c?.voiceAssetId && v?.id && c.voiceAssetId === v.id); };
   const pieces = (i.plan.furniture ?? []).filter((x) => isSetPiece(x));
+  // Drinks in the scene (D182): props or set pieces that are something to drink.
+  const drinks = [...new Set([...(i.plan.furniture ?? []).flatMap((f) => [f.name, ...(f.detail ?? "").split(/;\s*/)]), ...panels.flatMap((p) => (p.spec.props ?? []).map((x) => x.name))])].filter((n) => DRINK.test(n)).map((n) => n.split(/\s+-\s+|:/)[0].trim()).filter((n, k, a) => n && a.indexOf(n) === k);
   const held = [...new Set(panels.flatMap((p) => (p.spec.props ?? []).map((x) => x.name)))].filter((n) => !pieces.some((x) => x.name === n));
   const wanted: { key: string; what: string }[] = [
     ...inClip.map((id) => ({ key: elementKey.character(id), what: nameOf(id) })),
@@ -618,6 +628,9 @@ export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake
     if (i.when?.trim()) L.push(whenLine(i.when));
     const chars = inClip.filter((id) => used.some((u) => u.key === elementKey.character(id)));
     if (chars.length) L.push(`${chars.map((id) => `${first(nameOf(id))} is ${ref(elementKey.character(id), first(nameOf(id)))}`).join("; ")}.`);
+    // Coat off indoors, said outright (D182): Samantha came into a shot in a coat she wasn't wearing.
+    const off = chars.filter((id) => !wearing && i.coatOff?.[id]?.id);
+    if (off.length) L.push(`${and(off.map((id) => first(nameOf(id))))} ${off.length > 1 ? "have" : "has"} taken off ${off.length > 1 ? "their coats" : "their coat"}: in every shot, including any shot they first appear in, they wear exactly what ${off.length > 1 ? "their Elements show" : "their Element shows"}, with no coat, jacket or bag on.`);
     // Props: each with its Element when it has one; its own words only when it has none.
     const props = [...pieces.map((x) => ({ name: x.name, detail: x.detail })), ...held.map((n) => ({ name: n, detail: undefined as string | undefined }))];
     const propLines = props.map((x) => { const has = used.some((u) => u.key === elementKey.prop(x.name)); return has ? `the ${x.name} is ${ref(elementKey.prop(x.name), x.name)}` : `the ${x.name}${x.detail ? ` (${x.detail.replace(/;\s*see (?:the )?reference image.*$/i, "")})` : ""}`; });
@@ -670,7 +683,9 @@ export function framesPrompt(panels: ClipPanel[], i: ClipInput, after?: KeptTake
       // shot, but she wore it in her close-up, because her Element shows her in it.
       start ? `${COATS} as they are in ${pic(1)}, worn or off (over a chair, on a hook, on the floor), in every shot and from every angle; they only come off or go on when what happens says so (someone takes their coat off and puts it over the chair, or stands, takes it off the chair and puts it on).` : `${COATS} on or off as the clip starts, in every shot and from every angle; they only come off or go on when what happens says so.`,
       // Never a line through a glass (D171): Chase spoke while drinking, so his mouth didn't move.
-      panels.some((p) => SIP.test(p.description) || p.dialogue.some((d) => SIP.test(d.delivery ?? ""))) ? "Nobody drinks or eats while saying a line: a sip comes before or after their words, never during them; while they speak the glass is away from their mouth and their lips move with every word." : "",
+      // Drinks get drunk (D182): Paul wants sips and the level going down, not untouched cups.
+      drinks.length ? `${drinkLine(drinks, seconds)}` : "",
+      panels.some((p) => SIP.test(p.description) || p.dialogue.some((d) => SIP.test(d.delivery ?? ""))) || drinks.length ? "Nobody drinks or eats while saying a line: a sip comes before or after their words, never during them; while they speak the glass is away from their mouth and their lips move with every word." : "",
       ...onCall.map((c) => `${c.name} is on a phone call ${c.ends ? `until ${c.ends}` : "for the whole clip"}: the phone stays at their ear in the same hand, never put down or lowered before then, and they keep talking into it; anything else they do (a drink, a gesture) is with the other hand.`),
       "Each person keeps the feeling they're given to the very last frame: nobody smiles or softens unless what happens says so.",
       inClip.length > 1 ? `${and(names(inClip))} each appear once in the picture, never twice; no guest looks or dresses like any of them. When someone is somewhere new in a later shot (behind someone, then in front of them), they are only in the new place: the spot where they were in 图片1 or an earlier shot is empty or taken by a guest who looks nothing like them.` : "",

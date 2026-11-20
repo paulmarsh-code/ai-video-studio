@@ -2991,3 +2991,13 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
   - **Walls:** a clip now sends only the walls seen behind the people. For each person, that's the wall straight on beyond them as seen from where each of the others sits, worked out from the floor plan and the walls' look directions. For two people across a table, that's two walls, not four. When the plan can't say, all walls go, as before. Paul: "the right shot added".
 - **General:** any speaker; any venue with wall pictures and a floor plan.
 - **Reaches the generation through:** the voice line and the audio inputs, and which reference pictures the clip request sends. Tested in `voiceWallsCoats.d177.test.ts`.
+
+## D182: coats off said outright, and drinks get drunk (20 Nov 2026)
+
+- **Visible failures.** Scene 5, panel 6, take 2: Samantha came into the last second in a cream coat. That was with her coat-off Element (D179), and she wasn't in the start frame. The season line said "what everyone wears suits" a wet autumn day. And the coffees on the table were never touched. Paul: "we need to make sure they actually drink their coffees… take sips and see the coffee go down".
+- **Decisions.**
+  - **Coats:** a clip using coat-off looks says so outright: "<names> have taken off their coats: in every shot, including any shot they first appear in, they wear exactly what their Elements show, with no coat, jacket or bag on".
+  - **Season:** the season line now dresses only the guests and passers-by. The named people wear their Elements.
+  - **Drinks:** when the scene has drinks (props or set-piece details, such as a coffee, a pint or a glass of wine), the clip asks for sips. In clips of 5 s or more it's "at least one sip in this clip", by whoever is listening and between lines. Each sip leaves visibly less, and the level never goes back up. The rule that nobody drinks while speaking (D171) is always added with it.
+- **General:** any scene, any outer clothing, any drinks.
+- **Reaches the generation through:** prompt lines in the clip request. Tested in `voiceWallsCoats.d177.test.ts`.
