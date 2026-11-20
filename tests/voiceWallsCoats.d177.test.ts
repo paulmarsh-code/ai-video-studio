@@ -76,11 +76,11 @@ describe("Linked Elements keep their voice (D177)", () => {
   });
 });
 
-describe("One speaker per clip (D180)", () => {
-  it("starts a new clip when someone else speaks; silent panels stay with the speaker", () => {
+describe("Two speakers may share a clip again (D184, D180 undone)", () => {
+  it("keeps panels together by time, whoever speaks", () => {
     const panels = [P(1, "They sit.", [{ characterId: "ava", text: "Hello." }]), P(2, "Bo frowns."), P(3, "Bo answers.", [{ characterId: "bo", text: "Hi." }]), P(4, "Ava again.", [{ characterId: "ava", text: "Well." }])];
     const clips = sceneClips({ panels, cast: cast as never, plan: plan as never, venue: { id: "v1", name: "Café" }, elements: base as never });
-    expect(clips.map((c) => c.panels)).toEqual([[1, 2], [3], [4]]);
+    expect(clips.map((c) => c.panels)).toEqual([[1, 2, 3, 4]]);
   });
 });
 
@@ -108,5 +108,12 @@ describe("Coats off said outright, and drinks get drunk (D182)", () => {
     expect(c.prompt).toContain("The drinks (Ava's coffee, Bo's tea) get drunk: at least one sip in this clip");
     expect(c.prompt).toContain("the level never goes back up");
     expect(c.prompt).toContain("Nobody drinks or eats while saying a line");
+  });
+});
+
+describe("No wall pictures from the scene (D184)", () => {
+  it("buildSceneClips no longer passes walls", async () => {
+    const src = (await import("node:fs")).readFileSync("src/lib/sceneClips.ts", "utf8");
+    expect(src).not.toMatch(/coatOff, walls \}/);
   });
 });

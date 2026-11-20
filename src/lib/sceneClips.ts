@@ -159,8 +159,8 @@ export function buildSceneClips(db: DB, sceneId: string): SceneClipsView | null 
   }
   // The same looks with coats and bags off (D179), used unless what happens has them wearing them.
   const coatOff = Object.fromEntries(Object.keys(looks).flatMap((slug) => { const e = elements[elementKey.lookOff(slug, sceneId)]; return e?.id ? [[slug, e]] : []; }));
-  // The venue all the way round (D178): the same wall pictures its Element is made from.
-  const walls = venueWalls(s.venue);
+  // D184: no wall pictures with the clip (D178/D181 undone): the venue's Element already holds the
+  // room all the way round, as in scene 4, and extra pictures loosened the start frame's hold.
   // Each panel's picture for Kling (D123): the storyboard's unless another version or none is picked.
   const picked = ((s.scene.staging ?? {}) as { clipPictures?: Record<string, string> }).clipPictures ?? {};
   const panelAssets = repo.listAssets(db, projectId, "panel");
@@ -187,7 +187,7 @@ export function buildSceneClips(db: DB, sceneId: string): SceneClipsView | null 
   const frames = studio.getClipFrames(db, sceneId);
   const positionsNote = studio.getPositionsNote(db, sceneId);
   const when = studio.getSceneWhen(db, sceneId);
-  const clips = sceneClips({ panels, cast, plan, venue: { id: s.venue.id, name: s.venue.name }, crowd, elements, kept: kept.map((k) => ({ from: k.from, to: k.to, frameAssetId: k.frameAssetId })), frames, positionsNote, when, coatOff, walls });
+  const clips = sceneClips({ panels, cast, plan, venue: { id: s.venue.id, name: s.venue.name }, crowd, elements, kept: kept.map((k) => ({ from: k.from, to: k.to, frameAssetId: k.frameAssetId })), frames, positionsNote, when, coatOff });
   const held = [...new Set(panels.flatMap((p) => (p.spec.props ?? []).map((x) => x.name)))];
   const pieces = (plan.furniture ?? []).filter(isSetPiece).map((f) => f.name);
   const rows = [

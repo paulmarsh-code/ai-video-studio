@@ -3008,3 +3008,17 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
 - **Decision.** The voice stays part of the character in the app: one voice sample per person, set on their row. Kling gets it only as that person's voice file in each clip ("exactly the voice in 音频N"). Elements are made without a voice. Paul's Jade and Samantha café Elements have had their voices removed in Kling. One speaker per clip (D180) stays. This replaces D177's Element voice and D181's "Element voice alone".
 - **General:** every speaking character.
 - **Reaches the generation through:** the clip's audio input and voice line, and Elements without a voice. Tested in `voiceWallsCoats.d177.test.ts`.
+
+## D184: back to the scene 4 recipe, plus coat-off looks (20 Nov 2026)
+
+- **What we found.** Comparing what each clip sent Kling:
+  - **Scene 4, which worked:** the start frame as the only picture; Elements for each character and for the venue, which holds the room all the way round; clean voice files; Chase and Jade both speaking in one clip, without trouble.
+  - **The café scene went wrong from the second clip.** Samantha's voice sample, cut by Claude from clip 2, ran to 10.3 s, and Jade's laugh starts at 10.0 s. So "Samantha's voice" had Jade in it, which explains the first voice mix-up.
+  - **The fixes that followed made it worse.** They added things scene 4 never had: voices inside Elements (D177), and wall pictures with every clip (D178/D181). The extra pictures loosened the start frame's hold: Kling moved the seats, turned the camera and invented a plain window. The café's room all the way round was already in its Element.
+- **Decision.** Clips go back to the scene 4 recipe:
+  - The start frame is the only picture, and the venue's Element carries the room. D178/D181's wall pictures are no longer sent; `venueWalls` stays for later use.
+  - Two speakers may share a clip again; D180's split is undone.
+  - Voices go as clean voice files only (D183).
+  - Kept, because they answer something genuinely new: the coat-off looks (D179), the line saying who has their coat off and the season dressing only the guests (D182), the coat rule (D176) and the drinks line (D182).
+  - Samantha's voice sample is re-cut to stop before Jade's laugh.
+- **Process.** No new rule during a scene unless a single short test clip proves it first. Paul: "we need to understand why things have changed".
