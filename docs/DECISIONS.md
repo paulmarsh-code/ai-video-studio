@@ -3022,3 +3022,10 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
   - Kept, because they answer something genuinely new: the coat-off looks (D179), the line saying who has their coat off and the season dressing only the guests (D182), the coat rule (D176) and the drinks line (D182).
   - Samantha's voice sample is re-cut to stop before Jade's laugh.
 - **Process.** No new rule during a scene unless a single short test clip proves it first. Paul: "we need to understand why things have changed".
+
+## D185: one speaker per clip, again (20 Nov 2026)
+
+- **Visible failure.** Scene 5, panels 6–7 on the scene 4 recipe (D184), with Samantha's clean re-cut sample: the pictures were right, but Jade spoke in Samantha's voice. That's the third time two women speaking in one clip have swapped voices. Every clip with one speaker has had the right voice, and Paul approved scene 4, where Chase and Jade spoke in one clip, but their voices sound nothing alike.
+- **Decision.** D180's split comes back: a panel with someone new speaking starts the next clip, and silent panels stay with the speaker. Everything else stays on the D184 recipe: the start frame is the only picture, the venue Element holds the room, clean voice files, coat-off looks.
+- **General:** any scene with more than one speaker.
+- **Reaches the generation through:** how the scene is split into clips. Tested in `voiceWallsCoats.d177.test.ts`.

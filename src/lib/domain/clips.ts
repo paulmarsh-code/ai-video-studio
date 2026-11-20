@@ -207,9 +207,9 @@ export { CLIP_MAX_SEC, CLIP_MAX_SHOTS } from "./clipCameras";
  */
 export function groupClips(panels: ClipPanel[], plan?: GeometryPlanData): ClipPanel[][] {
   const angle = (p: ClipPanel) => plan?.cameras.find((x) => x.id === p.spec.cameraId);
-  // D184: two speakers may share a clip again (D180 undone), as in scene 4: the voice mix-up came
-  // from Samantha's voice sample, which had Jade's laugh at its end.
-  return groupByTime([...panels].sort((a, b) => a.order - b.order), (p) => p.durationSec, plan ? angle : undefined);
+  // One speaker per clip (D185, D180 back): two women speaking in one clip swapped voices three times,
+  // even with clean samples; Chase and Jade in scene 4 sound nothing alike. Each alone was right.
+  return groupByTime([...panels].sort((a, b) => a.order - b.order), (p) => p.durationSec, plan ? angle : undefined, undefined, undefined, (p) => [...new Set(p.dialogue.map((d) => d.characterId))]);
 }
 
 const first = (name: string) => name.split(/\s+/)[0];

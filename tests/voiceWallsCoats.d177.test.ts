@@ -76,11 +76,11 @@ describe("Linked Elements keep their voice (D177)", () => {
   });
 });
 
-describe("Two speakers may share a clip again (D184, D180 undone)", () => {
-  it("keeps panels together by time, whoever speaks", () => {
+describe("One speaker per clip (D185)", () => {
+  it("starts a new clip when someone else speaks; silent panels stay with the speaker", () => {
     const panels = [P(1, "They sit.", [{ characterId: "ava", text: "Hello." }]), P(2, "Bo frowns."), P(3, "Bo answers.", [{ characterId: "bo", text: "Hi." }]), P(4, "Ava again.", [{ characterId: "ava", text: "Well." }])];
     const clips = sceneClips({ panels, cast: cast as never, plan: plan as never, venue: { id: "v1", name: "Café" }, elements: base as never });
-    expect(clips.map((c) => c.panels)).toEqual([[1, 2, 3, 4]]);
+    expect(clips.map((c) => c.panels)).toEqual([[1, 2], [3], [4]]);
   });
 });
 
