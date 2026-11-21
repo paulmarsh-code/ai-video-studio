@@ -3038,6 +3038,7 @@ The user approves at every stage. Gaps found against the app on 16 Nov:
   - Such a clip goes to Kling 3.0 Omni when every speaker has a voiced copy of their Element. The request says each speaks in "their own voice, the one that comes with <<<their voiced Element>>>", and sends no voice files.
   - For each character Element (base, scene look and coat off), the app now also asks for a voiced copy: same pictures, plus the voice sample, key `…#voice`, name starting "V".
   - If a speaker has no voiced copy, the clip stays on 4.0 with voice files and says what's missing.
+  - "Make again" on a character's row also asks for its voiced copy.
   - One speaker, or none, stays on Kling 4.0 with the voice file (D183), for its better rooms.
   - The clips page marks 3.0 clips. The runbook says how to send them, through `image_to_video`, model `kling-video-v3_0_omni`.
 - **General:** any scene where two or more people talk.

@@ -335,7 +335,9 @@ export async function requestElementsAction(sceneId: string, keys?: string[]): P
     if (!s) throw new Error("Scene not found");
     const linked = studio.getKlingElements(db, s.scene.projectId);
     // None named: the ones still missing.
-    const want = keys?.length ? keys : elementSources(db, sceneId).map((x) => x.key).filter((k) => !linked[k]);
+    // A character's voiced copy (D186) comes with it: "Make again" on Jade asks for both.
+    const all = elementSources(db, sceneId).map((x) => x.key);
+    const want = keys?.length ? [...new Set(keys.flatMap((k) => [k, ...(all.includes(`${k}#voice`) ? [`${k}#voice`] : [])]))] : all.filter((k) => !linked[k]);
     if (!want.length) throw new Error("Every Element is linked already, or nothing has an approved picture yet.");
     const made = requestElements(db, sceneId, want);
     return { count: made.length };
